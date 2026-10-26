@@ -1,4 +1,4 @@
-// Gavelling Crisis war map: the colours and the MapLibre layers. A blank style (a sea-coloured
+// Gavelling Crisis map: the colours and the MapLibre layers. A blank style (a sea-coloured
 // background and nothing else), so no tile, sprite or glyph server is ever contacted. Country
 // labels and unit tokens are HTML markers, never symbol layers (those need glyphs).
 // This file has no imports from the app so a script can check the layers against the style spec.
@@ -15,6 +15,10 @@ export const NOBODY = '#6B6256';
 export const SRC_COUNTRIES = 'countries';
 export const SRC_SHAPES = 'shapes';
 export const SRC_DRAFT = 'draft';
+/** The selected territory's outline, the outline being dragged, and the point under the pointer. */
+export const SRC_SEL = 'sel';
+export const SRC_EDIT = 'edit';
+export const SRC_HOVER = 'hover-pt';
 
 export const L_LAND = 'c-land';
 export const L_SHAPE_FILL = 'shape-area-fill';
@@ -61,6 +65,24 @@ export function mapLayers(): AddLayerObject[] {
     {
       id: 'c-hi', type: 'line', source: SRC_COUNTRIES, layout: { 'line-join': 'round' },
       paint: { 'line-color': FOREST, 'line-width': 3, 'line-opacity': ['case', ['boolean', ['feature-state', 'hi'], false], 1, 0] },
+    },
+  ];
+}
+
+/** Layers for selecting and reshaping a territory (the main map only; they need SRC_SEL, SRC_EDIT and SRC_HOVER). */
+export function editLayers(): AddLayerObject[] {
+  return [
+    { id: 'sel-fill', type: 'fill', source: SRC_SEL, paint: { 'fill-color': DRAFT, 'fill-opacity': 0.07 } },
+    { id: 'sel-halo', type: 'line', source: SRC_SEL, layout: { 'line-join': 'round' }, paint: { 'line-color': '#FFFFFF', 'line-width': 5, 'line-opacity': 0.85 } },
+    { id: 'sel-line', type: 'line', source: SRC_SEL, layout: { 'line-join': 'round' }, paint: { 'line-color': DRAFT, 'line-width': 2.2 } },
+    {
+      id: 'edit-fill', type: 'fill', source: SRC_EDIT, filter: ['==', ['geometry-type'], 'Polygon'],
+      paint: { 'fill-color': ['coalesce', ['get', 'tint'], DRAFT], 'fill-opacity': ['case', ['has', 'tint'], 1, 0.2] },
+    },
+    { id: 'edit-line', type: 'line', source: SRC_EDIT, layout: { 'line-join': 'round' }, paint: { 'line-color': DRAFT, 'line-width': 2.4, 'line-dasharray': [2, 1.5] } },
+    {
+      id: 'hover-pt', type: 'circle', source: SRC_HOVER,
+      paint: { 'circle-radius': 6, 'circle-color': '#FFFFFF', 'circle-stroke-color': DRAFT, 'circle-stroke-width': 2.5 },
     },
   ];
 }

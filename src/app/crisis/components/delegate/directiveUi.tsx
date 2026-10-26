@@ -3,7 +3,7 @@
 // and chair pages (the chair page uses StatusLine and whenLabel).
 
 import {
-  CheckCircle2, CircleDot, CircleHelp, Clock, Contrast, Hourglass, Landmark, Lock, Megaphone, ScrollText, Undo2, UserRoundCog, Users, XCircle,
+  CheckCircle2, CircleDot, CircleHelp, Clock, Contrast, Gavel, Hourglass, Landmark, Lock, Megaphone, ScrollText, Undo2, UserRoundCog, Users, XCircle,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { OUTCOME_LABEL, type Directive, type DirectiveKind, type DirectiveOutcome, type DirectiveStatus } from '@/lib/crisis/types';
@@ -11,6 +11,7 @@ import { timeAgo } from '@/lib/crisis/format';
 import { CK, THEME_STYLE } from '../../crisisKit';
 
 export const STATUS_WORDS: Record<DirectiveStatus, string> = {
+  awaiting_chair: 'With your chair',
   queued: 'Waiting for the backroom',
   claimed: 'With a backroomer',
   clarify: 'More detail needed',
@@ -20,6 +21,7 @@ export const STATUS_WORDS: Record<DirectiveStatus, string> = {
 
 export function statusIcon(s: DirectiveStatus, size = 15): ReactNode {
   const p = { size, strokeWidth: 1.5, 'aria-hidden': true } as const;
+  if (s === 'awaiting_chair') return <Gavel {...p} />;
   if (s === 'queued') return <Hourglass {...p} />;
   if (s === 'claimed') return <UserRoundCog {...p} />;
   if (s === 'clarify') return <CircleHelp {...p} />;
@@ -29,12 +31,15 @@ export function statusIcon(s: DirectiveStatus, size = 15): ReactNode {
 
 export function statusColor(s: DirectiveStatus): string {
   if (s === 'answered') return CK.ok;
+  if (s === 'awaiting_chair') return PLUM;
   if (s === 'clarify') return BLUE;
   if (s === 'withdrawn') return CK.muted;
   return CK.goldDeep;
 }
 
 const BLUE = '#2F5F8F';
+/** A cabinet directive waiting for the chair: its own colour, apart from the backroom's gold. */
+const PLUM = '#7B3F61';
 
 /** approved green, partly works gold, denied red, more detail needed blue, answer later grey. */
 export function outcomeColor(o: DirectiveOutcome): string {

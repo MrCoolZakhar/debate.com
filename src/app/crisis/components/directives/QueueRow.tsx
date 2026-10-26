@@ -1,10 +1,9 @@
 'use client';
 // Gavelling Crisis: one directive as a queue row (the one shared look for every directive row).
-// The TITLE comes first and is the biggest text on the card; it wraps and is never cut. The number
-// ("No. 13") is a small badge overlapping the top edge. The character is on the left: the portrait
-// overhangs the top corner (one third outside, as on the organiser Live Status card) with the name
-// beneath it in two rows (surname big, full name small). Everything else sits small at the bottom
-// right: wait time, cabinet logo, theme, kind, backroomer. Clicking the portrait opens the character.
+// The TITLE comes first, runs the full width of the card and is the biggest text on it; it wraps and is
+// never cut. The number ("No. 13") is a small badge overlapping the top edge. Under the title: the
+// character on the left (round portrait, surname in bold, the character's title beneath it), and on the
+// right, small: theme, kind, cabinet logo, wait time, backroomer. Clicking the portrait opens the character.
 // Used by the backroom inbox and the "Waiting for a Reply" card on Command.
 
 import { useState } from 'react';
@@ -13,7 +12,8 @@ import type { Directive } from '@/lib/crisis/types';
 import { dirNumber } from '@/lib/crisis/format';
 import { Avatar, CK, ThemeTag } from '../../crisisKit';
 import CharacterModal from '../character/CharacterModal';
-import { CabinetLogo, NameStack, NumberBadge, StaffPic } from './directiveParts';
+import { seatFitFontPx } from '@/lib/seatName';
+import { CabinetLogo, NumberBadge, shortName, StaffPic } from './directiveParts';
 import { KIND_ICON, authorName, type Names } from './directiveKit';
 
 export const WAIT_COLOR = { ok: CK.ink, late: CK.goldDeep, very: CK.danger } as const;
@@ -42,55 +42,62 @@ export default function QueueRow({ d, names, whenLabel, sev, selected, delegateN
   const responsible = (d.assigned_member_id ?? ch?.owner_member_id ?? null);
   const backroomer = responsible ? names.members.get(responsible) : undefined;
 
-  const P = compact ? 36 : 52;              // portrait
-  const O = Math.round(P / 3);              // overhang
-  const COL = compact ? 80 : 90;            // the fixed character column
-  const titleSize = compact ? 16 : 18;
+  const P = compact ? 30 : 42;              // portrait, inside the row (it no longer hangs over the top corner)
+  const titleSize = compact ? 15 : 18;
+  const short = shortName(who);
+  const nameWidth = compact ? 120 : 160;
+  const bigPx = seatFitFontPx(short, nameWidth, compact ? 13 : 14.5, { lines: 1, minPx: 10 });
+  const under = ch?.title?.trim() || (short !== who.trim() ? who : '');
   const shadow = selected ? `${CK.shadowSm}, 0 0 0 2px ${color}` : sev === 'very' ? `${CK.shadowSm}, 0 0 0 1px rgba(163,65,47,0.45)` : CK.shadowSm;
+
+  const portrait = <Avatar name={who} src={ch?.picture_url} size={P} color={color} />;
 
   return (
     <div
       style={{
         position: 'relative', overflow: 'visible', background: CK.card, borderRadius: compact ? 14 : 18, border: '1px solid rgba(27,56,40,0.14)', minWidth: 0,
-        marginTop: Math.max(O, 9) + 6, boxShadow: shadow,
+        marginTop: 14, boxShadow: shadow,
       }}
     >
-      {/* Portrait: its own button, a sibling of the row button (a button never holds a button) */}
-      {ch ? (
-        <button
-          type="button"
-          onClick={() => setCharacterOpen(true)}
-          aria-label={`Open ${who}`}
-          title={`Open ${who}`}
-          className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] transition-transform hover:scale-105"
-          style={{ position: 'absolute', zIndex: 2, top: -O, left: Math.round((COL - P) / 2), border: 0, padding: 0, borderRadius: '50%', background: 'transparent', cursor: 'pointer', lineHeight: 0 }}
-        >
-          <Avatar name={who} src={ch.picture_url} size={P} color={color} />
-        </button>
-      ) : (
-        <span style={{ position: 'absolute', zIndex: 2, top: -O, left: Math.round((COL - P) / 2), lineHeight: 0 }}>
-          <Avatar name={who} size={P} color={color} />
-        </span>
-      )}
+      <NumberBadge n={dirNumber(d)} color={color} style={{ position: 'absolute', zIndex: 2, top: -9, left: 12 }} />
 
-      <NumberBadge n={dirNumber(d)} color={color} style={{ position: 'absolute', zIndex: 2, top: -9, left: COL + 2 }} />
-
+      {/* The whole card opens the directive: one button laid over the content; the portrait is a second button above it. */}
       <button
         type="button"
         onClick={onOpen}
+        aria-label={`Open directive No. ${dirNumber(d)}: ${d.title}`}
         className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] transition-transform active:scale-[0.99]"
-        style={{
-          display: 'flex', alignItems: 'stretch', width: '100%', textAlign: 'left', border: 0, background: 'transparent', borderRadius: 'inherit', cursor: 'pointer',
-          fontFamily: CK.font, color: CK.ink, padding: 0,
-        }}
-      >
-        <span style={{ display: 'block', flex: 'none', width: COL, boxSizing: 'border-box', padding: `${P - O + 6}px 6px 8px`, minWidth: 0 }}>
-          <NameStack name={who} big={compact ? 12 : 12.5} />
-        </span>
+        style={{ position: 'absolute', inset: 0, zIndex: 1, width: '100%', border: 0, background: 'transparent', borderRadius: 'inherit', cursor: 'pointer', padding: 0 }}
+      />
 
-        <span style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, padding: `${compact ? 14 : 16}px 12px 8px 2px` }}>
-          <span style={{ display: 'block', fontSize: titleSize, fontWeight: 800, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{d.title}</span>
-          <span className="flex flex-wrap items-center justify-end" style={{ gap: '4px 9px', marginTop: 'auto', paddingTop: 8 }}>
+      <div style={{ position: 'relative', fontFamily: CK.font, color: CK.ink, padding: compact ? '14px 12px 9px' : '16px 14px 11px', pointerEvents: 'none' }}>
+        {/* The title runs the whole width of the card. */}
+        <span style={{ display: 'block', fontSize: titleSize, fontWeight: 800, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{d.title}</span>
+
+        {/* Under it: the character (portrait, surname, title) on the left; wait, theme and backroomer small on the right. */}
+        <span className="flex flex-wrap items-center" style={{ gap: '6px 10px', marginTop: compact ? 8 : 10 }}>
+          <span className="flex items-center" style={{ gap: 8, flex: '1 1 130px', minWidth: 0 }}>
+            {/* The portrait: its own button above the card's open button. */}
+            <span style={{ flex: 'none', lineHeight: 0, position: 'relative', zIndex: 2, pointerEvents: 'auto' }}>
+              {ch ? (
+                <button
+                  type="button"
+                  onClick={() => setCharacterOpen(true)}
+                  aria-label={`Open ${who}`}
+                  title={`Open ${who}`}
+                  className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] transition-transform hover:scale-105"
+                  style={{ border: 0, padding: 0, borderRadius: '50%', background: 'transparent', cursor: 'pointer', lineHeight: 0 }}
+                >
+                  {portrait}
+                </button>
+              ) : portrait}
+            </span>
+            <span style={{ display: 'block', minWidth: 0, flex: 1 }}>
+              <span style={{ display: 'block', fontSize: bigPx, fontWeight: 800, lineHeight: 1.2, color: CK.ink, overflowWrap: 'normal', wordBreak: 'normal' }}>{short}</span>
+              {under && <span style={{ display: 'block', marginTop: 1, fontSize: compact ? 11 : 11.5, fontWeight: 600, lineHeight: 1.25, color: CK.muted, overflowWrap: 'anywhere' }}>{under}</span>}
+            </span>
+          </span>
+          <span className="flex flex-wrap items-center justify-end" style={{ gap: '4px 8px', marginLeft: 'auto' }}>
             {delegateNote && <MessageCircle size={14} strokeWidth={1.5} aria-label="The delegate sent a note" style={{ color: '#3E6A9A' }} />}
             {d.themes[0] && <ThemeTag theme={d.themes[0]} />}
             <KindIcon size={14} strokeWidth={1.5} aria-label={d.kind} style={{ flex: 'none', color: CK.red }} />
@@ -106,7 +113,7 @@ export default function QueueRow({ d, names, whenLabel, sev, selected, delegateN
             <StaffPic member={backroomer} size={compact ? 20 : 24} />
           </span>
         </span>
-      </button>
+      </div>
 
       {characterOpen && ch && <CharacterModal characterId={ch.id} initialTab="directives" onClose={() => setCharacterOpen(false)} />}
     </div>

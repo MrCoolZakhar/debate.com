@@ -101,12 +101,16 @@ export default function TryAsPanel({ cref, compact }: { cref: CrisisRef; compact
     }
   };
 
-  const teamRank: Record<string, number> = { director: 0, assistant_director: 1, backroomer: 2, press: 3 };
+  const teamRank: Record<string, number> = { director: 0, assistant_director: 1, backroomer: 2 };
+  const byName = (a: Member, b: Member) => a.display_name.localeCompare(b.display_name);
   const staff = (data?.members ?? [])
-    .filter((m) => m.role === 'director' || m.role === 'backroomer' || m.role === 'assistant_director' || m.role === 'press')
-    .sort((a, b) => (teamRank[a.role] - teamRank[b.role]) || a.display_name.localeCompare(b.display_name));
+    .filter((m) => m.role === 'director' || m.role === 'backroomer' || m.role === 'assistant_director')
+    .sort((a, b) => (teamRank[a.role] - teamRank[b.role]) || byName(a, b));
   const isYou = (m: Member) => !!data?.selfUserId && m.user_id === data.selfUserId;
-  const chairs = (data?.members ?? []).filter((m) => m.role === 'chair');
+  const cabinetName = (id: string | null) => data?.cabinets.find((c) => c.id === id)?.name ?? null;
+  const cabinetColor = (id: string | null) => data?.cabinets.find((c) => c.id === id)?.color ?? CK.forest2;
+  const chairs = (data?.members ?? []).filter((m) => m.role === 'chair').sort(byName);
+  const press = (data?.members ?? []).filter((m) => m.role === 'press').sort(byName);
   const delegates = (data?.members ?? []).filter((m) => m.role === 'delegate');
 
   return (
@@ -131,10 +135,36 @@ export default function TryAsPanel({ cref, compact }: { cref: CrisisRef; compact
               </div>
             </div>
           )}
+          {chairs.length > 0 && (
+            <div>
+              <p style={{ margin: '0 0 6px', fontSize: 11.5, fontWeight: 800, color: CK.muted }}>Chairs (the front room)</p>
+              <div className="flex flex-wrap" style={{ gap: 6 }}>
+                {chairs.map((m) => {
+                  const cn = cabinetName(m.cabinet_id);
+                  return (
+                    <Chip key={m.id} busy={busy === m.id} onClick={() => enter(m)} icon={face(m, cabinetColor(m.cabinet_id))}>
+                      Chair · {m.display_name}{cn ? ` · ${cn}` : ''}{isYou(m) ? ' (you)' : ''}
+                    </Chip>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          {press.length > 0 && (
+            <div>
+              <p style={{ margin: '0 0 6px', fontSize: 11.5, fontWeight: 800, color: CK.muted }}>Press</p>
+              <div className="flex flex-wrap" style={{ gap: 6 }}>
+                {press.map((m) => (
+                  <Chip key={m.id} busy={busy === m.id} onClick={() => enter(m)} icon={face(m, CK.forest2)}>
+                    Press · {m.display_name}{isYou(m) ? ' (you)' : ''}
+                  </Chip>
+                ))}
+              </div>
+            </div>
+          )}
           {data.cabinets.map((cab) => {
             const dels = delegates.filter((m) => m.cabinet_id === cab.id);
             const room = data.rooms.get(cab.id);
-            const cabChairs = chairs.filter((m) => m.cabinet_id === cab.id);
             return (
               <div key={cab.id}>
                 <p style={{ margin: '0 0 6px', fontSize: 11.5, fontWeight: 800, color: cab.color, overflowWrap: 'anywhere' }}>{cab.name}</p>
@@ -144,11 +174,6 @@ export default function TryAsPanel({ cref, compact }: { cref: CrisisRef; compact
                       Delegate · {m.character_id ? charName.get(m.character_id) ?? m.display_name : m.display_name}
                     </Chip>
                   ))}
-                  {cabChairs.map((m) => (
-                    <Chip key={m.id} busy={busy === m.id} onClick={() => enter(m)} icon={face(m, cab.color)}>
-                      Chair · {m.display_name}
-                    </Chip>
-                  ))}
                   {room && (
                     <>
                       <Chip tone="red" href={`/join?code=${encodeURIComponent(room.chairPassword ? `${room.code}-${room.chairPassword}` : room.code)}&mode=chair`} icon={<Gavel size={14} strokeWidth={1.5} />}>Live room as chair</Chip>
@@ -156,7 +181,7 @@ export default function TryAsPanel({ cref, compact }: { cref: CrisisRef; compact
                       <Chip tone="red" href={`/advisor?add=${encodeURIComponent(room.code)}`} icon={<GraduationCap size={14} strokeWidth={1.5} />}>Faculty advisor board</Chip>
                     </>
                   )}
-                  {!dels.length && !cabChairs.length && !room && <span style={{ fontSize: 12.5, color: CK.inkSoft }}>No one here yet.</span>}
+                  {!dels.length && !room && <span style={{ fontSize: 12.5, color: CK.inkSoft }}>No delegates here yet.</span>}
                 </div>
               </div>
             );

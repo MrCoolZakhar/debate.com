@@ -28,7 +28,8 @@ import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { ConfirmInline, responsibleMembers } from '../command/setupKit';
 import { KIND_ICON, OUTCOME_STYLE } from '../directives/directiveKit';
 import { NumberBadge } from '../directives/directiveParts';
-import CharacterMapPicker from './CharacterMapPicker';
+import CharacterMapPicker, { type PickedSpot } from './CharacterMapPicker';
+import CharacterSpotSnippet from './CharacterSpotSnippet';
 import { STATUS_ORDER, STATUS_WORD, StatusIcon, mayEditCharacters, statusColor } from './characterStatus';
 
 export interface CharacterModalProps { characterId: string; onClose: () => void; initialTab?: 'profile' | 'directives' | 'performance' }
@@ -180,11 +181,25 @@ function ModalBody({ char, onClose, initialTab }: { char: Character; onClose: ()
     finally { setUploading(null); }
   };
 
-  const pickPlace = async (place: string) => {
-    set('location', place);
+  // The exact spot: saves the coordinates at once; the place label is filled with the country under the pin only while it is empty.
+  const saveSpot = async (spot: PickedSpot) => {
+    const fill = !d.location.trim() && spot.country ? spot.country : null;
+    const row: Partial<Character> = { location_lng: spot.lng, location_lat: spot.lat };
+    if (fill) row.location = fill;
+    setBusy(true);
+    const ok = await patch(row, 'Spot saved');
+    setBusy(false);
+    if (!ok) return;
+    if (fill) set('location', fill);
     setStep({ kind: 'main' });
-    await patch({ location: place }, 'Location saved');
   };
+  const clearSpot = async () => {
+    setBusy(true);
+    const ok = await patch({ location_lng: null, location_lat: null }, 'Spot removed');
+    setBusy(false);
+    if (ok) setStep({ kind: 'main' });
+  };
+  const hasSpot = typeof char.location_lng === 'number' && typeof char.location_lat === 'number';
 
   const dirty =
     d.name.trim() !== char.name || d.title.trim() !== (char.title ?? '') || d.bio.trim() !== (char.bio ?? '').trim()
@@ -241,7 +256,7 @@ function ModalBody({ char, onClose, initialTab }: { char: Character; onClose: ()
   ];
 
   const openStep = step.kind === 'directive' ? mine?.find((x) => x.id === step.id) ?? null : null;
-  const stepTitle = step.kind === 'guide' ? 'Character Guide' : step.kind === 'map' ? 'Pick a Location' : step.kind === 'directive' ? `Directive ${openStep ? dirNumber(openStep) : ''}` : '';
+  const stepTitle = step.kind === 'guide' ? 'Character Guide' : step.kind === 'map' ? 'Pick the Exact Spot' : step.kind === 'directive' ? `Directive ${openStep ? dirNumber(openStep) : ''}` : '';
 
   const tabs: Array<{ value: Tab; label: string }> = [
     { value: 'profile', label: 'Profile' }, { value: 'directives', label: 'Directives' }, { value: 'performance', label: 'Performance' },
@@ -374,7 +389,7 @@ function ModalBody({ char, onClose, initialTab }: { char: Character; onClose: ()
             {/* Body */}
             <div key={step.kind === 'main' ? tab : `${step.kind}`} style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px 20px 22px' }}>
               {step.kind === 'guide' && <GuideStep char={char} canEdit={canEdit} uploading={uploading === 'guide'} onReplace={() => guideInput.current?.click()} />}
-              {step.kind === 'map' && <CharacterMapPicker current={d.location} onPick={(p) => { void pickPlace(p); }} />}
+              {step.kind === 'map' && <CharacterMapPicker lng={char.location_lng} lat={char.location_lat} label={d.location} busy={busy} onSave={(sp) => { void saveSpot(sp); }} onClear={() => { void clearSpot(); }} />}
               {step.kind === 'directive' && !restricted && (openStep ? <DirectiveView d={openStep} /> : <p style={{ margin: 0, fontSize: 14, color: CK.inkSoft }}>That directive is no longer here.</p>)}
 
               {step.kind === 'main' && tab === 'profile' && (
@@ -400,10 +415,18 @@ function ModalBody({ char, onClose, initialTab }: { char: Character; onClose: ()
                     {canEdit ? (
                       <div className="flex items-center gap-2 flex-wrap">
                         <input id="cm-location" value={d.location} onChange={(e) => set('location', e.target.value)} style={{ ...fieldStyle, flex: '1 1 220px', width: 'auto' }} maxLength={160} />
-                        <Btn tone="ghost" icon={<MapPin size={15} strokeWidth={1.5} />} onClick={() => setStep({ kind: 'map' })}>Pick on the map</Btn>
+                        <Btn tone="ghost" icon={<MapPin size={15} strokeWidth={1.5} />} onClick={() => setStep({ kind: 'map' })}>{hasSpot ? 'Move the spot' : 'Pick the exact spot'}</Btn>
                       </div>
                     ) : (
-                      <p style={{ margin: 0, fontSize: 14.5, color: char.location ? CK.ink : CK.muted, overflowWrap: 'anywhere' }}>{char.location || 'Not set.'}</p>
+                      <p className="inline-flex items-center gap-1.5" style={{ margin: 0, fontSize: 14.5, color: char.location ? CK.ink : CK.muted, overflowWrap: 'anywhere' }}>
+                        {hasSpot && <MapPin size={15} strokeWidth={1.5} aria-hidden style={{ color: CK.red, flex: 'none' }} />}
+                        {char.location || 'Not set.'}
+                      </p>
+                    )}
+                    {hasSpot && (
+                      <div style={{ marginTop: 8 }}>
+                        <CharacterSpotSnippet lng={char.location_lng as number} lat={char.location_lat as number} />
+                      </div>
                     )}
                   </div>
 

@@ -15,7 +15,7 @@ type Pkg = 'basic' | 'full';
 
 const PACKAGES: Array<{ id: Pkg; title: string; line: string }> = [
   { id: 'basic', title: 'Basic crisis', line: 'Directives, the backroom, news and characters.' },
-  { id: 'full', title: 'Full package', line: 'Everything in Basic, plus the war map and resources.' },
+  { id: 'full', title: 'Full package', line: 'Everything in Basic, plus the map and resources.' },
 ];
 
 const FOREST = '#1B3828';

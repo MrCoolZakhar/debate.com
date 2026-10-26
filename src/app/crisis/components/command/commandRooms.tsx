@@ -56,8 +56,8 @@ export function FrontRoomsCard({ cref, cabinets }: { cref: CrisisRef; cabinets: 
     <Card warm className="cmd-card cmd-rooms" style={{ display: 'flex', flexDirection: 'column' }}>
       <CardTitle icon={<Presentation size={17} strokeWidth={1.5} />}>Front Rooms</CardTitle>
       {cabinets.length === 0 ? <EmptyLine>No cabinets yet.</EmptyLine> : (
-        <div className="flex flex-col" style={{ gap: 0, flex: 1, minHeight: 0 }}>
-          {cabinets.map((cab) => {
+        <div className="flex flex-col" style={{ gap: 0 }}>
+          {cabinets.map((cab, i) => {
             const r = byCab.get(cab.id);
             return (
               <OverhangCard
@@ -66,28 +66,27 @@ export function FrontRoomsCard({ cref, cabinets }: { cref: CrisisRef; cabinets: 
                 src={cab.logo_url}
                 color={cab.color}
                 size={ROOM_SIZE}
-                style={{ boxShadow: CK.shadowSm, padding: '8px 14px 12px', marginTop: 20, flex: '1 1 auto', display: 'flex', flexDirection: 'column', gap: 8, minHeight: 0 }}
+                style={{ boxShadow: CK.shadowSm, padding: '8px 14px 10px', marginTop: i === 0 ? 20 : 26, display: 'flex', flexDirection: 'column', gap: 5 }}
               >
-                {/* The header sits beside the emblem; the dashboard below it uses the whole card width. */}
+                {/* The header sits beside the emblem. */}
                 <div className="flex flex-wrap items-center justify-between" style={{ gap: '4px 8px', paddingLeft: ROOM_INSET + ROOM_SIZE + 12 - 14, minHeight: ROOM_SIZE - ROOM_INSET + 2 }}>
-                  {/* The name keeps its words whole; the buttons wrap below it when the card is narrow. */}
-                  <b style={{ fontSize: 14, color: cab.color, overflowWrap: 'break-word', flex: '1 1 110px', minWidth: 'min(110px, 100%)' }}>{cab.name}</b>
+                  <b style={{ fontSize: 14, color: cab.color, overflowWrap: 'break-word', flex: '1 1 90px', minWidth: 'min(90px, 100%)' }}>{cab.name}</b>
                   {r?.code && (
                     <span className="flex flex-wrap justify-end" style={{ gap: 6 }}>
-                      {/* The silent secretariat view is read only on purpose; Join as chair is the full console. */}
-                      <LinkBtn href={`/chair/${r.code}?secretariat=1`} newTab icon={<Eye size={13} strokeWidth={1.5} />}>Watch</LinkBtn>
-                      <LinkBtn href={`/join?code=${encodeURIComponent(r.chairPassword ? `${r.code}-${r.chairPassword}` : r.code)}&mode=chair`} newTab icon={<Gavel size={13} strokeWidth={1.5} />}>Join as chair</LinkBtn>
+                      {/* Watch is the silent, read-only secretariat view; Join as chair is the real console and the main button. */}
+                      <LinkBtn href={`/join?code=${encodeURIComponent(r.chairPassword ? `${r.code}-${r.chairPassword}` : r.code)}&mode=chair`} newTab tone="red" icon={<Gavel size={13} strokeWidth={1.5} />}>Join as chair</LinkBtn>
+                      <LinkBtn href={`/chair/${r.code}?secretariat=1`} newTab title="Read only: you can watch the room but not change anything" icon={<Eye size={13} strokeWidth={1.5} />}>Watch only</LinkBtn>
                     </span>
                   )}
                 </div>
                 {r?.code && (
-                  <p className="flex items-center flex-wrap" style={{ margin: 0, gap: '2px 12px', fontSize: 12, color: CK.inkSoft, fontVariantNumeric: 'tabular-nums' }}>
-                    <span className="inline-flex items-center" style={{ gap: 4 }}><Hash size={12} strokeWidth={1.5} aria-hidden />Room code <b style={{ color: CK.ink, letterSpacing: '0.06em' }}>{r.code}</b></span>
-                    {r.chairPassword && <span className="inline-flex items-center" style={{ gap: 4 }}><KeyRound size={12} strokeWidth={1.5} aria-hidden />Chair password <b style={{ color: CK.ink, letterSpacing: '0.06em' }}>{r.chairPassword}</b></span>}
-                  </p>
+                  <div style={{ fontSize: 12, color: CK.inkSoft, fontVariantNumeric: 'tabular-nums', lineHeight: 1.45 }}>
+                    <span className="flex items-center" style={{ gap: 4 }}><Hash size={12} strokeWidth={1.5} aria-hidden />Room code <b style={{ color: CK.ink, letterSpacing: '0.06em' }}>{r.code}</b></span>
+                    {r.chairPassword && <span className="flex items-center" style={{ gap: 4 }}><KeyRound size={12} strokeWidth={1.5} aria-hidden />Chair password <b style={{ color: CK.ink, letterSpacing: '0.06em' }}>{r.chairPassword}</b></span>}
+                  </div>
                 )}
                 {rooms === null && !failed ? <Skeleton h={14} w="55%" />
-                  : r?.sessionId ? <RoomLivePanel sessionId={r.sessionId} color={cab.color} />
+                  : r?.sessionId ? <RoomLivePanel sessionId={r.sessionId} />
                   : failed && rooms === null ? <span style={{ fontSize: 12.5, color: CK.inkSoft }}>Could not read this room</span>
                   : <span className="inline-flex items-center" style={{ gap: 4, fontSize: 12.5, color: CK.inkSoft }}><Radio size={12} strokeWidth={1.5} aria-hidden />No room linked</span>}
               </OverhangCard>

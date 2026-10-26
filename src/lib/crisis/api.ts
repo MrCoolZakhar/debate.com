@@ -10,7 +10,7 @@ import {
   MEMBER_COLUMNS,
   type Cabinet, type Character, type CharacterSecret, type Crisis, type Directive, type DirectiveNote,
   type MapRegion, type MapShape, type MapUnit, type Member, type News, type Resource, type ResourceType,
-  type ResolvedCrisis, type DirectiveOutcome, type DirectiveKind, type CrisisMessage, type Meeting, type MeetingStatus, type CharacterStatus, type CrisisNotification,
+  type ResolvedCrisis, type RegionGeometry, type DirectiveOutcome, type DirectiveKind, type CrisisMessage, type Meeting, type MeetingStatus, type CharacterStatus, type CrisisNotification,
 } from './types';
 
 export interface CrisisRef { conf: string; crisis: string; id: string }
@@ -240,7 +240,7 @@ export interface DirectiveDraft {
   resources_used?: string; goal?: string; affects?: string; covert?: boolean; coauthors?: string[];
 }
 export type SubmitResult =
-  | { ok: true; id: string; no: number; cabinet_no?: number | null }
+  | { ok: true; id: string; no: number; cabinet_no?: number | null; awaiting_chair?: boolean }
   | { ok: false; reason: 'paused'; note?: string | null }
   | { ok: false; reason: 'cooldown'; wait_seconds: number }
   | { ok: false; reason: 'too_long'; limit: number };
@@ -249,6 +249,15 @@ export async function submitDirective(ref: CrisisRef, d: DirectiveDraft): Promis
   const client = await c(ref);
   const res = await client.rpc('crisis_submit_directive', { p_crisis: ref.id, p: d });
   return must(res, 'Could not send the directive. Your text is kept, try again.') as SubmitResult;
+}
+
+/** The chair of a cabinet sends a waiting cabinet directive on to the backroom (approve) or turns it back with an optional note.
+ *  False means it was no longer waiting. */
+export async function reviewDirectiveAsChair(ref: CrisisRef, directiveId: string, approve: boolean, note?: string | null): Promise<boolean> {
+  const client = await c(ref);
+  const res = await client.rpc('crisis_chair_review_directive', { p_directive: directiveId, p_approve: approve, p_note: note?.trim() ? note.trim() : null });
+  if (res.error) throw new UserFacingError(crisisError(res.error, 'Could not save that decision. Try again.'));
+  return res.data === true;
 }
 
 /** Claim for yourself (memberId omitted) or hand to another staff member. */
@@ -355,6 +364,19 @@ export async function setRegionOwner(ref: CrisisRef, regionKey: string, ownerCab
     .upsert({ crisis_id: ref.id, region_key: regionKey, owner_cabinet_id: ownerCabinetId, updated_at: new Date().toISOString() })
     .select('region_key');
   if (res.error || !res.data?.length) throw new UserFacingError(crisisError(res.error, 'Could not change the border.'));
+}
+
+/** Saves edited country outlines in one write (map power), keeping each row's owner. null geometry = the world map's own. */
+export async function saveRegionGeometries(
+  ref: CrisisRef, rows: Array<{ key: string; owner_cabinet_id: string | null; geometry: RegionGeometry | null }>,
+): Promise<void> {
+  if (!rows.length) return;
+  const client = await c(ref);
+  const at = new Date().toISOString();
+  const res = await client.from('crisis_map_regions')
+    .upsert(rows.map((r) => ({ crisis_id: ref.id, region_key: r.key, owner_cabinet_id: r.owner_cabinet_id, geometry: r.geometry, updated_at: at })))
+    .select('region_key');
+  if (res.error || (res.data?.length ?? 0) < rows.length) throw new UserFacingError(crisisError(res.error, 'Could not change the border.'));
 }
 
 export async function saveUnit(ref: CrisisRef, u: Partial<MapUnit> & { id?: string }): Promise<string> {

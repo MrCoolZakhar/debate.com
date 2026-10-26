@@ -1,5 +1,5 @@
 'use client';
-// Gavelling Crisis war map: the offline world (Natural Earth 50m through world-atlas), unit kinds
+// Gavelling Crisis map: the offline world (Natural Earth 50m through world-atlas), unit kinds
 // and the small geometry helpers the map needs. Nothing here makes a network request: the
 // TopoJSON is bundled with the app and loaded only when a map mounts.
 
@@ -151,8 +151,17 @@ export function loadWorldData(): Promise<WorldData> {
   return cache as Promise<WorldData>;
 }
 
-/** Corner points of a stored shape geometry (an area drops its closing point). */
+/** Corner points of a stored shape geometry (an area drops its closing point; a MultiPolygon gives its largest piece). */
 export function shapePoints(g: { type: string; coordinates: unknown }): LngLat[] {
+  if (g.type === 'MultiPolygon') {
+    let best: number[][] = []; let bestA = -1;
+    for (const poly of (g.coordinates as number[][][][]) ?? []) {
+      const r = poly?.[0] ?? [];
+      const a = r.length > 3 ? Math.abs(ringArea(r).area) : 0;
+      if (a > bestA) { bestA = a; best = r; }
+    }
+    return shapePoints({ type: 'Polygon', coordinates: [best] });
+  }
   if (g.type === 'Polygon') {
     const ring = ((g.coordinates as number[][][])[0] ?? []).map((p) => [p[0], p[1]] as LngLat);
     if (ring.length > 1 && ring[0][0] === ring[ring.length - 1][0] && ring[0][1] === ring[ring.length - 1][1]) ring.pop();

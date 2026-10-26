@@ -14,6 +14,7 @@ import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { BigCount, Card, CardTitle, CK, scenarioLabel, Skeleton } from '../../crisisKit';
 import { StatusLine, whenLabel } from '../delegate/directiveUi';
 import { NewsHistory } from '../news/NewsList';
+import ChairApproval from './ChairApproval';
 import { useCrisisNews } from '../news/useCrisisNews';
 
 interface Room { cabinetId: string; name: string; code: string | null }
@@ -74,6 +75,8 @@ export default function ChairHome() {
   const crisis = core.crisis;
   const typeById = useMemo(() => new Map((res?.types ?? []).map((t) => [t.id, t])), [res]);
   const cabinetRes = (res?.resources ?? []).filter((r) => r.cabinet_id && (cabinetId ? r.cabinet_id === cabinetId : true));
+  // Cabinet directives (waiting or sent on) live in the approval card above; the rest is listed here.
+  const otherDirectives = useMemo(() => (directives ?? []).filter((d) => d.kind !== 'committee'), [directives]);
   const charName = useCallback((id: string | null) => core.characters.find((c) => c.id === id)?.name ?? null, [core.characters]);
 
   return (
@@ -86,6 +89,18 @@ export default function ChairHome() {
         </span>
         {error && <p role="status" style={{ margin: '6px 0 0', fontSize: 13, color: CK.danger }}>{error}</p>}
       </header>
+
+      <div style={{ marginBottom: 16 }}>
+        <ChairApproval
+          cref={ref}
+          directives={directives}
+          cabinetId={cabinetId}
+          characters={core.characters}
+          members={core.members}
+          cabinets={core.cabinets}
+          onChanged={() => { void readDirectives(); }}
+        />
+      </div>
 
       <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3 items-start">
         <div className="grid gap-4">
@@ -142,13 +157,13 @@ export default function ChairHome() {
 
         <section aria-label="Directives" className="min-w-0 lg:col-span-2 xl:col-span-1">
           <Card warm style={{ marginBottom: 12 }}>
-            <CardTitle icon={<ScrollText size={18} strokeWidth={1.5} />} sub="Only the ones you are allowed to read.">Committee Directives</CardTitle>
-            {directives === null ? <Skeleton h={50} r={14} /> : directives.length === 0 ? (
+            <CardTitle icon={<ScrollText size={18} strokeWidth={1.5} />} sub="Only the ones you are allowed to read.">Other Directives</CardTitle>
+            {directives === null ? <Skeleton h={50} r={14} /> : otherDirectives.length === 0 ? (
               <p style={{ margin: 0, fontSize: 14, color: CK.inkSoft }}>No directives to show.</p>
             ) : null}
           </Card>
           <div className="grid gap-3">
-            {(directives ?? []).map((d) => (
+            {otherDirectives.map((d) => (
               <Card key={d.id}>
                 <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: CK.muted }}>Directive {dirNumber(d)} · {KIND_LABEL[d.kind]} · {whenLabel(d.created_at)}</p>
                 <h3 style={{ margin: '2px 0 4px', fontSize: 15, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{d.title}</h3>

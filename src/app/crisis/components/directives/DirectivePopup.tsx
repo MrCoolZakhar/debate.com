@@ -1,8 +1,9 @@
 'use client';
 // Gavelling Crisis: a directive opened in the backroom, as a pop-up shaped like the organiser's
-// committee editor: the MAIN pop-up (the directive, the notes, the reply and the outcome) with a
-// SIDE panel docked right next to it, "What happens when you send" (resources, map, characters,
-// news). Both are the same height and scroll on their own. On a screen narrower than 1000px the
+// committee editor: the MAIN pop-up (a chat: the directive, the notes, and the composer with the
+// outcome) with a SIDE panel docked right next to it, "What happens when you send" (it starts empty;
+// a plus adds cards for resources, unit moves, borders, characters, news). Both are the same height
+// and scroll on their own. On a screen narrower than 1000px the
 // side panel is a second step reached by a button, with a back button, never a pop-up on a pop-up.
 // A pop-up never opens another on top of itself, so nothing in here opens one.
 

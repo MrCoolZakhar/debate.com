@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard, ScrollText, Map as MapIcon, Newspaper, ContactRound, UsersRound, Settings, Presentation,
-  Home, LogOut, KeyRound, CalendarClock, Boxes, History as HistoryIcon,
+  Home, LogOut, KeyRound, CalendarClock, Boxes,
 } from 'lucide-react';
 import BrandLogo from '@/components/BrandLogo';
 import ProfileAvatarMenu from '@/components/ProfileAvatar';
@@ -26,16 +26,15 @@ interface NavItem { href: string; label: string; icon: React.ReactNode; section?
 function navFor(role: CrisisRole, base: string): NavItem[] {
   // The whole sidebar for every role, even pages still being built (Peter, 26 Oct 2026).
   const ic = (I: typeof Home) => <I size={19} strokeWidth={1.6} />;
-  const map: NavItem = { href: `${base}/map`, label: 'War map', icon: ic(MapIcon) };
+  const map: NavItem = { href: `${base}/map`, label: 'Map', icon: ic(MapIcon) };
   const news = (section?: string): NavItem => ({ href: `${base}/news`, label: 'News', icon: ic(Newspaper), section });
   const meetings = (section?: string): NavItem => ({ href: `${base}/meetings`, label: 'Meetings', icon: ic(CalendarClock), section });
   const characters = (section?: string, label = 'Characters'): NavItem => ({ href: `${base}/characters`, label, icon: ic(ContactRound), section });
   const resources = (section?: string): NavItem => ({ href: `${base}/resources`, label: 'Resources', icon: ic(Boxes), section });
-  const history = (section?: string): NavItem => ({ href: `${base}/history`, label: 'History', icon: ic(HistoryIcon), section });
   if (role === 'director' || role === 'assistant_director' || role === 'organiser') {
     return [
       { href: base, label: 'Command', icon: ic(LayoutDashboard) },
-      map, history(),
+      map,
       { href: `${base}/directives`, label: 'Directives', icon: ic(ScrollText), section: 'RUN' },
       news('RUN'), meetings('RUN'),
       characters('WORLD'), resources('WORLD'),
@@ -46,19 +45,19 @@ function navFor(role: CrisisRole, base: string): NavItem[] {
   if (role === 'backroomer') {
     return [
       { href: base, label: 'Directives', icon: ic(ScrollText) },
-      map, history(),
+      map,
       news('RUN'), meetings('RUN'),
       characters('WORLD'), resources('WORLD'),
     ];
   }
   if (role === 'chair') {
-    return [{ href: base, label: 'Front room', icon: ic(Presentation) }, map, history(), news(), meetings(), characters()];
+    return [{ href: base, label: 'Front room', icon: ic(Presentation) }, map, news(), meetings(), characters()];
   }
   if (role === 'press') {
-    return [{ href: base, label: 'News', icon: ic(Newspaper) }, map, history(), characters()];
+    return [{ href: base, label: 'News', icon: ic(Newspaper) }, map, characters()];
   }
-  // Delegates: "Cabinet" (Peter, 26 Oct 2026); History last so the phone bar keeps the five main pages first.
-  return [{ href: base, label: 'My crisis', icon: ic(Home) }, map, news(), meetings(), characters(undefined, 'Cabinet'), history()];
+  // Delegates: "Cabinet" (Peter, 26 Oct 2026). History is a tab inside the Map page for everybody (27 Oct 2026).
+  return [{ href: base, label: 'My crisis', icon: ic(Home) }, map, news(), meetings(), characters(undefined, 'Cabinet')];
 }
 
 function Rail({ v, items }: { v: CrisisContextValue; items: NavItem[] }) {

@@ -21,11 +21,11 @@ export function WaitingCard({ directives, base, now, onOpen }: {
     const all = directives ?? [];
     const openList = all.filter(isOpenStatus);
     const sorted = sortDirectives(openList, settings.queueOrder, 'open', lastAnsweredByAuthor(all));
-    return { open: openList.length, top: sorted.slice(0, 6) };
+    return { open: openList.length, top: sorted };
   }, [directives, settings.queueOrder]);
 
   return (
-    <Card warm>
+    <Card warm className="cmd-card cmd-wait">
       {/* One line: the title left, the open count right (never wraps under the title). */}
       <div className="flex items-center justify-between" style={{ gap: 8, marginBottom: 10 }}>
         <h2 className="flex items-center" style={{ gap: 7, margin: 0, fontSize: 15, fontWeight: 800, color: CK.ink, whiteSpace: 'nowrap', minWidth: 0 }}>
@@ -43,16 +43,17 @@ export function WaitingCard({ directives, base, now, onOpen }: {
         <div className="flex flex-col" style={{ gap: 8 }}><Skeleton h={58} /><Skeleton h={58} /><Skeleton h={58} /></div>
       ) : (
         <>
+          {/* Every open directive; the list scrolls inside the card, the footer button stays. */}
           {top.length === 0 ? <EmptyLine>Every directive has an answer.</EmptyLine> : (
-            <div className="flex flex-col" style={{ gap: 2 }}>
+            <div className="cmd-scroll flex flex-col" style={{ gap: 6 }}>
               {top.map((d) => (
                 <QueueRow key={d.id} d={d} names={names} sev={waitSeverity(d.waiting_since, now)} whenLabel={waitLabel(d.waiting_since, now)} onOpen={() => onOpen(d)} compact />
               ))}
             </div>
           )}
-          <div style={{ marginTop: 10 }}>
+          <div style={{ marginTop: 8, flex: 'none' }}>
             <LinkBtn href={`${base}/directives`} style={{ width: '100%', justifyContent: 'center' }}>
-              {open > top.length ? `See all ${open} in Directives` : 'See all in Directives'}
+              See all in Directives
             </LinkBtn>
           </div>
         </>

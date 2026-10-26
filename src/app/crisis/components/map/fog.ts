@@ -1,7 +1,8 @@
 'use client';
-// Gavelling Crisis war map: the fog of war. A canvas sits over the map, filled with a hatch and
+// Gavelling Crisis map: the fog of war. A canvas sits over the map, filled with a hatch and
 // then "cut open" with destination-out around what the viewing cabinet can see: its own
-// countries, its own areas and a radius around each of its own units. Redrawn on every map move.
+// countries, its own areas and a small sight circle around each of its own units (drawn as a soft
+// ring so players see how far their troops can see). Redrawn on every map move.
 
 import type { Map as MLMap } from 'maplibre-gl';
 import type { Geometry } from 'geojson';
@@ -104,16 +105,25 @@ export function drawFog(canvas: HTMLCanvasElement, map: MLMap, holes: FogHoles |
   }
   for (const r of holes.rings) cut([r.map((p) => [p[0], p[1]])]);
 
+  const seen: Array<{ x: number; y: number; r: number }> = [];
   for (const c of holes.circles) {
     const p = map.project([c.lng, c.lat]);
+    // The radius in km, measured north-south on screen (Mercator grows it towards the poles, like the land).
     const q = map.project([c.lng, Math.min(84, c.lat + c.km / 111.2)]);
     const r = Math.max(8, Math.abs(p.y - q.y));
     if (p.x + r < 0 || p.y + r < 0 || p.x - r > w || p.y - r > h) continue;
-    const grad = ctx.createRadialGradient(p.x, p.y, r * 0.55, p.x, p.y, r);
+    const grad = ctx.createRadialGradient(p.x, p.y, r * 0.84, p.x, p.y, r);
     grad.addColorStop(0, 'rgba(0,0,0,1)');
     grad.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = grad;
     ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.fill();
+    seen.push({ x: p.x, y: p.y, r });
   }
+  // The sight rings, drawn over the cleared fog.
   ctx.globalCompositeOperation = 'source-over';
+  ctx.setLineDash([5, 4]);
+  ctx.lineWidth = 1.4;
+  ctx.strokeStyle = 'rgba(142,36,36,0.5)';
+  for (const s of seen) { ctx.beginPath(); ctx.arc(s.x, s.y, s.r * 0.97, 0, Math.PI * 2); ctx.stroke(); }
+  ctx.setLineDash([]);
 }

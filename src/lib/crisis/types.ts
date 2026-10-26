@@ -27,6 +27,8 @@ export interface CrisisSettings {
   newsNeedsApproval: boolean;
   meetingsNeedApproval: boolean;
   chairReadsPersonal: boolean;
+  /** A cabinet directive waits for its cabinet's chair before the backroom sees it (docs/crisis/sql/017). */
+  chairApprovesCabinetDirectives: boolean;
   queueOrder: 'fair' | 'oldest' | 'newest';
 }
 
@@ -39,6 +41,7 @@ export const DEFAULT_SETTINGS: CrisisSettings = {
   newsNeedsApproval: true,
   meetingsNeedApproval: true,
   chairReadsPersonal: false,
+  chairApprovesCabinetDirectives: true,
   queueOrder: 'fair',
 };
 
@@ -116,6 +119,8 @@ export interface Character {
   sort: number;
   guide_url: string | null;    // the character guide the CD attaches (docs/crisis/sql/008)
   guide_name: string | null;
+  location_lng?: number | null;   // where the character stands on the map (docs/crisis/sql/017); staff see it
+  location_lat?: number | null;
 }
 
 export interface CharacterSecret {
@@ -126,7 +131,7 @@ export interface CharacterSecret {
 }
 
 export type DirectiveKind = 'personal' | 'joint' | 'committee' | 'press_release' | 'communique';
-export type DirectiveStatus = 'queued' | 'claimed' | 'clarify' | 'answered' | 'withdrawn';
+export type DirectiveStatus = 'awaiting_chair' | 'queued' | 'claimed' | 'clarify' | 'answered' | 'withdrawn';
 export type DirectiveOutcome = 'approved' | 'partial' | 'denied' | 'clarify' | 'later';
 
 export const KIND_LABEL: Record<DirectiveKind, string> = {
@@ -241,7 +246,13 @@ export interface MapRegion {
   crisis_id: string;
   region_key: string;              // ISO 3166 numeric id from world-atlas for countries
   owner_cabinet_id: string | null;
+  /** An edited outline for this country in this crisis (docs/crisis/sql/017); null = the world map's own. */
+  geometry?: RegionGeometry | null;
+  updated_at?: string;
 }
+
+/** A country or area outline: GeoJSON Polygon or MultiPolygon (an empty MultiPolygon = all its land was taken). */
+export interface RegionGeometry { type: 'Polygon' | 'MultiPolygon'; coordinates: number[][][] | number[][][][] }
 
 export type UnitKind = 'army' | 'navy' | 'air' | 'missile' | 'base' | 'spy' | 'sub' | 'custom';
 export interface MapUnit {
@@ -265,7 +276,7 @@ export interface MapShape {
   owner_cabinet_id: string | null;
   label: string | null;
   color: string | null;
-  geometry: { type: 'LineString' | 'Polygon'; coordinates: unknown };
+  geometry: { type: 'LineString' | 'Polygon' | 'MultiPolygon'; coordinates: unknown };
   public: boolean;
   revealed_to: string[];
 }

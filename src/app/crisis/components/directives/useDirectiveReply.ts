@@ -77,5 +77,5 @@ export function useDirectiveReply(ref: CrisisRef, d: Directive, who: string, pow
 }
 
 function hasStaged(e: EffectsDraft): boolean {
-  return Object.keys(e.resources).length + Object.keys(e.units).length + Object.keys(e.regions).length + Object.keys(e.characters).length > 0 || !!e.news;
+  return Object.keys(e.resources).length + Object.keys(e.units).length + Object.keys(e.regions).length + Object.keys(e.characters).length > 0 || !!e.news || e.cards.length > 0;
 }

@@ -53,7 +53,8 @@ function Row({ c, ctx, staff, onOpen }: { c: HistoryChange; ctx: ChangeCtx; staf
   );
 }
 
-export default function HistoryPage() {
+/** `embedded`: shown as the History tab of the Map page, which carries the page title. */
+export default function HistoryPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { ref, staff } = useCrisis();
   const ctx = useChangeCtx();
   const [limit, setLimit] = useState(PAGE);
@@ -88,7 +89,7 @@ export default function HistoryPage() {
   return (
     <div style={{ paddingBottom: 40, width: '100%', minWidth: 0 }}>
       <div className="flex items-end justify-between flex-wrap" style={{ margin: '8px 0 14px', gap: '10px 16px' }}>
-        <div>
+        <div style={embedded ? { display: 'none' } : undefined}>
           <h1 className="flex items-center" style={{ margin: 0, gap: 10, fontSize: 26, fontWeight: 800, color: CK.ink }}>
             <HistoryIcon size={24} strokeWidth={1.5} aria-hidden style={{ color: CK.red }} />History
           </h1>

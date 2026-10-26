@@ -1,0 +1,1 @@
+-- Part 18 (crisis_part18_seat_pictures): crisis_sync_seat_picture trigger copies a character's picture to its seat (delegates.logo_url) in every live room of the crisis's cabinets, matched by name; existing seats filled.

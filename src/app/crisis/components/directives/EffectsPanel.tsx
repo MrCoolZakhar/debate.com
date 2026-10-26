@@ -1,89 +1,27 @@
 'use client';
-// Gavelling Crisis: the side panel of a directive, "What happens when you send". Plain sections that
-// are always visible: Resources, Map (a unit's place and amount, a country's holder), Characters and
-// News. Every change is STAGED in the reply's draft and listed at the top, each removable. Nothing is
-// written until Send reply, which applies them all in the same call (answerDirective).
+// Gavelling Crisis: the side panel of a directive, "What happens when you send". It starts EMPTY:
+// "Nothing changes yet" and a plus. The plus opens a small menu right inside the panel (Resources,
+// Move a unit, Change a border, A character, Newsflash); each choice adds a CARD that holds that one
+// action's controls and has its own remove X. The plus stays at the bottom, so several characters, unit
+// moves or borders can be added. Every change is STAGED in the reply's draft and summed at the top;
+// nothing is written until Send reply, which applies them all in one call (answerDirective).
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import {
-  CircleHelp, Coins, Lock, Map as MapIcon, Minus, Newspaper, Plus, Skull, Undo2, UserCheck, UsersRound, X, Zap, type LucideIcon,
-} from 'lucide-react';
-import GSelect from '@/components/GSelect';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Coins, Map as MapIcon, Newspaper, Plus, X, Zap, type LucideIcon } from 'lucide-react';
 import { notifyErr } from '@/lib/appNotify';
 import { crisisError, loadMap, loadResources, type CrisisRef } from '@/lib/crisis/api';
 import { amount as fmtAmount } from '@/lib/crisis/format';
-import type { CharacterStatus, MapRegion, MapUnit, Resource, ResourceType } from '@/lib/crisis/types';
-import { Avatar, CK, FieldLabel, Segmented, Skeleton, cabinetTint, fieldStyle, resourceIcon } from '../../crisisKit';
+import { CK, cabinetTint } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
-import { KIND_META } from '../map/mapData';
 import { loadCountries, type CountryOption } from './countryPick';
-import { CabinetLogo } from './directiveParts';
+import {
+  BorderCard, CARD_META, CharacterCard, NewsCard, ResourcesCard, STATUS_META, UnitCard, clearCard, place, round2,
+  type CardEnv, type StageData,
+} from './effectCards';
 import type { ReplyPowers } from './ReplyActions';
-import { STAGEABLE_STATUSES, countChanges, type EffectsDraft, type UnitStage } from './replyDraft';
-import StageMap, { type StageMode } from './StageMap';
+import { countChanges, newCardId, type EffectCard, type EffectCardKind, type EffectsDraft } from './replyDraft';
 
-interface StageData { types: ResourceType[]; resources: Resource[]; units: MapUnit[]; regions: MapRegion[]; countries: CountryOption[] }
-
-const round2 = (n: number) => Math.round(n * 100) / 100;
-const place = (lng: number, lat: number) => `${lat.toFixed(1)}, ${lng.toFixed(1)}`;
-const upColor = CK.ok;
-const downColor = CK.danger;
-
-function stepFor(n: number): number {
-  const a = Math.abs(n);
-  return a >= 10000 ? 1000 : a >= 1000 ? 100 : a >= 100 ? 10 : 1;
-}
-
-/** A number with minus and plus buttons around a typed field. */
-function StepNumber({ value, onChange, step, min, label, color }: {
-  value: number; onChange: (n: number) => void; step: number; min?: number; label: string; color?: string;
-}) {
-  const [text, setText] = useState<string | null>(null);
-  const clamp = (n: number) => (min !== undefined ? Math.max(min, n) : n);
-  const btn = {
-    width: 30, height: 32, border: 0, borderRadius: 9, background: CK.well, color: CK.forest, cursor: 'pointer', display: 'grid', placeItems: 'center', flex: 'none',
-  } as const;
-  return (
-    <span className="inline-flex items-center" style={{ gap: 4 }}>
-      <button type="button" aria-label={`${label}: take away ${fmtAmount(step)}`} title={`Take away ${fmtAmount(step)}`} onClick={() => onChange(round2(clamp(value - step)))}
-        className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] active:scale-[0.94] transition-transform" style={btn}><Minus size={15} strokeWidth={1.8} /></button>
-      <input
-        type="text" inputMode="decimal" aria-label={label} value={text ?? fmtAmount(value)}
-        onFocus={() => setText(String(value))} onBlur={() => setText(null)}
-        onChange={(e) => {
-          setText(e.target.value);
-          const n = Number(e.target.value.replace(/,/g, ''));
-          if (e.target.value.trim() !== '' && Number.isFinite(n)) onChange(round2(clamp(n)));
-        }}
-        style={{ ...fieldStyle, width: 88, padding: '6px 8px', textAlign: 'center', fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: color ?? CK.ink }}
-      />
-      <button type="button" aria-label={`${label}: add ${fmtAmount(step)}`} title={`Add ${fmtAmount(step)}`} onClick={() => onChange(round2(value + step))}
-        className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] active:scale-[0.94] transition-transform" style={btn}><Plus size={15} strokeWidth={1.8} /></button>
-    </span>
-  );
-}
-
-function Section({ icon, title, children }: { icon: LucideIcon; title: string; children: ReactNode }) {
-  const I = icon;
-  return (
-    <section className="flex flex-col" style={{ gap: 10, background: CK.card, borderRadius: 18, padding: '12px 13px', boxShadow: CK.shadowSm }}>
-      <h3 className="flex items-center" style={{ margin: 0, gap: 7, fontSize: 15, fontWeight: 800, color: CK.ink }}>
-        <I size={18} strokeWidth={1.5} aria-hidden style={{ color: CK.red }} />{title}
-      </h3>
-      {children}
-    </section>
-  );
-}
-
-const Muted = ({ children }: { children: ReactNode }) => <p style={{ margin: 0, fontSize: 13, color: CK.muted, lineHeight: 1.45 }}>{children}</p>;
-
-const STATUS_META: Record<CharacterStatus, { label: string; Icon: LucideIcon; color: string }> = {
-  active: { label: 'Active', Icon: UserCheck, color: CK.ok },
-  arrested: { label: 'Arrested', Icon: Lock, color: CK.goldDeep },
-  dead: { label: 'Dead', Icon: Skull, color: CK.danger },
-  missing: { label: 'Missing', Icon: CircleHelp, color: '#3E6A9A' },
-  spare: { label: 'Spare', Icon: UsersRound, color: CK.muted },
-};
+interface MenuItem { kind: EffectCardKind; label: string; Icon: LucideIcon; blocked: string | null }
 
 export default function EffectsPanel({ crisisRef, authorCharacterId, cabinetId, powers, effects, setEffects }: {
   crisisRef: CrisisRef;
@@ -95,11 +33,9 @@ export default function EffectsPanel({ crisisRef, authorCharacterId, cabinetId, 
 }) {
   const { core } = useCrisis();
   const [data, setData] = useState<StageData | null>(null);
-  const [mode, setMode] = useState<StageMode>(powers.units ? 'unit' : 'border');
-  const [unitId, setUnitId] = useState('');
-  const [country, setCountry] = useState('');
-  const [charId, setCharId] = useState(authorCharacterId ?? '');
-  const [openOthers, setOpenOthers] = useState<Record<string, boolean>>({});
+  const [menuOpen, setMenuOpen] = useState(false);
+  const justAdded = useRef<string | null>(null);
+  const root = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -119,38 +55,40 @@ export default function EffectsPanel({ crisisRef, authorCharacterId, cabinetId, 
   const typeById = useMemo(() => new Map((data?.types ?? []).map((t, i) => [t.id, { t, i }])), [data]);
   const countryName = useMemo(() => new Map((data?.countries ?? []).map((c) => [c.key, c.name])), [data]);
   const baseHolder = useMemo(() => new Map((data?.regions ?? []).map((r) => [r.region_key, r.owner_cabinet_id])), [data]);
-  const unit = data?.units.find((u) => u.id === unitId);
 
-  // ── staging ──
-  const setResourceTo = (r: Resource, next: number) => setEffects((e) => {
-    const delta = round2(next - r.amount);
-    const resources = { ...e.resources };
-    if (delta === 0) delete resources[r.id]; else resources[r.id] = delta;
-    return { ...e, resources };
-  });
-  const updateUnit = (u: MapUnit, fn: (s: UnitStage) => UnitStage) => setEffects((e) => {
-    const next = fn({ ...(e.units[u.id] ?? {}) });
-    const clean: UnitStage = {};
-    if (next.lng !== undefined && next.lat !== undefined && (next.lng !== u.lng || next.lat !== u.lat)) { clean.lng = next.lng; clean.lat = next.lat; }
-    if (next.strength !== undefined && next.strength !== u.strength) clean.strength = next.strength;
-    const units = { ...e.units };
-    if (clean.lng === undefined && clean.strength === undefined) delete units[u.id]; else units[u.id] = clean;
-    return { ...e, units };
-  });
-  const setHolder = (key: string, owner: string | null) => setEffects((e) => {
-    const regions = { ...e.regions };
-    if (owner === (baseHolder.get(key) ?? null)) delete regions[key]; else regions[key] = owner;
-    return { ...e, regions };
-  });
-  const setCharStatus = (id: string, status: CharacterStatus, current: CharacterStatus) => setEffects((e) => {
-    const characters = { ...e.characters };
-    if (status === current || characters[id]?.status === status) delete characters[id];
-    else characters[id] = { status, note: characters[id]?.note ?? '' };
-    return { ...e, characters };
-  });
-  const patchNews = (patch: Partial<NonNullable<EffectsDraft['news']>>) => setEffects((e) => ({
-    ...e, news: { title: '', body: '', source: '', audience: '', ...(e.news ?? {}), ...patch },
-  }));
+  const env: CardEnv = {
+    data, powers, effects, setEffects, authorCharacterId, cabinetId, cabinets: core.cabinets, cabById, charById,
+    characters: core.characters, typeById, baseHolder, cabinetColors,
+  };
+
+  // A card that was just added scrolls into view.
+  const cardCount = effects.cards.length;
+  useEffect(() => {
+    const id = justAdded.current;
+    if (!id) return;
+    justAdded.current = null;
+    root.current?.querySelector<HTMLElement>(`[data-card="${id}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [cardCount]);
+
+  const addCard = (kind: EffectCardKind) => {
+    const id = newCardId();
+    let target = '';
+    if (kind === 'character' && authorCharacterId && !effects.cards.some((c) => c.kind === 'character' && c.target === authorCharacterId)) target = authorCharacterId;
+    setEffects((e) => ({ ...e, cards: [...e.cards, { id, kind, target }] }));
+    setMenuOpen(false);
+    justAdded.current = id;
+  };
+  const removeCard = (card: EffectCard) => setEffects((e) => ({ ...clearCard(e, card, env), cards: e.cards.filter((c) => c.id !== card.id) }));
+  const retarget = (card: EffectCard, target: string) => setEffects((e) => ({ ...clearCard(e, card, env), cards: e.cards.map((c) => (c.id === card.id ? { ...c, target } : c)) }));
+
+  const hasNews = effects.cards.some((c) => c.kind === 'news');
+  const menu: MenuItem[] = [
+    { kind: 'resources', label: 'Resources', Icon: CARD_META.resources.Icon, blocked: powers.resources ? null : 'Not allowed' },
+    { kind: 'unit', label: 'Move a unit', Icon: CARD_META.unit.Icon, blocked: powers.units ? null : 'Not allowed' },
+    { kind: 'border', label: 'Change a border', Icon: CARD_META.border.Icon, blocked: powers.map ? null : 'Not allowed' },
+    { kind: 'character', label: 'A character', Icon: CARD_META.character.Icon, blocked: null },
+    { kind: 'news', label: 'Newsflash', Icon: CARD_META.news.Icon, blocked: hasNews ? 'One per reply' : null },
+  ];
 
   // ── the summary ──
   interface Change { id: string; icon: LucideIcon; text: string; remove: () => void }
@@ -194,89 +132,48 @@ export default function EffectsPanel({ crisisRef, authorCharacterId, cabinetId, 
     changes.push({ id: 'news', icon: Newspaper, text: `News: ${effects.news.title.trim()}`, remove: () => setEffects((e) => ({ ...e, news: null })) });
   }
   const total = countChanges(effects);
+  const empty = effects.cards.length === 0;
 
-  // ── Resources ──
-  const groups = useMemo(() => {
-    if (!data) return [];
-    const order = (r: Resource) => typeById.get(r.type_id)?.i ?? 999;
-    const out: Array<{ key: string; title: string; cabinet?: (typeof core.cabinets)[number]; items: Resource[]; primary: boolean }> = [];
-    if (authorCharacterId) {
-      const items = data.resources.filter((r) => r.character_id === authorCharacterId).sort((a, b) => order(a) - order(b));
-      if (items.length) out.push({ key: `char-${authorCharacterId}`, title: charById.get(authorCharacterId)?.name ?? 'Character', items, primary: true });
-    }
-    const cabs = [...core.cabinets].sort((a, b) => (a.id === cabinetId ? -1 : b.id === cabinetId ? 1 : 0));
-    for (const c of cabs) {
-      const items = data.resources.filter((r) => r.cabinet_id === c.id).sort((a, b) => order(a) - order(b));
-      if (items.length) out.push({ key: c.id, title: c.name, cabinet: c, items, primary: c.id === cabinetId });
-    }
-    return out;
-  }, [data, typeById, core, authorCharacterId, cabinetId, charById]);
-
-  const resourceRow = (r: Resource) => {
-    const t = typeById.get(r.type_id)?.t;
-    const delta = effects.resources[r.id] ?? 0;
-    const next = round2(r.amount + delta);
-    const tone = delta > 0 ? upColor : delta < 0 ? downColor : CK.ink;
-    return (
-      <li key={r.id} className="flex items-center flex-wrap" style={{ gap: '6px 10px', padding: '6px 0' }}>
-        <span aria-hidden style={{ width: 34, height: 34, borderRadius: '50%', display: 'grid', placeItems: 'center', flex: 'none', background: CK.well, color: CK.red }}>{resourceIcon(t?.name ?? '', 18)}</span>
-        <span style={{ flex: '1 1 110px', minWidth: 0 }}>
-          <b style={{ display: 'block', fontSize: 13.5, color: CK.ink, overflowWrap: 'anywhere' }}>{t?.name ?? 'Resource'}</b>
-          <span style={{ display: 'block', fontSize: 12, fontWeight: 700, color: CK.muted, fontVariantNumeric: 'tabular-nums' }}>
-            {fmtAmount(r.amount)}{t?.unit ? ` ${t.unit}` : ''}
-            {delta !== 0 && <b style={{ color: tone }}>{` to ${fmtAmount(next)} (${delta > 0 ? '+' : '-'}${fmtAmount(Math.abs(delta))})`}</b>}
-          </span>
+  const addMenu = (
+    <div className="flex flex-col" style={{ gap: 8 }}>
+      <button type="button" onClick={() => setMenuOpen((v) => !v)} aria-expanded={menuOpen} aria-haspopup="true"
+        className="inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] active:scale-[0.98] transition-transform"
+        style={{ alignSelf: 'flex-start', gap: 8, border: 0, cursor: 'pointer', fontFamily: CK.font, fontSize: 13.5, fontWeight: 800, color: CK.forest, background: CK.card, borderRadius: 12, padding: '7px 14px 7px 8px', boxShadow: `inset 0 0 0 1px ${CK.hair}, ${CK.shadowSm}` }}>
+        <span aria-hidden style={{ width: 26, height: 26, borderRadius: '50%', display: 'grid', placeItems: 'center', background: CK.greenBtn, color: '#fff' }}>
+          <Plus size={16} strokeWidth={2} style={{ transform: menuOpen ? 'rotate(45deg)' : 'none', transition: 'transform 160ms' }} />
         </span>
-        <StepNumber value={next} step={stepFor(r.amount)} label={`${t?.name ?? 'Resource'} new amount`} color={delta !== 0 ? tone : undefined} onChange={(n) => setResourceTo(r, n)} />
-      </li>
-    );
-  };
-
-  // ── Map ──
-  const unitOptions = useMemo(() => (data?.units ?? []).map((u) => ({
-    value: u.id, label: u.name,
-    hint: [KIND_META[u.kind]?.label, cabById.get(u.owner_cabinet_id ?? '')?.name, `amount ${fmtAmount(u.strength)}`].filter(Boolean).join(', '),
-  })), [data, cabById]);
-  const countryOptions = useMemo(() => (data?.countries ?? []).map((c) => {
-    const h = baseHolder.get(c.key);
-    return { value: c.key, label: c.name, hint: h ? `Held by ${cabById.get(h)?.name ?? 'a cabinet'}` : undefined };
-  }), [data, baseHolder, cabById]);
-  const holderOptions = useMemo(() => [{ value: '', label: 'Nobody' }, ...core.cabinets.map((c) => ({ value: c.id, label: c.name }))], [core.cabinets]);
-  const mapModes: Array<{ value: StageMode; label: string }> = [];
-  if (powers.units) mapModes.push({ value: 'unit', label: 'Move a unit' });
-  if (powers.map) mapModes.push({ value: 'border', label: 'Change a border' });
-  const activeMode: StageMode = mapModes.some((m) => m.value === mode) ? mode : (mapModes[0]?.value ?? 'unit');
-  const stagedUnit = unit ? effects.units[unit.id] : undefined;
-  const movedTo = stagedUnit && stagedUnit.lng !== undefined && stagedUnit.lat !== undefined ? stagedUnit : null;
-  const amountNow = unit ? (stagedUnit?.strength ?? unit.strength) : 0;
-  const holderNow = country ? (country in effects.regions ? effects.regions[country] : (baseHolder.get(country) ?? null)) : null;
-
-  // ── Characters ──
-  const charOptions = useMemo(() => {
-    const sorted = [...core.characters].sort((a, b) => (a.id === authorCharacterId ? -1 : b.id === authorCharacterId ? 1 : 0));
-    return sorted.map((c) => ({
-      value: c.id, label: c.name,
-      hint: [c.id === authorCharacterId ? 'Wrote this directive' : null, cabById.get(c.cabinet_id ?? '')?.name].filter(Boolean).join(', ') || undefined,
-      icon: <Avatar name={c.name} src={c.picture_url} size={24} color={cabById.get(c.cabinet_id ?? '')?.color ?? CK.red} />,
-    }));
-  }, [core.characters, authorCharacterId, cabById]);
-  const ch = charId ? charById.get(charId) : undefined;
-  const staged = ch ? effects.characters[ch.id] : undefined;
-
-  const news = effects.news;
-  const audienceOptions = useMemo(() => [{ value: '', label: 'Every room' }, ...core.cabinets.map((c) => ({ value: c.id, label: c.name }))], [core.cabinets]);
+        Add what happens
+      </button>
+      {menuOpen && (
+        <div role="menu" aria-label="What should happen" style={{ display: 'grid', gap: 6, gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
+          {menu.map((m) => (
+            <button key={m.kind} type="button" role="menuitem" disabled={!!m.blocked} onClick={() => addCard(m.kind)}
+              className="flex items-center text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] active:scale-[0.98] transition-transform disabled:cursor-not-allowed"
+              style={{ gap: 9, border: 0, borderRadius: 13, padding: '9px 11px', fontFamily: CK.font, cursor: 'pointer', background: CK.card, boxShadow: `inset 0 0 0 1px ${CK.hair}`, opacity: m.blocked ? 0.55 : 1 }}>
+              <m.Icon size={19} strokeWidth={1.5} aria-hidden style={{ color: CK.red, flex: 'none' }} />
+              <span style={{ minWidth: 0 }}>
+                <b style={{ display: 'block', fontSize: 13.5, color: CK.ink, overflowWrap: 'anywhere' }}>{m.label}</b>
+                {m.blocked && <span style={{ display: 'block', fontSize: 11.5, fontWeight: 600, color: CK.muted }}>{m.blocked}</span>}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 
   return (
-    <div className="flex flex-col" style={{ gap: 12, fontFamily: CK.font }}>
+    <div ref={root} className="flex flex-col" style={{ gap: 12, fontFamily: CK.font }}>
       {/* What will apply */}
-      <section aria-live="polite" style={{ background: total ? cabinetTint(CK.red, 0.06) : CK.card, borderRadius: 18, padding: '12px 13px', boxShadow: total ? `inset 0 0 0 1px ${cabinetTint(CK.red, 0.22)}` : CK.shadowSm }}>
+      <section aria-live="polite" className="flex flex-col" style={{ gap: 10, background: total ? cabinetTint(CK.red, 0.06) : CK.card, borderRadius: 18, padding: '12px 13px', boxShadow: total ? `inset 0 0 0 1px ${cabinetTint(CK.red, 0.22)}` : CK.shadowSm }}>
         <p className="flex items-center" style={{ margin: 0, gap: 8 }}>
           <Zap size={18} strokeWidth={1.5} aria-hidden style={{ color: CK.red }} />
-          <b style={{ fontSize: 15, color: CK.ink }}>{total === 0 ? 'No changes yet' : total === 1 ? '1 change will apply' : `${total} changes will apply`}</b>
+          <b style={{ fontSize: 15, color: CK.ink }}>
+            {empty ? 'Nothing changes yet' : total === 0 ? 'No changes yet' : total === 1 ? '1 change will apply' : `${total} changes will apply`}
+          </b>
         </p>
-        <p style={{ margin: '3px 0 0', fontSize: 12.5, color: CK.inkSoft }}>Everything below happens in the moment you send the reply, not before.</p>
         {changes.length > 0 && (
-          <ul className="flex flex-col" style={{ listStyle: 'none', margin: '9px 0 0', padding: 0, gap: 5 }}>
+          <ul className="flex flex-col" style={{ listStyle: 'none', margin: 0, padding: 0, gap: 5 }}>
             {changes.map((c) => {
               const I = c.icon;
               return (
@@ -293,162 +190,24 @@ export default function EffectsPanel({ crisisRef, authorCharacterId, cabinetId, 
             })}
           </ul>
         )}
+        {empty && addMenu}
       </section>
 
-      {/* Resources */}
-      <Section icon={Coins} title="Resources">
-        {!powers.resources ? <Muted>You cannot change resources. The Crisis Director can allow it in Settings.</Muted>
-          : !data ? <Skeleton h={60} r={12} />
-          : groups.length === 0 ? <Muted>No resources yet. They are set up on the Resources page.</Muted>
-          : (
-            <div className="flex flex-col" style={{ gap: 8 }}>
-              {groups.map((g) => {
-                const hasStaged = g.items.some((r) => effects.resources[r.id] !== undefined);
-                const open = g.primary || (openOthers[g.key] ?? hasStaged);
-                return (
-                  <div key={g.key}>
-                    {g.primary ? (
-                      <p className="flex items-center" style={{ margin: '0 0 2px', gap: 7, fontSize: 12.5, fontWeight: 800, color: CK.inkSoft }}>
-                        {g.cabinet ? <CabinetLogo cabinet={g.cabinet} size={22} /> : null}
-                        <span style={{ overflowWrap: 'anywhere' }}>{g.title}</span>
-                        <span style={{ fontWeight: 600, color: CK.muted }}>{g.cabinet ? 'the author’s cabinet' : 'the author'}</span>
-                      </p>
-                    ) : (
-                      <button type="button" onClick={() => setOpenOthers((o) => ({ ...o, [g.key]: !open }))} aria-expanded={open}
-                        className="flex items-center w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
-                        style={{ gap: 7, border: 0, background: 'transparent', padding: '4px 0', cursor: 'pointer', fontFamily: CK.font, fontSize: 12.5, fontWeight: 800, color: CK.inkSoft, textAlign: 'left' }}>
-                        {g.cabinet ? <CabinetLogo cabinet={g.cabinet} size={22} /> : null}
-                        <span style={{ flex: 1, overflowWrap: 'anywhere' }}>{g.title}</span>
-                        <span style={{ fontWeight: 600, color: CK.muted }}>{open ? 'Hide' : `Show ${g.items.length}`}</span>
-                      </button>
-                    )}
-                    {open && <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>{g.items.map(resourceRow)}</ul>}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-      </Section>
-
-      {/* Map */}
-      <Section icon={MapIcon} title="Map">
-        {mapModes.length === 0 ? <Muted>You cannot change the map. The Crisis Director can allow it in Settings.</Muted>
-          : !data ? <Skeleton h={220} r={12} />
-          : (
-            <div className="flex flex-col" style={{ gap: 10 }}>
-              {mapModes.length > 1 && <div style={{ overflowX: 'auto' }}><Segmented ariaLabel="What to change on the map" value={activeMode} onChange={setMode} options={mapModes} /></div>}
-              {activeMode === 'unit' ? (
-                <>
-                  <div><FieldLabel>Unit</FieldLabel>
-                    <GSelect value={unitId} options={unitOptions} onChange={setUnitId} placeholder={unitOptions.length ? 'Pick a unit' : 'No units on the map yet'} aria-label="Unit" searchable />
-                  </div>
-                  {unit && (
-                    <div className="flex flex-col" style={{ gap: 6 }}>
-                      <p style={{ margin: 0, fontSize: 13, color: CK.inkSoft }}>
-                        <b style={{ color: CK.ink }}>Now at</b> {place(unit.lng, unit.lat)}
-                        {movedTo && (
-                          <>
-                            {' '}<b style={{ color: CK.red }}>Goes to {place(movedTo.lng as number, movedTo.lat as number)}</b>{' '}
-                            <button type="button" onClick={() => updateUnit(unit, (s) => ({ ...s, lng: undefined, lat: undefined }))}
-                              className="inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
-                              style={{ gap: 4, border: 0, background: 'transparent', padding: 0, cursor: 'pointer', fontFamily: CK.font, fontSize: 12.5, fontWeight: 700, color: CK.forest, textDecoration: 'underline' }}>
-                              <Undo2 size={12} strokeWidth={1.8} aria-hidden />Keep it where it is
-                            </button>
-                          </>
-                        )}
-                      </p>
-                      <div className="flex items-center flex-wrap" style={{ gap: 8 }}>
-                        <b style={{ fontSize: 13, color: CK.ink }}>Amount</b>
-                        <StepNumber value={amountNow} min={0} step={stepFor(unit.strength)} label={`${unit.name} amount`}
-                          color={amountNow > unit.strength ? upColor : amountNow < unit.strength ? downColor : undefined}
-                          onChange={(n) => updateUnit(unit, (s) => ({ ...s, strength: Math.round(n) }))} />
-                        {amountNow !== unit.strength && (
-                          <span style={{ fontSize: 12.5, fontWeight: 700, color: amountNow > unit.strength ? upColor : downColor, fontVariantNumeric: 'tabular-nums' }}>
-                            {fmtAmount(unit.strength)} to {fmtAmount(amountNow)}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                  <Muted>{unit ? 'Click the map or drag the unit to where it goes.' : 'Pick a unit, or click one on the map.'}</Muted>
-                </>
-              ) : (
-                <>
-                  <div><FieldLabel>Country</FieldLabel>
-                    <GSelect value={country} options={countryOptions} onChange={setCountry} placeholder="Pick a country, or click it on the map" aria-label="Country" searchable />
-                  </div>
-                  {country && (
-                    <div><FieldLabel>Held by</FieldLabel>
-                      <GSelect value={holderNow ?? ''} options={holderOptions} onChange={(v) => setHolder(country, v || null)} aria-label="Held by" />
-                    </div>
-                  )}
-                </>
-              )}
-              <StageMap
-                units={data.units} regions={data.regions} cabinets={cabinetColors}
-                stagedUnits={effects.units} stagedRegions={effects.regions}
-                mode={activeMode} selectedUnitId={unitId} selectedCountry={country}
-                canUnits={powers.units} canMap={powers.map}
-                onSelectUnit={(id) => { setUnitId(id); if (powers.units) setMode('unit'); }}
-                onPlaceUnit={(lng, lat) => { if (unit) updateUnit(unit, (s) => ({ ...s, lng, lat })); }}
-                onPickCountry={setCountry}
-                height={260}
-              />
-            </div>
-          )}
-      </Section>
-
-      {/* Characters */}
-      <Section icon={Skull} title="Characters">
-        <div><FieldLabel>Character</FieldLabel>
-          <GSelect value={charId} options={charOptions} onChange={setCharId} placeholder="Pick a character" aria-label="Character" searchable />
-        </div>
-        {ch && (
-          <>
-            <div role="group" aria-label="New status" style={{ display: 'grid', gap: 6, gridTemplateColumns: 'repeat(auto-fit, minmax(92px, 1fr))' }}>
-              {STAGEABLE_STATUSES.map((s) => {
-                const meta = STATUS_META[s];
-                const isNow = ch.status === s;
-                const on = staged?.status === s;
-                return (
-                  <button key={s} type="button" aria-pressed={on} onClick={() => setCharStatus(ch.id, s, ch.status)}
-                    className="flex flex-col items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] active:scale-[0.97] transition-transform"
-                    style={{ border: 0, borderRadius: 13, padding: '8px 4px', gap: 3, fontSize: 12.5, fontWeight: 700, cursor: 'pointer', fontFamily: CK.font,
-                      background: on ? meta.color : cabinetTint(meta.color, isNow ? 0.16 : 0.06), color: on ? '#fff' : meta.color,
-                      boxShadow: on ? CK.shadowSm : `inset 0 0 0 1px ${cabinetTint(meta.color, isNow ? 0.5 : 0.2)}` }}>
-                    <meta.Icon size={20} strokeWidth={1.5} aria-hidden />
-                    <span>{meta.label}</span>
-                    {isNow && <span style={{ fontSize: 10.5, fontWeight: 600, opacity: 0.85 }}>now</span>}
-                  </button>
-                );
-              })}
-            </div>
-            {staged && (
-              <input value={staged.note} maxLength={200} aria-label="Status note" placeholder="Short note, for example: killed in the raid" style={fieldStyle}
-                onChange={(e) => setEffects((e0) => ({ ...e0, characters: { ...e0.characters, [ch.id]: { ...staged, note: e.target.value } } }))} />
-            )}
-          </>
-        )}
-      </Section>
-
-      {/* News */}
-      <Section icon={Newspaper} title="News">
-        <Muted>Optional. A newsflash from this directive, saved as a draft on the News page.</Muted>
-        <div><FieldLabel>Title</FieldLabel>
-          <input value={news?.title ?? ''} onChange={(e) => patchNews({ title: e.target.value })} maxLength={160} aria-label="News title" placeholder="What happened" style={fieldStyle} />
-        </div>
-        <div><FieldLabel>Story</FieldLabel>
-          <textarea value={news?.body ?? ''} onChange={(e) => patchNews({ body: e.target.value })} rows={3} aria-label="News text" placeholder="The story" style={{ ...fieldStyle, resize: 'vertical' }} />
-        </div>
-        <div className="flex flex-wrap" style={{ gap: 8 }}>
-          <div style={{ flex: '1 1 150px', minWidth: 0 }}><FieldLabel hint="optional">Source</FieldLabel>
-            <input value={news?.source ?? ''} onChange={(e) => patchNews({ source: e.target.value })} maxLength={80} aria-label="News source" placeholder="For example Radio Moscow" style={fieldStyle} />
+      {/* The cards */}
+      {effects.cards.map((card) => {
+        const common = { card, env, onTarget: (t: string) => retarget(card, t), onRemove: () => removeCard(card) };
+        return (
+          <div key={card.id} data-card={card.id}>
+            {card.kind === 'resources' && <ResourcesCard {...common} />}
+            {card.kind === 'unit' && <UnitCard {...common} />}
+            {card.kind === 'border' && <BorderCard {...common} />}
+            {card.kind === 'character' && <CharacterCard {...common} />}
+            {card.kind === 'news' && <NewsCard env={env} onRemove={common.onRemove} />}
           </div>
-          <div style={{ flex: '1 1 150px', minWidth: 0 }}><FieldLabel>Who reads it</FieldLabel>
-            <GSelect size="sm" value={news?.audience ?? ''} options={audienceOptions} onChange={(v) => patchNews({ audience: v })} aria-label="News audience" />
-          </div>
-        </div>
-      </Section>
+        );
+      })}
+
+      {!empty && addMenu}
     </div>
   );
 }

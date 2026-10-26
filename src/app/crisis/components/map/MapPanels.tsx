@@ -1,14 +1,15 @@
 'use client';
-// Gavelling Crisis war map: the small panels that sit on the map card (top right on a wide screen,
-// under the map on a phone): unit picker, editor and viewer, the territory editor and the border panel.
+// Gavelling Crisis map: the small panels that sit on the map card (top right on a wide screen,
+// under the map on a phone): unit picker, editor and viewer, the territory card (a country or a drawn
+// area: who holds it, and how to reshape it), drawing new territory, and a character's card.
 // Each panel keeps its own form state; the caller gives it a `key` so a new subject starts clean.
 
 import { useState, type ReactNode } from 'react';
-import { Check, Trash2, X, Undo2 } from 'lucide-react';
+import { Check, RotateCcw, Trash2, X, Undo2 } from 'lucide-react';
 import GSelect from '@/components/GSelect';
 import { amount as fmtAmount } from '@/lib/crisis/format';
 import { Btn, CK, FieldLabel, fieldStyle } from '../../crisisKit';
-import type { MapUnit, UnitKind } from '@/lib/crisis/types';
+import type { Character, MapUnit, UnitKind } from '@/lib/crisis/types';
 import { KIND_META, KIND_ORDER } from './mapData';
 import { glyphSvg } from './glyphs';
 
@@ -240,97 +241,161 @@ export function UnitEditor({
 }
 
 /** What a cabinet (or a delegate) is allowed to see about a unit. */
-export function UnitViewer({ unit, suspected, cabinets, onClose }: { unit: MapUnit; suspected: boolean; cabinets: PanelCabinet[]; onClose: () => void }) {
+export function UnitViewer({ unit, cabinets, onClose }: { unit: MapUnit; cabinets: PanelCabinet[]; onClose: () => void }) {
   const owner = cabinets.find((c) => c.id === unit.owner_cabinet_id);
   return (
-    <Shell title={suspected ? 'Suspected Site' : unit.name} onClose={onClose}>
-      {suspected ? (
-        <p style={{ margin: 0, fontSize: 13.5, color: CK.inkSoft }}>Your people think something is here. You do not know what it is yet.</p>
+    <Shell title={unit.name} onClose={onClose}>
+      <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '6px 12px', fontSize: 13.5 }}>
+        <dt style={{ color: CK.muted }}>Kind</dt><dd style={{ margin: 0 }}>{KIND_META[unit.kind].label}</dd>
+        <dt style={{ color: CK.muted }}>Amount</dt><dd style={{ margin: 0, fontVariantNumeric: 'tabular-nums' }}>{fmtAmount(unit.strength)}</dd>
+        <dt style={{ color: CK.muted }}>Held by</dt>
+        <dd className="flex items-center" style={{ margin: 0, gap: 6, overflowWrap: 'anywhere' }}>
+          {owner ? (<><Dot color={owner.color} />{owner.name}</>) : 'Nobody'}
+        </dd>
+      </dl>
+    </Shell>
+  );
+}
+
+function Confirm({ text, yes, busy, onYes, onNo }: { text: string; yes: string; busy: boolean; onYes: () => void; onNo: () => void }) {
+  return (
+    <div style={{ marginTop: 10, padding: 10, borderRadius: 12, background: CK.well }}>
+      <p style={{ margin: '0 0 8px', fontSize: 13, color: CK.ink }}>{text}</p>
+      <div className="flex flex-wrap" style={{ gap: 8 }}>
+        <Btn size="sm" tone="red" disabled={busy} onClick={onYes}>{yes}</Btn>
+        <Btn size="sm" tone="ghost" onClick={onNo}>Keep it</Btn>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A selected country or drawn area: who holds it and, for staff with map power, how to reshape it.
+ * `detailed` outlines (many corners) are reshaped by pressing on the outline; simple ones also show corners.
+ */
+export function TerritoryCard({
+  name, kind, owner, cabinets, editable, detailed, edited, busy, onOwner, onReset, onDelete, onClose,
+}: {
+  name: string; kind: 'country' | 'area'; owner: string | null; cabinets: PanelCabinet[]; editable: boolean; detailed: boolean;
+  edited: boolean; busy: boolean; onOwner: (id: string | null) => void; onReset?: () => void; onDelete?: () => void; onClose: () => void;
+}) {
+  const [confirm, setConfirm] = useState<'reset' | 'delete' | null>(null);
+  const holder = cabinets.find((c) => c.id === owner);
+  return (
+    <Shell title={name} onClose={onClose}>
+      <p style={{ margin: '-6px 0 10px', fontSize: 12.5, fontWeight: 600, color: CK.muted }}>
+        {kind === 'country' ? (edited ? 'Country, border changed in this crisis' : 'Country') : 'Drawn territory'}
+      </p>
+      {editable ? (
+        <Field label="Held by">
+          <OwnerPicker value={owner} cabinets={cabinets} withNobody disabled={busy} ariaLabel="Who holds this territory" onChange={onOwner} />
+        </Field>
       ) : (
-        <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '6px 12px', fontSize: 13.5 }}>
-          <dt style={{ color: CK.muted }}>Kind</dt><dd style={{ margin: 0 }}>{KIND_META[unit.kind].label}</dd>
-          <dt style={{ color: CK.muted }}>Amount</dt><dd style={{ margin: 0, fontVariantNumeric: 'tabular-nums' }}>{fmtAmount(unit.strength)}</dd>
-          <dt style={{ color: CK.muted }}>Held by</dt>
-          <dd className="flex items-center" style={{ margin: 0, gap: 6, overflowWrap: 'anywhere' }}>
-            {owner ? (<><Dot color={owner.color} />{owner.name}</>) : 'Nobody'}
-          </dd>
-        </dl>
+        <p className="flex items-center" style={{ margin: 0, gap: 6, fontSize: 13.5, color: CK.ink, overflowWrap: 'anywhere' }}>
+          <span style={{ color: CK.muted }}>Held by</span>
+          {holder ? (<><Dot color={holder.color} /><b>{holder.name}</b></>) : <b>Nobody</b>}
+        </p>
+      )}
+      {editable && (
+        <p style={{ margin: '0 0 10px', fontSize: 12.5, color: CK.inkSoft }}>
+          {detailed
+            ? 'To move the border, press on the outline and drag. It bends out or in from that point. Do it again elsewhere to change it another way.'
+            : 'Drag a white corner to move it, or press anywhere on the outline and drag to add a corner there. Double-click a corner to remove it.'}
+        </p>
+      )}
+      {editable && (onReset || onDelete) && !confirm && (
+        <div className="flex flex-wrap" style={{ gap: 8 }}>
+          {onReset && edited && (
+            <Btn size="sm" tone="ghost" disabled={busy} icon={<RotateCcw size={14} strokeWidth={1.5} />} onClick={() => setConfirm('reset')}>Back to the real border</Btn>
+          )}
+          {onDelete && (
+            <Btn size="sm" tone="danger" disabled={busy} icon={<Trash2 size={14} strokeWidth={1.5} />} onClick={() => setConfirm('delete')}>Delete</Btn>
+          )}
+        </div>
+      )}
+      {confirm === 'reset' && onReset && (
+        <Confirm
+          text="Put back the real border? Land it covers is taken back from whoever holds it now." yes="Yes, put it back" busy={busy}
+          onYes={() => { setConfirm(null); onReset(); }} onNo={() => setConfirm(null)}
+        />
+      )}
+      {confirm === 'delete' && onDelete && (
+        <Confirm text="Remove this territory from the map?" yes="Yes, remove it" busy={busy} onYes={onDelete} onNo={() => setConfirm(null)} />
       )}
     </Shell>
   );
 }
 
-/** Extend territory: draw new land for a cabinet, and reshape saved territory by its corners. */
-export function TerritoryPanel({
-  phase, isNew, owner, pointCount, minPoints, cabinets, busy, onOwner, onUndo, onFinish, onSave, onDelete, onClose,
+/** Borders tool: a new territory being drawn on the map, then who holds it. */
+export function NewTerritoryPanel({
+  phase, owner, pointCount, minPoints, cabinets, busy, onOwner, onUndo, onFinish, onSave, onClose,
 }: {
-  phase: 'draw' | 'refine'; isNew: boolean; owner: string | null; pointCount: number; minPoints: number; cabinets: PanelCabinet[]; busy: boolean;
-  onOwner: (id: string | null) => void; onUndo: () => void; onFinish: () => void; onSave: () => void; onDelete?: () => void; onClose: () => void;
+  phase: 'draw' | 'refine'; owner: string | null; pointCount: number; minPoints: number; cabinets: PanelCabinet[]; busy: boolean;
+  onOwner: (id: string | null) => void; onUndo: () => void; onFinish: () => void; onSave: () => void; onClose: () => void;
 }) {
-  const [confirm, setConfirm] = useState(false);
-  const title = isNew ? 'Extend Territory' : 'Territory';
   const ownerPick = (
-    <Field label="Land goes to">
-      <OwnerPicker value={owner} cabinets={cabinets} ariaLabel="Who holds this land" onChange={onOwner} />
+    <Field label="Held by">
+      <OwnerPicker value={owner} cabinets={cabinets} withNobody ariaLabel="Who holds this land" onChange={onOwner} />
     </Field>
   );
-
   if (phase === 'draw') {
     return (
-      <Shell title={title} onClose={onClose}>
-        {ownerPick}
+      <Shell title="New Territory" onClose={onClose}>
         <p style={{ margin: '0 0 10px', fontSize: 13, color: CK.inkSoft }}>
-          Click the map to outline the land. Double-click or press Finish to close the shape. You can drag the corners afterwards.
+          Click the map to add points. Double-click, or click the first point, to close the shape.
         </p>
         <p style={{ margin: '0 0 10px', fontSize: 13.5 }}>
           <b style={{ fontSize: 20, fontVariantNumeric: 'tabular-nums' }}>{pointCount}</b> <span style={{ color: CK.inkSoft }}>{pointCount === 1 ? 'point' : 'points'}</span>
         </p>
         <div className="flex flex-wrap" style={{ gap: 8 }}>
-          <Btn size="sm" disabled={pointCount < minPoints} icon={<Check size={14} strokeWidth={1.5} />} onClick={onFinish}>Finish</Btn>
+          <Btn size="sm" disabled={pointCount < minPoints} icon={<Check size={14} strokeWidth={1.5} />} onClick={onFinish}>Close the shape</Btn>
           <Btn size="sm" tone="ghost" disabled={pointCount === 0} icon={<Undo2 size={14} strokeWidth={1.5} />} onClick={onUndo}>Undo point</Btn>
           <Btn size="sm" tone="ghost" onClick={onClose}>Cancel</Btn>
         </div>
       </Shell>
     );
   }
-
   return (
-    <Shell title={title} onClose={onClose}>
-      <p style={{ margin: '0 0 10px', fontSize: 13, color: CK.inkSoft }}>
-        Drag the corners to reshape the land. Click a small dot to add a corner. Double-click a corner to remove it.
-      </p>
+    <Shell title="New Territory" onClose={onClose}>
       {ownerPick}
+      <p style={{ margin: '0 0 10px', fontSize: 12.5, color: CK.inkSoft }}>
+        You can still drag the corners. Land it covers is taken from whoever holds it now.
+      </p>
       <div className="flex flex-wrap items-center" style={{ gap: 8 }}>
-        <Btn size="sm" disabled={busy || !owner} icon={<Check size={14} strokeWidth={1.5} />} onClick={onSave}>{isNew ? 'Save territory' : 'Save'}</Btn>
+        <Btn size="sm" disabled={busy} icon={<Check size={14} strokeWidth={1.5} />} onClick={onSave}>Save territory</Btn>
         <Btn size="sm" tone="ghost" onClick={onClose}>Cancel</Btn>
-        {!isNew && onDelete && !confirm && (
-          <Btn size="sm" tone="danger" disabled={busy} icon={<Trash2 size={14} strokeWidth={1.5} />} onClick={() => setConfirm(true)}>Delete</Btn>
-        )}
       </div>
-      {confirm && onDelete && (
-        <div style={{ marginTop: 10, padding: 10, borderRadius: 12, background: CK.well }}>
-          <p style={{ margin: '0 0 8px', fontSize: 13, color: CK.ink }}>Remove this territory from the map?</p>
-          <div className="flex" style={{ gap: 8 }}>
-            <Btn size="sm" tone="red" disabled={busy} onClick={onDelete}>Yes, remove it</Btn>
-            <Btn size="sm" tone="ghost" onClick={() => setConfirm(false)}>Keep it</Btn>
-          </div>
-        </div>
-      )}
     </Shell>
   );
 }
 
-/** Borders tool: choose who receives countries once, then every click on a country hands it over. */
-export function BorderPanel({ brush, cabinets, onBrush, onClose }: {
-  brush: string | null; cabinets: PanelCabinet[]; onBrush: (id: string | null) => void; onClose: () => void;
-}) {
+/** A character standing on the map (staff only): who they are. */
+export function CharacterCard({ character, cabinet, onClose }: { character: Character; cabinet: PanelCabinet | null; onClose: () => void }) {
+  const status = character.status !== 'active' ? character.status.charAt(0).toUpperCase() + character.status.slice(1) : null;
   return (
-    <Shell title="Borders" onClose={onClose}>
-      <Field label="Hand countries to">
-        <OwnerPicker value={brush} cabinets={cabinets} withNobody ariaLabel="Who receives the countries you click" onChange={onBrush} />
-      </Field>
-      <p style={{ margin: '0 0 6px', fontSize: 13, color: CK.inkSoft }}>Each click on a country hands it over at once.</p>
-      <p style={{ margin: 0, fontSize: 12, color: CK.muted }}>Click inside extended territory to reshape its corners.</p>
+    <Shell title={character.name} onClose={onClose}>
+      <div className="flex items-start" style={{ gap: 12 }}>
+        <span
+          aria-hidden
+          style={{
+            width: 52, height: 52, borderRadius: '50%', flex: 'none', overflow: 'hidden', boxSizing: 'border-box',
+            border: `3px solid ${cabinet?.color ?? CK.inkSoft}`, background: cabinet?.color ?? CK.inkSoft, display: 'grid', placeItems: 'center',
+          }}
+        >
+          {character.picture_url
+            // eslint-disable-next-line @next/next/no-img-element
+            ? <img src={character.picture_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            : <span style={{ color: '#fff', fontWeight: 800, fontSize: 18 }}>{character.name.trim().charAt(0).toUpperCase()}</span>}
+        </span>
+        <div className="min-w-0" style={{ fontSize: 13.5 }}>
+          {character.title && <p style={{ margin: '0 0 4px', color: CK.inkSoft, overflowWrap: 'anywhere' }}>{character.title}</p>}
+          <p className="flex items-center" style={{ margin: 0, gap: 6, overflowWrap: 'anywhere' }}>
+            {cabinet ? (<><Dot color={cabinet.color} />{cabinet.name}</>) : <span style={{ color: CK.muted }}>No cabinet</span>}
+          </p>
+          {character.location && <p style={{ margin: '4px 0 0', color: CK.muted, overflowWrap: 'anywhere' }}>{character.location}</p>}
+          {status && <p style={{ margin: '4px 0 0', fontWeight: 700, color: CK.red }}>{status}</p>}
+        </div>
+      </div>
     </Shell>
   );
 }

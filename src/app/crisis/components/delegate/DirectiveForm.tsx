@@ -151,7 +151,8 @@ export default function DirectiveForm({
         coauthors: kind === 'joint' ? d.coauthors : [],
       } as DirectiveDraft); // no "To": the receiver is left out and the database stores none
       if (r.ok) {
-        notifyOk(`Directive ${dirNumber({ no: r.no, cabinet_no: (r as { cabinet_no?: number | null }).cabinet_no ?? null })} sent`);
+        const num = dirNumber({ no: r.no, cabinet_no: r.cabinet_no ?? null });
+        notifyOk(r.awaiting_chair ? `Directive ${num} sent to your chair` : `Directive ${num} sent`);
         setD(EMPTY);
         onSent();
       } else if (r.reason === 'cooldown') {

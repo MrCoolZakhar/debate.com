@@ -3,17 +3,14 @@
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import Link from 'next/link';
-import { CalendarClock, ClipboardCheck, Landmark, Newspaper, Pause, Pencil, Play, Users } from 'lucide-react';
+import { CalendarClock, ClipboardCheck, Newspaper, Pause, Pencil, Play, Users } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { DatePicker } from '@/components/DatePicker';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { crisisError, patchCrisis, publishNews, type CrisisRef } from '@/lib/crisis/api';
-import type { Cabinet, Crisis, Member, News, Resource, ResourceType } from '@/lib/crisis/types';
+import type { Cabinet, Crisis, Member, News } from '@/lib/crisis/types';
 import { Btn, Card, CardTitle, CK, cabinetTint, Eyebrow, fieldStyle, scenarioLabel, Skeleton, waitLabel } from '../../crisisKit';
-import { groupResourcesByCabinet } from './commandData';
-import CabinetResourcesDialog from './CabinetResourcesDialog';
-import ResourceDisc from '../resources/ResourceDisc';
-import ResourceHistoryDialog from '../resources/ResourceHistoryDialog';
+import NewsComposerDialog from './NewsComposerDialog';
 import { TryAsButton } from './TryAsPanel';
 
 // ─────────── Shared bits ───────────
@@ -21,8 +18,8 @@ import { TryAsButton } from './TryAsPanel';
 type LinkTone = 'ghost' | 'red' | 'green';
 
 /** A link that looks like a crisis button (navigation is a link, not a button). */
-export function LinkBtn({ href, tone = 'ghost', icon, children, newTab, style }: {
-  href: string; tone?: LinkTone; icon?: ReactNode; children: ReactNode; newTab?: boolean; style?: CSSProperties;
+export function LinkBtn({ href, tone = 'ghost', icon, children, newTab, style, title }: {
+  href: string; tone?: LinkTone; icon?: ReactNode; children: ReactNode; newTab?: boolean; style?: CSSProperties; title?: string;
 }) {
   const bg: Record<LinkTone, string> = { ghost: CK.card, red: CK.redBtn, green: CK.greenBtn };
   const color: Record<LinkTone, string> = { ghost: CK.forest, red: '#FFF4E6', green: '#FFFFFF' };
@@ -30,6 +27,7 @@ export function LinkBtn({ href, tone = 'ghost', icon, children, newTab, style }:
   return (
     <Link
       href={href}
+      title={title}
       {...(newTab ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
       className="inline-flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] active:scale-[0.97] transition-transform"
       style={{
@@ -236,10 +234,12 @@ export function CommandHeader({ crisis, cref, acronym, logoUrl, members, now, on
 
 // ─────────── Needs your approval ───────────
 
-export function ApprovalCard({ news, cabinets, members, cref, base, now, onChanged }: {
-  news: News[] | null; cabinets: Cabinet[]; members: Member[]; cref: CrisisRef; base: string; now: number; onChanged: () => void;
+export function ApprovalCard({ news, cabinets, members, cref, now, onChanged }: {
+  news: News[] | null; cabinets: Cabinet[]; members: Member[]; cref: CrisisRef; now: number; onChanged: () => void;
 }) {
   const [busy, setBusy] = useState<string | null>(null);
+  // The news composer opens as a pop-up (no navigation): blank for "Crisis news", loaded with a draft for "Edit".
+  const [composer, setComposer] = useState<{ edit: News | null } | null>(null);
   const drafts = useMemo(() => (news ?? []).filter((n) => n.status === 'draft').sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()), [news]);
   const cabName = (id: string | null) => (id ? cabinets.find((c) => c.id === id)?.name ?? 'one room' : null);
   const authorOf = (id: string | null) => members.find((m) => m.id === id)?.display_name ?? null;
@@ -259,7 +259,7 @@ export function ApprovalCard({ news, cabinets, members, cref, base, now, onChang
     <Card className="cmd-card cmd-approval">
       <CardTitle
         icon={<ClipboardCheck size={17} strokeWidth={1.5} />}
-        right={<LinkBtn href={`${base}/news`} tone="red" icon={<Newspaper size={13} strokeWidth={1.5} />}>Crisis news</LinkBtn>}
+        right={<Btn size="sm" tone="red" icon={<Newspaper size={13} strokeWidth={1.5} />} onClick={() => setComposer({ edit: null })}>Crisis news</Btn>}
       >
         Needs Your Approval
       </CardTitle>
@@ -279,94 +279,12 @@ export function ApprovalCard({ news, cabinets, members, cref, base, now, onChang
               </div>
               <div className="flex" style={{ gap: 6, flex: 'none' }}>
                 <Btn size="sm" onClick={() => publish(n)} disabled={busy === n.id}>Publish</Btn>
-                <LinkBtn href={`${base}/news`}>Edit</LinkBtn>
+                <Btn size="sm" tone="ghost" onClick={() => setComposer({ edit: n })}>Edit</Btn>
               </div>
             </div>
           );
         })}
-    </Card>
-  );
-}
-
-// ─────────── Cabinet resources ───────────
-
-/** Tiles shown per cabinet on Command (two rows of four); "See all" opens everything. */
-const PER_CABINET = 8;
-
-export function ResourcesCard({ cabinets, types, resources, changes, loaded }: {
-  cabinets: Cabinet[]; types: ResourceType[]; resources: Resource[]; changes: Map<string, number>; loaded: boolean;
-}) {
-  const [view, setView] = useState<{ kind: 'all' } | { kind: 'one'; id: string } | null>(null);
-  const typeById = useMemo(() => new Map(types.map((t) => [t.id, t])), [types]);
-  const byCab = useMemo(() => groupResourcesByCabinet(resources), [resources]);
-  const cabinetRows = (cabId: string) => (byCab.get(cabId) ?? []).filter((r) => typeById.get(r.type_id)?.scope === 'cabinet')
-    .sort((a, b) => (typeById.get(a.type_id)?.sort ?? 0) - (typeById.get(b.type_id)?.sort ?? 0));
-  const withRes = cabinets.filter((c) => cabinetRows(c.id).length > 0);
-  const one = view?.kind === 'one' ? resources.find((r) => r.id === view.id) ?? null : null;
-  const oneType = one ? typeById.get(one.type_id) : undefined;
-  const oneCab = one ? cabinets.find((c) => c.id === one.cabinet_id) : undefined;
-
-  return (
-    <Card className="cmd-card cmd-resources" style={{ padding: '12px 16px 14px' }}>
-      <CardTitle
-        icon={<Landmark size={17} strokeWidth={1.5} />}
-        right={withRes.length > 0 ? <Btn size="sm" tone="ghost" onClick={() => setView({ kind: 'all' })}>See all</Btn> : undefined}
-      >
-        Cabinet Resources
-      </CardTitle>
-      {!loaded ? <div className="flex flex-col" style={{ gap: 8 }}><Skeleton h={18} w="50%" /><Skeleton h={90} r={16} /></div>
-        : withRes.length === 0 ? <EmptyLine>No cabinet resources yet.</EmptyLine>
-        : (
-          <div style={{ display: 'grid', gap: '14px 22px', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))' }}>
-            {withRes.map((cab) => {
-              const rows = cabinetRows(cab.id);
-              const shown = rows.slice(0, PER_CABINET);
-              return (
-                <div key={cab.id} style={{ minWidth: 0 }}>
-                  <h3 className="flex items-center" style={{ margin: '0 0 8px', gap: 7, fontSize: 13, fontWeight: 800, color: cab.color, overflowWrap: 'anywhere' }}>
-                    <i aria-hidden style={{ width: 10, height: 10, borderRadius: '50%', background: cab.color, display: 'inline-block', flex: 'none' }} />
-                    {cab.name}
-                    {rows.length > shown.length && (
-                      <button type="button" onClick={() => setView({ kind: 'all' })} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]" style={{ marginLeft: 'auto', border: 0, background: 'transparent', padding: 0, cursor: 'pointer', fontFamily: CK.font, fontSize: 12, fontWeight: 700, color: CK.forest, textDecoration: 'underline', whiteSpace: 'nowrap' }}>
-                        See all {rows.length}
-                      </button>
-                    )}
-                  </h3>
-                  <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(auto-fill, minmax(96px, 1fr))' }}>
-                    {shown.map((r) => {
-                      const t = typeById.get(r.type_id);
-                      return (
-                        <ResourceDisc
-                          key={r.id}
-                          name={t?.name ?? 'Resource'}
-                          unit={t?.unit}
-                          value={r.amount}
-                          change={changes.get(r.id)}
-                          color={cab.color}
-                          onOpen={() => setView({ kind: 'one', id: r.id })}
-                        />
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-      {view?.kind === 'all' && (
-        <CabinetResourcesDialog cabinets={cabinets} types={types} resources={resources} changes={changes} onClose={() => setView(null)} />
-      )}
-      {one && oneType && (
-        <ResourceHistoryDialog
-          resource={{ id: one.id, amount: one.amount }}
-          typeName={oneType.name}
-          unit={oneType.unit}
-          color={oneCab?.color}
-          eyebrow={oneCab?.name}
-          onClose={() => setView(null)}
-        />
-      )}
+      {composer && <NewsComposerDialog edit={composer.edit} onClose={() => setComposer(null)} onChanged={onChanged} />}
     </Card>
   );
 }

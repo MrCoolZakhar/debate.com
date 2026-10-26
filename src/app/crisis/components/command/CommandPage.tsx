@@ -10,10 +10,11 @@ import { notifyErr } from '@/lib/appNotify';
 import { crisisError, listDirectives, listNews, loadResources } from '@/lib/crisis/api';
 import { useCrisisLive } from '@/lib/crisis/live';
 import type { Directive, News, Resource, ResourceType } from '@/lib/crisis/types';
-import { Card, CardTitle, CK, Skeleton } from '../../crisisKit';
+import { Card, CK, Skeleton } from '../../crisisKit';
 import { crisisBase, useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { loadLastChanges } from './commandData';
-import { ApprovalCard, CommandHeader, LinkBtn, ResourcesCard } from './commandParts';
+import { ApprovalCard, CommandHeader, LinkBtn } from './commandParts';
+import { ResourcesStrip } from './commandResources';
 import { DirectiveDrawer, WaitingCard } from './commandQueue';
 import { BackroomCard, FrontRoomsCard } from './commandRooms';
 
@@ -22,33 +23,36 @@ const WarMap = dynamic(() => import('../map/WarMap'), {
   loading: () => <Skeleton h={300} r={16} />,
 });
 
-// Layout (owner, 26 Oct 2026: "too much on one page", "awkward gaps around the war map").
-// From 1240px the first row is exactly the screen under the header (56px bar, 4px top, 8px page top, 48px strip,
-// 10px gap, 18px bottom): Waiting for a Reply over Needs Your Approval on the left, the War Map filling its card
-// in the middle, the Front Rooms on the right. Every card in a column shares the column's full height and scrolls
-// inside itself, so nothing leaves an empty band. Cabinet Resources and the Backroom sit in a second row under it
-// and the page scrolls to them. Below 1240px the cards stack and the page scrolls as usual.
+// Layout (owner, 27 Oct 2026, asked twice: "it's not on one page anymore"). From 1100px wide the page is EXACTLY the
+// screen under the top bar and never scrolls: the page is a flex column (header strip, then the grid filling the rest).
+// Left: Waiting for a Reply (tall, its list scrolls inside) over Needs Your Approval. Middle: the Map card filling
+// the height, with Cabinet Resources as a small strip directly under it. Right: Front Rooms over the Backroom, both
+// scrolling inside themselves. Every card in a column shares the column's height exactly (flex, min-height 0), so
+// there are no empty bands and no gaps around the map. Below 1100px the cards stack and the page scrolls.
+// Height maths: 56px top bar + 4px main top padding + 18px main bottom padding = 78px, plus 2px of slack.
 const GRID_CSS = `
-.cmd-grid { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); grid-template-areas: "map" "needs" "side" "res" "back"; }
+.cmd-page { display: flex; flex-direction: column; padding-top: 8px; }
+.cmd-grid { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); grid-template-areas: "map" "needs" "side"; }
 .cmd-col { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-.cmd-needs { grid-area: needs; } .cmd-map { grid-area: map; min-width: 0; } .cmd-side { grid-area: side; } .cmd-res { grid-area: res; min-width: 0; } .cmd-back { grid-area: back; min-width: 0; }
-.cmd-mapbox { position: relative; display: flex; flex-direction: column; height: clamp(320px, 50vh, 560px); border-radius: 16px; overflow: hidden; }
+.cmd-needs { grid-area: needs; } .cmd-mapcol { grid-area: map; } .cmd-side { grid-area: side; }
+.cmd-mapcard { display: flex; flex-direction: column; padding: 10px 12px 12px; height: clamp(380px, 56vh, 560px); }
+.cmd-mapbox { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
 .cmd-mapbox .wm-root { flex: 1 1 0; height: auto; min-height: 0; }
 .cmd-mapbox .wm-body { min-height: 0; }
-@media (min-width: 768px) and (max-width: 1239px) {
-  .cmd-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "map map" "needs side" "res res" "back back"; }
+@media (min-width: 768px) and (max-width: 1099px) {
+  .cmd-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "map map" "needs side"; }
 }
-@media (min-width: 1240px) {
-  .cmd-grid { grid-template-columns: minmax(300px, 340px) minmax(0, 1fr) minmax(310px, 380px); grid-template-rows: max(560px, calc(100dvh - 146px)) auto; grid-template-areas: "needs map side" "res res back"; padding-bottom: 28px; }
-  .cmd-needs, .cmd-side { min-height: 0; }
-  .cmd-map > section { height: 100%; overflow: hidden; }
-  .cmd-mapbox { flex: 1 1 0; height: auto; min-height: 0; }
-  .cmd-needs > .cmd-card, .cmd-side > .cmd-card { min-height: 0; overflow: auto; flex: 0 1 auto; }
-  .cmd-wait { flex: 1 1 0; min-height: 0; display: flex; }
-  .cmd-wait > section { flex: 1; min-height: 0; overflow: auto; }
-  .cmd-needs > .cmd-approval { max-height: 45%; min-height: 128px; }
-  .cmd-side > .cmd-rooms { flex: 1 1 0; }
-  .cmd-res > .cmd-card, .cmd-back > .cmd-card { height: 100%; }
+@media (min-width: 1100px) {
+  .cmd-page { height: calc(100dvh - 80px); min-height: 560px; }
+  .cmd-grid { flex: 1 1 0; min-height: 0; grid-template-columns: minmax(270px, 26%) minmax(0, 1fr) minmax(290px, 27%); grid-template-rows: minmax(0, 1fr); grid-template-areas: "needs map side"; }
+  .cmd-col { min-height: 0; }
+  .cmd-col > .cmd-card { min-height: 0; overflow: auto; }
+  .cmd-wait { flex: 1 1 0; display: flex; flex-direction: column; overflow: hidden !important; }
+  .cmd-scroll { flex: 1 1 0; min-height: 0; overflow-y: auto; padding: 12px 3px 4px; margin: -8px -3px 0; }
+  .cmd-approval { flex: 0 1 auto; max-height: 42%; min-height: 96px; }
+  .cmd-mapcard { flex: 1 1 0; min-height: 0; height: auto; overflow: hidden; }
+  .cmd-res { flex: none; max-height: 36%; }
+  .cmd-rooms, .cmd-back { flex: 1 1 auto; }
 }
 `;
 
@@ -114,7 +118,7 @@ export default function CommandPage() {
 
   const crisis = core.crisis;
   return (
-    <div style={{ paddingTop: 8 }}>
+    <div className="cmd-page">
       <style>{GRID_CSS}</style>
       <CommandHeader
         crisis={crisis}
@@ -128,35 +132,25 @@ export default function CommandPage() {
 
       <div className="cmd-grid">
         <section className="cmd-col cmd-needs">
-          <div className="cmd-wait">
-            <WaitingCard directives={directives} base={base} now={now} onOpen={(d) => setOpen(d.id)} />
-          </div>
-          <ApprovalCard news={news} cabinets={core.cabinets} members={core.members} cref={ref} base={base} now={now} onChanged={() => { void readNews(); }} />
+          <WaitingCard directives={directives} base={base} now={now} onOpen={(d) => setOpen(d.id)} />
+          <ApprovalCard news={news} cabinets={core.cabinets} members={core.members} cref={ref} now={now} onChanged={() => { void readNews(); }} />
         </section>
 
-        <section className="cmd-map">
-          <Card style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '10px 14px 14px' }}>
-            <CardTitle
-              icon={<MapIcon size={17} strokeWidth={1.5} />}
-              right={<LinkBtn href={`${base}/map`}>Open the full map</LinkBtn>}
-            >
-              War Map
-            </CardTitle>
+        <section className="cmd-col cmd-mapcol">
+          <Card className="cmd-mapcard">
             <div className="cmd-mapbox">
-              <WarMap compact />
+              <WarMap
+                compact
+                title={<span className="inline-flex items-center" style={{ gap: 7 }}><MapIcon size={17} strokeWidth={1.5} style={{ color: CK.red }} aria-hidden />Map</span>}
+                actions={<LinkBtn href={`${base}/map`}>Open the full map</LinkBtn>}
+              />
             </div>
           </Card>
+          <ResourcesStrip cabinets={core.cabinets} types={res?.types ?? []} resources={res?.resources ?? []} changes={changes} loaded={res !== null} />
         </section>
 
         <section className="cmd-col cmd-side">
           <FrontRoomsCard cref={ref} cabinets={core.cabinets} />
-        </section>
-
-        <section className="cmd-res">
-          <ResourcesCard cabinets={core.cabinets} types={res?.types ?? []} resources={res?.resources ?? []} changes={changes} loaded={res !== null} />
-        </section>
-
-        <section className="cmd-back">
           <BackroomCard cref={ref} members={core.members} directives={directives} base={base} onChanged={() => { void readDirectives(); }} />
         </section>
       </div>

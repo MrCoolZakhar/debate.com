@@ -72,6 +72,7 @@ function SettingsBody() {
           <ChoiceRow title="Word limit" hint="The longest a directive's action text may be.">
             <GSelect value={String(s.wordLimit)} onChange={(x) => save('wordLimit', Number(x))} options={WORD_LIMITS} aria-label="Word limit" style={{ minWidth: 170 }} />
           </ChoiceRow>
+          <ToggleRow title="Cabinet directives go to the chair first" checked={s.chairApprovesCabinetDirectives} onChange={(on) => save('chairApprovesCabinetDirectives', on)} hint="The chair of the cabinet approves them before the backroom sees them." />
           <ChoiceRow title="Queue order" hint="Fair: the longest wait first, then whoever heard back least recently. Oldest and newest go by when the directive was sent.">
             <Segmented
               ariaLabel="Queue order"
@@ -85,10 +86,10 @@ function SettingsBody() {
         <Card>
           <CardTitle icon={<ShieldCheck size={16} strokeWidth={1.5} />}>Backroom Powers</CardTitle>
           <p style={{ margin: '-4px 0 6px', fontSize: 13, color: CK.inkSoft }}>One set of powers for every backroomer.</p>
-          {full && <ToggleRow title="Edit the map" checked={s.backroomPowers.map} onChange={(on) => setPower('map', on)} hint="Move borders and draw shapes on the war map." />}
+          {full && <ToggleRow title="Edit the map" checked={s.backroomPowers.map} onChange={(on) => setPower('map', on)} hint="Move borders and draw shapes on the map." />}
           {full && <ToggleRow title="Change resources" checked={s.backroomPowers.resources} onChange={(on) => setPower('resources', on)} hint="Add or take away resources, with a reason." />}
           {full && <ToggleRow title="Fog of war" checked={s.backroomPowers.fog} onChange={(on) => setPower('fog', on)} hint="Choose what each cabinet can see on the map." />}
-          {full && <ToggleRow title="Units" checked={s.backroomPowers.units} onChange={(on) => setPower('units', on)} hint="Place and move units on the war map." />}
+          {full && <ToggleRow title="Units" checked={s.backroomPowers.units} onChange={(on) => setPower('units', on)} hint="Place and move units on the map." />}
           <ToggleRow title="Edit characters" checked={!!powers.characters} onChange={(on) => setPower('characters', on)} hint="Change a character's bio, picture, powers, status and guide. Off means a backroomer can only read them." />
           <ToggleRow title="See all directives" checked={s.backroomPowers.seeAll} onChange={(on) => setPower('seeAll', on)} hint="Off means a backroomer sees only the directives of their own characters." />
           <ToggleRow title="Publish news without approval" checked={s.backroomPowers.news} onChange={(on) => setPower('news', on)} hint="Off means a backroomer's news waits for the Crisis Director." />

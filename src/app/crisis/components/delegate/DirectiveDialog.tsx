@@ -98,6 +98,11 @@ export default function DirectiveDialog({
         <span style={{ color: tone, lineHeight: 0, flexShrink: 0 }}>{verdictIcon}</span>
         <div className="min-w-0">
           <b style={{ display: 'block', fontSize: 21, lineHeight: 1.15, fontWeight: 800, color: tone, overflowWrap: 'anywhere' }}>{verdict}</b>
+          {d.status === 'awaiting_chair' && (
+            <span className="block" style={{ marginTop: 2, fontSize: 13, fontWeight: 700, color: CK.inkSoft }}>
+              Your chair reads it first. If they send it on, it goes to the backroom.
+            </span>
+          )}
           {d.answered_at && (
             <span className="block" style={{ marginTop: 2, fontSize: 13, fontWeight: 700, color: CK.inkSoft }}>
               Reply came in {whenTitle(d.answered_at)} ({whenLabel(d.answered_at)})

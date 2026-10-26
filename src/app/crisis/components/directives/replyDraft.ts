@@ -8,7 +8,20 @@ import type { CharacterStatus, DirectiveOutcome } from '@/lib/crisis/types';
 export interface UnitStage { lng?: number; lat?: number; strength?: number }
 export interface NewsStage { title: string; body: string; source: string; audience: string }
 
+/** The kinds of card the side panel can hold. */
+export type EffectCardKind = 'resources' | 'unit' | 'border' | 'character' | 'news';
+
+/**
+ * One card in "What happens when you send". It only remembers WHAT it is about; what it changes is
+ * staged in the maps below (resources, units, regions, characters, news), so the send reads those.
+ * target: resources `cab:<id>` or `char:<id>` ('' = the author's cabinet), unit id, country key,
+ * character id; news has none.
+ */
+export interface EffectCard { id: string; kind: EffectCardKind; target: string }
+
 export interface EffectsDraft {
+  /** The cards on the panel, in the order they were added. */
+  cards: EffectCard[];
   /** Resource id to the CHANGE (not the new amount). */
   resources: Record<string, number>;
   /** Unit id to what changes about it. */
@@ -24,7 +37,9 @@ export interface ReplyDraft { outcome: DirectiveOutcome | null; reply: string; e
 
 export const STAGEABLE_STATUSES: CharacterStatus[] = ['active', 'arrested', 'dead', 'missing'];
 
-export const emptyEffects = (): EffectsDraft => ({ resources: {}, units: {}, regions: {}, characters: {}, news: null });
+export const emptyEffects = (): EffectsDraft => ({ cards: [], resources: {}, units: {}, regions: {}, characters: {}, news: null });
+
+export const newCardId = () => `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
 
 /** How many things the reply will change (a newsflash with no title is not one yet). */
 export function countChanges(e: EffectsDraft): number {
@@ -64,6 +79,21 @@ function parseEffects(raw: unknown): EffectsDraft {
       source: typeof n.source === 'string' ? n.source : '', audience: typeof n.audience === 'string' ? n.audience : '',
     };
   }
+  const CARD_KINDS: EffectCardKind[] = ['resources', 'unit', 'border', 'character', 'news'];
+  if (Array.isArray(raw.cards)) {
+    for (const c of raw.cards) {
+      if (!isObj(c) || typeof c.id !== 'string') continue;
+      const kind = CARD_KINDS.find((k) => k === c.kind);
+      if (kind) out.cards.push({ id: c.id, kind, target: typeof c.target === 'string' ? c.target : '' });
+    }
+  } else {
+    // A draft from before the cards: one card for everything that was staged.
+    if (Object.keys(out.resources).length) out.cards.push({ id: newCardId(), kind: 'resources', target: '' });
+    for (const k of Object.keys(out.units)) out.cards.push({ id: newCardId(), kind: 'unit', target: k });
+    for (const k of Object.keys(out.regions)) out.cards.push({ id: newCardId(), kind: 'border', target: k });
+    for (const k of Object.keys(out.characters)) out.cards.push({ id: newCardId(), kind: 'character', target: k });
+    if (out.news) out.cards.push({ id: newCardId(), kind: 'news', target: '' });
+  }
   return out;
 }
 
@@ -75,7 +105,7 @@ export function readReplyDraft(crisisId: string, directiveId: string): ReplyDraf
     const reply = typeof v.reply === 'string' ? v.reply : '';
     const outcome = OUTCOMES.find((o) => o === v.outcome) ?? null;
     const effects = parseEffects(v.effects);
-    return reply || outcome || countChanges(effects) > 0 || effects.news ? { outcome, reply, effects } : null;
+    return reply || outcome || countChanges(effects) > 0 || effects.news || effects.cards.length ? { outcome, reply, effects } : null;
   } catch {
     return null;
   }
@@ -84,7 +114,7 @@ export function readReplyDraft(crisisId: string, directiveId: string): ReplyDraf
 /** Saves the draft, or removes it when there is nothing to keep. Returns whether a draft is now stored. */
 export function writeReplyDraft(crisisId: string, directiveId: string, draft: ReplyDraft | null): boolean {
   try {
-    const empty = !draft || (!draft.reply.trim() && !draft.outcome && countChanges(draft.effects) === 0 && !draft.effects.news);
+    const empty = !draft || (!draft.reply.trim() && !draft.outcome && countChanges(draft.effects) === 0 && !draft.effects.news && draft.effects.cards.length === 0);
     if (empty) {
       window.localStorage.removeItem(keyOf(crisisId, directiveId));
       return false;
