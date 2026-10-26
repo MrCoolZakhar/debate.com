@@ -10,7 +10,7 @@ import {
   MEMBER_COLUMNS,
   type Cabinet, type Character, type CharacterSecret, type Crisis, type Directive, type DirectiveNote,
   type MapRegion, type MapShape, type MapUnit, type Member, type News, type Resource, type ResourceType,
-  type ResolvedCrisis, type DirectiveOutcome, type DirectiveKind, type CrisisMessage,
+  type ResolvedCrisis, type DirectiveOutcome, type DirectiveKind, type CrisisMessage, type Meeting, type MeetingStatus, type CharacterStatus,
 } from './types';
 
 export interface CrisisRef { conf: string; crisis: string; id: string }
@@ -258,9 +258,16 @@ export async function assignDirective(ref: CrisisRef, directiveId: string, membe
   must(res, 'Could not move this directive.');
 }
 
+/** Everything a reply can also do in the same press (docs/crisis/sql/010). */
 export interface AnswerEffects {
   resources?: Array<{ id: string; delta: number }>;
-  news?: { title: string; body?: string; source_label?: string; audience_cabinet_id?: string | null };
+  news?: { title: string; body?: string; source_label?: string; audience_cabinet_id?: string | null; banner_url?: string | null };
+  /** Change any character's status (kill, arrest, missing, back to active). Any staff. */
+  characters?: Array<{ id: string; status: CharacterStatus; status_note?: string | null }>;
+  /** Move a unit or change its amount (units power). */
+  units?: Array<{ id: string; lng?: number; lat?: number; strength?: number }>;
+  /** Hand a country to a cabinet or to nobody (map power). */
+  regions?: Array<{ key: string; owner_cabinet_id: string | null }>;
 }
 
 export async function answerDirective(ref: CrisisRef, directiveId: string, outcome: DirectiveOutcome, reply: string, effects: AnswerEffects = {}): Promise<{ news_id: string | null }> {
@@ -452,4 +459,31 @@ export async function crisisForRoom(code: string): Promise<{ conference_slug: st
   const res = await anonClient.rpc('crisis_for_room', { p_code: code });
   if (res.error) return null;
   return (res.data as { conference_slug: string; crisis_slug: string; name: string } | null) ?? null;
+}
+
+// ─────────── Meetings ───────────
+
+export async function listMeetings(ref: CrisisRef): Promise<Meeting[]> {
+  const client = await c(ref);
+  const res = await client.from('crisis_meetings').select('*').eq('crisis_id', ref.id).order('created_at', { ascending: false }).limit(1000);
+  return must(res, 'Could not load the meetings.') as Meeting[];
+}
+
+export type RequestMeetingResult = { ok: true; id: string; status: MeetingStatus } | { ok: false; reason: 'nobody' };
+export async function requestMeeting(ref: CrisisRef, m: { character_ids: string[]; intention: string; duration_minutes: number; wanted_time?: string | null }): Promise<RequestMeetingResult> {
+  const client = await c(ref);
+  const res = await client.rpc('crisis_request_meeting', { p_crisis: ref.id, p: m });
+  return must(res, 'Could not ask for the meeting. Try again.') as RequestMeetingResult;
+}
+
+export async function decideMeeting(ref: CrisisRef, meetingId: string, status: MeetingStatus, staffNote?: string | null, outcomeNote?: string | null): Promise<void> {
+  const client = await c(ref);
+  const res = await client.rpc('crisis_decide_meeting', { p_meeting: meetingId, p_status: status, p_staff_note: staffNote ?? null, p_outcome_note: outcomeNote ?? null });
+  must(res, 'Could not save that meeting decision.');
+}
+
+export async function cancelMeeting(ref: CrisisRef, meetingId: string): Promise<void> {
+  const client = await c(ref);
+  const res = await client.rpc('crisis_cancel_meeting', { p_meeting: meetingId });
+  must(res, 'Could not cancel the meeting.');
 }

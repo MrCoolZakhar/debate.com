@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard, ScrollText, Map as MapIcon, Newspaper, ContactRound, UsersRound, Settings, Presentation,
-  Home, LogOut, KeyRound,
+  Home, LogOut, KeyRound, CalendarClock, Boxes, GitBranch,
 } from 'lucide-react';
 import BrandLogo from '@/components/BrandLogo';
 import ProfileAvatarMenu from '@/components/ProfileAvatar';
@@ -23,17 +23,21 @@ import NewsPopup from '../../components/news/NewsPopup';
 interface NavItem { href: string; label: string; icon: React.ReactNode; section?: string }
 
 function navFor(role: CrisisRole, base: string): NavItem[] {
+  // The whole sidebar for every role, even pages still being built (Peter, 26 Oct 2026).
   const ic = (I: typeof Home) => <I size={19} strokeWidth={1.6} />;
-  const staffWorld: NavItem[] = [
-    { href: `${base}/map`, label: 'War map', icon: ic(MapIcon) },
-  ];
+  const map: NavItem = { href: `${base}/map`, label: 'War map', icon: ic(MapIcon) };
+  const news = (section?: string): NavItem => ({ href: `${base}/news`, label: 'News', icon: ic(Newspaper), section });
+  const meetings = (section?: string): NavItem => ({ href: `${base}/meetings`, label: 'Meetings', icon: ic(CalendarClock), section });
+  const characters = (section?: string): NavItem => ({ href: `${base}/characters`, label: 'Characters', icon: ic(ContactRound), section });
+  const resources = (section?: string): NavItem => ({ href: `${base}/resources`, label: 'Resources', icon: ic(Boxes), section });
+  const timeline = (section?: string): NavItem => ({ href: `${base}/timeline`, label: 'Arcs and timeline', icon: ic(GitBranch), section });
   if (role === 'director' || role === 'assistant_director' || role === 'organiser') {
     return [
       { href: base, label: 'Command', icon: ic(LayoutDashboard) },
-      ...staffWorld,
+      map,
       { href: `${base}/directives`, label: 'Directives', icon: ic(ScrollText), section: 'RUN' },
-      { href: `${base}/news`, label: 'News', icon: ic(Newspaper), section: 'RUN' },
-      { href: `${base}/characters`, label: 'Characters', icon: ic(ContactRound), section: 'WORLD' },
+      news('RUN'), meetings('RUN'),
+      characters('WORLD'), resources('WORLD'), timeline('WORLD'),
       { href: `${base}/staff`, label: 'Staff and access', icon: ic(UsersRound), section: 'SET UP' },
       { href: `${base}/settings`, label: 'Settings', icon: ic(Settings), section: 'SET UP' },
     ];
@@ -41,29 +45,18 @@ function navFor(role: CrisisRole, base: string): NavItem[] {
   if (role === 'backroomer') {
     return [
       { href: base, label: 'Directives', icon: ic(ScrollText) },
-      ...staffWorld,
-      { href: `${base}/news`, label: 'News', icon: ic(Newspaper), section: 'RUN' },
-      { href: `${base}/characters`, label: 'Characters', icon: ic(ContactRound), section: 'WORLD' },
+      map,
+      news('RUN'), meetings('RUN'),
+      characters('WORLD'), resources('WORLD'), timeline('WORLD'),
     ];
   }
   if (role === 'chair') {
-    return [
-      { href: base, label: 'Front room', icon: ic(Presentation) },
-      { href: `${base}/map`, label: 'War map', icon: ic(MapIcon) },
-      { href: `${base}/news`, label: 'News', icon: ic(Newspaper) },
-    ];
+    return [{ href: base, label: 'Front room', icon: ic(Presentation) }, map, news(), meetings(), characters()];
   }
   if (role === 'press') {
-    return [
-      { href: base, label: 'News', icon: ic(Newspaper) },
-      { href: `${base}/map`, label: 'War map', icon: ic(MapIcon) },
-    ];
+    return [{ href: base, label: 'News', icon: ic(Newspaper) }, map, characters()];
   }
-  return [
-    { href: base, label: 'My crisis', icon: ic(Home) },
-    { href: `${base}/map`, label: 'War map', icon: ic(MapIcon) },
-    { href: `${base}/news`, label: 'News', icon: ic(Newspaper) },
-  ];
+  return [{ href: base, label: 'My crisis', icon: ic(Home) }, map, news(), meetings(), characters()];
 }
 
 function Rail({ v, items }: { v: CrisisContextValue; items: NavItem[] }) {

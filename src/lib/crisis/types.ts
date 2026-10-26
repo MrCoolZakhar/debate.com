@@ -75,6 +75,7 @@ export interface Cabinet {
   short_name: string | null;
   color: string;
   sort: number;
+  logo_url: string | null;      // the cabinet's logo or seal (docs/crisis/sql/010)
 }
 
 export interface Member {
@@ -89,9 +90,10 @@ export interface Member {
   access_code: string | null;
   last_seen_at: string | null;
   created_at: string;
+  picture_url: string | null;   // staff picture (delegates show their character's)
 }
 /** Columns a client may select from crisis_members (the hashes are not granted). */
-export const MEMBER_COLUMNS = 'id, crisis_id, user_id, role, cabinet_id, character_id, display_name, email, access_code, last_seen_at, created_at';
+export const MEMBER_COLUMNS = 'id, crisis_id, user_id, role, cabinet_id, character_id, display_name, email, access_code, last_seen_at, created_at, picture_url';
 
 export type CharacterStatus = 'active' | 'spare' | 'dead' | 'arrested' | 'missing';
 export interface Character {
@@ -192,6 +194,7 @@ export interface News {
   published_by: string | null;
   published_at: string | null;
   directive_id: string | null;
+  numbers: Record<string, number>;  // news number per cabinet id (an all-rooms story is numbered in every cabinet)
   banner_url: string | null;        // a wide image above the story (and the live-room pop-up image)
   attachment_url: string | null;    // one file to download
   attachment_name: string | null;
@@ -275,3 +278,26 @@ export interface ResolvedCrisis {
   display_name?: string | null;
   conference?: { id: string; slug: string; name: string; acronym: string; logo_url: string | null };
 }
+
+/** A meeting between characters (docs/crisis/sql/010). Happens in person; the app holds the request. */
+export type MeetingStatus = 'pending' | 'approved' | 'declined' | 'held' | 'cancelled';
+export interface Meeting {
+  id: string;
+  crisis_id: string;
+  requested_by_member: string | null;
+  requested_by_character: string | null;
+  character_ids: string[];
+  intention: string;
+  duration_minutes: number;
+  wanted_time: string | null;
+  status: MeetingStatus;
+  decided_by: string | null;
+  decided_at: string | null;
+  staff_note: string | null;
+  outcome_note: string | null;
+  created_at: string;
+  updated_at: string;
+}
+export const MEETING_STATUS_LABEL: Record<MeetingStatus, string> = {
+  pending: 'Waiting for approval', approved: 'Approved', declined: 'Declined', held: 'Held', cancelled: 'Cancelled',
+};
