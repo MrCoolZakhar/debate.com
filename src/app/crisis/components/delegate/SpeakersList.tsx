@@ -1,6 +1,6 @@
 'use client';
-// Gavelling Crisis: a very simple speakers list for the delegate. Who has the floor now (picture and
-// name), then the next four names, with the delegate's own place highlighted. The room phase is only a
+// Gavelling Crisis: a very simple, compact speakers list for the delegate. Who has the floor now (picture
+// and name), then the next three names, with the delegate's own place highlighted. The room phase is only a
 // small label above it. Reads the shared room (useCrisisRoom); writes nothing.
 
 import { useMemo } from 'react';
@@ -9,7 +9,7 @@ import type { Committee } from '@/lib/types';
 import { Avatar, CK, Skeleton } from '../../crisisKit';
 import { sameSeat, type CrisisRoom } from './useCrisisRoom';
 
-const NEXT_SHOWN = 4;
+const NEXT_SHOWN = 3;
 
 function phaseLabel(c: Committee): string {
   if (c.endedAt) return 'Ended';
@@ -35,12 +35,12 @@ function Person({ name, picture, size, mine, strong }: { name: string; picture: 
     <div
       className="flex items-center"
       style={{
-        gap: 10, padding: mine ? '5px 10px 5px 6px' : '2px 6px', borderRadius: 14,
+        gap: 9, padding: mine ? '3px 9px 3px 5px' : '1px 5px', borderRadius: 14,
         background: mine ? 'rgba(238,217,138,0.5)' : 'transparent', boxShadow: mine ? `inset 0 0 0 1.5px ${CK.goldMid}` : 'none',
       }}
     >
       <Avatar name={name} src={picture} size={size} color={mine ? CK.goldMid : CK.red} />
-      <span className="min-w-0" style={{ fontSize: strong ? 15.5 : 14, fontWeight: strong || mine ? 800 : 600, color: CK.ink, overflowWrap: 'anywhere' }}>
+      <span className="min-w-0" style={{ fontSize: strong ? 14.5 : 13, fontWeight: strong || mine ? 800 : 600, color: CK.ink, overflowWrap: 'anywhere' }}>
         {name}
         {mine && <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 800, color: CK.goldDeep }}>You</span>}
       </span>
@@ -74,29 +74,29 @@ export default function SpeakersList({ room, characters }: { room: CrisisRoom; c
 
   return (
     <div>
-      <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 800, color: CK.red }}>{phaseLabel(committee)}</p>
+      <p style={{ margin: '0 0 6px', fontSize: 12, fontWeight: 800, color: CK.red }}>{phaseLabel(committee)}</p>
       {unused ? (
         <p style={{ margin: 0, fontSize: 13.5, color: CK.inkSoft }}>The speakers list is not in use right now.</p>
       ) : (
-        <div className="grid gap-1.5">
+        <div className="grid gap-1">
           <p className="flex items-center gap-1.5" style={{ margin: 0, fontSize: 11.5, fontWeight: 700, color: CK.muted }}>
             <Mic size={13} strokeWidth={1.5} aria-hidden />Speaking now
           </p>
           {floorName ? (
-            <Person name={floorName} picture={pictureOf(floorName)} size={38} mine={iSpeak} strong />
+            <Person name={floorName} picture={pictureOf(floorName)} size={32} mine={iSpeak} strong />
           ) : (
             <p style={{ margin: '0 0 0 4px', fontSize: 13.5, color: CK.inkSoft }}>Nobody has the floor.</p>
           )}
           {shown.length > 0 && (
             <>
               <p style={{ margin: '6px 0 0', fontSize: 11.5, fontWeight: 700, color: CK.muted }}>Next</p>
-              {shown.map((n, i) => <Person key={`${n}-${i}`} name={n} picture={pictureOf(n)} size={28} mine={myShown && i === myIndex} />)}
+              {shown.map((n, i) => <Person key={`${n}-${i}`} name={n} picture={pictureOf(n)} size={24} mine={myShown && i === myIndex} />)}
             </>
           )}
           {!myShown && myIndex !== -1 && (
             <>
               <p style={{ margin: '4px 0 0', fontSize: 11.5, fontWeight: 700, color: CK.muted }}>Your place</p>
-              <Person name={country} picture={pictureOf(country)} size={28} mine />
+              <Person name={country} picture={pictureOf(country)} size={24} mine />
               <p style={{ margin: 0, fontSize: 12.5, fontWeight: 700, color: CK.goldDeep }}>You are {ordinal(myIndex + 1)} in line.</p>
             </>
           )}

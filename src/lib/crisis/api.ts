@@ -10,7 +10,7 @@ import {
   MEMBER_COLUMNS,
   type Cabinet, type Character, type CharacterSecret, type Crisis, type Directive, type DirectiveNote,
   type MapRegion, type MapShape, type MapUnit, type Member, type News, type Resource, type ResourceType,
-  type ResolvedCrisis, type DirectiveOutcome, type DirectiveKind, type CrisisMessage, type Meeting, type MeetingStatus, type CharacterStatus,
+  type ResolvedCrisis, type DirectiveOutcome, type DirectiveKind, type CrisisMessage, type Meeting, type MeetingStatus, type CharacterStatus, type CrisisNotification,
 } from './types';
 
 export interface CrisisRef { conf: string; crisis: string; id: string }
@@ -486,4 +486,18 @@ export async function cancelMeeting(ref: CrisisRef, meetingId: string): Promise<
   const client = await c(ref);
   const res = await client.rpc('crisis_cancel_meeting', { p_meeting: meetingId });
   must(res, 'Could not cancel the meeting.');
+}
+
+// ─────────── Notifications (the bell) ───────────
+
+export async function listNotifications(ref: CrisisRef): Promise<CrisisNotification[]> {
+  const client = await c(ref);
+  const res = await client.from('crisis_notifications').select('*').eq('crisis_id', ref.id).order('created_at', { ascending: false }).limit(80);
+  return must(res, 'Could not load notifications.') as CrisisNotification[];
+}
+
+/** Mark some (or, with no ids, all) of my notifications read. */
+export async function markNotificationsRead(ref: CrisisRef, ids?: string[]): Promise<void> {
+  const client = await c(ref);
+  await client.rpc('crisis_mark_notifications_read', { p_crisis: ref.id, p_ids: ids ?? null });
 }

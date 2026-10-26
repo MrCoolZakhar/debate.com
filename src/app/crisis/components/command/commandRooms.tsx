@@ -51,14 +51,14 @@ export function FrontRoomsCard({ cref, cabinets, base }: { cref: CrisisRef; cabi
   const byCab = useMemo(() => new Map((rooms ?? []).map((r) => [r.cabinetId, r])), [rooms]);
 
   return (
-    <Card warm>
-      <CardTitle icon={<Presentation size={17} strokeWidth={1.5} />}>Front Rooms</CardTitle>
+    <Card warm className="cmd-card">
+      <CardTitle icon={<Presentation size={17} strokeWidth={1.5} />} right={<LinkBtn href={`${base}/news`} tone="red" icon={<Siren size={13} strokeWidth={1.5} />}>Send a crisis break</LinkBtn>}>Front Rooms</CardTitle>
       {cabinets.length === 0 ? <EmptyLine>No cabinets yet.</EmptyLine> : (
-        <div className="flex flex-col" style={{ gap: 4 }}>
+        <div className="flex flex-col" style={{ gap: 0 }}>
           {cabinets.map((cab) => {
             const r = byCab.get(cab.id);
             return (
-              <OverhangCard key={cab.id} name={cab.short_name || cab.name} color={cab.color} size={42} style={{ boxShadow: CK.shadowSm }}>
+              <OverhangCard key={cab.id} name={cab.short_name || cab.name} src={cab.logo_url} color={cab.color} size={36} style={{ boxShadow: CK.shadowSm }}>
                 <div className="flex items-center justify-between" style={{ gap: 8 }}>
                   <b style={{ fontSize: 14, color: cab.color, overflowWrap: 'anywhere', minWidth: 0 }}>{cab.name}</b>
                   {r?.code && (
@@ -70,12 +70,12 @@ export function FrontRoomsCard({ cref, cabinets, base }: { cref: CrisisRef; cabi
                   )}
                 </div>
                 {r?.code && (
-                  <p className="flex items-center flex-wrap" style={{ margin: '4px 0 0', gap: '2px 12px', fontSize: 12, color: CK.inkSoft, fontVariantNumeric: 'tabular-nums' }}>
+                  <p className="flex items-center flex-wrap" style={{ margin: '2px 0 0', gap: '2px 12px', fontSize: 12, color: CK.inkSoft, fontVariantNumeric: 'tabular-nums' }}>
                     <span className="inline-flex items-center" style={{ gap: 4 }}><Hash size={12} strokeWidth={1.5} aria-hidden />Room code <b style={{ color: CK.ink, letterSpacing: '0.06em' }}>{r.code}</b></span>
                     {r.chairPassword && <span className="inline-flex items-center" style={{ gap: 4 }}><KeyRound size={12} strokeWidth={1.5} aria-hidden />Chair password <b style={{ color: CK.ink, letterSpacing: '0.06em' }}>{r.chairPassword}</b></span>}
                   </p>
                 )}
-                <div className="flex items-center flex-wrap" style={{ gap: '2px 6px', marginTop: 4, fontSize: 12.5, color: CK.inkSoft }}>
+                <div className="flex items-center flex-wrap" style={{ gap: '2px 6px', marginTop: 2, fontSize: 12.5, color: CK.inkSoft }}>
                   {rooms === null && !failed ? <Skeleton h={14} w="55%" /> : r?.phaseLabel ? (
                     <>
                       <span aria-hidden style={{ width: 7, height: 7, borderRadius: '50%', background: TONE_DOT[r.tone], boxShadow: `0 0 0 3px ${cabinetTint(TONE_DOT[r.tone], 0.2)}`, flex: 'none' }} />
@@ -89,9 +89,6 @@ export function FrontRoomsCard({ cref, cabinets, base }: { cref: CrisisRef; cabi
           })}
         </div>
       )}
-      <div style={{ marginTop: 12 }}>
-        <LinkBtn href={`${base}/news`} tone="red" icon={<Siren size={14} strokeWidth={1.5} />}>Send a crisis break</LinkBtn>
-      </div>
     </Card>
   );
 }
@@ -120,8 +117,8 @@ export function BackroomCard({ cref, members, directives, base, onChanged }: {
   };
 
   return (
-    <Card>
-      <CardTitle icon={<UsersRound size={17} strokeWidth={1.5} />} sub="Open directives per person and their average reply today">Backroom</CardTitle>
+    <Card className="cmd-card">
+      <CardTitle icon={<UsersRound size={17} strokeWidth={1.5} />}>Backroom</CardTitle>
       {loads === null ? <div className="flex flex-col" style={{ gap: 8 }}><Skeleton h={34} /><Skeleton h={34} /><Skeleton h={34} /></div>
         : loads.length === 0 ? (
           <>
@@ -130,12 +127,12 @@ export function BackroomCard({ cref, members, directives, base, onChanged }: {
           </>
         ) : (
           <>
-            <div className="flex flex-col" style={{ gap: 4 }}>
+            <div className="flex flex-col" style={{ gap: 0 }}>
               {loads.map((l) => {
                 const n = l.open.length;
                 const heavy = n >= 4;
                 return (
-                  <OverhangCard key={l.member.id} name={l.member.display_name} color={heavy ? CK.red : CK.forest2} size={36} style={{ boxShadow: CK.shadowSm }}>
+                  <OverhangCard key={l.member.id} name={l.member.display_name} src={l.member.picture_url} color={heavy ? CK.red : CK.forest2} size={33} style={{ boxShadow: CK.shadowSm }}>
                     <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 84px', gap: 9, alignItems: 'center' }}>
                       <span style={{ minWidth: 0 }}>
                         <b style={{ display: 'block', fontSize: 13, color: CK.ink, overflowWrap: 'anywhere' }}>{l.member.display_name}</b>

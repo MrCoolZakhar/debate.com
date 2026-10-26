@@ -4,6 +4,7 @@
 import { useState } from 'react';
 import { Clock, Landmark, Newspaper, Radio, Users } from 'lucide-react';
 import type { Cabinet, News } from '@/lib/crisis/types';
+import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { CK, Card } from '../../crisisKit';
 import NewsDetailDialog from './NewsDetailDialog';
 
@@ -19,6 +20,55 @@ export function newsTime(iso: string | null | undefined): string {
 export function audienceLabel(n: Pick<News, 'audience_cabinet_id'>, cabinets: Cabinet[]): string {
   if (!n.audience_cabinet_id) return 'Every room';
   return cabinets.find((c) => c.id === n.audience_cabinet_id)?.name ?? 'One room';
+}
+
+/** The number of a story in the viewer's own cabinet, or null when it has none (a draft, or older news). */
+export function ownNewsNumber(n: Pick<News, 'numbers'>, cabinetId: string | null): number | null {
+  if (!cabinetId) return null;
+  const x = n.numbers?.[cabinetId];
+  return typeof x === 'number' ? x : null;
+}
+
+/**
+ * The news number, big. A delegate or chair sees the number of their own cabinet; staff and press see
+ * one number per cabinet that got the story ("ExComm No. 4 · Presidium No. 3"). `preview` draws the
+ * placeholder a story has before it is published. `light` is for the dark red live pop-up.
+ */
+export function NewsNumber({ n, preview, light }: { n: Pick<News, 'numbers'>; preview?: boolean; light?: boolean }) {
+  const v = useCrisis();
+  const num = light ? CK.gold : CK.red;
+  const soft = light ? 'rgba(255,240,226,0.8)' : CK.inkSoft;
+  const big = { fontSize: 34, fontWeight: 800, lineHeight: 1, fontVariantNumeric: 'tabular-nums', color: num } as const;
+  if (preview) {
+    return (
+      <span className="inline-flex flex-col" style={{ flex: 'none' }}>
+        <b style={big}>#</b>
+        <span style={{ fontSize: 11, fontWeight: 600, color: soft, marginTop: 2 }}>Number given when published</span>
+      </span>
+    );
+  }
+  if (!v.staff && v.cabinetId) {
+    const own = ownNewsNumber(n, v.cabinetId);
+    if (own === null) return null;
+    return (
+      <span className="inline-flex items-baseline" style={{ gap: 5, flex: 'none' }} aria-label={`News number ${own}`}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: soft }}>No.</span>
+        <b style={big}>{own}</b>
+      </span>
+    );
+  }
+  const entries = v.core.cabinets.filter((c) => typeof n.numbers?.[c.id] === 'number');
+  if (!entries.length) return null;
+  return (
+    <span className="inline-flex flex-wrap items-baseline" style={{ gap: '4px 18px' }}>
+      {entries.map((c) => (
+        <span key={c.id} className="inline-flex items-baseline" style={{ gap: 5 }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: soft, overflowWrap: 'anywhere' }}>{c.short_name || c.name} No.</span>
+          <b style={{ ...big, fontSize: entries.length > 1 ? 26 : 34 }}>{n.numbers[c.id]}</b>
+        </span>
+      ))}
+    </span>
+  );
 }
 
 /** The source, time and audience of a story, each with its icon. */
@@ -47,7 +97,10 @@ export function NewsCard({ n, cabinets, onOpen }: { n: News; cabinets: Cabinet[]
   ) : null;
   const body = (
     <>
-      <NewsMeta n={n} cabinets={cabinets} />
+      <div className="flex items-center flex-wrap" style={{ gap: '4px 14px' }}>
+        <NewsNumber n={n} />
+        <div style={{ flex: '1 1 200px', minWidth: 0 }}><NewsMeta n={n} cabinets={cabinets} /></div>
+      </div>
       <h3 style={{ margin: '6px 0 4px', fontSize: 16, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{n.title}</h3>
       <p style={{ margin: 0, fontSize: 14, lineHeight: 1.55, color: CK.inkSoft, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{n.body}</p>
       <span style={{ display: 'inline-block', marginTop: 6, fontSize: 13, fontWeight: 700, color: CK.forest, textDecoration: 'underline' }}>Read the full story</span>

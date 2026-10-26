@@ -1,6 +1,6 @@
 'use client';
-// Gavelling Crisis: the delegate's resources. Each one is an icon tile in a soft tint of the cabinet
-// colour, the amount big, the name small beside it. Compact, in a grid that fills the width.
+// Gavelling Crisis: the delegate's resources, two per row. Each one is a small tile in a soft tint of the
+// cabinet colour: the icon and the amount big on one line, the name small beneath.
 
 import type { Resource, ResourceType } from '@/lib/crisis/types';
 import { cabinetTint, CK, resourceIcon, Skeleton } from '../../crisisKit';
@@ -13,24 +13,22 @@ export default function ResourcesCard({ types, resources, characterId, color }: 
     <section aria-labelledby="my-resources-title">
       <h2 id="my-resources-title" style={{ margin: '0 0 8px', fontSize: 14, fontWeight: 800, color: CK.ink }}>Resources</h2>
       {types === null ? (
-        <div className="grid gap-2 sm:grid-cols-2"><Skeleton h={48} r={14} /><Skeleton h={48} r={14} /></div>
+        <div className="grid grid-cols-2 gap-2"><Skeleton h={52} r={12} /><Skeleton h={52} r={12} /></div>
       ) : resources.length === 0 ? (
         <p style={{ margin: 0, fontSize: 13.5, color: CK.inkSoft }}>No resources yet.</p>
       ) : (
-        <ul className="grid gap-2" style={{ margin: 0, padding: 0, listStyle: 'none', gridTemplateColumns: 'repeat(auto-fill, minmax(168px, 1fr))' }}>
+        <ul className="grid grid-cols-2 gap-2" style={{ margin: 0, padding: 0, listStyle: 'none' }}>
           {resources.map((r) => {
             const t = typeById.get(r.type_id);
             const own = !!characterId && r.character_id === characterId;
             return (
-              <li key={r.id} className="flex items-center" style={{ gap: 10, background: cabinetTint(color, 0.07), borderRadius: 14, padding: '7px 10px 7px 7px' }}>
-                <span aria-hidden className="grid place-items-center" style={{ width: 38, height: 38, borderRadius: 11, flexShrink: 0, background: cabinetTint(color, 0.22), color: CK.redDeep }}>
-                  {resourceIcon(t?.name ?? '', 20)}
+              <li key={r.id} title={own ? 'Just for you' : undefined} style={{ background: cabinetTint(color, 0.08), borderRadius: 12, padding: '7px 9px', minWidth: 0 }}>
+                <span className="flex items-center" style={{ gap: 6, color: CK.redDeep }}>
+                  <span style={{ lineHeight: 0, flexShrink: 0 }}>{resourceIcon(t?.name ?? '', 18)}</span>
+                  <b style={{ fontSize: 18, lineHeight: 1.1, fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: CK.ink, overflowWrap: 'anywhere' }}>{Number(r.amount).toLocaleString()}</b>
                 </span>
-                <span className="min-w-0">
-                  <b style={{ display: 'block', fontSize: 19, lineHeight: 1.1, fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: CK.ink }}>{Number(r.amount).toLocaleString()}</b>
-                  <span style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: CK.inkSoft, overflowWrap: 'anywhere' }}>
-                    {t?.name ?? 'Resource'}{t?.unit ? ` (${t.unit})` : ''}{own ? ', just for you' : ''}
-                  </span>
+                <span style={{ display: 'block', marginTop: 2, fontSize: 11.5, lineHeight: 1.25, fontWeight: 600, color: CK.inkSoft, overflowWrap: 'anywhere' }}>
+                  {t?.name ?? 'Resource'}{t?.unit ? ` (${t.unit})` : ''}
                 </span>
               </li>
             );

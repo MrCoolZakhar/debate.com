@@ -9,6 +9,7 @@ import { Newspaper, Radio, X } from 'lucide-react';
 import type { News } from '@/lib/crisis/types';
 import { crisisBase, useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { CK } from '../../crisisKit';
+import { NewsNumber } from './NewsList';
 import { useCrisisNews } from './useCrisisNews';
 
 const SHOW_MS = 30_000;
@@ -59,9 +60,12 @@ export default function NewsPopup() {
         >
           <X size={15} strokeWidth={1.5} />
         </button>
-        <div className="flex items-center gap-2" style={{ fontSize: 11.5, fontWeight: 800, letterSpacing: '0.1em', color: CK.gold, paddingRight: 32, overflowWrap: 'anywhere' }}>
-          {card.source_label ? <Radio size={14} strokeWidth={1.5} aria-hidden /> : <Newspaper size={14} strokeWidth={1.5} aria-hidden />}
-          {card.source_label || 'Crisis update'}
+        <div className="flex items-center flex-wrap" style={{ gap: '2px 12px', paddingRight: 32 }}>
+          <NewsNumber n={card} light />
+          <div className="flex items-center gap-2" style={{ fontSize: 11.5, fontWeight: 800, letterSpacing: '0.1em', color: CK.gold, overflowWrap: 'anywhere' }}>
+            {card.source_label ? <Radio size={14} strokeWidth={1.5} aria-hidden /> : <Newspaper size={14} strokeWidth={1.5} aria-hidden />}
+            {card.source_label || 'Crisis update'}
+          </div>
         </div>
         {card.banner_url && (
           // eslint-disable-next-line @next/next/no-img-element

@@ -102,6 +102,15 @@ export const MAP_CSS = `
 .wm-stage{position:absolute;inset:0;border-radius:16px;overflow:hidden;background:#DCE4DA;box-shadow:inset 0 0 0 1px rgba(27,56,40,0.08)}
 .wm-map{position:absolute;inset:0;touch-action:none}
 .wm-drawer{position:absolute;top:12px;right:12px;z-index:5;max-height:calc(100% - 76px);display:flex}
+.wm-drawer[data-add]{top:88px;max-height:calc(100% - 152px)}
+.wm-add{position:absolute;top:12px;right:12px;z-index:6;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;width:80px;height:64px;border:0;border-radius:16px;background:linear-gradient(180deg,#2C5440,#1B3828);color:#fff;font:700 11.5px/1.1 var(--font-brand),Inter,sans-serif;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,0.18),0 1px 2px rgba(27,56,40,0.2),4px 6px 14px rgba(27,56,40,0.28)}
+.wm-add:hover{filter:brightness(1.08)}
+.wm-add:active{transform:scale(0.97)}
+.wm-add[aria-pressed="true"]{background:#EED98A;color:#1B3828}
+.wm-add:focus{outline:none}
+.wm-add:focus-visible{outline:2px solid #1B3828;outline-offset:2px}
+.wm-add-icons{display:inline-flex;align-items:center;gap:5px}
+.wm-move{position:absolute;z-index:7;left:0;top:0;width:256px;background:rgba(255,255,255,0.98);border-radius:14px;padding:11px 12px;box-shadow:inset 0 1px 0 rgba(255,255,255,0.75),0 0 0 1px rgba(27,56,40,0.07),6px 7px 18px rgba(27,56,40,0.2)}
 .wm-panel{width:292px;max-width:100%;overflow:auto;background:rgba(255,255,255,0.97);border-radius:16px;padding:12px 13px;box-shadow:inset 0 1px 0 rgba(255,255,255,0.75),0 0 0 1px rgba(27,56,40,0.07),6px 7px 18px rgba(27,56,40,0.16)}
 .wm-legend{position:absolute;left:12px;right:12px;bottom:12px;z-index:4;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;pointer-events:none}
 .wm-legend>div{pointer-events:auto;background:rgba(255,255,255,0.93);border-radius:12px;padding:7px 11px;font-size:12px;color:#4E463C;box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 1px 2px rgba(27,56,40,0.1),0 3px 7px -2px rgba(27,56,40,0.15);display:flex;gap:6px 14px;flex-wrap:wrap;align-items:center}
@@ -114,7 +123,8 @@ export const MAP_CSS = `
   .wm-drawer,.wm-legend{position:static;max-height:none;margin-top:10px;display:block}
   .wm-panel{width:auto}
   .wm-legend>div{margin-bottom:8px}
-  .wm-hint{max-width:calc(100% - 24px)}
+  .wm-hint{max-width:calc(100% - 112px)}
+  .wm-drawer[data-add]{top:auto;max-height:none}
 }
 .wm-marker{cursor:pointer}
 .wm-tok{position:relative;display:grid;place-items:center;border-radius:50%;border:2px solid #fff;box-sizing:border-box;box-shadow:0 2px 6px rgba(27,56,40,0.38)}

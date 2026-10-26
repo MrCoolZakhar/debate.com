@@ -1,26 +1,30 @@
 'use client';
 // Gavelling Crisis: one directive, opened. The backroom inbox shows it beside the queue and the
 // Crisis Command page reuses it. Staff only: it shows the author's secret goals and internal notes.
+// WHO wrote it leads: a big portrait overhanging the card (click it for the character's directives,
+// performance and points), the name, their title, the cabinet logo and name, and small tags for
+// the details. The reply box has a "+" for what is done together with the reply.
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
-  ArrowLeft, ArrowRight, Check, Clock, Coins, FileText, Landmark, Lock, MessageCircle, MessageSquare, Newspaper, Send, Target, UserCheck,
-  UserRound, VenetianMask, X, Zap, Package,
+  ArrowLeft, ArrowRight, Check, ChevronDown, Clock, FileText, Landmark, Lock, MessageCircle, MessageSquare, Package, Plus, Send, Target,
+  UserCheck, VenetianMask, X, Zap,
 } from 'lucide-react';
 import GSelect from '@/components/GSelect';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
-import {
-  addNote, answerDirective, assignDirective, crisisError, listNotes, loadResources, loadSecrets,
-  type AnswerEffects,
-} from '@/lib/crisis/api';
+import { addNote, answerDirective, assignDirective, crisisError, listNotes, loadSecrets } from '@/lib/crisis/api';
 import { getCrisisClient } from '@/lib/crisis/client';
 import {
   KIND_LABEL, OUTCOME_LABEL, ROLE_LABEL,
-  type Directive, type DirectiveNote, type DirectiveOutcome, type Resource, type ResourceType,
+  type Directive, type DirectiveNote, type DirectiveOutcome,
 } from '@/lib/crisis/types';
-import { Avatar, Btn, CK, Eyebrow, FieldLabel, OverhangCard, Skeleton, ThemeTag, cabinetTint, fieldStyle, waitLabel, waitSeverity } from '../../crisisKit';
+import { Avatar, Btn, CK, Eyebrow, Skeleton, ThemeTag, cabinetTint, fieldStyle, waitLabel, waitSeverity } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
+import CharacterModal from '../character/CharacterModal';
+import { CabinetLogo, StaffPic, Tag } from './directiveParts';
 import { KIND_ICON, OUTCOME_STYLE, authorName, buildNames, listDirectiveCoauthors, memberName } from './directiveKit';
+import ReplyActionsDialog, { ActionChips, actionsToEffects, type ReplyAction } from './ReplyActions';
+import { readReplyDraft, writeReplyDraft } from './replyDraft';
 
 export interface DirectiveDetailProps {
   directive: Directive;
@@ -34,17 +38,17 @@ export interface DirectiveDetailProps {
 
 const OUTCOMES: DirectiveOutcome[] = ['approved', 'partial', 'denied', 'clarify', 'later'];
 
-// Unsent replies survive switching between directives.
-const drafts = new Map<string, { outcome: DirectiveOutcome | null; reply: string }>();
+// The "+" actions of an unsent reply survive switching between directives (the text itself is saved on this device).
+const actionDrafts = new Map<string, ReplyAction[]>();
 
-/** A small tile with an icon, a label and a value. */
-function Tile({ icon, label, value, tone }: { icon: ReactNode; label: string; value: ReactNode; tone?: string }) {
+/** A small tile with an icon, a label and a value (only for the old fields a row still carries). */
+function Tile({ icon, label, value }: { icon: ReactNode; label: string; value: ReactNode }) {
   return (
     <div className="flex items-start" style={{ gap: 8, background: CK.card, borderRadius: 14, padding: '9px 11px', boxShadow: `inset 0 0 0 1px ${CK.hair}`, minWidth: 0 }}>
-      <span aria-hidden style={{ color: tone ?? CK.red, lineHeight: 0, marginTop: 2, flex: 'none' }}>{icon}</span>
-      <span style={{ minWidth: 0 }}>
+      <span aria-hidden style={{ color: CK.red, lineHeight: 0, marginTop: 2, flex: 'none' }}>{icon}</span>
+      <span style={{ minWidth: 0, flex: 1 }}>
         <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: CK.muted }}>{label}</span>
-        <b style={{ display: 'block', fontSize: 13, marginTop: 1, overflowWrap: 'anywhere', color: CK.ink }}>{value}</b>
+        <b style={{ display: 'block', fontSize: 13, marginTop: 1, overflowWrap: 'break-word', color: CK.ink }}>{value}</b>
       </span>
     </div>
   );
@@ -52,48 +56,67 @@ function Tile({ icon, label, value, tone }: { icon: ReactNode; label: string; va
 
 const timeOf = (iso: string) => new Date(iso).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
-export function DirectiveDetail({ directive, onClose, onChanged, notesVersion = 0 }: DirectiveDetailProps) {
+const PORTRAIT = 92;
+const OVERHANG = Math.round(PORTRAIT / 3);
+
+export function DirectiveDetail(props: DirectiveDetailProps) {
+  // One fresh state per directive, wherever this is mounted.
+  return <DirectiveDetailInner key={props.directive.id} {...props} />;
+}
+
+function DirectiveDetailInner({ directive, onClose, onChanged, notesVersion = 0 }: DirectiveDetailProps) {
   const { ref, core, memberId, director, settings, staff } = useCrisis();
   const names = useMemo(() => buildNames(core.cabinets, core.characters, core.members), [core]);
   const d = directive;
   const who = authorName(d, names);
   const cabinet = d.cabinet_id ? names.cabinets.get(d.cabinet_id) : undefined;
   const character = d.author_character_id ? names.characters.get(d.author_character_id) : undefined;
-  const backroomer = character?.owner_member_id ?? null;
+  const backroomerId = character?.owner_member_id ?? null;
   const mine = !!memberId && d.assigned_member_id === memberId;
   const open = d.status === 'queued' || d.status === 'claimed' || d.status === 'clarify';
 
-  const draft = drafts.get(d.id);
-  const [outcome, setOutcome] = useState<DirectiveOutcome | null>(draft?.outcome ?? null);
-  const [reply, setReply] = useState(draft?.reply ?? '');
-  const [editing, setEditing] = useState(false);
+  // The reply being written: restored from this device, saved as it is typed.
+  const [stored] = useState(() => readReplyDraft(ref.id, d.id));
+  const [outcome, setOutcome] = useState<DirectiveOutcome | null>(stored?.outcome ?? null);
+  const [reply, setReply] = useState(stored?.reply ?? '');
+  const [saved, setSaved] = useState(!!stored);
+  const [editing, setEditing] = useState(!!stored && d.status === 'answered');
+  const [actions, setActionsState] = useState<ReplyAction[]>(() => actionDrafts.get(d.id) ?? []);
+  const [actionsOpen, setActionsOpen] = useState(false);
   const [busy, setBusy] = useState<'send' | 'claim' | 'assign' | 'note' | null>(null);
   const [handTo, setHandTo] = useState('');
+  const sent = useRef(false);
+  const firstRun = useRef(true);
 
-  // Also: resources and news.
-  const [resOn, setResOn] = useState(false);
-  const [resData, setResData] = useState<{ types: ResourceType[]; resources: Resource[] } | null>(null);
-  const [resRows, setResRows] = useState<Array<{ id: string; delta: string }>>([{ id: '', delta: '' }]);
-  const [newsOn, setNewsOn] = useState(false);
-  const [newsTitle, setNewsTitle] = useState('');
-  const [newsBody, setNewsBody] = useState('');
-  const [newsAudience, setNewsAudience] = useState('');
+  const setActions = (next: ReplyAction[]) => { setActionsState(next); if (next.length) actionDrafts.set(d.id, next); else actionDrafts.delete(d.id); };
+
+  // Autosave, a moment after the last keystroke.
+  useEffect(() => {
+    if (firstRun.current) { firstRun.current = false; return; }
+    const t = window.setTimeout(() => {
+      if (sent.current) return;
+      const untouched = d.status === 'answered' && reply === (d.reply ?? '') && outcome === d.outcome;
+      if (untouched) return;
+      setSaved(writeReplyDraft(ref.id, d.id, { outcome, reply }));
+    }, 600);
+    return () => window.clearTimeout(t);
+  }, [outcome, reply, ref.id, d.id, d.status, d.reply, d.outcome]);
 
   // Notes
   const [notes, setNotes] = useState<DirectiveNote[] | null>(null);
   const [noteText, setNoteText] = useState('');
-  const [internal, setInternal] = useState(true);
 
   // Joint directives: who signed with the author
   const [coIds, setCoIds] = useState<string[]>([]);
 
   // Context
   const [goals, setGoals] = useState<string | null | undefined>(undefined);
+  const [goalsOpen, setGoalsOpen] = useState(false);
   const [lastHeard, setLastHeard] = useState<string | null | undefined>(undefined);
   const [now, setNow] = useState(() => Date.now());
+  const [modalCharacter, setModalCharacter] = useState<string | null>(null);
 
   useEffect(() => { const t = window.setInterval(() => setNow(Date.now()), 30_000); return () => window.clearInterval(t); }, []);
-  useEffect(() => { drafts.set(d.id, { outcome, reply }); }, [d.id, outcome, reply]);
 
   const loadNotes = useCallback(async () => {
     try { setNotes(await listNotes(ref, d.id)); } catch { setNotes((prev) => prev ?? []); }
@@ -131,40 +154,21 @@ export function DirectiveDetail({ directive, onClose, onChanged, notesVersion = 
     return () => { cancelled = true; };
   }, [ref, d.author_member_id, d.id]);
 
-  const canResources = director || settings.backroomPowers.resources;
-  useEffect(() => {
-    if (!resOn || resData) return;
-    let cancelled = false;
-    loadResources(ref).then((r) => { if (!cancelled) setResData(r); }).catch((e) => { if (!cancelled) { notifyErr(crisisError(e, 'Could not load the resources.'), 'crisis-resources'); setResOn(false); } });
-    return () => { cancelled = true; };
-  }, [resOn, resData, ref]);
-
-  const resourceOptions = useMemo(() => {
-    if (!resData) return [];
-    const cabId = d.cabinet_id ?? character?.cabinet_id ?? null;
-    const typeById = new Map(resData.types.map((t) => [t.id, t]));
-    return resData.resources
-      .filter((r) => (r.character_id && r.character_id === d.author_character_id) || (r.cabinet_id && r.cabinet_id === cabId))
-      .map((r) => {
-        const t = typeById.get(r.type_id);
-        const owner = r.character_id ? (names.characters.get(r.character_id)?.name ?? 'Character') : (names.cabinets.get(r.cabinet_id ?? '')?.name ?? 'Cabinet');
-        return { value: r.id, label: `${t?.name ?? 'Resource'}, ${owner}: ${r.amount}${t?.unit ? ` ${t.unit}` : ''}` };
-      });
-  }, [resData, d.cabinet_id, d.author_character_id, character, names]);
-
+  // Hand to: other staff only, never yourself (Claim is separate), each with their picture.
   const staffOptions = useMemo(
     () => core.members
-      .filter((m) => m.role === 'director' || m.role === 'assistant_director' || m.role === 'backroomer')
-      .map((m) => ({ value: m.id, label: m.display_name, hint: ROLE_LABEL[m.role] })),
-    [core.members],
-  );
-
-  const audienceOptions = useMemo(
-    () => [{ value: '', label: 'Every room' }, ...core.cabinets.map((c) => ({ value: c.id, label: c.name }))],
-    [core.cabinets],
+      .filter((m) => (m.role === 'director' || m.role === 'assistant_director' || m.role === 'backroomer') && m.id !== memberId)
+      .map((m) => ({ value: m.id, label: m.display_name, hint: ROLE_LABEL[m.role], icon: <StaffPic member={m} size={24} /> })),
+    [core.members, memberId],
   );
 
   if (!staff) return null;
+
+  const powers = {
+    resources: director || settings.backroomPowers.resources,
+    units: director || settings.backroomPowers.units,
+    map: director || settings.backroomPowers.map,
+  };
 
   const claim = async () => {
     setBusy('claim');
@@ -181,44 +185,34 @@ export function DirectiveDetail({ directive, onClose, onChanged, notesVersion = 
     finally { setBusy(null); }
   };
 
+  // Every staff note is internal; the delegate's own notes come in through the clarification flow.
   const sendNote = async () => {
     const text = noteText.trim();
     if (!text) return;
     setBusy('note');
-    try { await addNote(ref, d.id, text, internal); setNoteText(''); await loadNotes(); }
+    try { await addNote(ref, d.id, text, true); setNoteText(''); await loadNotes(); }
     catch (e) { notifyErr(crisisError(e), 'crisis-directive'); }
     finally { setBusy(null); }
-  };
-
-  const effectsFromForm = (): AnswerEffects => {
-    const effects: AnswerEffects = {};
-    if (resOn && canResources) {
-      const rows = resRows
-        .map((r) => ({ id: r.id, delta: Number(r.delta) }))
-        .filter((r) => r.id && Number.isFinite(r.delta) && r.delta !== 0);
-      if (rows.length) effects.resources = rows;
-    }
-    if (newsOn && newsTitle.trim()) {
-      effects.news = { title: newsTitle.trim(), body: newsBody.trim() || undefined, audience_cabinet_id: newsAudience || null };
-    }
-    return effects;
   };
 
   const send = async () => {
     if (!outcome || !reply.trim() || busy) return;
     setBusy('send');
     try {
-      await answerDirective(ref, d.id, outcome, reply.trim(), effectsFromForm());
-      drafts.delete(d.id);
+      const effects = await actionsToEffects(ref, actions);
+      await answerDirective(ref, d.id, outcome, reply.trim(), effects);
+      sent.current = true;
+      writeReplyDraft(ref.id, d.id, null);
+      actionDrafts.delete(d.id);
       notifyOk(`Reply sent to ${who}`, 'crisis-directive');
       setEditing(false);
-      setResOn(false); setNewsOn(false); setNewsTitle(''); setNewsBody(''); setResRows([{ id: '', delta: '' }]);
+      setSaved(false);
+      setActionsState([]);
       onChanged?.('answered');
     } catch (e) {
       notifyErr(crisisError(e, 'Could not send the reply. Your text is kept, try again.'), 'crisis-directive');
     } finally { setBusy(null); }
   };
-
 
   const showForm = d.status !== 'answered' || editing;
   const KindIcon = KIND_ICON[d.kind];
@@ -227,105 +221,136 @@ export function DirectiveDetail({ directive, onClose, onChanged, notesVersion = 
   const sev = waitSeverity(d.waiting_since, now);
   const sevColor = sev === 'very' ? CK.danger : sev === 'late' ? CK.goldDeep : CK.ink;
   const answeredStyle = d.outcome ? OUTCOME_STYLE[d.outcome] : null;
-  const hasLegacy = !!(d.resources_used || d.goal || d.affects || d.covert);
+  const hasLegacy = !!(d.resources_used || d.goal || d.affects);
+  const waitText = d.status === 'answered' ? `Answered ${waitLabel(d.answered_at, now)} ago` : d.status === 'clarify' ? 'Waiting for the delegate' : `Waiting ${waitLabel(d.waiting_since, now)}`;
+  const waitTagColor = d.status === 'queued' || d.status === 'claimed' ? sevColor : CK.inkSoft;
+  const hasGoals = !!(goals && goals.trim());
+
+  const portrait = (
+    <Avatar name={who} src={character?.picture_url} size={PORTRAIT} color={accent} />
+  );
+  const closeBtnStyle = { width: 34, height: 34, borderRadius: '50%', border: 0, background: CK.card, boxShadow: CK.shadowSm, color: CK.ink, flex: 'none', cursor: 'pointer' } as const;
 
   return (
     <div className="flex flex-col" style={{ gap: 12, fontFamily: CK.font }}>
-      {/* Header: the author's picture overhangs the corner */}
-      <OverhangCard name={who} src={character?.picture_url} color={accent} size={58} warm>
-        <div className="flex items-start" style={{ gap: 10 }}>
-          {onClose && (
-            <button onClick={onClose} aria-label="Back to the queue" className="lg:hidden grid place-items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
-              style={{ width: 34, height: 34, borderRadius: '50%', border: 0, background: CK.card, boxShadow: CK.shadowSm, color: CK.ink, flex: 'none', cursor: 'pointer' }}>
-              <ArrowLeft size={17} strokeWidth={1.5} />
+      {onClose && (
+        <div className="lg:hidden">
+          <Btn tone="ghost" size="sm" icon={<ArrowLeft size={15} strokeWidth={1.5} />} onClick={onClose}>Back to the queue</Btn>
+        </div>
+      )}
+
+      {/* The character bar: a big portrait overhanging the card, name, title, cabinet, small tags */}
+      <div style={{
+        position: 'relative', overflow: 'visible', marginTop: OVERHANG + 6, background: CK.redWash, borderRadius: 26,
+        border: '1px solid rgba(27,56,40,0.14)', boxShadow: CK.shadow, padding: '14px 16px 14px', minWidth: 0,
+      }}>
+        <span style={{ position: 'absolute', zIndex: 2, top: -OVERHANG, left: OVERHANG, lineHeight: 0 }}>
+          {character ? (
+            <button type="button" onClick={() => setModalCharacter(character.id)} aria-label={`Open ${who}`} title={`Open ${who}`}
+              className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] transition-transform hover:scale-[1.03]"
+              style={{ border: 0, padding: 0, borderRadius: '50%', background: 'transparent', cursor: 'pointer', lineHeight: 0 }}>
+              {portrait}
             </button>
-          )}
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <div className="flex items-center" style={{ gap: 6 }}>
-              <span aria-hidden style={{ color: CK.red, lineHeight: 0 }}><KindIcon size={15} strokeWidth={1.5} /></span>
-              <Eyebrow>{`${KIND_LABEL[d.kind].toUpperCase()} · NO. ${d.no}`}</Eyebrow>
-            </div>
-            <h2 style={{ margin: '3px 0 0', fontSize: 20, fontWeight: 800, lineHeight: 1.2, color: CK.ink, overflowWrap: 'anywhere' }}>{d.title}</h2>
-            <p style={{ margin: '5px 0 0', fontSize: 13, color: CK.inkSoft, overflowWrap: 'anywhere' }}>
-              <b style={{ color: CK.ink }}>{who}</b>
-              {cabinet && <> · <span style={{ color: cabinet.color, fontWeight: 700 }}>{cabinet.name}</span></>}
-            </p>
-            <p className="flex items-center" style={{ margin: '3px 0 0', gap: 5, fontSize: 12.5, color: d.status === 'queued' || d.status === 'claimed' ? sevColor : CK.inkSoft, fontWeight: 600 }}>
-              <Clock size={13} strokeWidth={1.5} aria-hidden />
-              {d.status === 'answered' ? `Answered ${waitLabel(d.answered_at, now)} ago` : d.status === 'clarify' ? 'Waiting for the delegate' : `Waiting ${waitLabel(d.waiting_since, now)}`}
-            </p>
-            {d.kind === 'committee' && cabinet && (
-              <p className="flex items-center" style={{ margin: '6px 0 0', gap: 6, fontSize: 12.5, fontWeight: 700, color: cabinet.color }}>
-                <Landmark size={14} strokeWidth={1.5} aria-hidden />On behalf of {cabinet.name}
-              </p>
-            )}
-            {d.kind === 'joint' && coChars.length > 0 && (
-              <div className="flex items-center flex-wrap" style={{ gap: '6px 12px', marginTop: 8 }}>
-                <span style={{ fontSize: 12, fontWeight: 700, color: CK.inkSoft }}>With</span>
-                {coChars.map((c) => {
-                  const cc = c.cabinet_id ? names.cabinets.get(c.cabinet_id) : undefined;
-                  return (
-                    <span key={c.id} className="inline-flex items-center" style={{ gap: 6, fontSize: 12.5, fontWeight: 700, color: CK.ink }}>
-                      <Avatar name={c.name} src={c.picture_url} size={26} color={cc?.color ?? CK.red} />
-                      <span style={{ overflowWrap: 'anywhere' }}>{c.name}</span>
-                    </span>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-          {onClose && (
-            <button onClick={onClose} aria-label="Close" className="hidden lg:grid place-items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
-              style={{ width: 34, height: 34, borderRadius: '50%', border: 0, background: CK.card, boxShadow: CK.shadowSm, color: CK.ink, flex: 'none', cursor: 'pointer' }}>
-              <X size={17} strokeWidth={1.5} />
+          ) : portrait}
+        </span>
+
+        <div style={{ minHeight: PORTRAIT - OVERHANG - 6, paddingLeft: OVERHANG + PORTRAIT - 2, paddingRight: onClose ? 40 : 0 }}>
+          <h2 style={{ margin: 0, fontSize: 26, fontWeight: 800, lineHeight: 1.1, color: CK.ink, overflowWrap: 'break-word' }}>{who}</h2>
+          {character?.title && <p style={{ margin: '4px 0 0', fontSize: 15, fontWeight: 600, lineHeight: 1.3, color: CK.inkSoft, overflowWrap: 'break-word' }}>{character.title}</p>}
+          <p className="flex items-center" style={{ margin: '8px 0 0', gap: 8 }}>
+            <CabinetLogo cabinet={cabinet} size={30} />
+            <span style={{ fontSize: 15, fontWeight: 800, color: accent, overflowWrap: 'break-word', minWidth: 0 }}>{cabinet?.name ?? 'No cabinet'}</span>
+          </p>
+        </div>
+
+        {onClose && (
+          <button onClick={onClose} aria-label="Close" className="hidden lg:grid place-items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+            style={{ ...closeBtnStyle, position: 'absolute', top: 10, right: 12 }}>
+            <X size={17} strokeWidth={1.5} />
+          </button>
+        )}
+
+        <div className="flex flex-wrap items-center" style={{ gap: '6px 8px', marginTop: 12 }}>
+          <Tag icon={<Clock size={13} strokeWidth={1.6} />} color={waitTagColor}>{waitText}</Tag>
+          <Tag icon={<MessageCircle size={13} strokeWidth={1.6} />}>
+            {lastHeard === undefined ? 'Last heard back: loading' : lastHeard ? `Last heard back ${waitLabel(lastHeard, now)} ago` : 'Not heard back yet'}
+          </Tag>
+          <Tag icon={<FileText size={13} strokeWidth={1.6} />}>{d.word_count} words</Tag>
+          <Tag icon={<StaffPic member={backroomerId ? names.members.get(backroomerId) : null} size={18} />} title="Their backroomer">
+            <span style={{ color: CK.muted, fontWeight: 600 }}>Backroomer </span>{memberName(backroomerId, names, 'nobody yet')}
+          </Tag>
+          {hasGoals && (
+            <button type="button" onClick={() => setGoalsOpen((v) => !v)} aria-expanded={goalsOpen}
+              className="inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+              style={{ gap: 5, border: 0, cursor: 'pointer', fontFamily: CK.font, fontSize: 12, fontWeight: 700, color: CK.goldDeep, background: cabinetTint(CK.gold, 0.45), borderRadius: 9, padding: '3px 9px', boxShadow: `inset 0 0 0 1px ${cabinetTint(CK.goldDeep, 0.25)}` }}>
+              <Lock size={12} strokeWidth={1.6} aria-hidden />Goals
+              <ChevronDown size={13} strokeWidth={1.8} aria-hidden style={{ transform: goalsOpen ? 'rotate(180deg)' : 'none', transition: 'transform 160ms' }} />
             </button>
           )}
         </div>
-      </OverhangCard>
 
-      {/* To and themes (and only the old fields a row still carries) */}
+        {hasGoals && goalsOpen && (
+          <div style={{ marginTop: 10, background: `linear-gradient(180deg, ${cabinetTint(CK.gold, 0.5)}, ${cabinetTint(CK.gold, 0.26)})`, borderRadius: 14, padding: '10px 13px', boxShadow: `inset 0 0 0 1px ${cabinetTint(CK.goldDeep, 0.25)}` }}>
+            <span style={{ display: 'block', fontSize: 11.5, fontWeight: 800, color: CK.goldDeep }}>Secret goals, only staff see this</span>
+            <b style={{ display: 'block', fontSize: 13.5, marginTop: 3, fontWeight: 600, lineHeight: 1.5, whiteSpace: 'pre-wrap', overflowWrap: 'break-word', color: CK.ink }}>{goals}</b>
+          </div>
+        )}
+
+        {d.kind === 'joint' && coChars.length > 0 && (
+          <div className="flex items-center flex-wrap" style={{ gap: '6px 12px', marginTop: 10 }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: CK.inkSoft }}>With</span>
+            {coChars.map((c) => {
+              const cc = c.cabinet_id ? names.cabinets.get(c.cabinet_id) : undefined;
+              return (
+                <button key={c.id} type="button" onClick={() => setModalCharacter(c.id)} title={`Open ${c.name}`}
+                  className="inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+                  style={{ gap: 6, border: 0, background: 'transparent', padding: 0, cursor: 'pointer', fontFamily: CK.font, fontSize: 12.5, fontWeight: 700, color: CK.ink, textAlign: 'left' }}>
+                  <Avatar name={c.name} src={c.picture_url} size={28} color={cc?.color ?? CK.red} />
+                  <span style={{ overflowWrap: 'break-word' }}>{c.name}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* The directive itself */}
+      <div>
+        <div className="flex items-center" style={{ gap: 6 }}>
+          <span aria-hidden style={{ color: CK.red, lineHeight: 0 }}><KindIcon size={15} strokeWidth={1.5} /></span>
+          <Eyebrow>{`${KIND_LABEL[d.kind].toUpperCase()} · NO. ${d.no}`}</Eyebrow>
+        </div>
+        <h3 style={{ margin: '3px 0 0', fontSize: 20, fontWeight: 800, lineHeight: 1.25, color: CK.ink, overflowWrap: 'break-word' }}>{d.title}</h3>
+      </div>
+
       <div className="flex items-center flex-wrap" style={{ gap: '6px 8px' }}>
-        <span className="inline-flex items-center" style={{ gap: 5, fontSize: 13, fontWeight: 700, color: CK.ink, background: CK.card, borderRadius: 10, padding: '4px 10px', boxShadow: `inset 0 0 0 1px ${CK.hair}`, overflowWrap: 'anywhere' }}>
+        <span className="inline-flex items-center" style={{ gap: 5, fontSize: 13, fontWeight: 700, color: CK.ink, background: CK.card, borderRadius: 10, padding: '4px 10px', boxShadow: `inset 0 0 0 1px ${CK.hair}`, overflowWrap: 'break-word' }}>
           <ArrowRight size={14} strokeWidth={1.5} aria-hidden style={{ color: CK.red, flex: 'none' }} />
           <span style={{ color: CK.muted, fontWeight: 600 }}>To</span> {d.receiver}
         </span>
         {d.themes.map((t) => <ThemeTag key={t} theme={t} size="md" />)}
+        {d.kind === 'committee' && cabinet && (
+          <span className="inline-flex items-center" style={{ gap: 5, fontSize: 12.5, fontWeight: 700, color: cabinet.color }}>
+            <Landmark size={14} strokeWidth={1.5} aria-hidden />On behalf of {cabinet.name}
+          </span>
+        )}
         {d.covert && (
           <span className="inline-flex items-center" style={{ gap: 4, fontSize: 12.5, fontWeight: 700, color: CK.redDeep, background: cabinetTint(CK.redDeep, 0.08), borderRadius: 8, padding: '3px 9px' }}>
             <VenetianMask size={14} strokeWidth={1.6} aria-hidden />Covert
           </span>
         )}
       </div>
-      {hasLegacy && (d.resources_used || d.goal || d.affects) && (
-        <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: 8 }}>
+      {hasLegacy && (
+        <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
           {d.resources_used && <Tile icon={<Package size={16} strokeWidth={1.5} />} label="Resources used" value={d.resources_used} />}
           {d.affects && <Tile icon={<Zap size={16} strokeWidth={1.5} />} label="Affects" value={d.affects} />}
-          {d.goal && <div style={{ gridColumn: '1 / -1' }}><Tile icon={<Target size={16} strokeWidth={1.5} />} label="Goal" value={d.goal} /></div>}
+          {d.goal && <Tile icon={<Target size={16} strokeWidth={1.5} />} label="Goal" value={d.goal} />}
         </div>
       )}
 
-      <div style={{ background: CK.card, borderRadius: 16, padding: '13px 15px', lineHeight: 1.6, fontSize: 14.5, boxShadow: `inset 4px 0 0 ${accent}, ${CK.shadowSm}`, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+      <div style={{ background: CK.card, borderRadius: 16, padding: '13px 15px', lineHeight: 1.6, fontSize: 14.5, boxShadow: `inset 4px 0 0 ${accent}, ${CK.shadowSm}`, whiteSpace: 'pre-wrap', overflowWrap: 'break-word' }}>
         {d.body}
       </div>
-
-      <div className="grid grid-cols-2 xl:grid-cols-4" style={{ gap: 8 }}>
-        <Tile icon={<Clock size={16} strokeWidth={1.5} />} label={d.status === 'answered' ? 'Answered' : 'Waiting'} tone={d.status === 'answered' ? CK.ok : sevColor}
-          value={d.status === 'answered' ? `${waitLabel(d.answered_at, now)} ago` : d.status === 'clarify' ? 'For the delegate' : waitLabel(d.waiting_since, now)} />
-        <Tile icon={<MessageCircle size={16} strokeWidth={1.5} />} label="Last heard back" value={lastHeard === undefined ? 'Loading' : lastHeard ? `${waitLabel(lastHeard, now)} ago` : 'Not yet'} />
-        <Tile icon={<FileText size={16} strokeWidth={1.5} />} label="Length" value={`${d.word_count} words`} />
-        <Tile icon={<UserRound size={16} strokeWidth={1.5} />} label="Their backroomer" value={memberName(backroomer, names, 'Nobody yet')} />
-      </div>
-
-      {(goals === undefined || (goals && goals.trim())) && (
-        <div style={{ background: `linear-gradient(180deg, ${cabinetTint(CK.gold, 0.5)}, ${cabinetTint(CK.gold, 0.26)})`, borderRadius: 16, padding: '11px 14px', boxShadow: `inset 0 0 0 1px ${cabinetTint(CK.goldDeep, 0.25)}` }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 800, color: CK.goldDeep }}>
-            <Lock size={14} strokeWidth={1.5} /> Their goals, only staff see this
-          </span>
-          {goals === undefined ? <div style={{ marginTop: 6 }}><Skeleton h={14} w="70%" /></div> : (
-            <b style={{ display: 'block', fontSize: 13.5, marginTop: 4, fontWeight: 600, lineHeight: 1.5, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', color: CK.ink }}>{goals}</b>
-          )}
-        </div>
-      )}
 
       {/* Thread */}
       <div>
@@ -336,36 +361,39 @@ export function DirectiveDetail({ directive, onClose, onChanged, notesVersion = 
           {notes === null && <Skeleton h={34} r={14} />}
           {notes?.length === 0 && <p style={{ margin: 0, fontSize: 13, color: CK.muted }}>No notes yet</p>}
           {notes?.map((n) => {
-            const fromAuthor = !!n.member_id && n.member_id === d.author_member_id;
+            const fromAuthor = !n.internal && !!n.member_id && n.member_id === d.author_member_id;
+            const author = n.member_id ? names.members.get(n.member_id) : undefined;
             return (
               <div key={n.id} style={{
-                alignSelf: fromAuthor ? 'flex-start' : 'flex-end', maxWidth: '90%', padding: '8px 12px',
+                alignSelf: fromAuthor ? 'flex-start' : 'flex-end', maxWidth: '92%', minWidth: 'min(200px, 100%)', padding: '8px 12px',
                 borderRadius: fromAuthor ? '4px 16px 16px 16px' : '16px 4px 16px 16px',
-                background: n.internal ? cabinetTint(CK.gold, 0.34) : fromAuthor ? CK.card : cabinetTint(CK.forest, 0.1),
+                background: fromAuthor ? CK.card : n.internal ? cabinetTint(CK.gold, 0.34) : cabinetTint(CK.forest, 0.1),
                 boxShadow: fromAuthor ? CK.shadowSm : 'none',
               }}>
-                <p style={{ margin: 0, fontSize: 11.5, fontWeight: 700, color: CK.inkSoft, display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
-                  {n.internal && <Lock size={11} strokeWidth={1.5} aria-label="Internal note" />}
-                  <span>{memberName(n.member_id, names, 'Staff')}{fromAuthor ? ' (delegate)' : ''}</span>
-                  <span style={{ fontWeight: 500, color: CK.muted }}>{timeOf(n.created_at)}{n.internal ? ' · Internal' : ''}</span>
+                <p className="flex items-center flex-wrap" style={{ margin: 0, gap: '2px 6px', fontSize: 11.5, fontWeight: 700, color: CK.inkSoft }}>
+                  {fromAuthor
+                    ? <Avatar name={who} src={character?.picture_url} size={22} color={accent} />
+                    : <StaffPic member={author} size={22} />}
+                  <span style={{ color: CK.ink }}>{fromAuthor ? `${who}, the delegate` : memberName(n.member_id, names, 'Staff')}</span>
+                  {!fromAuthor && n.internal && <span className="inline-flex items-center" style={{ gap: 3, color: CK.goldDeep }}><Lock size={11} strokeWidth={1.6} aria-hidden />Internal note</span>}
+                  {!fromAuthor && !n.internal && <span style={{ fontWeight: 600, color: CK.muted }}>Seen by the delegate</span>}
+                  <span style={{ fontWeight: 500, color: CK.muted }}>{timeOf(n.created_at)}</span>
                 </p>
-                <p style={{ margin: '2px 0 0', fontSize: 13.5, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{n.body}</p>
+                <p style={{ margin: '4px 0 0', fontSize: 13.5, whiteSpace: 'pre-wrap', overflowWrap: 'break-word' }}>{n.body}</p>
               </div>
             );
           })}
         </div>
         <div className="flex flex-col" style={{ gap: 6, marginTop: 10 }}>
+          <span className="inline-flex items-center" style={{ gap: 5, fontSize: 12.5, fontWeight: 700, color: CK.goldDeep }}>
+            <Lock size={13} strokeWidth={1.5} aria-hidden />Internal note
+          </span>
           <textarea
             value={noteText} onChange={(e) => setNoteText(e.target.value)} rows={2} maxLength={4000}
-            aria-label="Write a note" placeholder={internal ? 'Note for staff only' : 'Note the delegate will see'}
-            style={{ ...fieldStyle, resize: 'vertical' }}
+            aria-label="Internal note" placeholder="Only staff see this" style={{ ...fieldStyle, resize: 'vertical' }}
           />
-          <div className="flex items-center justify-between flex-wrap" style={{ gap: 8 }}>
-            <label className="inline-flex items-center" style={{ gap: 6, fontSize: 13, fontWeight: 600, color: CK.inkSoft, cursor: 'pointer' }}>
-              <input type="checkbox" checked={internal} onChange={(e) => setInternal(e.target.checked)} />
-              <Lock size={13} strokeWidth={1.5} aria-hidden /> Internal note
-            </label>
-            <Btn tone="ghost" size="sm" icon={<MessageSquare size={14} strokeWidth={1.5} />} onClick={sendNote} disabled={!noteText.trim() || busy === 'note'}>Add note</Btn>
+          <div className="flex justify-end">
+            <Btn tone="ghost" size="sm" icon={<MessageSquare size={14} strokeWidth={1.5} />} onClick={sendNote} disabled={!noteText.trim() || busy === 'note'}>Add internal note</Btn>
           </div>
         </div>
       </div>
@@ -377,9 +405,11 @@ export function DirectiveDetail({ directive, onClose, onChanged, notesVersion = 
             {answeredStyle && <answeredStyle.Icon size={18} strokeWidth={1.5} aria-hidden />}
             {d.outcome ? OUTCOME_LABEL[d.outcome] : 'Answered'}
           </span>
-          <p style={{ margin: '6px 0 0', fontSize: 14, lineHeight: 1.55, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{d.reply}</p>
-          <p style={{ margin: '6px 0 0', fontSize: 12, color: CK.muted }}>By {memberName(d.answered_by, names, 'staff')}</p>
-          <div style={{ marginTop: 8 }}><Btn tone="ghost" size="sm" onClick={() => { setOutcome(d.outcome); setReply(d.reply ?? ''); setEditing(true); }}>Answer again</Btn></div>
+          <p style={{ margin: '6px 0 0', fontSize: 14, lineHeight: 1.55, whiteSpace: 'pre-wrap', overflowWrap: 'break-word' }}>{d.reply}</p>
+          <p className="flex items-center" style={{ margin: '6px 0 0', gap: 6, fontSize: 12, color: CK.muted }}>
+            <StaffPic member={d.answered_by ? names.members.get(d.answered_by) : null} size={18} />By {memberName(d.answered_by, names, 'staff')}
+          </p>
+          <div style={{ marginTop: 8 }}><Btn tone="ghost" size="sm" onClick={() => { setOutcome(d.outcome); setReply(d.reply ?? ''); setSaved(false); setEditing(true); }}>Answer again</Btn></div>
         </div>
       )}
 
@@ -391,12 +421,12 @@ export function DirectiveDetail({ directive, onClose, onChanged, notesVersion = 
           {d.status === 'clarify' && d.reply && (
             <p style={{ margin: 0, fontSize: 12.5, color: CK.inkSoft }}>You asked for more detail: <i>{d.reply}</i></p>
           )}
-          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5" style={{ gap: 6 }} role="radiogroup" aria-label="Outcome">
+          <div style={{ display: 'grid', gap: 6, gridTemplateColumns: 'repeat(auto-fit, minmax(118px, 1fr))' }} role="radiogroup" aria-label="Outcome">
             {OUTCOMES.map((o) => {
               const on = outcome === o;
               const st = OUTCOME_STYLE[o];
               return (
-                <button key={o} role="radio" aria-checked={on} onClick={() => setOutcome(o)}
+                <button key={o} role="radio" aria-checked={on} onClick={() => { setOutcome(o); setSaved(false); }}
                   className="flex flex-col items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] active:scale-[0.97] transition-transform"
                   style={{ border: 0, borderRadius: 14, padding: '9px 6px', gap: 4, fontSize: 12.5, fontWeight: 700, cursor: 'pointer', fontFamily: CK.font, textAlign: 'center',
                     background: on ? st.color : cabinetTint(st.color, 0.07), color: on ? '#fff' : st.color,
@@ -407,47 +437,22 @@ export function DirectiveDetail({ directive, onClose, onChanged, notesVersion = 
               );
             })}
           </div>
-          <textarea value={reply} onChange={(e) => setReply(e.target.value)} rows={5} maxLength={8000}
-            aria-label="Reply to the delegate" placeholder={`Reply to ${who}`} style={{ ...fieldStyle, resize: 'vertical', background: CK.page }} />
 
-          <div className="flex flex-col" style={{ gap: 8 }}>
-            <p style={{ margin: 0, fontSize: 12.5, fontWeight: 700, color: CK.inkSoft }}>Also</p>
-            <div className="flex flex-wrap" style={{ gap: 6 }}>
-              {canResources && <AlsoToggle icon={<Coins size={16} strokeWidth={1.5} />} label="Change resources" on={resOn} onClick={() => setResOn((v) => !v)} />}
-              <AlsoToggle icon={<Newspaper size={16} strokeWidth={1.5} />} label="Write news from this" on={newsOn} onClick={() => setNewsOn((v) => !v)} />
-            </div>
-            {resOn && canResources && (
-              <div className="flex flex-col" style={{ gap: 6 }}>
-                {!resData && <Skeleton h={34} />}
-                {resData && resourceOptions.length === 0 && <p style={{ margin: 0, fontSize: 13, color: CK.muted }}>This character and cabinet have no resources yet</p>}
-                {resData && resourceOptions.length > 0 && resRows.map((row, i) => (
-                  <div key={i} className="flex items-center flex-wrap" style={{ gap: 6 }}>
-                    <div style={{ flex: '1 1 220px', minWidth: 0 }}>
-                      <GSelect size="sm" value={row.id} placeholder="Pick a resource" aria-label="Resource" options={resourceOptions}
-                        onChange={(v) => setResRows((rs) => rs.map((r, j) => (j === i ? { ...r, id: v } : r)))} />
-                    </div>
-                    <input type="number" inputMode="decimal" value={row.delta} aria-label="Change by"
-                      onChange={(e) => setResRows((rs) => rs.map((r, j) => (j === i ? { ...r, delta: e.target.value } : r)))}
-                      placeholder="+5 or -5" style={{ ...fieldStyle, width: 110, padding: '6px 10px' }} />
-                  </div>
-                ))}
-                {resData && resourceOptions.length > 0 && (
-                  <div><Btn tone="ghost" size="sm" onClick={() => setResRows((rs) => [...rs, { id: '', delta: '' }])}>Add another</Btn></div>
-                )}
-              </div>
-            )}
-            {newsOn && (
-              <div className="flex flex-col" style={{ gap: 6 }}>
-                <input value={newsTitle} onChange={(e) => setNewsTitle(e.target.value)} maxLength={160} aria-label="News title" placeholder="News title" style={fieldStyle} />
-                <textarea value={newsBody} onChange={(e) => setNewsBody(e.target.value)} rows={3} aria-label="News text" placeholder="News text" style={{ ...fieldStyle, resize: 'vertical' }} />
-                <div>
-                  <FieldLabel>Who reads it</FieldLabel>
-                  <GSelect size="sm" value={newsAudience} options={audienceOptions} onChange={setNewsAudience} aria-label="News audience" />
-                </div>
-                <p style={{ margin: 0, fontSize: 12, color: CK.muted }}>It is saved as a draft on the News page.</p>
-              </div>
+          <div style={{ position: 'relative' }}>
+            <textarea value={reply} onChange={(e) => { setReply(e.target.value); setSaved(false); }} rows={5} maxLength={8000}
+              aria-label="Reply to the delegate" placeholder={`Reply to ${who}`} style={{ ...fieldStyle, resize: 'vertical', background: CK.page, paddingBottom: 48 }} />
+            <button type="button" onClick={() => setActionsOpen(true)} aria-label="Do more with this reply" title="Do more with this reply"
+              className="grid place-items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] active:scale-[0.95] transition-transform"
+              style={{ position: 'absolute', left: 10, bottom: 10, width: 32, height: 32, borderRadius: '50%', border: 0, background: CK.greenBtn, color: '#fff', boxShadow: CK.shadowSm, cursor: 'pointer' }}>
+              <Plus size={18} strokeWidth={1.8} />
+            </button>
+            {saved && (
+              <span className="inline-flex items-center" aria-live="polite" style={{ position: 'absolute', right: 14, bottom: 14, gap: 4, fontSize: 11.5, fontWeight: 700, color: CK.muted }}>
+                <Check size={12} strokeWidth={2} aria-hidden />Draft saved
+              </span>
             )}
           </div>
+          <ActionChips actions={actions} onRemove={(id) => setActions(actions.filter((a) => a.id !== id))} />
         </div>
       )}
 
@@ -457,33 +462,34 @@ export function DirectiveDetail({ directive, onClose, onChanged, notesVersion = 
           {!mine && !!memberId && d.status !== 'clarify' && (
             <Btn tone="ghost" icon={<UserCheck size={15} strokeWidth={1.5} />} onClick={claim} disabled={busy === 'claim'}>Claim</Btn>
           )}
-          <div className="flex items-center" style={{ gap: 6 }}>
-            <div style={{ width: 190 }}>
-              <GSelect size="sm" value={handTo} onChange={setHandTo} options={staffOptions} placeholder="Choose a person" aria-label="Hand to" />
+          {staffOptions.length > 0 && (
+            <div className="flex items-center" style={{ gap: 6 }}>
+              <div style={{ width: 210 }}>
+                <GSelect size="sm" value={handTo} onChange={setHandTo} options={staffOptions} placeholder="Choose a person" aria-label="Hand to" />
+              </div>
+              <Btn tone="ghost" onClick={hand} disabled={!handTo || busy === 'assign'}>Hand to</Btn>
             </div>
-            <Btn tone="ghost" onClick={hand} disabled={!handTo || busy === 'assign'}>Hand to</Btn>
-          </div>
+          )}
           <span className="flex-1" />
           {showForm && (
             <Btn tone="green" icon={<Send size={15} strokeWidth={1.5} />} onClick={send} disabled={!outcome || !reply.trim() || busy === 'send'}>Send reply</Btn>
           )}
         </div>
       )}
-    </div>
-  );
-}
 
-function AlsoToggle({ icon, label, on, onClick }: { icon: ReactNode; label: string; on: boolean; onClick: () => void }) {
-  return (
-    <button type="button" aria-pressed={on} onClick={onClick}
-      className="inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] active:scale-[0.97] transition-transform"
-      style={{ gap: 7, border: 0, borderRadius: 12, padding: '7px 12px', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: CK.font,
-        background: on ? cabinetTint(CK.forest, 0.1) : CK.page, color: on ? CK.forest : CK.inkSoft,
-        boxShadow: on ? `inset 0 0 0 1.5px ${CK.forest}` : `inset 0 0 0 1px ${CK.hair}` }}>
-      <span aria-hidden style={{ lineHeight: 0 }}>{icon}</span>
-      {label}
-      {on && <Check size={14} strokeWidth={2} aria-hidden />}
-    </button>
+      {actionsOpen && (
+        <ReplyActionsDialog
+          crisisRef={ref}
+          authorCharacterId={d.author_character_id}
+          cabinetId={d.cabinet_id ?? character?.cabinet_id ?? null}
+          powers={powers}
+          actions={actions}
+          onChange={setActions}
+          onClose={() => setActionsOpen(false)}
+        />
+      )}
+      {modalCharacter && <CharacterModal characterId={modalCharacter} initialTab="directives" onClose={() => setModalCharacter(null)} />}
+    </div>
   );
 }
 

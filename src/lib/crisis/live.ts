@@ -16,7 +16,7 @@ import { anonClient } from './client';
 export type CrisisTable =
   | 'crises' | 'crisis_cabinets' | 'crisis_members' | 'crisis_characters' | 'crisis_character_secrets'
   | 'crisis_directives' | 'crisis_directive_notes' | 'crisis_news' | 'crisis_resource_types' | 'crisis_resources'
-  | 'crisis_map_regions' | 'crisis_units' | 'crisis_shapes' | 'crisis_messages' | 'crisis_meetings';
+  | 'crisis_map_regions' | 'crisis_units' | 'crisis_shapes' | 'crisis_messages' | 'crisis_meetings' | 'crisis_notifications';
 
 export interface CrisisPing { t: CrisisTable; op: 'insert' | 'update' | 'delete'; id: string | null }
 

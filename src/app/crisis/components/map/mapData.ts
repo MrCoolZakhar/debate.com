@@ -18,7 +18,7 @@ export const KIND_META: Record<UnitKind, { label: string; sight: number }> = {
   base: { label: 'Base', sight: 450 },
   spy: { label: 'Spy', sight: 220 },
   sub: { label: 'Submarine', sight: 500 },
-  custom: { label: 'Other', sight: 400 },
+  custom: { label: 'Custom', sight: 400 },
 };
 export const KIND_ORDER: UnitKind[] = ['army', 'navy', 'air', 'missile', 'base', 'spy', 'sub', 'custom'];
 

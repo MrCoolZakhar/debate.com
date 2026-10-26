@@ -13,6 +13,7 @@ import { Btn, Card, CK, Segmented, Skeleton, fieldStyle, waitLabel, waitSeverity
 import QueueRow from './QueueRow';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import DirectiveDetail from './DirectiveDetail';
+import DirectiveDeepLink from '../notifications/DirectiveDeepLink';
 import {
   NO_FILTERS, buildNames, inLane, lastAnsweredByAuthor, matchesFilters, sortDirectives,
   type Filters, type Lane, type QueueOrder,
@@ -119,6 +120,23 @@ export default function BackroomInbox() {
 
   const selected = useMemo(() => all.find((d) => d.id === selectedId) ?? null, [all, selectedId]);
 
+  // A notification link (?d=<id>): select that directive and switch to a lane that holds it.
+  const [linkedId, setLinkedId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!linkedId) return;
+    const d = all.find((x) => x.id === linkedId);
+    if (!d) return;
+    const lanes: Lane[] = ['mine', 'unclaimed', 'open', 'waiting', 'answered'];
+    const target = inLane(d, lane, memberId) ? lane : lanes.find((l) => inLane(d, l, memberId));
+    /* eslint-disable react-hooks/set-state-in-effect */
+    if (target && target !== lane) setLane(target);
+    setFilters(NO_FILTERS);
+    setSelectedId(d.id);
+    setMobileOpen(true);
+    setLinkedId(null);
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [linkedId, all, lane, memberId]);
+
   const pick = (id: string) => { setSelectedId(id); setMobileOpen(true); };
 
   const afterChange = (what: 'claimed' | 'assigned' | 'answered') => {
@@ -162,6 +180,7 @@ export default function BackroomInbox() {
 
   return (
     <div className="flex flex-col" style={{ gap: 10, marginTop: 6, width: '100%' }}>
+      <DirectiveDeepLink onId={setLinkedId} />
       <div className="flex items-center justify-between flex-wrap" style={{ gap: 10 }}>
         <h1 className="flex items-center" style={{ margin: 0, gap: 8, fontSize: 22, fontWeight: 800, color: CK.ink }}><ListChecks size={22} strokeWidth={1.5} aria-hidden style={{ color: CK.red }} />Directives</h1>
         <div style={{ maxWidth: '100%', overflowX: 'auto' }}>
@@ -184,11 +203,11 @@ export default function BackroomInbox() {
           options={[{ value: 'fair', label: 'Fair' }, { value: 'oldest', label: 'Oldest' }, { value: 'newest', label: 'Newest' }]} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[400px_minmax(0,1fr)]" style={{ gap: 12, alignItems: 'start' }}>
+      <div className="grid grid-cols-1 lg:grid-cols-[430px_minmax(0,1fr)]" style={{ gap: 12, alignItems: 'start' }}>
         <Card className={`${mobileOpen ? 'hidden lg:block' : 'block'} ${paneH} lg:overflow-y-auto`} style={{ padding: 8 }}>
           {directives === null && !loadError && (
             <div className="flex flex-col" style={{ gap: 8, padding: 4 }} aria-busy="true">
-              {[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} h={64} r={12} />)}
+              {[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} h={120} r={16} />)}
             </div>
           )}
           {loadError && (
@@ -207,7 +226,7 @@ export default function BackroomInbox() {
               const when = lane === 'answered' ? `Answered ${waitLabel(d.answered_at, now)} ago`
                 : lane === 'waiting' ? `Asked ${waitLabel(d.answered_at, now)} ago` : waitLabel(d.waiting_since, now);
               return (
-                <li key={d.id} style={{ margin: '2px 4px 4px' }}>
+                <li key={d.id} style={{ margin: '0 4px', minWidth: 0 }}>
                   <QueueRow d={d} names={names} whenLabel={when} sev={sev} selected={d.id === selectedId}
                     delegateNote={d.status === 'queued' && d.outcome === 'clarify'} onOpen={() => pick(d.id)} />
                 </li>

@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Eye, Gavel, GraduationCap } from 'lucide-react';
 import { notifyErr } from '@/lib/appNotify';
-import { getCrisisClient } from '@/lib/crisis/client';
+import { clearCrisisToken, getCrisisClient } from '@/lib/crisis/client';
 import { crisisError, viewAs, type CrisisRef } from '@/lib/crisis/api';
 import { MEMBER_COLUMNS, ROLE_LABEL, type Cabinet, type Character, type Member } from '@/lib/crisis/types';
 import { Avatar, CK, Card, CardTitle, Skeleton } from '../../crisisKit';
@@ -17,6 +17,7 @@ interface Loaded {
   characters: Character[];
   cabinets: Cabinet[];
   rooms: Map<string, { code: string; chairPassword: string | null }>; // cabinet id -> live room
+  selfUserId: string | null; // the signed-in account, to tell which member is you
 }
 
 async function loadTryAs(crisisId: string): Promise<Loaded> {
@@ -27,6 +28,7 @@ async function loadTryAs(crisisId: string): Promise<Loaded> {
     client.from('crisis_cabinets').select('*').eq('crisis_id', crisisId).order('sort'),
   ]);
   if (m.error || ch.error || cb.error) throw m.error || ch.error || cb.error;
+  const selfUserId = (await client.auth.getSession()).data.session?.user.id ?? null;
   const cabinets = (cb.data ?? []) as Cabinet[];
   const rooms = new Map<string, { code: string; chairPassword: string | null }>();
   const ccIds = cabinets.map((c) => c.conference_committee_id).filter((x): x is string => !!x);
@@ -43,7 +45,7 @@ async function loadTryAs(crisisId: string): Promise<Loaded> {
       if (code) rooms.set(cab.id, { code, chairPassword: room?.settings?.chairJoinSuffix || null });
     }
   }
-  return { members: (m.data ?? []) as unknown as Member[], characters: (ch.data ?? []) as Character[], cabinets, rooms };
+  return { members: (m.data ?? []) as unknown as Member[], characters: (ch.data ?? []) as Character[], cabinets, rooms, selfUserId };
 }
 
 function Chip({ onClick, href, icon, children, tone = 'plain', busy }: {
@@ -78,6 +80,12 @@ export default function TryAsPanel({ cref, compact }: { cref: CrisisRef; compact
     if (busy) return;
     setBusy(m.id);
     try {
+      if (data?.selfUserId && m.user_id === data.selfUserId) {
+        // That is you: drop the stored token and open the crisis as your own account.
+        clearCrisisToken(cref.conf, cref.crisis);
+        window.location.assign(`/crisis/${cref.conf}/${cref.crisis}`);
+        return;
+      }
       await viewAs(cref, m.id);
       // A full load so every part of the page re-reads as the new person.
       window.location.assign(`/crisis/${cref.conf}/${cref.crisis}`);
@@ -87,7 +95,11 @@ export default function TryAsPanel({ cref, compact }: { cref: CrisisRef; compact
     }
   };
 
-  const staff = (data?.members ?? []).filter((m) => m.role === 'backroomer' || m.role === 'assistant_director' || m.role === 'press');
+  const teamRank: Record<string, number> = { director: 0, assistant_director: 1, backroomer: 2, press: 3 };
+  const staff = (data?.members ?? [])
+    .filter((m) => m.role === 'director' || m.role === 'backroomer' || m.role === 'assistant_director' || m.role === 'press')
+    .sort((a, b) => (teamRank[a.role] - teamRank[b.role]) || a.display_name.localeCompare(b.display_name));
+  const isYou = (m: Member) => !!data?.selfUserId && m.user_id === data.selfUserId;
   const chairs = (data?.members ?? []).filter((m) => m.role === 'chair');
   const delegates = (data?.members ?? []).filter((m) => m.role === 'delegate');
 
@@ -106,7 +118,7 @@ export default function TryAsPanel({ cref, compact }: { cref: CrisisRef; compact
               <div className="flex flex-wrap" style={{ gap: 6 }}>
                 {staff.map((m) => (
                   <Chip key={m.id} busy={busy === m.id} onClick={() => enter(m)} icon={face(m, CK.forest2)}>
-                    {ROLE_LABEL[m.role]} · {m.display_name}
+                    {ROLE_LABEL[m.role]} · {m.display_name}{isYou(m) ? ' (you)' : ''}
                   </Chip>
                 ))}
               </div>

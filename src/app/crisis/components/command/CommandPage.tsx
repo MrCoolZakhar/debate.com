@@ -20,20 +20,35 @@ import { BackroomCard, FrontRoomsCard } from './commandRooms';
 
 const WarMap = dynamic(() => import('../map/WarMap'), {
   ssr: false,
-  loading: () => <Skeleton h={380} r={16} />,
+  loading: () => <Skeleton h={300} r={16} />,
 });
 
+// Crisis Command fits one screen from 1240px wide: the grid takes the height left under the header
+// (56px bar, 4px top, 8px page top, 52px strip, 12px gap, 18px bottom), every card scrolls inside itself
+// and the map fills its cell. Below 1240px the cards stack and the page scrolls as usual.
 const GRID_CSS = `
-.cmd-grid { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); grid-template-areas: "map" "needs" "side" "res"; }
-.cmd-needs, .cmd-side { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
-.cmd-needs { grid-area: needs; } .cmd-map { grid-area: map; } .cmd-side { grid-area: side; }
-.cmd-res { grid-area: res; display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); min-width: 0; }
-@media (min-width: 640px) { .cmd-res { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.cmd-grid { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); grid-template-areas: "map" "needs" "side" "res"; }
+.cmd-col { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.cmd-needs { grid-area: needs; } .cmd-map { grid-area: map; min-width: 0; } .cmd-side { grid-area: side; } .cmd-res { grid-area: res; min-width: 0; }
+.cmd-mapbox { position: relative; height: clamp(320px, 50vh, 560px); border-radius: 16px; overflow: hidden; }
 @media (min-width: 768px) and (max-width: 1239px) {
   .cmd-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "map map" "needs side" "res res"; }
 }
 @media (min-width: 1240px) {
-  .cmd-grid { grid-template-columns: minmax(300px, 340px) minmax(0, 1fr) minmax(280px, 320px); grid-template-areas: "needs map side" "needs res side"; }
+  .cmd-grid { height: calc(100dvh - 152px); min-height: 540px; grid-template-columns: minmax(300px, 330px) minmax(0, 1fr) minmax(290px, 320px); grid-template-rows: minmax(0, 1fr) auto; grid-template-areas: "needs map side" "needs res side"; }
+  .cmd-col { min-height: 0; }
+  .cmd-map > section { height: 100%; overflow: hidden; }
+  .cmd-mapbox { flex: 1 1 0; height: auto; min-height: 0; }
+  .cmd-mapbox .wm-root { min-height: 0; }
+  .cmd-mapbox .wm-body { min-height: 0; }
+  .cmd-card { min-height: 0; overflow: auto; flex: 0 1 auto; }
+  .cmd-wait { flex: 1 1 0; min-height: 0; display: flex; }
+  .cmd-wait > section { flex: 1; min-height: 0; overflow: auto; }
+  .cmd-needs > .cmd-card:nth-child(2) { max-height: 30%; }
+  .cmd-needs > .cmd-card:nth-child(3) { max-height: 27%; }
+  .cmd-side > .cmd-card:first-child { max-height: 55%; }
+  .cmd-side > .cmd-card:last-child { flex: 1 1 0; }
+  .cmd-res > .cmd-card { max-height: 210px; }
 }
 `;
 
@@ -112,34 +127,35 @@ export default function CommandPage() {
       />
 
       <div className="cmd-grid">
-        <section className="cmd-needs">
-          <WaitingCard directives={directives} base={base} now={now} onOpen={(d) => setOpen(d.id)} />
+        <section className="cmd-col cmd-needs">
+          <div className="cmd-wait">
+            <WaitingCard directives={directives} base={base} now={now} onOpen={(d) => setOpen(d.id)} />
+          </div>
           <ApprovalCard news={news} cabinets={core.cabinets} members={core.members} cref={ref} base={base} now={now} onChanged={() => { void readNews(); }} />
+          <NewsCard news={news} cabinets={core.cabinets} members={core.members} base={base} now={now} />
         </section>
 
         <section className="cmd-map">
-          <Card style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+          <Card style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '10px 14px 14px' }}>
             <CardTitle
               icon={<MapIcon size={17} strokeWidth={1.5} />}
-              sub="You see everything. Delegates see only what their side knows."
               right={<LinkBtn href={`${base}/map`}>Open the full map</LinkBtn>}
             >
               War Map
             </CardTitle>
-            <div style={{ position: 'relative', flex: 1, minHeight: 380, height: 'clamp(380px, 50vh, 640px)', borderRadius: 16, overflow: 'hidden' }}>
+            <div className="cmd-mapbox">
               <WarMap compact />
             </div>
           </Card>
         </section>
 
-        <section className="cmd-side">
+        <section className="cmd-col cmd-side">
           <FrontRoomsCard cref={ref} cabinets={core.cabinets} base={base} />
           <BackroomCard cref={ref} members={core.members} directives={directives} base={base} onChanged={() => { void readDirectives(); }} />
         </section>
 
         <section className="cmd-res">
-          <ResourcesCard cabinets={core.cabinets} types={res?.types ?? []} resources={res?.resources ?? []} changes={changes} loaded={res !== null} />
-          <NewsCard news={news} cabinets={core.cabinets} members={core.members} base={base} now={now} />
+          <ResourcesCard cabinets={core.cabinets} types={res?.types ?? []} resources={res?.resources ?? []} changes={changes} loaded={res !== null} base={base} />
         </section>
       </div>
 

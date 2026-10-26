@@ -1,20 +1,21 @@
 'use client';
-// Gavelling Crisis: the delegate's home. A red status strip stays at the top (in-world date, directives
-// open or paused). Under it a top band: the profile card (the big picture hangs over its top edge) at
-// the left, and to its right the action row (Request to speak, Chat, News), the speakers list and the
-// resources. Below, "Send a Directive" (narrower) beside "My Directives" (wider). On a phone it is one
-// column: status, profile, actions, speakers list, resources, send, my directives.
+// Gavelling Crisis: the delegate's home, three columns on a wide screen and no bar at the top.
+//   Left (small, 280px): the character card (portrait over the top edge, opens My Character), the two
+//   buttons (Request to speak, Chat), the compact speakers list, then the small facts (in-world date,
+//   directives open or paused) and the resources, two per row.
+//   Middle: Send a Directive, sized to fit one screen at 1440x900.
+//   Right: the latest news (with this cabinet's big numbers), then My Directives.
+// On a phone it stacks: character and buttons, send directive, news, my directives, facts and resources.
 // The live room is loaded once (useCrisisRoom) and shared by the speakers list, the request and the chat.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Newspaper } from 'lucide-react';
 import {
   crisisError, listDirectives, loadResources, loadSecrets, loadWorld, type CrisisRef,
 } from '@/lib/crisis/api';
 import { useCrisisLive } from '@/lib/crisis/live';
-import type { CharacterSecret, Directive, DirectiveNote, Resource, ResourceType } from '@/lib/crisis/types';
+import type { CharacterSecret, Directive, DirectiveNote, News, Resource, ResourceType } from '@/lib/crisis/types';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
-import { Btn, Card, CK } from '../../crisisKit';
+import { Card, CK } from '../../crisisKit';
 import DirectiveForm, { type WorldCharacter } from './DirectiveForm';
 import MyDirectives, { type PersonRef } from './MyDirectives';
 import RoomActions from './RoomActions';
@@ -22,9 +23,10 @@ import CharacterDialog from './CharacterDialog';
 import ChatDialog from './ChatDialog';
 import NewsDialog from './NewsDialog';
 import ProfileCard from './ProfileCard';
-import ResourcesCard from './ResourcesCard';
+import FactsCard from './FactsCard';
+import NewsPanel from './NewsPanel';
 import SpeakersList from './SpeakersList';
-import StatusStrip from './StatusStrip';
+import { useCrisisNews } from '../news/useCrisisNews';
 import { useCrisisRoom } from './useCrisisRoom';
 import { listAllNotes, listCoauthors } from './delegateData';
 
@@ -45,6 +47,8 @@ export default function DelegateHome() {
   const [world, setWorld] = useState<WorldCharacter[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [dialog, setDialog] = useState<'character' | 'news' | 'chat' | null>(null);
+  const [story, setStory] = useState<News | null>(null);
+  const news = useCrisisNews(ref);
   const seq = useRef<Record<string, number>>({});
 
   // Each slice keeps only the newest answer, and a failed re-read keeps what is on screen.
@@ -107,36 +111,36 @@ export default function DelegateHome() {
   const myResources = (res?.resources ?? []).filter((r) => (cabinetId && r.cabinet_id === cabinetId) || (characterId && r.character_id === characterId));
   const open = crisis.directives_open;
 
+  const cabinet = cabinetId ? core.cabinets.find((c) => c.id === cabinetId) ?? null : null;
+
   return (
-    <div style={{ paddingTop: 8 }}>
-      <StatusStrip crisis={crisis} me={me} color={myColor} />
-      {loadError && <p role="status" style={{ margin: '-4px 0 12px', fontSize: 13, color: CK.danger }}>{loadError}</p>}
+    <div style={{ paddingTop: 4 }}>
+      {loadError && <p role="status" style={{ margin: '0 0 10px', fontSize: 13, color: CK.danger }}>{loadError}</p>}
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,310px)_minmax(0,1fr)] items-stretch">
-        <section aria-label="My profile">
-          <ProfileCard me={me} cabinetName={cabinetId ? cabinetNames[cabinetId] ?? null : null} color={myColor} onOpen={() => setDialog('character')} />
-        </section>
-
-        <Card className="lg:mt-[58px]" style={{ padding: '14px 18px 16px' }}>
-          <section aria-label="Actions">
-            <RoomActions room={room} onChat={() => setDialog('chat')}>
-              <Btn tone="ghost" icon={<Newspaper size={16} strokeWidth={1.5} aria-hidden />} onClick={() => setDialog('news')} style={{ padding: '7px 13px', fontSize: 13, borderRadius: 11 }}>News</Btn>
-            </RoomActions>
-          </section>
-          <div className="grid gap-5 md:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]" style={{ marginTop: 14, paddingTop: 14, boxShadow: `inset 0 1px 0 ${CK.hair}` }}>
-            <section aria-label="Speakers list">
-              <h2 style={{ margin: '0 0 4px', fontSize: 14, fontWeight: 800, color: CK.ink }}>Speakers List</h2>
-              <SpeakersList room={room} characters={everyone} />
+      <div className="flex flex-col gap-6 xl:grid xl:items-start xl:gap-5 xl:grid-cols-[280px_minmax(0,6fr)_minmax(0,5fr)]">
+        {/* Left: the character, the buttons, the speakers list; the facts and resources come last on a phone. */}
+        <div className="contents xl:flex xl:flex-col xl:gap-5 xl:min-w-0">
+          <div className="order-1 xl:order-none min-w-0 flex flex-col gap-3">
+            <section aria-label="My profile">
+              <ProfileCard me={me} cabinet={cabinet} color={myColor} onOpen={() => setDialog('character')} />
             </section>
-            <div className="md:pl-5" style={{ boxShadow: 'none' }}>
-              <ResourcesCard types={res?.types ?? null} resources={myResources} characterId={characterId} color={myColor} />
-            </div>
+            <section aria-label="Actions">
+              <RoomActions room={room} onChat={() => setDialog('chat')} />
+            </section>
+            <Card style={{ padding: '10px 12px 12px' }}>
+              <section aria-label="Speakers list">
+                <h2 style={{ margin: '0 0 4px', fontSize: 13.5, fontWeight: 800, color: CK.ink }}>Speakers List</h2>
+                <SpeakersList room={room} characters={everyone} />
+              </section>
+            </Card>
           </div>
-        </Card>
-      </div>
+          <div className="order-5 xl:order-none min-w-0">
+            <FactsCard crisis={crisis} types={res?.types ?? null} resources={myResources} characterId={characterId} color={myColor} />
+          </div>
+        </div>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] items-start" style={{ marginTop: 22 }}>
-        <div className="min-w-0">
+        {/* Middle: the most important thing on the page. */}
+        <div className="order-2 xl:order-none min-w-0 xl:pt-[38px]">
           <DirectiveForm
             cref={ref}
             memberId={memberId}
@@ -150,24 +154,36 @@ export default function DelegateHome() {
             onSent={() => { void readDirectives(ref); }}
           />
         </div>
-        <div className="min-w-0">
-          <MyDirectives
-            cref={ref}
-            directives={directives}
-            notes={notes}
-            coauthors={coauthors}
-            personOf={personOf}
-            memberName={memberName}
-            myMemberId={memberId}
-            onChanged={() => { void readDirectives(ref); }}
-          />
+
+        {/* Right: the news, then my directives. */}
+        <div className="contents xl:flex xl:flex-col xl:gap-6 xl:min-w-0 xl:pt-[38px]">
+          <div className="order-3 xl:order-none min-w-0">
+            <NewsPanel
+              items={news.items}
+              cabinetId={cabinetId}
+              onOpen={(n) => { setStory(n); setDialog('news'); }}
+              onAll={() => { setStory(null); setDialog('news'); }}
+            />
+          </div>
+          <div className="order-4 xl:order-none min-w-0">
+            <MyDirectives
+              cref={ref}
+              directives={directives}
+              notes={notes}
+              coauthors={coauthors}
+              personOf={personOf}
+              memberName={memberName}
+              myMemberId={memberId}
+              onChanged={() => { void readDirectives(ref); }}
+            />
+          </div>
         </div>
       </div>
 
       {dialog === 'character' && me && (
         <CharacterDialog me={me} color={myColor} goals={goals} goalsLoaded={secrets !== null} onClose={() => setDialog(null)} />
       )}
-      {dialog === 'news' && <NewsDialog onClose={() => setDialog(null)} />}
+      {dialog === 'news' && <NewsDialog items={news.items} error={news.error} initial={story} onClose={() => setDialog(null)} />}
       {dialog === 'chat' && <ChatDialog room={room} onClose={() => setDialog(null)} />}
     </div>
   );

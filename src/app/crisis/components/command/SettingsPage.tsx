@@ -5,14 +5,15 @@
 // single-cabinet crisis) are hidden.
 
 import { useState } from 'react';
-import { MessageSquare, Newspaper, Presentation, ScrollText, ShieldCheck, Siren, UsersRound } from 'lucide-react';
+import { Award, MessageSquare, Newspaper, Presentation, ScrollText, ShieldCheck, Siren, UsersRound } from 'lucide-react';
 import GSelect from '@/components/GSelect';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { crisisError, patchCrisis, patchSettings } from '@/lib/crisis/api';
+import { DEFAULT_POINTS, readPoints, type PointsConfig } from '@/lib/crisis/points';
 import { readSettings, type CrisisSettings } from '@/lib/crisis/types';
-import { Card, CardTitle, CK, fieldStyle, Segmented } from '../../crisisKit';
+import { Btn, Card, CardTitle, CK, fieldStyle, Segmented } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
-import { ChoiceRow, DirectorOnlyCard, PageHeading, ToggleRow } from './setupKit';
+import { ChoiceRow, DirectorOnlyCard, Hint, PageHeading, ToggleRow } from './setupKit';
 
 const COOLDOWNS = [
   { value: '0', label: 'Off' }, { value: '60', label: '1 minute' }, { value: '120', label: '2 minutes' },
@@ -23,7 +24,7 @@ const WORD_LIMITS = [
   { value: '300', label: '300 words' }, { value: '500', label: '500 words' },
 ];
 
-type Powers = CrisisSettings['backroomPowers'];
+type Powers = CrisisSettings['backroomPowers'] & { characters?: boolean };
 
 export default function SettingsPage() {
   const v = useCrisis();
@@ -54,7 +55,9 @@ function SettingsBody() {
       notifyErr(crisisError(e, 'Could not save that setting.'), 'crisis-settings');
     }
   };
+  const powers = s.backroomPowers as Powers;
   const setPower = (k: keyof Powers, on: boolean) => save('backroomPowers', { ...s.backroomPowers, [k]: on });
+  const points = readPoints(raw);
 
   return (
     <div style={{ fontFamily: CK.font }}>
@@ -85,8 +88,15 @@ function SettingsBody() {
           {full && <ToggleRow title="Change resources" checked={s.backroomPowers.resources} onChange={(on) => setPower('resources', on)} hint="Add or take away resources, with a reason." />}
           {full && <ToggleRow title="Fog of war" checked={s.backroomPowers.fog} onChange={(on) => setPower('fog', on)} hint="Choose what each cabinet can see on the map." />}
           {full && <ToggleRow title="Units" checked={s.backroomPowers.units} onChange={(on) => setPower('units', on)} hint="Place and move units on the war map." />}
+          <ToggleRow title="Edit characters" checked={!!powers.characters} onChange={(on) => setPower('characters', on)} hint="Change a character's bio, picture, powers, status and guide. Off means a backroomer can only read them." />
           <ToggleRow title="See all directives" checked={s.backroomPowers.seeAll} onChange={(on) => setPower('seeAll', on)} hint="Off means a backroomer sees only the directives of their own characters." />
           <ToggleRow title="Publish news without approval" checked={s.backroomPowers.news} onChange={(on) => setPower('news', on)} hint="Off means a backroomer's news waits for the Crisis Director." />
+        </Card>
+
+        <Card>
+          <CardTitle icon={<Award size={16} strokeWidth={1.5} />}>Points</CardTitle>
+          <p style={{ margin: '-4px 0 6px', fontSize: 13, color: CK.inkSoft }}>What each action is worth in a character&apos;s crisis points. They help judge awards.</p>
+          <PointsFields points={points} onSave={(next) => save('points', next)} />
         </Card>
 
         <Card>
@@ -166,5 +176,67 @@ function CrisisName({ name }: { name: string }) {
         style={fieldStyle}
       />
     </div>
+  );
+}
+
+// ─────────── Points ───────────
+
+const POINT_ROWS: Array<{ key: keyof PointsConfig; title: string; hint?: string }> = [
+  { key: 'directiveSent', title: 'Directive sent', hint: 'Every personal, joint or cabinet directive a character sends.' },
+  { key: 'approved', title: 'Approved', hint: 'Extra when the backroom approves a directive.' },
+  { key: 'partial', title: 'Partly works', hint: 'Extra when a directive partly works.' },
+  { key: 'denied', title: 'Denied', hint: 'Extra when a directive is denied. Zero or negative.' },
+  { key: 'cabinetDirective', title: 'Cabinet directive', hint: 'Extra for a directive sent in the name of the cabinet.' },
+  { key: 'jointDirective', title: 'Joint directive co-written', hint: 'Each co-author of a joint directive.' },
+  { key: 'meetingHeld', title: 'Meeting held', hint: 'Each meeting the character took part in that was held.' },
+  { key: 'manual', title: 'Staff adjustment', hint: 'Reserved for a later release. Not counted yet.' },
+];
+
+function PointsFields({ points, onSave }: { points: PointsConfig; onSave: (next: PointsConfig) => void }) {
+  const [draft, setDraft] = useState<Partial<Record<keyof PointsConfig, string>>>({});
+  const changed = POINT_ROWS.some((r) => points[r.key] !== DEFAULT_POINTS[r.key]);
+
+  const commit = (key: keyof PointsConfig) => {
+    const raw = draft[key];
+    setDraft((d) => { const n = { ...d }; delete n[key]; return n; });
+    if (raw === undefined) return;
+    const n = Math.round(Number(raw));
+    if (raw.trim() === '' || !Number.isFinite(n)) return;
+    const value = Math.max(-100, Math.min(100, n));
+    if (value !== points[key]) onSave({ ...points, [key]: value });
+  };
+
+  return (
+    <>
+      {POINT_ROWS.map((r) => (
+        <div key={r.key} className="flex items-center justify-between gap-3" style={{ padding: '8px 0', borderTop: `1px solid ${CK.hair}` }}>
+          <span className="inline-flex items-center gap-2" style={{ fontSize: 14, fontWeight: 600, color: CK.ink, minWidth: 0 }}>
+            <span style={{ overflowWrap: 'anywhere' }}>{r.title}</span>
+            {r.hint && <Hint text={r.hint} />}
+          </span>
+          <span className="inline-flex items-center gap-2" style={{ flex: 'none' }}>
+            <span style={{ fontSize: 12, color: CK.muted }}>Default {DEFAULT_POINTS[r.key]}</span>
+            <input
+              type="number"
+              inputMode="numeric"
+              min={-100}
+              max={100}
+              step={1}
+              aria-label={`${r.title} points`}
+              value={draft[r.key] ?? String(points[r.key])}
+              onChange={(e) => setDraft((d) => ({ ...d, [r.key]: e.target.value }))}
+              onBlur={() => commit(r.key)}
+              onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+              style={{ ...fieldStyle, width: 76, padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}
+            />
+          </span>
+        </div>
+      ))}
+      {changed && (
+        <div style={{ paddingTop: 10 }}>
+          <Btn size="sm" tone="ghost" onClick={() => onSave({ ...DEFAULT_POINTS })}>Back to the defaults</Btn>
+        </div>
+      )}
+    </>
   );
 }

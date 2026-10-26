@@ -42,21 +42,21 @@ export function mapLayers(): AddLayerObject[] {
     },
     {
       id: L_SHAPE_FILL, type: 'fill', source: SRC_SHAPES, filter: ['==', ['get', 'kind'], 'area'],
-      paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.26 },
+      paint: { 'fill-color': ['coalesce', ['get', 'tint'], ['get', 'color']], 'fill-opacity': ['case', ['has', 'tint'], 1, 0.26] },
     },
     {
       id: 'shape-area-line', type: 'line', source: SRC_SHAPES, filter: ['==', ['get', 'kind'], 'area'], layout: { 'line-join': 'round' },
-      paint: { 'line-color': ['get', 'color'], 'line-width': 2 },
+      paint: { 'line-color': ['coalesce', ['get', 'edge'], ['get', 'color']], 'line-width': ['interpolate', ['linear'], ['zoom'], 0, 1, 6, 2.4] },
     },
     {
       id: 'shape-line', type: 'line', source: SRC_SHAPES, filter: ['==', ['get', 'kind'], 'line'], layout: { 'line-join': 'round', 'line-cap': 'butt' },
       paint: { 'line-color': ['get', 'color'], 'line-width': 3, 'line-dasharray': [2, 1.5] },
     },
     { id: L_SHAPE_HIT, type: 'line', source: SRC_SHAPES, paint: { 'line-color': '#000000', 'line-width': 16, 'line-opacity': 0 } },
-    { id: 'draft-fill', type: 'fill', source: SRC_DRAFT, filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': DRAFT, 'fill-opacity': 0.16 } },
+    { id: 'draft-fill', type: 'fill', source: SRC_DRAFT, filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': ['coalesce', ['get', 'tint'], DRAFT], 'fill-opacity': ['case', ['has', 'tint'], 1, 0.16] } },
     {
       id: 'draft-line', type: 'line', source: SRC_DRAFT, layout: { 'line-join': 'round' },
-      paint: { 'line-color': DRAFT, 'line-width': 2.4, 'line-dasharray': [2, 1.5] },
+      paint: { 'line-color': ['coalesce', ['get', 'edge'], DRAFT], 'line-width': 2.4, 'line-dasharray': [2, 1.5] },
     },
     {
       id: 'c-hi', type: 'line', source: SRC_COUNTRIES, layout: { 'line-join': 'round' },

@@ -1,13 +1,15 @@
 'use client';
-// Gavelling Crisis: the "Send a Directive" form. The draft is kept in this browser until it is sent.
-// Every SubmitResult is handled: ok clears the form; paused, cooldown and too_long keep the text.
+// Gavelling Crisis: the "Send a Directive" form, compact enough to sit on one screen at 1440x900. The
+// draft is autosaved in this browser until it is sent or discarded, so leaving the page never loses it
+// (a small "Draft saved" note says so, and "Discard draft" throws it away). Every SubmitResult is
+// handled: ok clears the form; paused, cooldown and too_long keep the text.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { PauseCircle, Send, Timer } from 'lucide-react';
+import { Check, PauseCircle, Send, Timer } from 'lucide-react';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { crisisError, submitDirective, type CrisisRef } from '@/lib/crisis/api';
 import { THEMES, type Character, type DirectiveKind } from '@/lib/crisis/types';
-import { Btn, Card, CardTitle, CK, FieldLabel, fieldStyle, Segmented } from '../../crisisKit';
+import { Btn, Card, CK, FieldLabel, fieldStyle, Segmented } from '../../crisisKit';
 import MultiSelect, { type MultiOption } from './MultiSelect';
 import { themeIcon } from './directiveUi';
 
@@ -72,7 +74,9 @@ export default function DirectiveForm({
   const [until, setUntil] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [problem, setProblem] = useState<string | null>(null);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
   const sendingRef = useRef(false);
+  const latest = useRef<Draft>(EMPTY);
 
   useEffect(() => {
     const saved = readDraft(draftKey);
@@ -80,13 +84,24 @@ export default function DirectiveForm({
     setD(saved.kind === 'committee' && !ownCabinetId ? { ...saved, kind: 'personal' } : saved);
     setLoaded(true);
   }, [draftKey, ownCabinetId]);
+  const saveDraft = useCallback((draft: Draft) => {
+    try {
+      if (draft === EMPTY) window.localStorage.removeItem(draftKey);
+      else window.localStorage.setItem(draftKey, JSON.stringify(draft));
+    } catch { /* private window: the draft just is not kept */ }
+  }, [draftKey]);
   useEffect(() => {
     if (!loaded) return;
-    try {
-      if (d === EMPTY) window.localStorage.removeItem(draftKey);
-      else window.localStorage.setItem(draftKey, JSON.stringify(d));
-    } catch { /* private window: the draft just is not kept */ }
-  }, [d, draftKey, loaded]);
+    latest.current = d;
+    saveDraft(d);
+  }, [d, loaded, saveDraft]);
+  // Closing the tab right after a keystroke still keeps the text.
+  useEffect(() => {
+    if (!loaded) return;
+    const flush = () => saveDraft(latest.current);
+    window.addEventListener('pagehide', flush);
+    return () => window.removeEventListener('pagehide', flush);
+  }, [loaded, saveDraft]);
 
   // The countdown only ticks while a cooldown is running.
   useEffect(() => {
@@ -101,7 +116,8 @@ export default function DirectiveForm({
     return () => window.clearInterval(id);
   }, [until]);
 
-  const set = useCallback(<K extends keyof Draft>(k: K, val: Draft[K]) => { setProblem(null); setD((p) => ({ ...p, [k]: val })); }, []);
+  const set = useCallback(<K extends keyof Draft>(k: K, val: Draft[K]) => { setProblem(null); setConfirmDiscard(false); setD((p) => ({ ...p, [k]: val })); }, []);
+  const hasDraft = d.title.trim() !== '' || d.receiver.trim() !== '' || d.body.trim() !== '' || d.themes.length > 0 || d.coauthors.length > 0;
   const words = countWords(d.body);
   const over = wordLimit > 0 && words > wordLimit;
   const waitLeft = until === null ? 0 : Math.max(0, Math.ceil((until - now) / 1000));
@@ -157,34 +173,67 @@ export default function DirectiveForm({
   };
 
   return (
-    <Card warm>
-      <CardTitle icon={<Send size={18} strokeWidth={1.5} />}>Send a Directive</CardTitle>
+    <Card warm style={{ padding: '14px 18px 16px' }}>
+      <div className="flex items-center justify-between gap-3 flex-wrap" style={{ marginBottom: 12 }}>
+        <h2 className="flex items-center gap-2" style={{ margin: 0, fontSize: 17, fontWeight: 800, color: CK.ink }}>
+          <span style={{ color: CK.red, lineHeight: 0 }}><Send size={18} strokeWidth={1.5} aria-hidden /></span>
+          Send a Directive
+        </h2>
+        {hasDraft && !sending && (
+          <span className="inline-flex items-center flex-wrap" style={{ gap: 8, fontSize: 12.5, fontWeight: 600, color: CK.inkSoft }}>
+            <span className="inline-flex items-center" style={{ gap: 4 }}>
+              <Check size={14} strokeWidth={1.8} aria-hidden style={{ color: CK.ok }} />Draft saved
+            </span>
+            {confirmDiscard ? (
+              <>
+                <button type="button" onClick={() => { setProblem(null); setConfirmDiscard(false); setD(EMPTY); }} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]" style={{ border: 0, background: 'transparent', padding: 0, cursor: 'pointer', fontFamily: CK.font, fontSize: 12.5, fontWeight: 800, color: CK.danger, textDecoration: 'underline' }}>Yes, discard it</button>
+                <button type="button" onClick={() => setConfirmDiscard(false)} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]" style={{ border: 0, background: 'transparent', padding: 0, cursor: 'pointer', fontFamily: CK.font, fontSize: 12.5, fontWeight: 800, color: CK.forest, textDecoration: 'underline' }}>Keep it</button>
+              </>
+            ) : (
+              <button type="button" onClick={() => setConfirmDiscard(true)} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]" style={{ border: 0, background: 'transparent', padding: 0, cursor: 'pointer', fontFamily: CK.font, fontSize: 12.5, fontWeight: 800, color: CK.forest, textDecoration: 'underline' }}>Discard draft</button>
+            )}
+          </span>
+        )}
+      </div>
 
       {!open && (
-        <div className="flex items-start gap-2" style={{ background: 'rgba(142,36,36,0.09)', borderRadius: 14, padding: '10px 12px', marginBottom: 12, color: CK.red2, fontSize: 13.5, fontWeight: 600 }}>
-          <PauseCircle size={18} strokeWidth={1.5} style={{ flexShrink: 0, marginTop: 1 }} aria-hidden />
+        <div className="flex items-start gap-2" style={{ background: 'rgba(142,36,36,0.09)', borderRadius: 12, padding: '8px 11px', marginBottom: 12, color: CK.red2, fontSize: 13, fontWeight: 600 }}>
+          <PauseCircle size={17} strokeWidth={1.5} style={{ flexShrink: 0, marginTop: 1 }} aria-hidden />
           <span>Directives are paused. {pausedNote || 'You can write one now and send it when they open.'}</span>
         </div>
       )}
 
-      <div className="grid gap-4">
-        <div>
-          <FieldLabel>Kind</FieldLabel>
-          <Segmented<FormKind>
-            ariaLabel="Kind of directive"
-            value={d.kind}
-            options={[
-              { value: 'personal', label: 'Personal' },
-              { value: 'joint', label: 'Joint' },
-              ...(ownCabinetId ? [{ value: 'committee' as const, label: 'Cabinet' }] : []),
-            ]}
-            onChange={(k) => set('kind', k)}
-          />
-          {d.kind === 'committee' && (
-            <p style={{ margin: '8px 0 0', fontSize: 13, color: CK.inkSoft }}>
-              This goes to the backroom from the whole cabinet{cabinetName ? `, ${cabinetName}` : ''}.
-            </p>
-          )}
+      <div className="grid gap-3">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <FieldLabel>Kind</FieldLabel>
+            <Segmented<FormKind>
+              ariaLabel="Kind of directive"
+              value={d.kind}
+              options={[
+                { value: 'personal', label: 'Personal' },
+                { value: 'joint', label: 'Joint' },
+                ...(ownCabinetId ? [{ value: 'committee' as const, label: 'Cabinet' }] : []),
+              ]}
+              onChange={(k) => set('kind', k)}
+            />
+            {d.kind === 'committee' && (
+              <p style={{ margin: '6px 0 0', fontSize: 12.5, color: CK.inkSoft }}>
+                From the whole cabinet{cabinetName ? `, ${cabinetName}` : ''}.
+              </p>
+            )}
+          </div>
+          <div>
+            <FieldLabel htmlFor="dir-themes" hint="Optional">Themes</FieldLabel>
+            <MultiSelect
+              id="dir-themes"
+              ariaLabel="Themes"
+              options={themeOptions}
+              value={d.themes}
+              onChange={(v) => set('themes', v)}
+              placeholder="Pick any that fit"
+            />
+          </div>
         </div>
 
         {d.kind === 'joint' && (
@@ -215,25 +264,13 @@ export default function DirectiveForm({
         </div>
 
         <div>
-          <FieldLabel htmlFor="dir-themes" hint="Optional">Themes</FieldLabel>
-          <MultiSelect
-            id="dir-themes"
-            ariaLabel="Themes"
-            options={themeOptions}
-            value={d.themes}
-            onChange={(v) => set('themes', v)}
-            placeholder="Pick any that fit"
-          />
-        </div>
-
-        <div>
           <div className="flex items-baseline justify-between gap-3">
             <FieldLabel htmlFor="dir-body">What do you want to happen?</FieldLabel>
             <span aria-live="polite" style={{ fontSize: 12.5, fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: over ? CK.danger : CK.muted, whiteSpace: 'nowrap' }}>
               {words}{wordLimit > 0 ? ` / ${wordLimit}` : ''} words
             </span>
           </div>
-          <textarea id="dir-body" value={d.body} onChange={(e) => set('body', e.target.value)} rows={9} style={{ ...fieldStyle, resize: 'vertical', boxShadow: over ? 'inset 0 0 0 2px rgba(163,65,47,0.6)' : fieldStyle.boxShadow }} placeholder="Say what you do, how, and when." />
+          <textarea id="dir-body" value={d.body} onChange={(e) => set('body', e.target.value)} rows={10} style={{ ...fieldStyle, resize: 'vertical', boxShadow: over ? 'inset 0 0 0 2px rgba(163,65,47,0.6)' : fieldStyle.boxShadow }} placeholder="Say what you do, how, and when." />
         </div>
 
         {problem && <p role="alert" style={{ margin: 0, fontSize: 13.5, fontWeight: 600, color: CK.danger }}>{problem}</p>}
@@ -245,9 +282,6 @@ export default function DirectiveForm({
             {sending ? 'Sending' : waitLeft > 0 ? `Wait ${clock(waitLeft)}` : 'Send directive'}
           </Btn>
           {waitLeft > 0 && <span style={{ fontSize: 13, color: CK.inkSoft }}>You can send again in {clock(waitLeft)}.</span>}
-          {(d.title || d.body) && !sending && (
-            <Btn tone="ghost" onClick={() => { setProblem(null); setD(EMPTY); }}>Clear</Btn>
-          )}
         </div>
       </div>
     </Card>

@@ -9,9 +9,10 @@ import type { News } from '@/lib/crisis/types';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { CK } from '../../crisisKit';
 import CrisisDialog from '../delegate/CrisisDialog';
-import { NewsMeta } from './NewsList';
+import { NewsMeta, NewsNumber } from './NewsList';
 
-export function NewsDetailBody({ n }: { n: News }) {
+/** `preview` is the composer's "Preview": the story exactly as players see it, with the number still to come. */
+export function NewsDetailBody({ n, preview }: { n: News; preview?: boolean }) {
   const { core } = useCrisis();
   return (
     <article style={{ fontFamily: CK.font }}>
@@ -20,7 +21,10 @@ export function NewsDetailBody({ n }: { n: News }) {
         <img src={n.banner_url} alt="" style={{ display: 'block', width: '100%', aspectRatio: '16 / 6', objectFit: 'cover', background: CK.well }} />
       )}
       <div style={{ padding: '16px 20px 24px' }}>
-        <NewsMeta n={n} cabinets={core.cabinets} size={15} />
+        <div className="flex items-center flex-wrap" style={{ gap: '6px 16px' }}>
+          <NewsNumber n={n} preview={preview} />
+          <div style={{ flex: '1 1 220px', minWidth: 0 }}><NewsMeta n={n} cabinets={core.cabinets} size={15} /></div>
+        </div>
         <h3 style={{ margin: '8px 0 10px', fontSize: 22, lineHeight: 1.25, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{n.title}</h3>
         <p style={{ margin: 0, fontSize: 15, lineHeight: 1.65, color: CK.ink, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{n.body}</p>
         {n.attachment_url && (

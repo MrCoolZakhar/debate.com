@@ -1,14 +1,14 @@
 'use client';
-// Gavelling Crisis: the delegate's live-room actions, in one compact row: "Request to speak" (red) and
-// "Chat", with "News" beside them. There are no working papers or draft resolutions in crisis, so there
-// is no "Submit a document".
+// Gavelling Crisis: the delegate's live-room actions: two small buttons the width of the profile card,
+// side by side: "Request to speak" (red) and "Chat" (with unread). There are no working papers or draft
+// resolutions in crisis, so there is no "Submit a document".
 //
 // Request to speak uses the existing session functions exactly as the phone does:
 //   request  requestGslSpot (a gsl-request motion), cooldowns kept in the SAME localStorage key as
 //            the delegate page (gsl-request:<committee>:<seat>) and in the shared per-delegation
 //            allowance (delegateAllowance.ts)
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { Hand, MessagesSquare } from 'lucide-react';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { getPendingMotionsList, requestGslSpot } from '@/lib/committeeService';
@@ -47,7 +47,12 @@ function waitWords(ms: number): string {
   return secs >= 60 ? `${Math.ceil(secs / 60)} min` : `${secs} s`;
 }
 
-const SMALL = { padding: '7px 13px', fontSize: 13, borderRadius: 11 } as const;
+// Icon on top, the word small beneath; the button fills its half of the row.
+const SMALL: CSSProperties = {
+  width: '100%', flexDirection: 'column', justifyContent: 'center', gap: 4, padding: '9px 6px', fontSize: 12.5, borderRadius: 12,
+  whiteSpace: 'normal', textAlign: 'center', lineHeight: 1.2,
+};
+const FULL_ROW: CSSProperties = { gridColumn: '1 / -1' };
 
 /** The red button, plus a one-line reason underneath (ordered last in the wrapping row). */
 function RequestToSpeak({ committee, seat }: { committee: Committee; seat: Delegate }) {
@@ -197,30 +202,31 @@ function RequestToSpeak({ committee, seat }: { committee: Committee; seat: Deleg
       <Btn tone="red" icon={<Hand size={16} strokeWidth={1.5} aria-hidden />} disabled={req.off || asking} onClick={request} style={SMALL}>
         {req.label}
       </Btn>
-      {req.hint && <span role="status" style={{ order: 10, flexBasis: '100%', fontSize: 12.5, color: CK.inkSoft }}>{req.hint}</span>}
+      {req.hint && <span role="status" style={{ ...FULL_ROW, fontSize: 12.5, color: CK.inkSoft }}>{req.hint}</span>}
     </>
   );
 }
 
-/** Request to speak, Chat and any extra button (News), side by side. */
-export default function RoomActions({ room, onChat, children }: { room: CrisisRoom; onChat: () => void; children?: ReactNode }) {
+/** Request to speak and Chat, side by side. */
+export default function RoomActions({ room, onChat }: { room: CrisisRoom; onChat: () => void }) {
   const ready = room.status === 'ready' && room.committee && room.seat;
   const chatReason = ready ? null : room.status === 'loading' ? 'Opening your committee room' : room.reason;
   return (
-    <div className="flex flex-wrap items-center" style={{ gap: 8 }}>
+    <div className="grid grid-cols-2" style={{ gap: 8 }}>
       {ready ? (
         <RequestToSpeak key={room.committee!.id + room.seat!.id} committee={room.committee!} seat={room.seat!} />
       ) : (
         <Btn tone="red" icon={<Hand size={16} strokeWidth={1.5} aria-hidden />} disabled style={SMALL}>Request to speak</Btn>
       )}
       <Btn tone="ghost" icon={<MessagesSquare size={16} strokeWidth={1.5} aria-hidden />} disabled={!ready} onClick={onChat} style={SMALL} aria-label={room.unread > 0 ? `Chat, ${room.unread} unread` : 'Chat'}>
-        Chat
-        {room.unread > 0 && <b aria-hidden style={{ color: CK.red, fontVariantNumeric: 'tabular-nums' }}>{room.unread}</b>}
+        <span className="inline-flex items-baseline" style={{ gap: 5 }}>
+          Chat
+          {room.unread > 0 && <b aria-hidden style={{ color: CK.red, fontSize: 14, fontVariantNumeric: 'tabular-nums' }}>{room.unread}</b>}
+        </span>
       </Btn>
-      {children}
-      {!ready && chatReason && <span style={{ order: 10, flexBasis: '100%', fontSize: 12.5, color: CK.inkSoft }}>{chatReason}</span>}
+      {!ready && chatReason && <span style={{ ...FULL_ROW, fontSize: 12.5, color: CK.inkSoft }}>{chatReason}</span>}
       {room.status === 'failed' && (
-        <span style={{ order: 11 }}><Btn tone="ghost" size="sm" onClick={room.retry}>Try again</Btn></span>
+        <span style={FULL_ROW}><Btn tone="ghost" size="sm" onClick={room.retry}>Try again</Btn></span>
       )}
     </div>
   );

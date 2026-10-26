@@ -1,20 +1,19 @@
 'use client';
-// Gavelling Crisis: the delegate's news dialog. The list of published news; picking a story swaps the
-// content for the full story with a back button (a dialog never opens another dialog).
+// Gavelling Crisis: the delegate's news dialog. The list of published news (all news), or one story
+// opened from the compact news block. Picking a story swaps the content for the full story with a back
+// button to the list (a dialog never opens another dialog). The news is loaded once by the page.
 
 import { useState } from 'react';
 import type { News } from '@/lib/crisis/types';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { NewsHistory } from '../news/NewsList';
 import { NewsDetailBody } from '../news/NewsDetailDialog';
-import { useCrisisNews } from '../news/useCrisisNews';
 import { CK } from '../../crisisKit';
 import CrisisDialog from './CrisisDialog';
 
-export default function NewsDialog({ onClose }: { onClose: () => void }) {
-  const { ref, core } = useCrisis();
-  const { items, error } = useCrisisNews(ref);
-  const [story, setStory] = useState<News | null>(null);
+export default function NewsDialog({ items, error, initial, onClose }: { items: News[] | null; error: string | null; initial: News | null; onClose: () => void }) {
+  const { core } = useCrisis();
+  const [story, setStory] = useState<News | null>(initial);
 
   if (story) {
     return (

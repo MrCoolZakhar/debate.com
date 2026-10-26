@@ -35,6 +35,7 @@ import {
 } from 'lucide-react';
 import { LogoDisc } from '@/components/LogoDisc';
 import { secretariatRoomHref } from '@/lib/secretariatView';
+import CrisisLiveLink from '@/app/crisis/components/manage/CrisisLiveLink';
 import { artFromIndex, slotArtKey, type SlotArtIndex } from '@/lib/slotGroups';
 import { type SessionSeat } from '@/lib/sessionFlags';
 import { SeatArtProvider, useSeatGroup } from '@/components/SeatFlag';
@@ -1541,6 +1542,8 @@ export function CommitteeCard({
               Open chair room
             </a>
           )}
+          {/* A crisis committee's room also opens Gavelling Crisis (docs/crisis). Renders nothing otherwise. */}
+          {data.session && <CrisisLiveLink code={data.session.code} />}
 
         </div>
         </div>

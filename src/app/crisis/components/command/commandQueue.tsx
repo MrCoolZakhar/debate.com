@@ -23,7 +23,7 @@ export function WaitingCard({ directives, base, now, onOpen }: {
     const openList = all.filter(isOpenStatus);
     const sorted = sortDirectives(openList, settings.queueOrder, 'open', lastAnsweredByAuthor(all));
     const oldestMs = openList.length ? Math.min(...openList.map((d) => new Date(d.waiting_since).getTime())) : null;
-    return { open: openList.length, clarify: all.filter((d) => d.status === 'clarify').length, top: sorted.slice(0, 5), oldest: oldestMs };
+    return { open: openList.length, clarify: all.filter((d) => d.status === 'clarify').length, top: sorted.slice(0, 6), oldest: oldestMs };
   }, [directives, settings.queueOrder]);
 
   const oldestIso = oldest ? new Date(oldest).toISOString() : null;
@@ -51,9 +51,9 @@ export function WaitingCard({ directives, base, now, onOpen }: {
             </p>
           )}
           {top.length === 0 ? <EmptyLine>Every directive has an answer.</EmptyLine> : (
-            <div className="flex flex-col" style={{ gap: 4, marginTop: 6 }}>
+            <div className="flex flex-col" style={{ gap: 2, marginTop: 4 }}>
               {top.map((d) => (
-                <QueueRow key={d.id} d={d} names={names} sev={waitSeverity(d.waiting_since, now)} whenLabel={waitLabel(d.waiting_since, now)} onOpen={() => onOpen(d)} />
+                <QueueRow key={d.id} d={d} names={names} sev={waitSeverity(d.waiting_since, now)} whenLabel={waitLabel(d.waiting_since, now)} onOpen={() => onOpen(d)} compact />
               ))}
             </div>
           )}
@@ -72,7 +72,11 @@ export function WaitingCard({ directives, base, now, onOpen }: {
 export function DirectiveDrawer({ directive, onClose }: { directive: Directive; onClose: () => void }) {
   const closeRef = useRef<HTMLButtonElement | null>(null);
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') {
+        // A pop-up opened from the drawer (the "+" actions, a character) closes first.
+        if (document.querySelector('[aria-modal="true"]') || e.defaultPrevented) return;
+        e.stopPropagation(); onClose();
+      } };
     window.addEventListener('keydown', onKey);
     closeRef.current?.focus();
     return () => window.removeEventListener('keydown', onKey);

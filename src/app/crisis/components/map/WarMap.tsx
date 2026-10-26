@@ -2,7 +2,7 @@
 // Gavelling Crisis: the war map.
 // A real-world map drawn offline (Natural Earth 50m through world-atlas) with MapLibre GL and a blank
 // style: no tile server, no glyph server, no third-party request. Borders work by country (a country
-// is held by a cabinet), plus drawn areas and lines for finer land. Units are round tokens, fog of
+// is held by a cabinet), plus drawn territory for finer land. Units are round tokens, fog of
 // war is a hatched canvas over everything the viewing cabinet cannot see. Staff change the map;
 // delegates only look. Every change is saved through src/lib/crisis/api.ts and logged by the database.
 
@@ -10,41 +10,43 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { GeoJSONSource, Map as MLMap, MapMouseEvent, Marker as MLMarker } from 'maplibre-gl';
 import type { Feature, FeatureCollection } from 'geojson';
-import { Cloud, Flag, MousePointer2, Pentagon, Route, Ship, Maximize2 } from 'lucide-react';
+import { Cloud, Flag, MousePointer2, Pentagon, Plus, Ship, Maximize2 } from 'lucide-react';
 import GSelect from '@/components/GSelect';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import {
   crisisError, deleteShape, deleteUnit, loadMap, saveShape, saveUnit, setRegionOwner,
 } from '@/lib/crisis/api';
 import { useCrisisLive } from '@/lib/crisis/live';
-import type { MapRegion, MapShape, MapUnit } from '@/lib/crisis/types';
+import type { MapRegion, MapShape, MapUnit, UnitKind } from '@/lib/crisis/types';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
-import { CK, Segmented, cabinetTint } from '../../crisisKit';
+import { Btn, CK, Segmented, cabinetTint } from '../../crisisKit';
 import { drawFog, type FogHoles } from './fog';
 import {
   KIND_META, centroidOf, clampLat, clampLng, geometryFor, loadWorldData, shapePoints, type LngLat, type WorldData,
 } from './mapData';
 import {
-  BLANK_STYLE, DRAFT, L_LAND, L_SHAPE_FILL, L_SHAPE_HIT, NOBODY, SRC_COUNTRIES, SRC_DRAFT, SRC_SHAPES, mapLayers,
+  BLANK_STYLE, DRAFT, L_LAND, L_SHAPE_FILL, NOBODY, SRC_COUNTRIES, SRC_DRAFT, SRC_SHAPES, mapLayers,
 } from './mapStyle';
 import {
-  BorderPanel, ShapeEditor, UnitEditor, UnitViewer, type PanelCabinet, type ShapeDraft, type UnitDraft,
+  BorderPanel, KindPicker, PlaceUnitPanel, TerritoryPanel, UnitEditor, UnitViewer, type PanelCabinet, type UnitDraft,
 } from './MapPanels';
 import {
   MAP_CSS, makeCountryLabel, makeGhost, makeMidpoint, makeShapeLabel, makeVertex, paintToken, safeColor,
 } from './tokens';
 
-type Tool = 'select' | 'borders' | 'unit' | 'area' | 'line';
+type Tool = 'select' | 'borders' | 'unit' | 'area';
 type MapData = { regions: MapRegion[]; units: MapUnit[]; shapes: MapShape[] };
 
+/** Territory being drawn (shapeId null) or reshaped (shapeId set). */
 interface Draft {
   sid: number;
-  kind: 'area' | 'line';
   shapeId: string | null;
   phase: 'draw' | 'refine';
   points: LngLat[];
-  init: ShapeDraft;
+  owner: string | null;
 }
+
+interface PendingMove { id: string; name: string; lng: number; lat: number }
 
 interface Live {
   tool: Tool;
@@ -52,7 +54,7 @@ interface Live {
   canMap: boolean;
   canUnits: boolean;
   editable: boolean;
-  borderKey: string | null;
+  addKind: UnitKind | null;
   onMapClick: (e: MapMouseEvent) => void;
   onMapDblClick: (e: MapMouseEvent) => void;
   onUnitClick: (id: string) => void;
@@ -61,17 +63,25 @@ interface Live {
   escape: () => void;
 }
 
-const MIN_POINTS = { area: 3, line: 2 } as const;
+const MIN_POINTS = 3;
 const emptyFc: FeatureCollection = { type: 'FeatureCollection', features: [] };
 
 function round5(n: number): number { return Math.round(n * 1e5) / 1e5; }
 
-function draftFc(kind: 'area' | 'line', pts: LngLat[]): FeatureCollection {
+/** The territory preview: filled and outlined in the owner's colours, exactly like that cabinet's countries. */
+function draftFc(pts: LngLat[], color: string | null): FeatureCollection {
   if (pts.length < 2) return emptyFc;
-  const f: Feature = kind === 'area' && pts.length >= 3
-    ? { type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [[...pts, pts[0]]] } }
-    : { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: pts } };
+  const props = color ? { tint: cabinetTint(color, 0.27), edge: cabinetTint(color, 0.95) } : {};
+  const f: Feature = pts.length >= 3
+    ? { type: 'Feature', properties: props, geometry: { type: 'Polygon', coordinates: [[...pts, pts[0]]] } }
+    : { type: 'Feature', properties: props, geometry: { type: 'LineString', coordinates: pts } };
   return { type: 'FeatureCollection', features: [f] };
+}
+
+/** Territory takes its owner's colour, so it reads as the cabinet's border; a line may carry its own. */
+function shapeColor(s: MapShape, cabById: Map<string, PanelCabinet>): string {
+  const owner = s.owner_cabinet_id ? cabById.get(s.owner_cabinet_id)?.color : undefined;
+  return safeColor(s.kind === 'area' ? owner ?? s.color ?? NOBODY : s.color ?? owner ?? DRAFT);
 }
 
 function clock(ms: number): string {
@@ -166,24 +176,48 @@ export default function WarMap({ compact = false }: { compact?: boolean }) {
   // ── tools and selection ──
   const [tool, setTool] = useState<Tool>('select');
   const [selUnit, setSelUnit] = useState<string | null>(null);
-  const [selShape, setSelShape] = useState<string | null>(null);
-  const [border, setBorder] = useState<{ key: string; name: string } | null>(null);
+  const [addKind, setAddKind] = useState<UnitKind | null>(null);
   const [newUnit, setNewUnit] = useState<{ lng: number; lat: number } | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
+  // Who receives the countries clicked with the Borders tool ('' is nobody). Undefined follows the default owner.
+  const [brushState, setBrushState] = useState<string | undefined>(undefined);
+  const unitMarkers = useRef(new Map<string, { marker: MLMarker; el: HTMLElement; sig: string }>());
+  const [pendingMove, setPendingMove] = useState<PendingMove | null>(null);
+  const pendingMoveRef = useRef<PendingMove | null>(null);
 
+  // New units and claims go to the cabinet being viewed, else the first cabinet.
   const defaultOwner = viewer ?? cabinets[0]?.id ?? null;
-  const freshDraft = useCallback((kind: 'area' | 'line'): Draft => ({
-    sid: new Date().getTime(), kind, shapeId: null, phase: 'draw', points: [],
-    init: { label: '', owner: defaultOwner, isPublic: false, revealed: [] },
+  const brush: string = brushState !== undefined && (brushState === '' || cabById.has(brushState)) ? brushState : defaultOwner ?? '';
+  const freshDraft = useCallback((): Draft => ({
+    sid: new Date().getTime(), shapeId: null, phase: 'draw', points: [], owner: defaultOwner,
   }), [defaultOwner]);
 
-  const changeTool = useCallback((t: Tool) => {
-    setTool(t);
-    setSelUnit(null); setSelShape(null); setBorder(null); setNewUnit(null);
-    setDraft(t === 'area' || t === 'line' ? freshDraft(t) : null);
-  }, [freshDraft]);
+  const setPending = useCallback((p: PendingMove | null) => {
+    pendingMoveRef.current = p;
+    setPendingMove(p);
+  }, []);
 
-  const editable = staff && !viewer && !compact;
+  /** Puts a dragged unit back where the database has it. */
+  const cancelMove = useCallback(() => {
+    const p = pendingMoveRef.current;
+    if (!p) return;
+    const u = dataRef.current?.units.find((x) => x.id === p.id);
+    const mk = unitMarkers.current.get(p.id);
+    if (u && mk) mk.marker.setLngLat([u.lng, u.lat]);
+    setPending(null);
+  }, [setPending]);
+
+  const changeTool = useCallback((t: Tool) => {
+    cancelMove();
+    setTool(t);
+    setSelUnit(null); setNewUnit(null); setAddKind(null); setBrushState(undefined);
+    setDraft(t === 'area' ? freshDraft() : null);
+  }, [freshDraft, cancelMove]);
+
+  const changeView = useCallback((val: string) => { setViewAs(val); setBrushState(undefined); }, []);
+
+  // Staff can still add units and claim countries while looking through a cabinet's eyes.
+  const editable = staff && !compact;
 
   // ── map plumbing ──
   const hostRef = useRef<HTMLDivElement>(null);
@@ -228,6 +262,8 @@ export default function WarMap({ compact = false }: { compact?: boolean }) {
   const pickOwner = useCallback(async (key: string, name: string, owner: string | null) => {
     const before = dataRef.current;
     if (!before) return;
+    const current = before.regions.find((r) => r.region_key === key)?.owner_cabinet_id ?? null;
+    if (current === owner) return;
     const has = before.regions.some((r) => r.region_key === key);
     const regions = has
       ? before.regions.map((r) => (r.region_key === key ? { ...r, owner_cabinet_id: owner } : r))
@@ -249,22 +285,27 @@ export default function WarMap({ compact = false }: { compact?: boolean }) {
     const before = dataRef.current;
     const patch = {
       name: d.name.trim(), kind: d.kind, strength: d.strength, owner_cabinet_id: d.owner,
-      note: d.note.trim() ? d.note.trim() : null, revealed_to: d.revealed, suspected_by: d.suspected,
+      note: d.note.trim() ? d.note.trim() : null, revealed_to: d.revealed,
     };
     if (existing && before) setData({ ...before, units: before.units.map((u) => (u.id === existing.id ? { ...u, ...patch } : u)) });
     await run(async () => {
       try {
         if (existing) await saveUnit(ref, { id: existing.id, ...patch });
-        else if (newUnit) await saveUnit(ref, { ...patch, lng: round5(clampLng(newUnit.lng)), lat: round5(clampLat(newUnit.lat)) });
+        else if (newUnit) {
+          const lng = round5(clampLng(newUnit.lng)); const lat = round5(clampLat(newUnit.lat));
+          const id = await saveUnit(ref, { ...patch, lng, lat });
+          const cur = dataRef.current;
+          if (cur) setData({ ...cur, units: [...cur.units.filter((u) => u.id !== id), { id, crisis_id: ref.id, suspected_by: [], lng, lat, ...patch }] });
+        }
         setLast({ at: new Date().getTime(), text: existing ? `You updated ${patch.name}` : `You added ${patch.name}` });
         notifyOk(existing ? 'Unit saved' : 'Unit added', 'crisis-map');
-        if (!existing) setNewUnit(null);
+        if (!existing) changeTool('select');
       } catch (e) {
         if (before) setData(before);
         notifyErr(crisisError(e, 'Could not save the unit.'), 'crisis-map');
       }
     });
-  }, [ref, run, newUnit]);
+  }, [ref, run, newUnit, changeTool]);
 
   const removeUnit = useCallback(async (u: MapUnit) => {
     const before = dataRef.current;
@@ -281,48 +322,67 @@ export default function WarMap({ compact = false }: { compact?: boolean }) {
     });
   }, [ref, run]);
 
-  const submitShape = useCallback(async (d: ShapeDraft, kind: 'area' | 'line', shapeId: string | null, points: LngLat[] | null) => {
+  /** Saves extended territory: a new area, or the new corners and owner of a saved one. */
+  const submitTerritory = useCallback(async (dr: Draft) => {
     const before = dataRef.current;
-    const fields = {
-      owner_cabinet_id: d.owner, label: d.label.trim() ? d.label.trim() : null, public: d.isPublic,
-      revealed_to: d.isPublic ? [] : d.revealed,
-    };
-    const geometry = points ? geometryFor(kind, points) : null;
-    if (shapeId && before) {
-      setData({
-        ...before,
-        shapes: before.shapes.map((s) => (s.id === shapeId ? { ...s, ...fields, geometry: (geometry as MapShape['geometry'] | null) ?? s.geometry } : s)),
-      });
+    const geometry = geometryFor('area', dr.points) as MapShape['geometry'];
+    if (dr.shapeId && before) {
+      setData({ ...before, shapes: before.shapes.map((s) => (s.id === dr.shapeId ? { ...s, owner_cabinet_id: dr.owner, geometry } : s)) });
     }
     await run(async () => {
       try {
-        if (shapeId) await saveShape(ref, { id: shapeId, ...fields, ...(geometry ? { geometry: geometry as MapShape['geometry'] } : {}) });
-        else if (geometry) await saveShape(ref, { kind, ...fields, geometry: geometry as MapShape['geometry'] });
-        setLast({ at: new Date().getTime(), text: kind === 'area' ? 'You saved an area' : 'You saved a line' });
-        notifyOk(kind === 'area' ? 'Area saved' : 'Line saved', 'crisis-map');
-        setDraft(null); setSelShape(null);
-        if (!shapeId) changeTool('select');
+        if (dr.shapeId) await saveShape(ref, { id: dr.shapeId, owner_cabinet_id: dr.owner, geometry });
+        else {
+          const id = await saveShape(ref, { kind: 'area', owner_cabinet_id: dr.owner, label: null, public: true, revealed_to: [], geometry });
+          const cur = dataRef.current;
+          if (cur) {
+            const shape: MapShape = { id, crisis_id: ref.id, kind: 'area', owner_cabinet_id: dr.owner, label: null, color: null, geometry, public: true, revealed_to: [] };
+            setData({ ...cur, shapes: [...cur.shapes.filter((s) => s.id !== id), shape] });
+          }
+        }
+        setLast({ at: new Date().getTime(), text: dr.shapeId ? 'You reshaped territory' : 'You extended territory' });
+        notifyOk('Territory saved', 'crisis-map');
+        if (dr.shapeId) setDraft(null); else changeTool('select');
       } catch (e) {
         if (before) setData(before);
-        notifyErr(crisisError(e, 'Could not save the shape.'), 'crisis-map');
+        notifyErr(crisisError(e, 'Could not save the territory.'), 'crisis-map');
       }
     });
   }, [ref, run, changeTool]);
 
-  const removeShape = useCallback(async (s: MapShape) => {
+  const removeTerritory = useCallback(async (shapeId: string) => {
     const before = dataRef.current;
-    if (before) setData({ ...before, shapes: before.shapes.filter((x) => x.id !== s.id) });
-    setSelShape(null);
+    if (before) setData({ ...before, shapes: before.shapes.filter((x) => x.id !== shapeId) });
+    setDraft(null);
     await run(async () => {
       try {
-        await deleteShape(ref, s.id);
-        setLast({ at: new Date().getTime(), text: s.kind === 'area' ? 'You removed an area' : 'You removed a line' });
+        await deleteShape(ref, shapeId);
+        setLast({ at: new Date().getTime(), text: 'You removed territory' });
       } catch (e) {
         if (before) setData(before);
-        notifyErr(crisisError(e, 'Could not remove the shape.'), 'crisis-map');
+        notifyErr(crisisError(e, 'Could not remove the territory.'), 'crisis-map');
       }
     });
   }, [ref, run]);
+
+  /** The unit was dragged: ask in place before saving. */
+  const askMove = useCallback((id: string, lng: number, lat: number) => {
+    const map = mapRef.current;
+    const u = dataRef.current?.units.find((x) => x.id === id);
+    if (!map || !u) return;
+    const was = pendingMoveRef.current;
+    if (was && was.id !== id) cancelMove();
+    const a = map.project([u.lng, u.lat]); const b = map.project([lng, lat]);
+    if (Math.hypot(a.x - b.x, a.y - b.y) < 4) { cancelMove(); return; }
+    setPending({ id, name: u.name, lng, lat });
+  }, [cancelMove, setPending]);
+
+  const confirmMove = useCallback(() => {
+    const p = pendingMoveRef.current;
+    if (!p) return;
+    setPending(null);
+    void moveUnit(p.id, p.lng, p.lat);
+  }, [moveUnit, setPending]);
 
   const fitView = useCallback(() => {
     const map = mapRef.current;
@@ -337,16 +397,19 @@ export default function WarMap({ compact = false }: { compact?: boolean }) {
   // ── map events read the latest state through this ──
   useEffect(() => {
     liveRef.current = {
-      tool, draft, canMap, canUnits, editable, borderKey: border?.key ?? null,
+      tool, draft, canMap, canUnits, editable, addKind,
       onMapClick: (e) => {
         const map = mapRef.current;
         if (!map) return;
         const target = e.originalEvent.target as HTMLElement | null;
         if (target?.closest('.wm-marker')) return;
-        if (tool === 'unit' && editable && canUnits) {
-          setSelUnit(null);
-          setNewUnit({ lng: e.lngLat.lng, lat: e.lngLat.lat });
-        } else if ((tool === 'area' || tool === 'line') && editable && canMap && draft && draft.phase === 'draw') {
+        if (tool === 'unit') {
+          if (editable && canUnits && addKind) {
+            setSelUnit(null);
+            setNewUnit({ lng: e.lngLat.lng, lat: e.lngLat.lat });
+          }
+        } else if (tool === 'area') {
+          if (!(editable && canMap && draft && draft.phase === 'draw')) return;
           const lastPt = draft.points[draft.points.length - 1];
           if (lastPt) {
             const lp = map.project(lastPt);
@@ -354,38 +417,47 @@ export default function WarMap({ compact = false }: { compact?: boolean }) {
           }
           const pt: LngLat = [round5(clampLng(e.lngLat.lng)), round5(clampLat(e.lngLat.lat))];
           setDraft({ ...draft, points: [...draft.points, pt] });
-        } else if (tool === 'borders' && editable && canMap) {
+        } else if (tool === 'borders') {
+          // While territory is open for reshaping, Save or Cancel comes first.
+          if (!editable || !canMap || draft) return;
+          const hit = map.queryRenderedFeatures(e.point, { layers: [L_SHAPE_FILL] })[0];
+          const sid = hit?.properties?.id as string | undefined;
+          const shape = sid ? dataRef.current?.shapes.find((x) => x.id === sid) : undefined;
+          if (shape && shape.kind === 'area') {
+            setDraft({ sid: new Date().getTime(), shapeId: shape.id, phase: 'refine', points: shapePoints(shape.geometry), owner: shape.owner_cabinet_id });
+            return;
+          }
           const f = map.queryRenderedFeatures(e.point, { layers: [L_LAND] })[0];
           const key = f?.properties?.key as string | undefined;
-          if (key) setBorder({ key, name: String(f.properties?.name ?? 'This country') });
-        } else if (tool === 'select') {
+          if (key) void pickOwner(key, String(f.properties?.name ?? 'This country'), brush || null);
+        } else {
           setSelUnit(null);
-          if (editable && canMap) {
-            const box: [[number, number], [number, number]] = [[e.point.x - 6, e.point.y - 6], [e.point.x + 6, e.point.y + 6]];
-            const hit = map.queryRenderedFeatures(box, { layers: [L_SHAPE_FILL, L_SHAPE_HIT] })[0];
-            const id = hit?.properties?.id as string | undefined;
-            setSelShape(id ?? null);
-          } else setSelShape(null);
         }
       },
       onMapDblClick: (e) => {
-        if (draft && draft.phase === 'draw' && draft.points.length >= MIN_POINTS[draft.kind]) {
+        if (draft && draft.phase === 'draw' && draft.points.length >= MIN_POINTS) {
           e.preventDefault();
           setDraft({ ...draft, phase: 'refine' });
         }
       },
       onUnitClick: (id) => {
-        if (tool !== 'select' && tool !== 'unit') return;
-        setNewUnit(null); setSelShape(null); setBorder(null);
+        if (tool !== 'select') return;
+        setNewUnit(null);
         setSelUnit(id);
       },
-      onUnitMoved: (id, lng, lat) => { void moveUnit(id, lng, lat); },
+      onUnitMoved: (id, lng, lat) => { askMove(id, lng, lat); },
       redrawFog,
       escape: () => {
-        if (draft || newUnit || border || selUnit || selShape) {
-          if (tool === 'area' || tool === 'line') changeTool('select');
-          else { setSelUnit(null); setSelShape(null); setNewUnit(null); setBorder(null); setDraft(null); }
+        if (pendingMoveRef.current) { cancelMove(); return; }
+        if (tool === 'area') { if (draft?.shapeId) setDraft(null); else changeTool('select'); return; }
+        if (tool === 'unit') {
+          if (newUnit) setNewUnit(null);
+          else if (addKind) setAddKind(null);
+          else changeTool('select');
+          return;
         }
+        if (tool === 'borders' && draft) { setDraft(null); return; }
+        if (selUnit) setSelUnit(null);
       },
     };
   });
@@ -456,15 +528,15 @@ export default function WarMap({ compact = false }: { compact?: boolean }) {
           m.on('mousemove', (e) => {
             const lv = liveRef.current;
             if (!lv) return;
-            if (lv.tool !== 'borders') {
-              if (hover && hover !== lv.borderKey) m.setFeatureState({ source: SRC_COUNTRIES, id: hover }, { hi: false });
+            if (lv.tool !== 'borders' || lv.draft) {
+              if (hover) m.setFeatureState({ source: SRC_COUNTRIES, id: hover }, { hi: false });
               hover = null;
               return;
             }
             const f = m.queryRenderedFeatures(e.point, { layers: [L_LAND] })[0];
             const key = (f?.properties?.key as string | undefined) ?? null;
             if (key === hover) return;
-            if (hover && hover !== lv.borderKey) m.setFeatureState({ source: SRC_COUNTRIES, id: hover }, { hi: false });
+            if (hover) m.setFeatureState({ source: SRC_COUNTRIES, id: hover }, { hi: false });
             hover = key;
             if (key) m.setFeatureState({ source: SRC_COUNTRIES, id: key }, { hi: true });
           });
@@ -502,10 +574,10 @@ export default function WarMap({ compact = false }: { compact?: boolean }) {
   useEffect(() => {
     const map = mapRef.current;
     if (!world || !map) return;
-    const drawing = tool === 'area' || tool === 'line';
-    map.getCanvasContainer().style.cursor = tool === 'select' ? '' : drawing || tool === 'unit' ? 'crosshair' : 'pointer';
+    const drawing = tool === 'area';
+    map.getCanvasContainer().style.cursor = tool === 'select' ? '' : drawing || (tool === 'unit' && addKind) ? 'crosshair' : tool === 'unit' ? '' : 'pointer';
     if (drawing) map.doubleClickZoom.disable(); else map.doubleClickZoom.enable();
-  }, [tool, world]);
+  }, [tool, world, addKind]);
 
   // Escape backs out of whatever is open.
   useEffect(() => {
@@ -554,17 +626,6 @@ export default function WarMap({ compact = false }: { compact?: boolean }) {
     }
   }, [world, ownerOf, cabById]);
 
-  // The country picked with the Borders tool stays outlined.
-  const outlined = useRef<string | null>(null);
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!world || !map) return;
-    const key = tool === 'borders' ? border?.key ?? null : null;
-    if (outlined.current && outlined.current !== key) map.setFeatureState({ source: SRC_COUNTRIES, id: outlined.current }, { hi: false });
-    if (key) map.setFeatureState({ source: SRC_COUNTRIES, id: key }, { hi: true });
-    outlined.current = key;
-  }, [world, tool, border]);
-
   // ── shapes ──
   const shapeLabels = useRef(new Map<string, MLMarker>());
   useEffect(() => {
@@ -574,18 +635,23 @@ export default function WarMap({ compact = false }: { compact?: boolean }) {
     const list = shownShapes.filter((s) => s.id !== editingId);
     const fc: FeatureCollection = {
       type: 'FeatureCollection',
-      features: list.map((s) => ({
-        type: 'Feature',
-        properties: { id: s.id, kind: s.kind, color: safeColor(s.color ?? cabById.get(s.owner_cabinet_id ?? '')?.color ?? DRAFT) },
-        geometry: s.geometry as unknown as Feature['geometry'],
-      })),
+      features: list.map((s) => {
+        const color = shapeColor(s, cabById);
+        // Territory is filled and outlined exactly like the cabinet's countries.
+        const props = s.kind === 'area' ? { tint: cabinetTint(color, 0.27), edge: cabinetTint(color, 0.95) } : {};
+        return {
+          type: 'Feature' as const,
+          properties: { id: s.id, kind: s.kind, color, ...props },
+          geometry: s.geometry as unknown as Feature['geometry'],
+        };
+      }),
     };
     (map.getSource(SRC_SHAPES) as GeoJSONSource | undefined)?.setData(fc);
     const wanted = new Set<string>();
     for (const s of list) {
       if (!s.label) continue;
       wanted.add(s.id);
-      const color = s.color ?? cabById.get(s.owner_cabinet_id ?? '')?.color ?? DRAFT;
+      const color = shapeColor(s, cabById);
       const at = centroidOf(shapePoints(s.geometry));
       const old = shapeLabels.current.get(s.id);
       if (old) old.remove();
@@ -596,12 +662,13 @@ export default function WarMap({ compact = false }: { compact?: boolean }) {
     }
   }, [world, shownShapes, draft?.shapeId, cabById]);
 
-  // Draft preview (the line or area being drawn).
+  // Draft preview (the territory being drawn or reshaped), in its owner's colours.
+  const draftColor = draft && draft.owner ? cabById.get(draft.owner)?.color ?? null : null;
   useEffect(() => {
     const map = mapRef.current;
     if (!world || !map) return;
-    (map.getSource(SRC_DRAFT) as GeoJSONSource | undefined)?.setData(draft ? draftFc(draft.kind, draft.points) : emptyFc);
-  }, [world, draft]);
+    (map.getSource(SRC_DRAFT) as GeoJSONSource | undefined)?.setData(draft ? draftFc(draft.points, draftColor) : emptyFc);
+  }, [world, draft, draftColor]);
 
   // Corner handles of the draft.
   const handles = useRef<MLMarker[]>([]);
@@ -611,9 +678,8 @@ export default function WarMap({ compact = false }: { compact?: boolean }) {
     for (const h of handles.current) h.remove();
     handles.current = [];
     if (!draft) return;
-    const kind = draft.kind;
     const pts = draft.points;
-    const min = MIN_POINTS[kind];
+    const min = MIN_POINTS;
     const live: LngLat[] = pts.map((p) => [p[0], p[1]]);
     pts.forEach((p, i) => {
       const el = makeVertex();
@@ -621,7 +687,7 @@ export default function WarMap({ compact = false }: { compact?: boolean }) {
       mk.on('drag', () => {
         const ll = mk.getLngLat();
         live[i] = [ll.lng, ll.lat];
-        (map.getSource(SRC_DRAFT) as GeoJSONSource | undefined)?.setData(draftFc(kind, live));
+        (map.getSource(SRC_DRAFT) as GeoJSONSource | undefined)?.setData(draftFc(live, draftColor));
       });
       mk.on('dragend', () => {
         const ll = mk.getLngLat();
@@ -637,8 +703,7 @@ export default function WarMap({ compact = false }: { compact?: boolean }) {
       handles.current.push(mk);
     });
     if (draft.phase === 'refine') {
-      const edges = kind === 'area' ? pts.length : pts.length - 1;
-      for (let i = 0; i < edges; i++) {
+      for (let i = 0; i < pts.length; i++) {
         const a = pts[i]; const b = pts[(i + 1) % pts.length];
         const el = makeMidpoint();
         const mk = new ml.Marker({ element: el, anchor: 'center' }).setLngLat([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]).addTo(map);
@@ -657,7 +722,7 @@ export default function WarMap({ compact = false }: { compact?: boolean }) {
       }
     }
     return () => { for (const h of handles.current) h.remove(); handles.current = []; };
-  }, [world, draft]);
+  }, [world, draft, draftColor]);
 
   // The spot where a new unit will go.
   const ghost = useRef<MLMarker | null>(null);
@@ -669,8 +734,24 @@ export default function WarMap({ compact = false }: { compact?: boolean }) {
     return () => { ghost.current?.remove(); ghost.current = null; };
   }, [world, newUnit]);
 
+  // The move confirmation sits next to the unit's new spot and follows the map as it pans.
+  const moveCard = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const map = mapRef.current; const card = moveCard.current;
+    if (!world || !map || !card || !pendingMove) return;
+    const place = () => {
+      const p = map.project([pendingMove.lng, pendingMove.lat]);
+      const w = map.getContainer().clientWidth;
+      card.style.left = `${Math.max(136, Math.min(w - 136, p.x))}px`;
+      card.style.top = `${p.y}px`;
+      card.style.transform = p.y < 130 ? 'translate(-50%, 28px)' : 'translate(-50%, calc(-100% - 28px))';
+    };
+    place();
+    map.on('move', place); map.on('resize', place);
+    return () => { map.off('move', place); map.off('resize', place); };
+  }, [world, pendingMove]);
+
   // ── unit tokens ──
-  const unitMarkers = useRef(new Map<string, { marker: MLMarker; el: HTMLElement; sig: string }>());
   const canDrag = editable && canUnits && tool === 'select';
   useEffect(() => {
     const map = mapRef.current; const ml = mlRef.current;
@@ -706,7 +787,7 @@ export default function WarMap({ compact = false }: { compact?: boolean }) {
         el.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); press(ev); } });
         m = { marker, el, sig: '' };
         markers.set(u.id, m);
-      } else if (!m.el.dataset.drag) {
+      } else if (!m.el.dataset.drag && pendingMoveRef.current?.id !== u.id) {
         m.marker.setLngLat([u.lng, u.lat]);
       }
       m.marker.setDraggable(canDrag);
@@ -729,7 +810,6 @@ export default function WarMap({ compact = false }: { compact?: boolean }) {
       for (const m of labels.values()) m.remove();
       labels.clear();
       owners.clear();
-      outlined.current = null;
     };
   }, []);
 
@@ -755,70 +835,54 @@ export default function WarMap({ compact = false }: { compact?: boolean }) {
 
   // ── panel ──
   const selUnitRow = selUnit ? shownUnits.find((s) => s.u.id === selUnit) ?? null : null;
-  const selShapeRow = selShape ? (data?.shapes.find((s) => s.id === selShape) ?? null) : null;
 
   const unitDraftOf = (u: MapUnit): UnitDraft => ({
-    name: u.name, kind: u.kind, strength: u.strength, owner: u.owner_cabinet_id, note: u.note ?? '',
-    revealed: u.revealed_to, suspected: u.suspected_by,
+    name: u.name, kind: u.kind, strength: u.strength, owner: u.owner_cabinet_id, note: u.note ?? '', revealed: u.revealed_to,
   });
 
   let panel: React.ReactNode = null;
   if (!compact) {
     if (draft && editable) {
       panel = (
-        <ShapeEditor
-          key={draft.sid} kind={draft.kind} phase={draft.phase} isNew={!draft.shapeId} initial={draft.init} pointCount={draft.points.length}
-          minPoints={MIN_POINTS[draft.kind]} cabinets={cabinets} busy={busy}
+        <TerritoryPanel
+          key={draft.sid} phase={draft.phase} isNew={!draft.shapeId} owner={draft.owner} pointCount={draft.points.length}
+          minPoints={MIN_POINTS} cabinets={cabinets} busy={busy}
+          onOwner={(id) => setDraft((d) => (d ? { ...d, owner: id } : d))}
           onUndo={() => setDraft({ ...draft, points: draft.points.slice(0, -1) })}
           onFinish={() => setDraft({ ...draft, phase: 'refine' })}
-          onSave={(d) => { void submitShape(d, draft.kind, draft.shapeId, draft.points); }}
+          onSave={() => { void submitTerritory(draft); }}
+          onDelete={draft.shapeId ? () => { if (draft.shapeId) void removeTerritory(draft.shapeId); } : undefined}
           onClose={() => { if (draft.shapeId) setDraft(null); else changeTool('select'); }}
         />
       );
-    } else if (newUnit && editable && canUnits) {
-      panel = (
-        <UnitEditor
-          key={`new-${newUnit.lng}-${newUnit.lat}`} isNew busy={busy} cabinets={cabinets}
-          initial={{ name: '', kind: 'army', strength: 1, owner: defaultOwner, note: '', revealed: [], suspected: [] }}
-          onSubmit={(d) => { void submitUnit(d, null); }} onClose={() => setNewUnit(null)}
-        />
-      );
+    } else if (tool === 'unit' && editable && canUnits) {
+      if (addKind && newUnit) {
+        panel = (
+          <UnitEditor
+            key="new-unit" isNew busy={busy} cabinets={cabinets}
+            initial={{ name: '', kind: addKind, strength: 1, owner: defaultOwner, note: '', revealed: [] }}
+            onSubmit={(d) => { void submitUnit(d, null); }} onClose={() => changeTool('select')}
+          />
+        );
+      } else if (addKind) {
+        panel = <PlaceUnitPanel kind={addKind} onBack={() => setAddKind(null)} onClose={() => changeTool('select')} />;
+      } else {
+        panel = <KindPicker onPick={(k) => { setNewUnit(null); setAddKind(k); }} onClose={() => changeTool('select')} />;
+      }
     } else if (selUnitRow) {
       const u = selUnitRow.u;
       panel = editable && canUnits && !selUnitRow.suspected ? (
         <UnitEditor
-          key={`${u.id}:${u.name}:${u.kind}:${u.strength}:${u.owner_cabinet_id}:${u.revealed_to.join()}:${u.suspected_by.join()}:${u.note}`}
+          key={`${u.id}:${u.name}:${u.kind}:${u.strength}:${u.owner_cabinet_id}:${u.revealed_to.join()}:${u.note}`}
           isNew={false} busy={busy} cabinets={cabinets} initial={unitDraftOf(u)}
           onSubmit={(d) => { void submitUnit(d, u); }} onDelete={() => { void removeUnit(u); }} onClose={() => setSelUnit(null)}
         />
       ) : (
         <UnitViewer key={u.id} unit={u} suspected={selUnitRow.suspected} cabinets={cabinets} onClose={() => setSelUnit(null)} />
       );
-    } else if (selShapeRow && editable && canMap) {
-      const s = selShapeRow;
-      panel = (
-        <ShapeEditor
-          key={`${s.id}:${s.label}:${s.owner_cabinet_id}:${s.public}:${s.revealed_to.join()}`}
-          kind={s.kind} phase="saved" isNew={false} pointCount={0} minPoints={0} cabinets={cabinets} busy={busy}
-          initial={{ label: s.label ?? '', owner: s.owner_cabinet_id, isPublic: s.public, revealed: s.revealed_to }}
-          onUndo={() => undefined} onFinish={() => undefined}
-          onSave={(d) => { void submitShape(d, s.kind, s.id, null); }}
-          onEditCorners={() => {
-            setDraft({
-              sid: new Date().getTime(), kind: s.kind, shapeId: s.id, phase: 'refine', points: shapePoints(s.geometry),
-              init: { label: s.label ?? '', owner: s.owner_cabinet_id, isPublic: s.public, revealed: s.revealed_to },
-            });
-            setSelShape(null);
-          }}
-          onDelete={() => { void removeShape(s); }} onClose={() => setSelShape(null)}
-        />
-      );
     } else if (tool === 'borders' && editable && canMap) {
       panel = (
-        <BorderPanel
-          name={border?.name ?? null} ownerId={border ? ownerOf.get(border.key) ?? null : null} cabinets={cabinets} busy={busy}
-          onPick={(id) => { if (border) void pickOwner(border.key, border.name, id); }} onClose={() => changeTool('select')}
-        />
+        <BorderPanel brush={brush || null} cabinets={cabinets} onBrush={(id) => setBrushState(id ?? '')} onClose={() => changeTool('select')} />
       );
     }
   }
@@ -829,15 +893,15 @@ export default function WarMap({ compact = false }: { compact?: boolean }) {
   const toolButtons: Array<{ id: Tool; label: string; icon: React.ReactNode; show: boolean }> = [
     { id: 'select', label: 'Select', icon: <MousePointer2 size={17} strokeWidth={1.5} />, show: true },
     { id: 'borders', label: 'Borders', icon: <Flag size={17} strokeWidth={1.5} />, show: editable && canMap },
-    { id: 'unit', label: 'Add unit', icon: <Ship size={17} strokeWidth={1.5} />, show: editable && canUnits },
-    { id: 'area', label: 'Draw area', icon: <Pentagon size={17} strokeWidth={1.5} />, show: editable && canMap },
-    { id: 'line', label: 'Draw line', icon: <Route size={17} strokeWidth={1.5} />, show: editable && canMap },
+    { id: 'area', label: 'Extend territory', icon: <Pentagon size={17} strokeWidth={1.5} />, show: editable && canMap },
   ];
   const showTools = !compact;
+  const showAdd = editable && canUnits;
 
+  const brushName = brush ? cabById.get(brush)?.name ?? 'that side' : 'nobody';
   const hint =
-    tool === 'unit' && !newUnit ? 'Click the map where the unit should go.'
-      : tool === 'borders' && !border ? 'Click a country to change who holds it.'
+    tool === 'unit' && addKind && !newUnit ? `Click the map to place the ${KIND_META[addKind].label.toLowerCase()}.`
+      : tool === 'borders' && !draft ? `Click a country to hand it to ${brushName}.`
         : null;
 
   const compactInfo = compact && selUnitRow
@@ -861,10 +925,10 @@ export default function WarMap({ compact = false }: { compact?: boolean }) {
         ) : <span />}
         {staff ? (
           cabinets.length <= 4 ? (
-            <Segmented value={staffViewer ?? 'all'} options={viewOptions} onChange={(val) => { setViewAs(val); }} ariaLabel="See the map as" />
+            <Segmented value={staffViewer ?? 'all'} options={viewOptions} onChange={changeView} ariaLabel="See the map as" />
           ) : (
             <div style={{ minWidth: 200 }}>
-              <GSelect size="sm" value={staffViewer ?? 'all'} options={viewOptions} onChange={setViewAs} aria-label="See the map as" />
+              <GSelect size="sm" value={staffViewer ?? 'all'} options={viewOptions} onChange={changeView} aria-label="See the map as" />
             </div>
           )
         ) : viewerCabinet ? (
@@ -908,9 +972,27 @@ export default function WarMap({ compact = false }: { compact?: boolean }) {
             </div>
           )}
           {hint && <div className="wm-hint">{hint}</div>}
+          {showAdd && (
+            <button
+              type="button" className="wm-add" aria-pressed={tool === 'unit'} title="Add a unit"
+              onClick={() => changeTool(tool === 'unit' ? 'select' : 'unit')}
+            >
+              <span className="wm-add-icons"><Plus size={26} strokeWidth={1.5} /><Ship size={19} strokeWidth={1.5} /></span>
+              <span>Add unit</span>
+            </button>
+          )}
+          {pendingMove && (
+            <div ref={moveCard} className="wm-move" role="group" aria-label="Confirm the move" style={{ fontFamily: CK.font }}>
+              <p style={{ margin: '0 0 9px', fontSize: 13.5, fontWeight: 700, color: CK.ink, overflowWrap: 'anywhere' }}>Move {pendingMove.name} here?</p>
+              <div className="flex" style={{ gap: 8 }}>
+                <Btn size="sm" disabled={busy} onClick={confirmMove}>Move</Btn>
+                <Btn size="sm" tone="ghost" onClick={cancelMove}>Cancel</Btn>
+              </div>
+            </div>
+          )}
         </div>
 
-        {panel && <div className="wm-drawer">{panel}</div>}
+        {panel && <div className="wm-drawer" data-add={showAdd ? '' : undefined}>{panel}</div>}
 
         <div className="wm-legend">
           <div>

@@ -19,6 +19,7 @@ import { ROLE_LABEL, type CrisisRole } from '@/lib/crisis/types';
 import { CK, Btn } from '../../crisisKit';
 import { CrisisProvider, crisisBase, useCrisisGate, type CrisisContextValue } from './CrisisContext';
 import NewsPopup from '../../components/news/NewsPopup';
+import NotificationBell from '../../components/notifications/NotificationBell';
 
 interface NavItem { href: string; label: string; icon: React.ReactNode; section?: string }
 
@@ -154,6 +155,7 @@ function TopBar({ v, items }: { v: CrisisContextValue; items: NavItem[] }) {
       <span className="hidden sm:inline" style={{ fontSize: 12.5, fontWeight: 600, color: CK.inkSoft }}>
         {v.displayName ? `${v.displayName} · ` : ''}{ROLE_LABEL[v.role]}
       </span>
+      <NotificationBell />
       {viewingAs ? (
         <Btn tone="red" size="sm" onClick={signOutCode} icon={<LogOut size={14} strokeWidth={1.6} />}>Back to my account</Btn>
       ) : codeUser ? (

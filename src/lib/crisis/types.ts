@@ -22,7 +22,8 @@ export interface CrisisSettings {
   wordLimit: number;                // 0 = no limit
   messages: 'free' | 'approval' | 'off';
   otherCabinets: 'hidden' | 'names' | 'full';
-  backroomPowers: { map: boolean; resources: boolean; fog: boolean; units: boolean; seeAll: boolean; news: boolean };
+  backroomPowers: { map: boolean; resources: boolean; fog: boolean; units: boolean; seeAll: boolean; news: boolean; characters: boolean };
+  points?: Partial<import('./points').PointsConfig>;
   newsNeedsApproval: boolean;
   meetingsNeedApproval: boolean;
   chairReadsPersonal: boolean;
@@ -34,7 +35,7 @@ export const DEFAULT_SETTINGS: CrisisSettings = {
   wordLimit: 300,
   messages: 'free',
   otherCabinets: 'names',
-  backroomPowers: { map: true, resources: true, fog: true, units: true, seeAll: true, news: false },
+  backroomPowers: { map: true, resources: true, fog: true, units: true, seeAll: true, news: false, characters: false },
   newsNeedsApproval: true,
   meetingsNeedApproval: true,
   chairReadsPersonal: false,
@@ -301,3 +302,18 @@ export interface Meeting {
 export const MEETING_STATUS_LABEL: Record<MeetingStatus, string> = {
   pending: 'Waiting for approval', approved: 'Approved', declined: 'Declined', held: 'Held', cancelled: 'Cancelled',
 };
+
+/** A bell notification for one member, written by database triggers (docs/crisis/sql/011). */
+export type NotificationKind = 'directive_answer' | 'directive_new' | 'directive_note' | 'news' | 'unit' | 'reveal' | 'territory' | 'meeting' | 'status';
+export interface CrisisNotification {
+  id: string;
+  crisis_id: string;
+  member_id: string;
+  kind: NotificationKind;
+  title: string;
+  body: string | null;
+  link: string | null;   // path inside the crisis: '' (home), 'map', 'news', 'meetings', 'directives?d=<id>', '?d=<id>'
+  ref_id: string | null;
+  read_at: string | null;
+  created_at: string;
+}
