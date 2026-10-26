@@ -64,3 +64,38 @@ Peter's answers to the 42 plan questions (25 Oct 2026), plus the follow-ups the 
 - The sidebar is complete for every role (pages being built say so).
 - Overlapping avatars copy the organiser Live Status emblem (one third outside the card's top edge).
 - Organiser Live Status cards of a crisis room carry "Open Gavelling Crisis"; Manage committees carries the switch-on button.
+
+## Round 4 (Peter, 26 Oct 2026)
+
+Directives everywhere
+- The directive's TITLE is the most important thing: at the very top of every directive card, the biggest text on the card, always fits (wraps, never cut). The number sits slightly overlapping the card's top edge as a small badge ("No. 13"). Tags and the rest go small, bottom right.
+- The character is on the left: the portrait, with the name beneath it as two rows (short name big, full name small) per the no-ellipsis rule.
+- My Directives (delegate) reads "11: Title".
+- A directive shows the time the response came in (answered_at).
+- Command "Waiting for a Reply": no explanatory line. Just the title with "17 directives open" at the top right, then straight into the directives.
+
+Backroom
+- A directive opens as a pop-up like the delegate's, shaped like the organiser committee editor (main pop-up with a side panel next to it). The side panel holds the actions: resources up/down, map moves (units, strength, borders), character status, news. All staged and applied the moment the reply is sent (crisis_answer_directive already does this).
+- The outcome buttons (Approve etc.) can be clicked again to unselect before sending.
+
+Crisis Director Command
+- Less on one page. No awkward gaps around the war map. No News card on Command: that column is Needs Your Approval, with the "Crisis news" button there (we no longer say "crisis break").
+- Front Rooms: a semi-live dashboard like the organiser Live Status cards.
+- Cabinet Resources: the icon in a circle, the number under it, the change small beside it (green up, red down). Room for 6 to 8 per cabinet. "See all" opens a pop-up.
+- Resources are cabinet resources. Individual (per character) resources come later.
+
+Resources
+- Clicking a resource opens its history as a graph; up is green, down is red.
+
+Notifications and history
+- Each kind looks different (its own icon and colour).
+- Clicking a notification opens a pop-up showing what changed: for the map a small map showing the movement from where to where, for troops what changed (strength from and to), with "Open the map".
+- A full history page: backroom and director see every change and who made it; delegates see what changed for their cabinet only, never who.
+
+Meetings
+- Start and stop a timer on the meeting itself (not strict); show who is in the room.
+
+Delegates
+- The directive form has no "To": title, "What do you want to happen?", themes. Joint co-authors are picked with their pictures.
+- "Characters" becomes "Cabinet". A delegate never sees another character's directives or performance (profile only). The director decides whether delegates see the other cabinet and how much (Settings: hidden, names and pictures, full profiles).
+- News without a picture is all text (no empty picture space). Delegates are not told whether news went to every room or only their cabinet.

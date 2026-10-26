@@ -1,0 +1,12 @@
+-- Gavelling Crisis, part 14 (applied 26 Oct 2026 as crisis_part14_history_meeting_clock_receiver_visibility).
+-- 1. crisis_map_log keeps `before` (the old row) and `cabinets` (who the change concerns: unit owner + revealed_to,
+--    region old and new owner, shape owner + revealed_to, null for a public shape). crisis_map_logger rewritten.
+-- 2. crisis_history(p_crisis, p_ref text, p_until timestamptz, p_limit) : staff get every row with by_name (who did it);
+--    everyone else only rows concerning their cabinet, stripped to id/name/kind/strength/lng/lat/owner/region/label/geometry,
+--    never who. p_ref = a unit/shape id or a region key; p_until = a notification's created_at.
+-- 3. crisis_resource_history(p_resource): the graph points (amount_after over time); reason and by_name only for staff.
+-- 4. crisis_meetings.started_at / ended_at and crisis_meeting_clock(p_meeting, 'start'|'stop'|'reset'), staff or chair.
+-- 5. crisis_directives.receiver is nullable (the "To" field is gone from the delegate form).
+-- 6. crisis_notifications.ref_key (the region key of a border change); crisis_notify_region sets it.
+-- 7. characters_read: delegates also see the other cabinets' characters when crises.settings.otherCabinets is 'names' or 'profiles'.
+-- Full SQL: see the migration in Supabase (list_migrations); this file records what it does.
