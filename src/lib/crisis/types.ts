@@ -21,7 +21,7 @@ export interface CrisisSettings {
   cooldownSeconds: number;          // between two directives from one delegate; 0 = off
   wordLimit: number;                // 0 = no limit
   messages: 'free' | 'approval' | 'off';
-  otherCabinets: 'hidden' | 'names' | 'full';
+  otherCabinets: 'hidden' | 'names' | 'profiles';  // what delegates see of the other cabinets' characters
   backroomPowers: { map: boolean; resources: boolean; fog: boolean; units: boolean; seeAll: boolean; news: boolean; characters: boolean };
   points?: Partial<import('./points').PointsConfig>;
   newsNeedsApproval: boolean;
@@ -34,7 +34,7 @@ export const DEFAULT_SETTINGS: CrisisSettings = {
   cooldownSeconds: 180,
   wordLimit: 300,
   messages: 'free',
-  otherCabinets: 'names',
+  otherCabinets: 'hidden',
   backroomPowers: { map: true, resources: true, fog: true, units: true, seeAll: true, news: false, characters: false },
   newsNeedsApproval: true,
   meetingsNeedApproval: true,
@@ -44,9 +44,11 @@ export const DEFAULT_SETTINGS: CrisisSettings = {
 
 export function readSettings(raw: unknown): CrisisSettings {
   const s = (raw && typeof raw === 'object' ? raw : {}) as Partial<CrisisSettings>;
+  const other = (s as { otherCabinets?: string }).otherCabinets;
   return {
     ...DEFAULT_SETTINGS,
     ...s,
+    otherCabinets: other === 'names' ? 'names' : other === 'profiles' || other === 'full' ? 'profiles' : 'hidden',
     backroomPowers: { ...DEFAULT_SETTINGS.backroomPowers, ...(s.backroomPowers ?? {}) },
   };
 }
@@ -153,7 +155,7 @@ export interface Directive {
   author_member_id: string | null;
   author_character_id: string | null;
   title: string;
-  receiver: string;
+  receiver: string | null;
   themes: string[];
   body: string;
   resources_used: string | null;
@@ -297,6 +299,8 @@ export interface Meeting {
   decided_at: string | null;
   staff_note: string | null;
   outcome_note: string | null;
+  started_at: string | null;   // the meeting clock (docs/crisis/sql/014): set by Start, cleared by Reset
+  ended_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -314,7 +318,8 @@ export interface CrisisNotification {
   title: string;
   body: string | null;
   link: string | null;   // path inside the crisis: '' (home), 'map', 'news', 'meetings', 'directives?d=<id>', '?d=<id>'
-  ref_id: string | null;
+  ref_id: string | null;   // 'unit' and 'reveal': the unit id; a directive: its id
+  ref_key: string | null;  // 'territory' about a country: its region key (ISO numeric)
   read_at: string | null;
   created_at: string;
 }

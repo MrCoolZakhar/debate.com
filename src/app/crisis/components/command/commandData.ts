@@ -13,6 +13,8 @@ export type RoomTone = 'live' | 'quiet' | 'ended';
 
 export interface RoomState {
   cabinetId: string;
+  /** The live session's id (committees.id): the organiser Live Status model loads the room from it. */
+  sessionId: string | null;
   /** null = no conference committee, or its room was never started. */
   code: string | null;
   phaseLabel: string | null;
@@ -66,11 +68,11 @@ export async function loadRoomStates(ref: CrisisRef, cabinets: Cabinet[]): Promi
   return cabinets.map((c) => {
     const link = c.conference_committee_id ? links.get(c.conference_committee_id) : undefined;
     const room = link?.session_id ? rooms.get(link.session_id) : undefined;
-    if (!room) return { cabinetId: c.id, code: null, phaseLabel: null, tone: 'quiet' as RoomTone, speaker: null, chairPassword: null };
+    if (!room) return { cabinetId: c.id, sessionId: null, code: null, phaseLabel: null, tone: 'quiet' as RoomTone, speaker: null, chairPassword: null };
     const { label, tone } = phaseWords(room);
     const floor = room.phase === 'speakers-list' || room.phase === 'moderated-caucus';
     const pw = (room as CommitteeRow & { settings?: { chairJoinSuffix?: unknown } }).settings?.chairJoinSuffix;
-    return { cabinetId: c.id, code: room.code ?? link?.session_code ?? null, phaseLabel: label, tone, speaker: floor && tone === 'live' ? speakers.get(room.id) ?? null : null, chairPassword: typeof pw === 'string' && pw ? pw : null };
+    return { cabinetId: c.id, sessionId: room.id, code: room.code ?? link?.session_code ?? null, phaseLabel: label, tone, speaker: floor && tone === 'live' ? speakers.get(room.id) ?? null : null, chairPassword: typeof pw === 'string' && pw ? pw : null };
   });
 }
 

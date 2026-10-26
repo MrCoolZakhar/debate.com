@@ -12,6 +12,8 @@ import { Btn, Card, CK, Skeleton } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import AskMeeting from './AskMeeting';
 import StaffMeetingCard from './StaffMeetingCard';
+import { InTheRoom, MeetingClockReadout } from './MeetingClock';
+import { meetingRunning } from '@/lib/crisis/meetings';
 import { AvatarStack, Fact, NameList, StatusLine, usePeople, whenText, type Person } from './meetingKit';
 
 export default function MeetingsPage() {
@@ -80,6 +82,12 @@ export default function MeetingsPage() {
                   <Fact label="Length">{m.duration_minutes} min</Fact>
                   <Fact label="When">{whenText(m)}</Fact>
                 </div>
+                {m.started_at && (m.status === 'approved' || m.status === 'held') && (
+                  <div className="flex flex-col" style={{ gap: 10, marginTop: 12 }}>
+                    <MeetingClockReadout m={m} />
+                    {meetingRunning(m) && <InTheRoom m={m} people={people} cabinets={core.cabinets} />}
+                  </div>
+                )}
                 {m.staff_note && <p style={{ margin: '10px 0 0', fontSize: 13, color: CK.inkSoft }}><b>Note from the backroom: </b>{m.staff_note}</p>}
                 {m.requested_by_member === memberId && (m.status === 'pending' || m.status === 'approved') && (
                   <div style={{ marginTop: 12 }}><Btn tone="danger" size="sm" icon={<X size={14} strokeWidth={1.5} aria-hidden />} onClick={() => cancel(m)}>Cancel</Btn></div>
@@ -112,7 +120,7 @@ export default function MeetingsPage() {
             </div>
             {!l.list.length && <p style={{ margin: '14px 0 0', fontSize: 13, color: CK.muted }}>Nothing here.</p>}
             {l.list.map((m) => (
-              <StaffMeetingCard key={m.id} m={m} refx={ref} people={people} cabinets={core.cabinets} members={core.members} canAct={staff} now={now} />
+              <StaffMeetingCard key={m.id} m={m} refx={ref} people={people} cabinets={core.cabinets} members={core.members} canAct={staff} canClock={staff || role === 'chair'} onChanged={() => void load()} now={now} />
             ))}
           </section>
         ))}

@@ -1,0 +1,3 @@
+-- Part 15 (crisis_part15_resource_log_cabinet_number): resource log reasons name the cabinet's own directive number.
+-- Part 16 (crisis_part16_backfill_history_cabinets): map log rows from before part 14 got their cabinets filled in,
+-- so older changes no longer show to every cabinet (only a public area stays visible to all).

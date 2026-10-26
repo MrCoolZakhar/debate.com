@@ -8,6 +8,7 @@ import { amount } from '@/lib/crisis/format';
 import { adjustResource, createResource, crisisError, type CrisisRef } from '@/lib/crisis/api';
 import type { Resource, ResourceType } from '@/lib/crisis/types';
 import { Avatar, Btn, CK, fieldStyle, resourceIcon } from '../../crisisKit';
+import ResourceHistoryDialog from './ResourceHistoryDialog';
 
 export interface LastChange { delta: number; reason: string | null }
 
@@ -28,6 +29,7 @@ export default function ResourceTile({ refx, type, resource, target, last, canEd
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
+  const [history, setHistory] = useState(false);
   const unit = type.unit ? ` ${type.unit}` : '';
 
   const save = async () => {
@@ -54,20 +56,31 @@ export default function ResourceTile({ refx, type, resource, target, last, canEd
 
   return (
     <div style={{ background: CK.card, borderRadius: 18, boxShadow: CK.shadow, padding: '12px 14px', minWidth: 0, border: '1px solid rgba(27,56,40,0.08)' }}>
-      <div className="flex items-center gap-2" style={{ color: CK.red }}>
+      {/* Clicking the name or the amount opens the history graph. */}
+      <button
+        type="button"
+        disabled={!resource}
+        onClick={() => setHistory(true)}
+        aria-label={`${type.name}: see how it changed`}
+        title={resource ? 'See how it changed' : undefined}
+        className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+        style={{ display: 'block', width: '100%', border: 0, background: 'transparent', padding: 0, textAlign: 'left', cursor: resource ? 'pointer' : 'default', fontFamily: CK.font, color: 'inherit', borderRadius: 10 }}
+      >
+      <span className="flex items-center gap-2" style={{ color: CK.red }}>
         {who ? <Avatar name={who.name} src={who.picture_url} size={30} color={who.color} /> : resourceIcon(type.name, 20)}
-        <div style={{ minWidth: 0 }}>
-          {who && <p style={{ margin: 0, fontSize: 12.5, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{who.name}</p>}
-          <p className="flex items-center gap-1.5" style={{ margin: 0, fontSize: who ? 11.5 : 13, fontWeight: 700, color: who ? CK.inkSoft : CK.ink, overflowWrap: 'anywhere' }}>
+        <span style={{ minWidth: 0, display: 'block' }}>
+          {who && <span style={{ display: 'block', margin: 0, fontSize: 12.5, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{who.name}</span>}
+          <span className="flex items-center gap-1.5" style={{ margin: 0, fontSize: who ? 11.5 : 13, fontWeight: 700, color: who ? CK.inkSoft : CK.ink, overflowWrap: 'anywhere' }}>
             {who && <span style={{ color: CK.red, lineHeight: 0 }}>{resourceIcon(type.name, 14)}</span>}{type.name}
-          </p>
-        </div>
-      </div>
-      <p style={{ margin: '8px 0 0', lineHeight: 1 }}>
+          </span>
+        </span>
+      </span>
+      <span style={{ display: 'block', margin: '8px 0 0', lineHeight: 1 }}>
         {resource ? (
           <><b style={{ fontSize: 30, fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: CK.ink }}>{fmt(resource.amount)}</b><span style={{ fontSize: 13, fontWeight: 600, color: CK.inkSoft }}>{unit}</span></>
         ) : <span style={{ fontSize: 13, color: CK.muted, fontWeight: 600 }}>Not set</span>}
-      </p>
+      </span>
+      </button>
       {last && (
         <p style={{ margin: '8px 0 0', fontSize: 12, color: CK.inkSoft, overflowWrap: 'anywhere' }}>
           <b style={{ color: last.delta < 0 ? CK.danger : CK.ok, fontVariantNumeric: 'tabular-nums' }}>{signed(last.delta)}</b>{last.reason ? `, ${last.reason}` : ''}
@@ -98,6 +111,9 @@ export default function ResourceTile({ refx, type, resource, target, last, canEd
             <Btn tone="ghost" size="sm" onClick={() => { setOpen(false); setHint(null); setDelta(0); }}>Back</Btn>
           </div>
         </div>
+      )}
+      {history && resource && (
+        <ResourceHistoryDialog resource={{ id: resource.id, amount: resource.amount }} typeName={type.name} unit={type.unit} color={who?.color ?? CK.red} eyebrow={who?.name} onClose={() => setHistory(false)} />
       )}
     </div>
   );

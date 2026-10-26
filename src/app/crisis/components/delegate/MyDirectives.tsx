@@ -1,12 +1,14 @@
 'use client';
-// Gavelling Crisis: "My Directives", newest first. Every card has the SAME height. The author's portrait
-// hangs over the top-left corner (as on the organiser Live Status card) with the kind as a small tag in
-// the empty space beneath it; the outcome (or the status while there is no answer) is a coloured tag with
-// its icon that sticks out on the very top edge. The text is the first lines of the reply, or of the
-// directive when there is no reply, clamped to the same number of lines. A click opens the conversation.
+// Gavelling Crisis: "My Directives", newest first. The biggest line is "11: Title" (the cabinet's own
+// number, a colon, the title; it wraps and is never cut). The author's portrait hangs over the top-left
+// corner (as on the organiser Live Status card) with the kind as a small tag beneath it; the outcome (or
+// the status while there is no answer) is a coloured tag that sticks out on the very top edge. Small
+// beneath the title: when the reply came in, then the first lines of the reply (or of the directive).
+// A click opens the conversation.
 
 import { useState } from 'react';
-import { dirNumber } from '@/lib/crisis/format';
+import { Clock } from 'lucide-react';
+import { dirNumber, timeAgo } from '@/lib/crisis/format';
 import { OUTCOME_LABEL, type Directive, type DirectiveNote } from '@/lib/crisis/types';
 import type { CrisisRef } from '@/lib/crisis/api';
 import { Avatar, Card, CK, Skeleton } from '../../crisisKit';
@@ -16,7 +18,7 @@ import { KIND_WORD, kindIcon, outcomeColor, outcomeIcon, statusColor, statusIcon
 
 export interface PersonRef { name: string; picture_url: string | null; color: string }
 
-const CARD_HEIGHT = 112;
+const CARD_HEIGHT = 112; // minimum; a long title makes the card taller
 const PORTRAIT = 48;
 const OVERHANG = PORTRAIT / 3;
 
@@ -31,10 +33,10 @@ function DirectiveCard({ d, author, onOpen }: { d: Directive; author: PersonRef;
     <button
       type="button"
       onClick={onOpen}
-      aria-label={`Directive ${dirNumber(d)}, ${d.title}. ${tagWord}`}
+      aria-label={`Directive ${dirNumber(d)}: ${d.title}. ${tagWord}`}
       className="relative text-left w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] transition-transform active:scale-[0.99]"
       style={{
-        height: CARD_HEIGHT, display: 'flex', gap: 10, padding: 0, cursor: 'pointer', fontFamily: CK.font, color: CK.ink,
+        minHeight: CARD_HEIGHT, display: 'flex', gap: 10, padding: 0, cursor: 'pointer', fontFamily: CK.font, color: CK.ink,
         background: CK.card, borderRadius: 20, border: '1px solid rgba(27,56,40,0.14)', overflow: 'visible',
         boxShadow: ask ? `${CK.shadow}, 0 0 0 2px rgba(47,95,143,0.35)` : CK.shadow,
       }}
@@ -59,16 +61,20 @@ function DirectiveCard({ d, author, onOpen }: { d: Directive; author: PersonRef;
         </span>
       </span>
 
-      <span className="flex flex-col min-w-0" style={{ flex: 1, padding: '15px 14px 10px 0' }}>
-        <b title={d.title} className="line-clamp-2 xl:line-clamp-1" style={{ fontSize: 14.5, lineHeight: 1.3, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>
-          {d.title}
+      <span className="flex flex-col min-w-0" style={{ flex: 1, padding: '17px 14px 12px 0' }}>
+        <b style={{ fontSize: 17, lineHeight: 1.28, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>
+          {dirNumber(d)}: {d.title}
         </b>
+        <span className="inline-flex items-center" style={{ gap: 4, marginTop: 3, fontSize: 12, fontWeight: 700, color: d.answered_at ? CK.red : CK.muted }}>
+          <Clock size={12} strokeWidth={1.6} aria-hidden />
+          {d.answered_at ? `Reply ${timeAgo(d.answered_at)}` : `Sent ${timeAgo(d.created_at)}`}
+        </span>
         <span
           title={text}
-          className="line-clamp-2 xl:line-clamp-3"
-          style={{ marginTop: 3, fontSize: 13, lineHeight: 1.42, color: CK.inkSoft, overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}
+          className="line-clamp-2"
+          style={{ marginTop: 3, fontSize: 12.5, lineHeight: 1.4, color: CK.inkSoft, overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}
         >
-          {reply && <b style={{ color: CK.red }}>Reply: </b>}{text}
+          {text}
         </span>
       </span>
     </button>

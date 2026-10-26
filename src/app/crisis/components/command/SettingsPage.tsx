@@ -112,13 +112,13 @@ function SettingsBody() {
 
         {joint && (
           <Card>
-            <CardTitle icon={<UsersRound size={16} strokeWidth={1.5} />}>Other Cabinets&apos; Characters</CardTitle>
-            <ChoiceRow title="What delegates see" hint="Hidden: nothing about the other cabinets. Names only: who they are. Full: bio, picture and title as well.">
+            <CardTitle icon={<UsersRound size={16} strokeWidth={1.5} />}>Other Cabinets</CardTitle>
+            <ChoiceRow title="What delegates see of the other cabinets" hint="Nothing: delegates see only their own cabinet. Names and pictures: who the other characters are. Full profiles: their bio and location as well. Delegates never see another character's directives or performance.">
               <Segmented
-                ariaLabel="What delegates see of other cabinets"
+                ariaLabel="What delegates see of the other cabinets"
                 value={s.otherCabinets}
                 onChange={(x) => save('otherCabinets', x)}
-                options={[{ value: 'hidden', label: 'Hidden' }, { value: 'names', label: 'Names only' }, { value: 'full', label: 'Full' }]}
+                options={[{ value: 'hidden', label: 'Nothing' }, { value: 'names', label: 'Names and pictures' }, { value: 'profiles', label: 'Full profiles' }]}
               />
             </ChoiceRow>
           </Card>

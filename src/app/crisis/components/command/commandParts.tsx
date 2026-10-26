@@ -3,14 +3,17 @@
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import Link from 'next/link';
-import { CalendarClock, ClipboardCheck, Landmark, Newspaper, Pause, Pencil, Play, RadioTower, Users } from 'lucide-react';
+import { CalendarClock, ClipboardCheck, Landmark, Newspaper, Pause, Pencil, Play, Users } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { DatePicker } from '@/components/DatePicker';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { crisisError, patchCrisis, publishNews, type CrisisRef } from '@/lib/crisis/api';
 import type { Cabinet, Crisis, Member, News, Resource, ResourceType } from '@/lib/crisis/types';
-import { Btn, Card, CardTitle, CK, cabinetTint, Eyebrow, fieldStyle, resourceIcon, scenarioLabel, Skeleton, waitLabel } from '../../crisisKit';
-import { formatAmount, groupResourcesByCabinet } from './commandData';
+import { Btn, Card, CardTitle, CK, cabinetTint, Eyebrow, fieldStyle, scenarioLabel, Skeleton, waitLabel } from '../../crisisKit';
+import { groupResourcesByCabinet } from './commandData';
+import CabinetResourcesDialog from './CabinetResourcesDialog';
+import ResourceDisc from '../resources/ResourceDisc';
+import ResourceHistoryDialog from '../resources/ResourceHistoryDialog';
 import { TryAsButton } from './TryAsPanel';
 
 // ─────────── Shared bits ───────────
@@ -253,8 +256,13 @@ export function ApprovalCard({ news, cabinets, members, cref, base, now, onChang
   };
 
   return (
-    <Card className="cmd-card">
-      <CardTitle icon={<ClipboardCheck size={17} strokeWidth={1.5} />}>Needs Your Approval</CardTitle>
+    <Card className="cmd-card cmd-approval">
+      <CardTitle
+        icon={<ClipboardCheck size={17} strokeWidth={1.5} />}
+        right={<LinkBtn href={`${base}/news`} tone="red" icon={<Newspaper size={13} strokeWidth={1.5} />}>Crisis news</LinkBtn>}
+      >
+        Needs Your Approval
+      </CardTitle>
       {news === null ? <div className="flex flex-col" style={{ gap: 8 }}><Skeleton h={36} /></div>
         : drafts.length === 0 ? <EmptyLine>Nothing is waiting for you.</EmptyLine>
         : drafts.map((n, i) => {
@@ -282,45 +290,61 @@ export function ApprovalCard({ news, cabinets, members, cref, base, now, onChang
 
 // ─────────── Cabinet resources ───────────
 
-const PER_CABINET = 4;
+/** Tiles shown per cabinet on Command (two rows of four); "See all" opens everything. */
+const PER_CABINET = 8;
 
-export function ResourcesCard({ cabinets, types, resources, changes, loaded, base }: {
-  cabinets: Cabinet[]; types: ResourceType[]; resources: Resource[]; changes: Map<string, number>; loaded: boolean; base: string;
+export function ResourcesCard({ cabinets, types, resources, changes, loaded }: {
+  cabinets: Cabinet[]; types: ResourceType[]; resources: Resource[]; changes: Map<string, number>; loaded: boolean;
 }) {
+  const [view, setView] = useState<{ kind: 'all' } | { kind: 'one'; id: string } | null>(null);
   const typeById = useMemo(() => new Map(types.map((t) => [t.id, t])), [types]);
   const byCab = useMemo(() => groupResourcesByCabinet(resources), [resources]);
-  const withRes = cabinets.filter((c) => (byCab.get(c.id) ?? []).some((r) => typeById.get(r.type_id)?.scope === 'cabinet'));
+  const cabinetRows = (cabId: string) => (byCab.get(cabId) ?? []).filter((r) => typeById.get(r.type_id)?.scope === 'cabinet')
+    .sort((a, b) => (typeById.get(a.type_id)?.sort ?? 0) - (typeById.get(b.type_id)?.sort ?? 0));
+  const withRes = cabinets.filter((c) => cabinetRows(c.id).length > 0);
+  const one = view?.kind === 'one' ? resources.find((r) => r.id === view.id) ?? null : null;
+  const oneType = one ? typeById.get(one.type_id) : undefined;
+  const oneCab = one ? cabinets.find((c) => c.id === one.cabinet_id) : undefined;
+
   return (
-    <Card className="cmd-card" style={{ padding: '10px 14px' }}>
-      <CardTitle icon={<Landmark size={17} strokeWidth={1.5} />} right={<LinkBtn href={`${base}/resources`}>See all</LinkBtn>}>Cabinet Resources</CardTitle>
-      {!loaded ? <div className="flex flex-col" style={{ gap: 8 }}><Skeleton h={18} w="50%" /><Skeleton h={40} /></div>
+    <Card className="cmd-card cmd-resources" style={{ padding: '12px 16px 14px' }}>
+      <CardTitle
+        icon={<Landmark size={17} strokeWidth={1.5} />}
+        right={withRes.length > 0 ? <Btn size="sm" tone="ghost" onClick={() => setView({ kind: 'all' })}>See all</Btn> : undefined}
+      >
+        Cabinet Resources
+      </CardTitle>
+      {!loaded ? <div className="flex flex-col" style={{ gap: 8 }}><Skeleton h={18} w="50%" /><Skeleton h={90} r={16} /></div>
         : withRes.length === 0 ? <EmptyLine>No cabinet resources yet.</EmptyLine>
         : (
-          <div style={{ display: 'grid', gap: '8px 16px', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))' }}>
+          <div style={{ display: 'grid', gap: '14px 22px', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))' }}>
             {withRes.map((cab) => {
-              const rows = (byCab.get(cab.id) ?? []).filter((r) => typeById.get(r.type_id)?.scope === 'cabinet')
-                .sort((a, b) => (typeById.get(a.type_id)?.sort ?? 0) - (typeById.get(b.type_id)?.sort ?? 0));
+              const rows = cabinetRows(cab.id);
               const shown = rows.slice(0, PER_CABINET);
               return (
                 <div key={cab.id} style={{ minWidth: 0 }}>
-                  <h3 className="flex items-center" style={{ margin: '0 0 4px', gap: 7, fontSize: 12.5, fontWeight: 800, color: cab.color, overflowWrap: 'anywhere' }}>
-                    <i aria-hidden style={{ width: 9, height: 9, borderRadius: 3, background: cab.color, display: 'inline-block', flex: 'none' }} />
+                  <h3 className="flex items-center" style={{ margin: '0 0 8px', gap: 7, fontSize: 13, fontWeight: 800, color: cab.color, overflowWrap: 'anywhere' }}>
+                    <i aria-hidden style={{ width: 10, height: 10, borderRadius: '50%', background: cab.color, display: 'inline-block', flex: 'none' }} />
                     {cab.name}
-                    {rows.length > shown.length && <Link href={`${base}/resources`} style={{ marginLeft: 'auto', fontSize: 11.5, fontWeight: 700, color: CK.forest, textDecoration: 'underline', whiteSpace: 'nowrap' }}>See all {rows.length}</Link>}
+                    {rows.length > shown.length && (
+                      <button type="button" onClick={() => setView({ kind: 'all' })} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]" style={{ marginLeft: 'auto', border: 0, background: 'transparent', padding: 0, cursor: 'pointer', fontFamily: CK.font, fontSize: 12, fontWeight: 700, color: CK.forest, textDecoration: 'underline', whiteSpace: 'nowrap' }}>
+                        See all {rows.length}
+                      </button>
+                    )}
                   </h3>
-                  <div style={{ display: 'grid', gap: 4, gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
+                  <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(auto-fill, minmax(96px, 1fr))' }}>
                     {shown.map((r) => {
                       const t = typeById.get(r.type_id);
-                      const ch = changes.get(r.id);
                       return (
-                        <div key={r.id} className="flex items-center" style={{ background: CK.well, borderRadius: 10, padding: '5px 8px', minWidth: 0, gap: 6 }}>
-                          <span aria-hidden style={{ color: cab.color, lineHeight: 0, flex: 'none' }}>{resourceIcon(t?.name ?? '', 15)}</span>
-                          <span style={{ flex: 1, minWidth: 0, fontSize: 11.5, fontWeight: 600, color: CK.inkSoft, overflowWrap: 'anywhere', lineHeight: 1.2 }}>{t?.name ?? 'Resource'}</span>
-                          <b style={{ fontSize: 14, fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: CK.ink, whiteSpace: 'nowrap' }}>
-                            {formatAmount(r.amount)}
-                            {ch ? <small style={{ marginLeft: 4, fontSize: 11, fontWeight: 700, color: ch > 0 ? CK.ok : CK.danger }}>{ch > 0 ? '+' : ''}{formatAmount(ch)}</small> : null}
-                          </b>
-                        </div>
+                        <ResourceDisc
+                          key={r.id}
+                          name={t?.name ?? 'Resource'}
+                          unit={t?.unit}
+                          value={r.amount}
+                          change={changes.get(r.id)}
+                          color={cab.color}
+                          onOpen={() => setView({ kind: 'one', id: r.id })}
+                        />
                       );
                     })}
                   </div>
@@ -329,36 +353,20 @@ export function ResourcesCard({ cabinets, types, resources, changes, loaded, bas
             })}
           </div>
         )}
-    </Card>
-  );
-}
 
-// ─────────── Latest news ───────────
-
-export function NewsCard({ news, cabinets, members, base, now }: { news: News[] | null; cabinets: Cabinet[]; members: Member[]; base: string; now: number }) {
-  const latest = useMemo(
-    () => (news ?? []).filter((n) => n.status === 'published' && n.published_at)
-      .sort((a, b) => new Date(b.published_at as string).getTime() - new Date(a.published_at as string).getTime()).slice(0, 4),
-    [news],
-  );
-  return (
-    <Card className="cmd-card">
-      <CardTitle icon={<RadioTower size={17} strokeWidth={1.5} />} right={<LinkBtn href={`${base}/news`}>Open news</LinkBtn>}>News</CardTitle>
-      {news === null ? <div className="flex flex-col" style={{ gap: 8 }}><Skeleton h={30} /><Skeleton h={30} /></div>
-        : latest.length === 0 ? <EmptyLine>Nothing has been published yet.</EmptyLine>
-        : latest.map((n, i) => {
-          const aud = n.audience_cabinet_id ? cabinets.find((c) => c.id === n.audience_cabinet_id)?.name ?? 'One room' : 'Every room';
-          const by = members.find((m) => m.id === n.published_by)?.display_name;
-          return (
-            <div key={n.id} className="flex" style={{ gap: 10, padding: '4px 0', borderTop: i === 0 ? 0 : `1px solid ${CK.hair}` }}>
-              <span title={new Date(n.published_at as string).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} style={{ flex: 'none', minWidth: 62, fontSize: 11.5, fontWeight: 800, color: CK.red }}>{ago(n.published_at, now)}</span>
-              <div style={{ minWidth: 0 }}>
-                <b style={{ display: 'block', fontSize: 13, color: CK.ink, overflowWrap: 'anywhere' }}>{n.title}</b>
-                <span style={{ display: 'block', fontSize: 11.5, color: CK.inkSoft, overflowWrap: 'anywhere' }}>{aud}{by ? ` · ${by}` : ''}</span>
-              </div>
-            </div>
-          );
-        })}
+      {view?.kind === 'all' && (
+        <CabinetResourcesDialog cabinets={cabinets} types={types} resources={resources} changes={changes} onClose={() => setView(null)} />
+      )}
+      {one && oneType && (
+        <ResourceHistoryDialog
+          resource={{ id: one.id, amount: one.amount }}
+          typeName={oneType.name}
+          unit={oneType.unit}
+          color={oneCab?.color}
+          eyebrow={oneCab?.name}
+          onClose={() => setView(null)}
+        />
+      )}
     </Card>
   );
 }

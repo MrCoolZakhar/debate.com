@@ -26,7 +26,7 @@ function BubbleView({ b, lead }: { b: Bubble; lead?: string }) {
         background: b.mine ? cabinetTint(CK.forest, 0.13) : CK.card, boxShadow: b.mine ? 'none' : CK.shadowSm,
       }}>
         <p style={{ margin: 0, fontSize: 11.5, fontWeight: 800, color: b.mine ? CK.forest : CK.red, overflowWrap: 'anywhere' }}>
-          {lead ? `${lead}, ` : ''}{b.who}{b.at ? <span title={whenTitle(b.at)}>{`, ${whenLabel(b.at)}`}</span> : ''}
+          {lead ? `${lead}, ` : ''}{b.who}{b.at ? <span title={whenTitle(b.at)}>{`, ${whenTitle(b.at) ?? ''} (${whenLabel(b.at)})`}</span> : ''}
         </p>
         <p style={{ margin: '2px 0 0', fontSize: 14.5, lineHeight: 1.55, color: CK.ink, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{b.body}</p>
       </div>
@@ -85,19 +85,24 @@ export default function DirectiveDialog({
   const verdictIcon = d.outcome ? outcomeIcon(d.outcome, 30) : statusIcon(d.status, 30);
 
   return (
-    <CrisisDialog title={`Directive ${dirNumber(d)}`} onClose={onClose} width={720} flush>
+    <CrisisDialog title="Your directive" onClose={onClose} width={720} flush>
       <div style={{ background: CK.redGrad, color: '#FFF4E6', padding: '14px 22px 16px' }}>
         <p className="flex items-center justify-between gap-3 flex-wrap" style={{ margin: 0, fontSize: 12.5, fontWeight: 700, color: 'rgba(255,232,214,0.85)' }}>
-          <span className="inline-flex items-center gap-1.5">{kindIcon(d.kind, 15)}Directive {dirNumber(d)}, {KIND_WORD[d.kind]}</span>
-          <span title={whenTitle(d.created_at)}>{whenLabel(d.created_at)}</span>
+          <span className="inline-flex items-center gap-1.5">{kindIcon(d.kind, 15)}{KIND_WORD[d.kind]}</span>
+          <span title={whenTitle(d.created_at)}>Sent {whenTitle(d.created_at)} ({whenLabel(d.created_at)})</span>
         </p>
-        <h3 style={{ margin: '5px 0 0', fontSize: 22, lineHeight: 1.2, fontWeight: 800, overflowWrap: 'anywhere' }}>{d.title}</h3>
+        <h3 style={{ margin: '6px 0 0', fontSize: 25, lineHeight: 1.2, fontWeight: 800, overflowWrap: 'anywhere' }}>{dirNumber(d)}: {d.title}</h3>
       </div>
 
       <div className="flex items-center" style={{ gap: 12, padding: '11px 22px', background: cabinetTint(tone, 0.1), boxShadow: `inset 0 -1px 0 ${cabinetTint(tone, 0.2)}` }}>
         <span style={{ color: tone, lineHeight: 0, flexShrink: 0 }}>{verdictIcon}</span>
         <div className="min-w-0">
           <b style={{ display: 'block', fontSize: 21, lineHeight: 1.15, fontWeight: 800, color: tone, overflowWrap: 'anywhere' }}>{verdict}</b>
+          {d.answered_at && (
+            <span className="block" style={{ marginTop: 2, fontSize: 13, fontWeight: 700, color: CK.inkSoft }}>
+              Reply came in {whenTitle(d.answered_at)} ({whenLabel(d.answered_at)})
+            </span>
+          )}
           {d.outcome && d.status !== 'answered' && (
             <span className="inline-flex items-center gap-1.5" style={{ marginTop: 2, fontSize: 13, fontWeight: 700, color: statusColor(d.status) }}>{statusIcon(d.status)}{STATUS_WORDS[d.status]}</span>
           )}
@@ -106,7 +111,7 @@ export default function DirectiveDialog({
 
       <div style={{ padding: '12px 22px 0' }}>
         <p className="flex flex-wrap items-center gap-x-4 gap-y-1" style={{ margin: 0, fontSize: 13.5, color: CK.inkSoft }}>
-          <span><b style={{ color: CK.ink }}>To:</b> {d.receiver}</span>
+          {d.receiver && <span><b style={{ color: CK.ink }}>To:</b> {d.receiver}</span>}
           <span><b style={{ color: CK.ink }}>From:</b> {author.name}</span>
           {withNames.length > 0 && <span><b style={{ color: CK.ink }}>Signed with:</b> {withNames.join(', ')}</span>}
         </p>

@@ -14,32 +14,36 @@ import { crisisError, listNotifications, markNotificationsRead } from '@/lib/cri
 import { useCrisisLive } from '@/lib/crisis/live';
 import { crisisBase, useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { CK } from '../../crisisKit';
+import NotificationDetail, { hasMapDetail } from './NotificationDetail';
 
 const POPUP_MS = 6000;
 const MAX_POPUPS = 3;
 
-function kindIcon(n: CrisisNotification): { icon: ReactNode; color: string } {
-  const p = { size: 18, strokeWidth: 1.5 };
+interface Look { icon: ReactNode; color: string; label: string }
+
+/** Each kind has its own colour, icon and small label, so the list reads at a glance. */
+function kindLook(n: CrisisNotification): Look {
+  const p = { size: 18, strokeWidth: 1.6 };
   const t = n.title.toLowerCase();
   switch (n.kind) {
-    case 'unit': return /ship|fleet|navy|naval|sail|flotilla/.test(t) ? { icon: <Ship {...p} />, color: CK.red } : { icon: <Swords {...p} />, color: CK.red };
-    case 'reveal': return { icon: <Eye {...p} />, color: CK.forest2 };
-    case 'territory': return { icon: <Flag {...p} />, color: CK.goldDeep };
+    case 'unit': return { icon: /ship|fleet|navy|naval|sail|flotilla/.test(t) ? <Ship {...p} /> : <Swords {...p} />, color: CK.red, label: 'Troop movement' };
+    case 'reveal': return { icon: <Eye {...p} />, color: '#5B4A8A', label: 'Revealed' };
+    case 'territory': return { icon: <Flag {...p} />, color: CK.goldDeep, label: 'Territory' };
     case 'directive_answer':
-      if (t.includes('approved')) return { icon: <CheckCircle2 {...p} />, color: CK.ok };
-      if (t.includes('partly')) return { icon: <CheckCircle2 {...p} />, color: CK.goldMid };
-      if (t.includes('denied')) return { icon: <XCircle {...p} />, color: CK.danger };
-      if (t.includes('more detail')) return { icon: <HelpCircle {...p} />, color: '#2F6690' };
-      return { icon: <ScrollText {...p} />, color: CK.inkSoft };
-    case 'directive_new': return { icon: <ScrollText {...p} />, color: CK.red };
-    case 'directive_note': return { icon: <MessageCircle {...p} />, color: '#2F6690' };
-    case 'news': return { icon: <Newspaper {...p} />, color: CK.red2 };
-    case 'meeting': return { icon: <CalendarClock {...p} />, color: CK.forest2 };
+      if (t.includes('approved')) return { icon: <CheckCircle2 {...p} />, color: CK.ok, label: 'Directive answer' };
+      if (t.includes('partly')) return { icon: <CheckCircle2 {...p} />, color: CK.goldMid, label: 'Directive answer' };
+      if (t.includes('denied')) return { icon: <XCircle {...p} />, color: CK.danger, label: 'Directive answer' };
+      if (t.includes('more detail')) return { icon: <HelpCircle {...p} />, color: '#2F6690', label: 'Directive answer' };
+      return { icon: <ScrollText {...p} />, color: CK.inkSoft, label: 'Directive answer' };
+    case 'directive_new': return { icon: <ScrollText {...p} />, color: '#A83030', label: 'New directive' };
+    case 'directive_note': return { icon: <MessageCircle {...p} />, color: '#2F6690', label: 'Directive note' };
+    case 'news': return { icon: <Newspaper {...p} />, color: '#3E6A9A', label: 'News' };
+    case 'meeting': return { icon: <CalendarClock {...p} />, color: '#2F6B5A', label: 'Meeting' };
     case 'status':
-      if (/dead|died|killed|assassinat/.test(t)) return { icon: <Skull {...p} />, color: CK.danger };
-      if (/arrest|captur|detain|imprison/.test(t)) return { icon: <UserX {...p} />, color: CK.warn };
-      return { icon: <User {...p} />, color: CK.inkSoft };
-    default: return { icon: <Bell {...p} />, color: CK.inkSoft };
+      if (/dead|died|killed|assassinat/.test(t)) return { icon: <Skull {...p} />, color: CK.redDeep, label: 'Character status' };
+      if (/arrest|captur|detain|imprison/.test(t)) return { icon: <UserX {...p} />, color: '#C26A1B', label: 'Character status' };
+      return { icon: <User {...p} />, color: '#7A5C3E', label: 'Character status' };
+    default: return { icon: <Bell {...p} />, color: CK.inkSoft, label: 'Notification' };
   }
 }
 
@@ -57,8 +61,13 @@ function ago(iso: string, now: number): string {
 const firstLine = (s: string | null) => (s ?? '').split('\n').find((l) => l.trim())?.trim() ?? '';
 
 function IconDisc({ n }: { n: CrisisNotification }) {
-  const { icon, color } = kindIcon(n);
-  return <span className="flex-shrink-0 grid place-items-center" style={{ width: 34, height: 34, borderRadius: '50%', background: `${color}1f`, color }}>{icon}</span>;
+  const { icon, color } = kindLook(n);
+  return <span className="flex-shrink-0 grid place-items-center" aria-hidden style={{ width: 36, height: 36, borderRadius: '50%', background: color, color: '#fff', boxShadow: '0 2px 6px rgba(27,56,40,0.22)' }}>{icon}</span>;
+}
+
+function KindLabel({ n }: { n: CrisisNotification }) {
+  const { color, label } = kindLook(n);
+  return <span style={{ display: 'block', fontSize: 11, fontWeight: 800, color, lineHeight: 1.3 }}>{label}</span>;
 }
 
 export default function NotificationBell() {
@@ -70,6 +79,7 @@ export default function NotificationBell() {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
   const [popups, setPopups] = useState<CrisisNotification[]>([]);
+  const [detail, setDetail] = useState<CrisisNotification | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const btnRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -102,7 +112,11 @@ export default function NotificationBell() {
     if (!open) return;
     const place = () => {
       const r = btnRef.current?.getBoundingClientRect();
-      if (r) setPos({ top: r.bottom + 8, right: Math.max(8, window.innerWidth - r.right) });
+      if (r) {
+        // Keep the whole panel on screen: on a phone the bell sits mid-bar, so clamp the right edge.
+        const panelW = Math.min(380, window.innerWidth - 16);
+        setPos({ top: r.bottom + 8, right: Math.min(Math.max(8, window.innerWidth - r.right), Math.max(8, window.innerWidth - panelW - 8)) });
+      }
     };
     place();
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
@@ -140,6 +154,8 @@ export default function NotificationBell() {
       markLocal([n.id]);
       void markNotificationsRead(v.ref, [n.id]).catch(() => void load());
     }
+    // A map change opens a picture of what changed first; "Open the map" is a button inside it.
+    if (hasMapDetail(n)) { setDetail(n); return; }
     const link = (n.link ?? '').trim().replace(/^\/+/, '');
     const to = link === '' ? base : link.startsWith('?') ? `${base}${link}` : `${base}/${link}`;
     router.push(to);
@@ -190,10 +206,11 @@ export default function NotificationBell() {
                     type="button"
                     onClick={() => void go(n)}
                     className="flex w-full text-left focus:outline-none focus-visible:bg-[rgba(142,36,36,0.1)]"
-                    style={{ gap: 12, padding: '12px 16px', border: 'none', borderBottom: `1px solid ${CK.hair}`, background: n.read_at ? 'transparent' : 'rgba(142,36,36,0.07)', cursor: 'pointer', font: 'inherit' }}
+                    style={{ gap: 12, padding: '12px 16px 12px 13px', border: 'none', borderLeft: `3px solid ${kindLook(n).color}`, borderBottom: `1px solid ${CK.hair}`, background: n.read_at ? 'transparent' : 'rgba(142,36,36,0.07)', cursor: 'pointer', font: 'inherit' }}
                   >
                     <IconDisc n={n} />
                     <span className="min-w-0 flex-1">
+                      <KindLabel n={n} />
                       <b style={{ display: 'block', fontSize: 14, fontWeight: n.read_at ? 600 : 800, color: CK.ink, overflowWrap: 'anywhere' }}>{n.title}</b>
                       {firstLine(n.body) && (
                         <span title={n.body ?? undefined} style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', fontSize: 13, color: CK.inkSoft, overflowWrap: 'anywhere' }}>{firstLine(n.body)}</span>
@@ -216,6 +233,7 @@ export default function NotificationBell() {
                 <button type="button" onClick={() => void go(n)} className="flex flex-1 min-w-0 text-left focus:outline-none" style={{ gap: 10, border: 'none', background: 'none', padding: 0, cursor: 'pointer', font: 'inherit' }}>
                   <IconDisc n={n} />
                   <span className="min-w-0 flex-1">
+                    <KindLabel n={n} />
                     <b style={{ display: 'block', fontSize: 14, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{n.title}</b>
                     {firstLine(n.body) && <span title={n.body ?? undefined} style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', fontSize: 13, color: CK.inkSoft, overflowWrap: 'anywhere' }}>{firstLine(n.body)}</span>}
                   </span>
@@ -229,6 +247,7 @@ export default function NotificationBell() {
           </div>
         </Portal>
       )}
+      {detail && <NotificationDetail n={detail} kindLabel={kindLook(detail).label} onClose={() => setDetail(null)} />}
     </>
   );
 }

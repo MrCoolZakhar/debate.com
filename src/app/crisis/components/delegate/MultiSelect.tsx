@@ -5,9 +5,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Check, ChevronDown, Search } from 'lucide-react';
 import Portal from '@/components/Portal';
-import { CK, fieldStyle } from '../../crisisKit';
+import { Avatar, CK, fieldStyle } from '../../crisisKit';
 
-export interface MultiOption { value: string; label: string; icon?: ReactNode; group?: string }
+export interface MultiOption {
+  value: string; label: string; icon?: ReactNode; group?: string;
+  /** A person: shown as a round picture (or initials) beside the name. `name` is the short name, `label` the full line. */
+  person?: { name: string; title?: string | null; picture_url?: string | null };
+}
 
 interface Pos { left: number; width: number; top?: number; bottom?: number; maxHeight: number }
 
@@ -92,6 +96,17 @@ export default function MultiSelect({ id, ariaLabel, options, value, onChange, p
         <span className="flex flex-wrap items-center gap-x-3 gap-y-1 min-w-0">
           {chosen.length === 0 ? (
             <span style={{ color: CK.muted }}>{placeholder}</span>
+          ) : chosen.some((o) => o.person) ? (
+            <>
+              <span className="inline-flex items-center flex-shrink-0" aria-hidden>
+                {chosen.map((o, i) => (
+                  <Avatar key={o.value} name={o.person?.name ?? o.label} src={o.person?.picture_url} size={28} style={{ marginLeft: i === 0 ? 0 : -9, boxShadow: '0 0 0 2px #fff' }} />
+                ))}
+              </span>
+              <span style={{ fontWeight: 700, color: CK.forest, overflowWrap: 'anywhere', fontSize: 13.5 }}>
+                {chosen.map((o) => o.person?.name ?? o.label).join(', ')}
+              </span>
+            </>
           ) : chosen.map((o) => (
             <span key={o.value} className="inline-flex items-center gap-1.5" style={{ fontWeight: 700, color: CK.forest, overflowWrap: 'anywhere' }}>
               {o.icon}{o.label}
@@ -146,7 +161,17 @@ export default function MultiSelect({ id, ariaLabel, options, value, onChange, p
                         {on && <Check size={13} strokeWidth={2.2} />}
                       </span>
                       {o.icon && <span style={{ color: CK.red, lineHeight: 0 }}>{o.icon}</span>}
-                      <span style={{ overflowWrap: 'anywhere' }}>{o.label}</span>
+                      {o.person ? (
+                        <>
+                          <Avatar name={o.person.name} src={o.person.picture_url} size={34} />
+                          <span className="min-w-0" style={{ overflowWrap: 'anywhere' }}>
+                            <span style={{ display: 'block', fontWeight: 700, lineHeight: 1.2 }}>{o.person.name}</span>
+                            {o.person.title && <span style={{ display: 'block', fontSize: 12.5, fontWeight: 500, color: CK.inkSoft, lineHeight: 1.25 }}>{o.person.title}</span>}
+                          </span>
+                        </>
+                      ) : (
+                        <span style={{ overflowWrap: 'anywhere' }}>{o.label}</span>
+                      )}
                     </button>
                   </div>
                 );

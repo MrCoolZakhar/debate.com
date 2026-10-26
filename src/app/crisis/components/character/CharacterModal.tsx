@@ -27,6 +27,7 @@ import { dirNumber, timeAgo } from '@/lib/crisis/format';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { ConfirmInline, responsibleMembers } from '../command/setupKit';
 import { KIND_ICON, OUTCOME_STYLE } from '../directives/directiveKit';
+import { NumberBadge } from '../directives/directiveParts';
 import CharacterMapPicker from './CharacterMapPicker';
 import { STATUS_ORDER, STATUS_WORD, StatusIcon, mayEditCharacters, statusColor } from './characterStatus';
 
@@ -60,7 +61,9 @@ function ModalBody({ char, onClose, initialTab }: { char: Character; onClose: ()
   const color = cab?.color ?? CK.muted;
   const gone = char.status === 'dead' || char.status === 'arrested';
 
-  const [tab, setTab] = useState<Tab>(initialTab ?? 'profile');
+  // A delegate sees only the profile of any character who is not their own: never their directives or performance.
+  const restricted = v.role === 'delegate' && v.characterId !== char.id;
+  const [tab, setTab] = useState<Tab>(restricted ? 'profile' : (initialTab ?? 'profile'));
   const [step, setStep] = useState<Step>({ kind: 'main' });
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState<'picture' | 'guide' | null>(null);
@@ -88,6 +91,7 @@ function ModalBody({ char, onClose, initialTab }: { char: Character; onClose: ()
   const seq = useRef(0);
 
   const readAll = useCallback(async () => {
+    if (restricted) return;
     const mine = ++seq.current;
     let client;
     try { client = await getCrisisClient(ref.conf, ref.crisis); } catch (e) { notifyErr(crisisError(e, 'Could not load the directives.'), `${KEY}-dirs`); return; }
@@ -104,13 +108,13 @@ function ModalBody({ char, onClose, initialTab }: { char: Character; onClose: ()
     if (cr.status === 'fulfilled' && cr.value && !cr.value.error) setCo(new Set(((cr.value.data ?? []) as Array<{ directive_id: string }>).map((r) => r.directive_id)));
     if (sr.status === 'fulfilled' && sr.value && !sr.value.error) setSecret((sr.value.data as CharacterSecret | null) ?? null);
     else if (v.staff) setSecret((p) => (p === undefined ? null : p));
-  }, [ref, char.id, v.staff]);
+  }, [ref, char.id, v.staff, restricted]);
 
   useEffect(() => {
     const t = window.setTimeout(() => { void readAll(); }, 0);
     return () => window.clearTimeout(t);
   }, [readAll]);
-  useCrisisLive(ref.id, ['crisis_directives', 'crisis_meetings', 'crisis_character_secrets'], () => { void readAll(); });
+  useCrisisLive(ref.id, restricted ? [] : ['crisis_directives', 'crisis_meetings', 'crisis_character_secrets'], () => { void readAll(); });
 
   // Escape goes back a step, then closes. A dropdown inside closes first.
   const stepRef = useRef(step);
@@ -337,7 +341,7 @@ function ModalBody({ char, onClose, initialTab }: { char: Character; onClose: ()
             </div>
 
             {/* Tabs, or the step bar with its back button */}
-            {step.kind === 'main' ? (
+            {step.kind === 'main' ? (restricted ? null : (
               <div role="tablist" aria-label="Character" className="flex" style={{ gap: 4, padding: '8px 16px 0', background: CK.card, borderBottom: `1px solid ${CK.hair}` }}>
                 {tabs.map((t) => {
                   const on = t.value === tab;
@@ -358,7 +362,7 @@ function ModalBody({ char, onClose, initialTab }: { char: Character; onClose: ()
                   );
                 })}
               </div>
-            ) : (
+            )) : (
               <div className="flex items-center gap-3" style={{ padding: '8px 16px', background: CK.card, borderBottom: `1px solid ${CK.hair}` }}>
                 <button type="button" onClick={() => setStep({ kind: 'main' })} aria-label="Back" className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]" style={iconBtn}>
                   <ArrowLeft size={18} strokeWidth={1.6} />
@@ -371,7 +375,7 @@ function ModalBody({ char, onClose, initialTab }: { char: Character; onClose: ()
             <div key={step.kind === 'main' ? tab : `${step.kind}`} style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px 20px 22px' }}>
               {step.kind === 'guide' && <GuideStep char={char} canEdit={canEdit} uploading={uploading === 'guide'} onReplace={() => guideInput.current?.click()} />}
               {step.kind === 'map' && <CharacterMapPicker current={d.location} onPick={(p) => { void pickPlace(p); }} />}
-              {step.kind === 'directive' && (openStep ? <DirectiveView d={openStep} /> : <p style={{ margin: 0, fontSize: 14, color: CK.inkSoft }}>That directive is no longer here.</p>)}
+              {step.kind === 'directive' && !restricted && (openStep ? <DirectiveView d={openStep} /> : <p style={{ margin: 0, fontSize: 14, color: CK.inkSoft }}>That directive is no longer here.</p>)}
 
               {step.kind === 'main' && tab === 'profile' && (
                 <div className="flex flex-col" style={{ gap: 14 }}>
@@ -489,7 +493,7 @@ function ModalBody({ char, onClose, initialTab }: { char: Character; onClose: ()
                 </div>
               )}
 
-              {step.kind === 'main' && tab === 'directives' && (
+              {step.kind === 'main' && !restricted && tab === 'directives' && (
                 mine === null ? (
                   <div className="flex flex-col" style={{ gap: 8 }}><Skeleton h={58} /><Skeleton h={58} /><Skeleton h={58} /></div>
                 ) : mine.length === 0 ? (
@@ -501,7 +505,7 @@ function ModalBody({ char, onClose, initialTab }: { char: Character; onClose: ()
                 )
               )}
 
-              {step.kind === 'main' && tab === 'performance' && (
+              {step.kind === 'main' && !restricted && tab === 'performance' && (
                 <Performance points={points} directives={mine} meetings={meetings} characterId={char.id} loading={dirs === null} />
               )}
             </div>
@@ -606,23 +610,22 @@ function DirectiveRow({ d, wrote, onOpen }: { d: Directive; wrote: boolean; onOp
   const o = d.outcome ? OUTCOME_STYLE[d.outcome] : null;
   const tone = o?.color ?? CK.muted;
   const K = KIND_ICON[d.kind];
-  const first = d.body.split('\n').find((l) => l.trim()) ?? '';
   return (
     <button
       type="button"
       onClick={onOpen}
-      className="flex items-start gap-3 w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] active:scale-[0.995] transition-transform"
-      style={{ border: 0, cursor: 'pointer', padding: '10px 14px', borderRadius: 14, background: cabinetTint(tone, 0.08), boxShadow: `inset 4px 0 0 ${tone}`, fontFamily: CK.font, color: CK.ink }}
+      className="relative flex items-start gap-3 w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] active:scale-[0.995] transition-transform"
+      style={{ border: 0, cursor: 'pointer', margin: '9px 0 0', padding: '16px 14px 10px', borderRadius: 14, background: cabinetTint(tone, 0.08), boxShadow: `inset 4px 0 0 ${tone}`, fontFamily: CK.font, color: CK.ink }}
     >
+      <NumberBadge n={dirNumber(d)} color={tone === CK.muted ? CK.red : tone} style={{ position: 'absolute', top: -9, left: 18 }} />
       <span style={{ flex: 1, minWidth: 0 }}>
-        <span className="flex items-center flex-wrap" style={{ gap: '2px 10px' }}>
-          <b style={{ fontSize: 14.5, overflowWrap: 'anywhere' }}>{d.title}</b>
-          <span className="inline-flex items-center" style={{ gap: 4, fontSize: 12, color: CK.inkSoft }}><K size={13} strokeWidth={1.5} aria-hidden />No. {dirNumber(d)}{wrote ? '' : ' (co-written)'}</span>
-        </span>
-        <span title={first} style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', fontSize: 13, color: CK.inkSoft, marginTop: 2, overflowWrap: 'anywhere' }}>{first}</span>
-        <span className="flex items-center flex-wrap" style={{ gap: '2px 12px', marginTop: 5 }}>
+        <b style={{ display: 'block', fontSize: 17, lineHeight: 1.28, fontWeight: 800, overflowWrap: 'anywhere' }}>{d.title}</b>
+        <span className="flex items-center justify-end flex-wrap" style={{ gap: '2px 12px', marginTop: 6 }}>
+          {!wrote && <span style={{ fontSize: 12, color: CK.inkSoft }}>Co-written</span>}
           <OutcomeMark d={d} />
+          <K size={13} strokeWidth={1.5} aria-label={d.kind} style={{ color: CK.red }} />
           <span title={dateTitle(d.created_at)} style={{ fontSize: 12, color: CK.muted }}>{dateLabel(d.created_at)}</span>
+          {d.answered_at && <span title={dateTitle(d.answered_at)} style={{ fontSize: 12, color: CK.muted }}>Reply {dateLabel(d.answered_at)}</span>}
         </span>
       </span>
       <ChevronRight size={18} strokeWidth={1.5} aria-hidden style={{ color: CK.muted, flex: 'none', marginTop: 2 }} />
@@ -645,11 +648,11 @@ function DirectiveView({ d }: { d: Directive }) {
   return (
     <article>
       <div className="flex items-center flex-wrap" style={{ gap: '4px 12px', fontSize: 12.5, color: CK.inkSoft }}>
-        <span className="inline-flex items-center" style={{ gap: 5, fontWeight: 700 }}><K size={14} strokeWidth={1.5} aria-hidden />{KIND_LABEL[d.kind]} No. {dirNumber(d)}</span>
+        <span className="inline-flex items-center" style={{ gap: 5, fontWeight: 700 }}><K size={14} strokeWidth={1.5} aria-hidden />{KIND_LABEL[d.kind]}</span>
         <span title={dateTitle(d.created_at)}>Sent {dateLabel(d.created_at)}</span>
         {d.covert && <span style={{ fontWeight: 700, color: CK.red }}>Covert</span>}
       </div>
-      <h3 style={{ margin: '6px 0 8px', fontSize: 20, lineHeight: 1.25, fontWeight: 800, overflowWrap: 'anywhere' }}>{d.title}</h3>
+      <h3 style={{ margin: '6px 0 8px', fontSize: 22, lineHeight: 1.25, fontWeight: 800, overflowWrap: 'anywhere' }}>{dirNumber(d)}: {d.title}</h3>
       {d.themes.length > 0 && <div className="flex flex-wrap" style={{ gap: 6, marginBottom: 10 }}>{d.themes.map((t) => <ThemeTag key={t} theme={t} size="md" />)}</div>}
       {d.receiver && <p style={{ margin: '0 0 10px', fontSize: 13.5, color: CK.inkSoft, overflowWrap: 'anywhere' }}>To: <b style={{ color: CK.ink }}>{d.receiver}</b></p>}
       <p style={{ margin: 0, fontSize: 15, lineHeight: 1.65, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{d.body}</p>

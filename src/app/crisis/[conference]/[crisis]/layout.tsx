@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard, ScrollText, Map as MapIcon, Newspaper, ContactRound, UsersRound, Settings, Presentation,
-  Home, LogOut, KeyRound, CalendarClock, Boxes, GitBranch,
+  Home, LogOut, KeyRound, CalendarClock, Boxes, History as HistoryIcon,
 } from 'lucide-react';
 import BrandLogo from '@/components/BrandLogo';
 import ProfileAvatarMenu from '@/components/ProfileAvatar';
@@ -29,16 +29,16 @@ function navFor(role: CrisisRole, base: string): NavItem[] {
   const map: NavItem = { href: `${base}/map`, label: 'War map', icon: ic(MapIcon) };
   const news = (section?: string): NavItem => ({ href: `${base}/news`, label: 'News', icon: ic(Newspaper), section });
   const meetings = (section?: string): NavItem => ({ href: `${base}/meetings`, label: 'Meetings', icon: ic(CalendarClock), section });
-  const characters = (section?: string): NavItem => ({ href: `${base}/characters`, label: 'Characters', icon: ic(ContactRound), section });
+  const characters = (section?: string, label = 'Characters'): NavItem => ({ href: `${base}/characters`, label, icon: ic(ContactRound), section });
   const resources = (section?: string): NavItem => ({ href: `${base}/resources`, label: 'Resources', icon: ic(Boxes), section });
-  const timeline = (section?: string): NavItem => ({ href: `${base}/timeline`, label: 'Arcs and timeline', icon: ic(GitBranch), section });
+  const history = (section?: string): NavItem => ({ href: `${base}/history`, label: 'History', icon: ic(HistoryIcon), section });
   if (role === 'director' || role === 'assistant_director' || role === 'organiser') {
     return [
       { href: base, label: 'Command', icon: ic(LayoutDashboard) },
-      map,
+      map, history(),
       { href: `${base}/directives`, label: 'Directives', icon: ic(ScrollText), section: 'RUN' },
       news('RUN'), meetings('RUN'),
-      characters('WORLD'), resources('WORLD'), timeline('WORLD'),
+      characters('WORLD'), resources('WORLD'),
       { href: `${base}/staff`, label: 'Staff and access', icon: ic(UsersRound), section: 'SET UP' },
       { href: `${base}/settings`, label: 'Settings', icon: ic(Settings), section: 'SET UP' },
     ];
@@ -46,18 +46,19 @@ function navFor(role: CrisisRole, base: string): NavItem[] {
   if (role === 'backroomer') {
     return [
       { href: base, label: 'Directives', icon: ic(ScrollText) },
-      map,
+      map, history(),
       news('RUN'), meetings('RUN'),
-      characters('WORLD'), resources('WORLD'), timeline('WORLD'),
+      characters('WORLD'), resources('WORLD'),
     ];
   }
   if (role === 'chair') {
-    return [{ href: base, label: 'Front room', icon: ic(Presentation) }, map, news(), meetings(), characters()];
+    return [{ href: base, label: 'Front room', icon: ic(Presentation) }, map, history(), news(), meetings(), characters()];
   }
   if (role === 'press') {
-    return [{ href: base, label: 'News', icon: ic(Newspaper) }, map, characters()];
+    return [{ href: base, label: 'News', icon: ic(Newspaper) }, map, history(), characters()];
   }
-  return [{ href: base, label: 'My crisis', icon: ic(Home) }, map, news(), meetings(), characters()];
+  // Delegates: "Cabinet" (Peter, 26 Oct 2026); History last so the phone bar keeps the five main pages first.
+  return [{ href: base, label: 'My crisis', icon: ic(Home) }, map, news(), meetings(), characters(undefined, 'Cabinet'), history()];
 }
 
 function Rail({ v, items }: { v: CrisisContextValue; items: NavItem[] }) {
@@ -170,7 +171,7 @@ function TopBar({ v, items }: { v: CrisisContextValue; items: NavItem[] }) {
     </header>
     {/* Phone navigation: the rail is hidden under 768px. */}
       <nav aria-label="Crisis pages" className="md:hidden fixed left-0 right-0 bottom-0 flex justify-around" style={{ background: CK.redGrad, padding: '6px 8px calc(6px + env(safe-area-inset-bottom, 0px))', zIndex: 40 }}>
-        {items.slice(0, 5).map((it) => {
+        {(items.length <= 6 ? items : items.slice(0, 5)).map((it) => {
           const active = it.href === pathname;
           return (
             <Link key={it.href} href={it.href} className="flex flex-col items-center focus:outline-none" style={{ gap: 2, fontSize: 10.5, fontWeight: 700, textDecoration: 'none', color: active ? CK.gold : 'rgba(255,232,214,0.78)', padding: '4px 6px' }}>

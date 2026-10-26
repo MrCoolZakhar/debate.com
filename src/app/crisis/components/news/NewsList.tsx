@@ -1,7 +1,7 @@
 'use client';
 // Gavelling Crisis: published news, newest first. Used by the news page and the chair home.
 
-import { useState } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { Clock, Landmark, Newspaper, Radio, Users } from 'lucide-react';
 import { timeAgo } from '@/lib/crisis/format';
 import type { Cabinet, News } from '@/lib/crisis/types';
@@ -27,6 +27,23 @@ export function newsTimeTitle(iso: string | null | undefined): string | undefine
 export function audienceLabel(n: Pick<News, 'audience_cabinet_id'>, cabinets: Cabinet[]): string {
   if (!n.audience_cabinet_id) return 'Every room';
   return cabinets.find((c) => c.id === n.audience_cabinet_id)?.name ?? 'One room';
+}
+
+/** A story's picture, or null when it has none: then the story is all text and reserves no picture space. */
+export function newsPicture(n: Pick<News, 'banner_url'>): string | null {
+  const u = n.banner_url?.trim();
+  return u ? u : null;
+}
+
+/** The banner of a story. Draws nothing at all when there is no picture or it fails to load. */
+export function NewsPicture({ n, style }: { n: Pick<News, 'banner_url'>; style?: CSSProperties }) {
+  const [broken, setBroken] = useState<string | null>(null);
+  const src = newsPicture(n);
+  if (!src || broken === src) return null;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={src} alt="" onError={() => setBroken(src)} style={{ display: 'block', width: '100%', aspectRatio: '16 / 6', objectFit: 'cover', background: CK.well, ...style }} />
+  );
 }
 
 /** The number of a story in the viewer's own cabinet, or null when it has none (a draft, or older news). */
@@ -78,8 +95,9 @@ export function NewsNumber({ n, preview, light }: { n: Pick<News, 'numbers'>; pr
   );
 }
 
-/** The source, time and audience of a story, each with its icon. */
+/** The source and time of a story, each with its icon. Only staff are told which rooms it went to. */
 export function NewsMeta({ n, cabinets, size = 14 }: { n: News; cabinets: Cabinet[]; size?: number }) {
+  const v = useCrisis();
   const AudIcon = n.audience_cabinet_id ? Landmark : Users;
   return (
     <div className="flex items-center flex-wrap" style={{ gap: '3px 12px', fontSize: 12, fontWeight: 700, color: CK.red }}>
@@ -90,18 +108,17 @@ export function NewsMeta({ n, cabinets, size = 14 }: { n: News; cabinets: Cabine
       <span className="inline-flex items-center gap-1.5" title={newsTimeTitle(n.published_at ?? n.created_at)} style={{ color: CK.muted, fontWeight: 600 }}>
         <Clock size={size - 1} strokeWidth={1.5} aria-hidden />{newsTime(n.published_at ?? n.created_at)}
       </span>
-      <span className="inline-flex items-center gap-1.5" style={{ color: CK.muted, fontWeight: 600, overflowWrap: 'anywhere' }}>
-        <AudIcon size={size - 1} strokeWidth={1.5} aria-hidden />{audienceLabel(n, cabinets)}
-      </span>
+      {v.staff && (
+        <span className="inline-flex items-center gap-1.5" style={{ color: CK.muted, fontWeight: 600, overflowWrap: 'anywhere' }}>
+          <AudIcon size={size - 1} strokeWidth={1.5} aria-hidden />{audienceLabel(n, cabinets)}
+        </span>
+      )}
     </div>
   );
 }
 
 export function NewsCard({ n, cabinets, onOpen }: { n: News; cabinets: Cabinet[]; onOpen?: (n: News) => void }) {
-  const banner = n.banner_url ? (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img src={n.banner_url} alt="" style={{ display: 'block', width: '100%', aspectRatio: '16 / 6', objectFit: 'cover', borderRadius: '22px 22px 0 0', background: CK.well }} />
-  ) : null;
+  const banner = <NewsPicture n={n} style={{ borderRadius: '22px 22px 0 0' }} />;
   const body = (
     <>
       <div className="flex items-center flex-wrap" style={{ gap: '4px 14px' }}>

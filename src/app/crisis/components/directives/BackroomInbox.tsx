@@ -1,6 +1,7 @@
 'use client';
-// Gavelling Crisis: the backroom inbox. A queue on the left, the open directive on the right
-// (one pane with a back button on phones). Used at /directives and as the backroomer's home.
+// Gavelling Crisis: the backroom inbox. The queue is the page, full width; opening a directive (a
+// click, or a notification's ?d=<id>) shows it as a pop-up with the "What happens when you send"
+// panel docked beside it (DirectivePopup). Used at /directives and as the backroomer's home.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CircleCheck, Hourglass, Inbox, Landmark, ListChecks, Palette, Search, Tag, UserRound, UsersRound, type LucideIcon } from 'lucide-react';
@@ -12,12 +13,15 @@ import { KIND_LABEL, THEMES, type Directive, type DirectiveKind } from '@/lib/cr
 import { Btn, Card, CK, Segmented, Skeleton, fieldStyle, waitLabel, waitSeverity } from '../../crisisKit';
 import QueueRow from './QueueRow';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
-import DirectiveDetail from './DirectiveDetail';
+import DirectivePopup from './DirectivePopup';
 import DirectiveDeepLink from '../notifications/DirectiveDeepLink';
 import {
   NO_FILTERS, buildNames, inLane, lastAnsweredByAuthor, matchesFilters, sortDirectives,
   type Filters, type Lane, type QueueOrder,
 } from './directiveKit';
+
+/** The queue fills the page: as many rows across as fit. */
+const LIST_COLUMNS = 'repeat(auto-fill, minmax(min(100%, 400px), 1fr))';
 
 const LANE_ICON: Record<Lane, LucideIcon> = { mine: UserRound, unclaimed: Inbox, open: ListChecks, waiting: Hourglass, answered: CircleCheck };
 
@@ -63,8 +67,7 @@ export default function BackroomInbox() {
   const [lane, setLane] = useState<Lane>(director ? 'open' : 'mine');
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
   const [order, setOrder] = useState<QueueOrder>(settings.queueOrder);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const [openId, setOpenId] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [notesVersion, setNotesVersion] = useState(0);
   const loadedOnce = useRef(false);
@@ -113,12 +116,7 @@ export default function BackroomInbox() {
     [all, lane, memberId, filters, names, order, lastAnswered],
   );
 
-  // Open the first directive on a wide screen so the right pane is never empty.
-  if (!selectedId && queue.length && typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches) {
-    setSelectedId(queue[0].id);
-  }
-
-  const selected = useMemo(() => all.find((d) => d.id === selectedId) ?? null, [all, selectedId]);
+  const selected = useMemo(() => all.find((d) => d.id === openId) ?? null, [all, openId]);
 
   // A notification link (?d=<id>): select that directive and switch to a lane that holds it.
   const [linkedId, setLinkedId] = useState<string | null>(null);
@@ -131,21 +129,13 @@ export default function BackroomInbox() {
     /* eslint-disable react-hooks/set-state-in-effect */
     if (target && target !== lane) setLane(target);
     setFilters(NO_FILTERS);
-    setSelectedId(d.id);
-    setMobileOpen(true);
+    setOpenId(d.id);
     setLinkedId(null);
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [linkedId, all, lane, memberId]);
 
-  const pick = (id: string) => { setSelectedId(id); setMobileOpen(true); };
-
   const afterChange = (what: 'claimed' | 'assigned' | 'answered') => {
-    if (what === 'answered' && selected) {
-      const i = queue.findIndex((d) => d.id === selected.id);
-      const next = queue[i + 1] ?? queue[i - 1];
-      if (next && (lane === 'mine' || lane === 'unclaimed' || lane === 'open')) setSelectedId(next.id);
-      setMobileOpen(false);
-    }
+    if (what === 'answered') setOpenId(null);
     void load();
   };
 
@@ -176,8 +166,6 @@ export default function BackroomInbox() {
     waiting: 'Nobody is waiting on a delegate', answered: 'Nothing answered yet',
   };
 
-  const paneH = 'lg:h-[calc(100dvh-210px)] lg:min-h-[420px]';
-
   return (
     <div className="flex flex-col" style={{ gap: 10, marginTop: 6, width: '100%' }}>
       <DirectiveDeepLink onId={setLinkedId} />
@@ -203,46 +191,40 @@ export default function BackroomInbox() {
           options={[{ value: 'fair', label: 'Fair' }, { value: 'oldest', label: 'Oldest' }, { value: 'newest', label: 'Newest' }]} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[430px_minmax(0,1fr)]" style={{ gap: 12, alignItems: 'start' }}>
-        <Card className={`${mobileOpen ? 'hidden lg:block' : 'block'} ${paneH} lg:overflow-y-auto`} style={{ padding: 8 }}>
-          {directives === null && !loadError && (
-            <div className="flex flex-col" style={{ gap: 8, padding: 4 }} aria-busy="true">
-              {[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} h={120} r={16} />)}
-            </div>
-          )}
-          {loadError && (
-            <div style={{ padding: 12 }}>
-              <p style={{ margin: '0 0 8px', fontSize: 14, color: CK.inkSoft }}>{loadError}</p>
-              <Btn onClick={() => { setLoadError(null); void load(); }}>Try again</Btn>
-            </div>
-          )}
-          {directives !== null && queue.length === 0 && (
-            <p style={{ margin: 0, padding: 16, fontSize: 14, color: CK.muted }}>{emptyText[lane]}</p>
-          )}
-          <ul style={{ listStyle: 'none', margin: 0, padding: '0 0 6px' }} className="flex flex-col">
-            {queue.map((d) => {
-              const waiting = lane !== 'answered' && lane !== 'waiting';
-              const sev = waiting ? waitSeverity(d.waiting_since, now) : null;
-              const when = lane === 'answered' ? `Answered ${waitLabel(d.answered_at, now)} ago`
-                : lane === 'waiting' ? `Asked ${waitLabel(d.answered_at, now)} ago` : waitLabel(d.waiting_since, now);
-              return (
-                <li key={d.id} style={{ margin: '0 4px', minWidth: 0 }}>
-                  <QueueRow d={d} names={names} whenLabel={when} sev={sev} selected={d.id === selectedId}
-                    delegateNote={d.status === 'queued' && d.outcome === 'clarify'} onOpen={() => pick(d.id)} />
-                </li>
-              );
-            })}
-          </ul>
-        </Card>
+      <Card style={{ padding: 8 }}>
+        {directives === null && !loadError && (
+          <div className="grid" style={{ gap: 8, padding: 4, gridTemplateColumns: LIST_COLUMNS }} aria-busy="true">
+            {[0, 1, 2, 3, 4, 5].map((i) => <Skeleton key={i} h={120} r={16} />)}
+          </div>
+        )}
+        {loadError && (
+          <div style={{ padding: 12 }}>
+            <p style={{ margin: '0 0 8px', fontSize: 14, color: CK.inkSoft }}>{loadError}</p>
+            <Btn onClick={() => { setLoadError(null); void load(); }}>Try again</Btn>
+          </div>
+        )}
+        {directives !== null && queue.length === 0 && (
+          <p style={{ margin: 0, padding: 16, fontSize: 14, color: CK.muted }}>{emptyText[lane]}</p>
+        )}
+        <ul style={{ listStyle: 'none', margin: 0, padding: '0 0 6px', display: 'grid', gap: 2, gridTemplateColumns: LIST_COLUMNS }}>
+          {queue.map((d) => {
+            const waiting = lane !== 'answered' && lane !== 'waiting';
+            const sev = waiting ? waitSeverity(d.waiting_since, now) : null;
+            const when = lane === 'answered' ? `Answered ${waitLabel(d.answered_at, now)} ago`
+              : lane === 'waiting' ? `Asked ${waitLabel(d.answered_at, now)} ago` : waitLabel(d.waiting_since, now);
+            return (
+              <li key={d.id} style={{ margin: '0 4px', minWidth: 0 }}>
+                <QueueRow d={d} names={names} whenLabel={when} sev={sev} selected={d.id === openId}
+                  delegateNote={d.status === 'queued' && d.outcome === 'clarify'} onOpen={() => setOpenId(d.id)} />
+              </li>
+            );
+          })}
+        </ul>
+      </Card>
 
-        <Card warm className={`${mobileOpen ? 'block' : 'hidden lg:block'} ${paneH} lg:overflow-y-auto`} style={{ padding: '16px 18px' }}>
-          {selected ? (
-            <DirectiveDetail key={selected.id} directive={selected} notesVersion={notesVersion} onChanged={afterChange} onClose={() => setMobileOpen(false)} />
-          ) : (
-            <p style={{ margin: 0, fontSize: 14, color: CK.muted }}>{directives === null ? 'Loading' : 'Pick a directive from the queue'}</p>
-          )}
-        </Card>
-      </div>
+      {selected && (
+        <DirectivePopup key={selected.id} directive={selected} notesVersion={notesVersion} onChanged={afterChange} onClose={() => setOpenId(null)} />
+      )}
     </div>
   );
 }

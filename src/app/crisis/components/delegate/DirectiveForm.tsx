@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Check, PauseCircle, Send, Timer } from 'lucide-react';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
-import { crisisError, submitDirective, type CrisisRef } from '@/lib/crisis/api';
+import { crisisError, submitDirective, type CrisisRef, type DirectiveDraft } from '@/lib/crisis/api';
 import { dirNumber } from '@/lib/crisis/format';
 import { THEMES, type Character, type DirectiveKind } from '@/lib/crisis/types';
 import { Btn, Card, CK, FieldLabel, fieldStyle, Segmented } from '../../crisisKit';
@@ -21,11 +21,10 @@ interface Draft {
   kind: FormKind;
   coauthors: string[];
   title: string;
-  receiver: string;
   body: string;
   themes: string[];
 }
-const EMPTY: Draft = { kind: 'personal', coauthors: [], title: '', receiver: '', body: '', themes: [] };
+const EMPTY: Draft = { kind: 'personal', coauthors: [], title: '', body: '', themes: [] };
 
 export function countWords(text: string): number {
   const t = text.trim();
@@ -47,7 +46,6 @@ function readDraft(key: string): Draft {
       kind: p.kind === 'joint' || p.kind === 'committee' ? p.kind : 'personal',
       coauthors: strings(p.coauthors),
       title: typeof p.title === 'string' ? p.title : '',
-      receiver: typeof p.receiver === 'string' ? p.receiver : '',
       body: typeof p.body === 'string' ? p.body : '',
       themes: strings(p.themes).filter((t) => (THEMES as readonly string[]).includes(t)),
     };
@@ -118,13 +116,13 @@ export default function DirectiveForm({
   }, [until]);
 
   const set = useCallback(<K extends keyof Draft>(k: K, val: Draft[K]) => { setProblem(null); setConfirmDiscard(false); setD((p) => ({ ...p, [k]: val })); }, []);
-  const hasDraft = d.title.trim() !== '' || d.receiver.trim() !== '' || d.body.trim() !== '' || d.themes.length > 0 || d.coauthors.length > 0;
+  const hasDraft = d.title.trim() !== '' || d.body.trim() !== '' || d.themes.length > 0 || d.coauthors.length > 0;
   const words = countWords(d.body);
   const over = wordLimit > 0 && words > wordLimit;
   const waitLeft = until === null ? 0 : Math.max(0, Math.ceil((until - now) / 1000));
   const needsCo = d.kind === 'joint' && d.coauthors.length === 0;
   const cabinetName = ownCabinetId ? cabinetNames[ownCabinetId] ?? 'your cabinet' : null;
-  const complete = d.title.trim() !== '' && d.receiver.trim() !== '' && d.body.trim() !== '';
+  const complete = d.title.trim() !== '' && d.body.trim() !== '';
   const canSend = open && complete && !over && !needsCo && waitLeft === 0 && !sending;
 
   // Co-authors can be any character in the crisis, from any cabinet.
@@ -133,9 +131,9 @@ export default function DirectiveForm({
     const groupName = (c: WorldCharacter) => (c.cabinet_id ? cabinetNames[c.cabinet_id] ?? 'Another cabinet' : 'Others');
     return world
       .filter((c) => c.id !== characterId && c.status !== 'dead')
-      .map((c) => ({ value: c.id, label: c.title ? `${c.name}, ${c.title}` : c.name, group: groupName(c), mine: c.cabinet_id === own, name: c.name }))
+      .map((c) => ({ value: c.id, label: c.title ? `${c.name}, ${c.title}` : c.name, group: groupName(c), mine: c.cabinet_id === own, name: c.name, person: { name: c.name, title: c.title, picture_url: c.picture_url ?? null } }))
       .sort((a, b) => (a.mine === b.mine ? a.group.localeCompare(b.group) || a.name.localeCompare(b.name) : a.mine ? -1 : 1))
-      .map(({ value, label, group }) => ({ value, label, group }));
+      .map(({ value, label, group, person }) => ({ value, label, group, person }));
   }, [world, characterId, ownCabinetId, cabinetNames]);
 
   const themeOptions = useMemo<MultiOption[]>(() => THEMES.map((t) => ({ value: t, label: t, icon: themeIcon(t) })), []);
@@ -148,10 +146,10 @@ export default function DirectiveForm({
     try {
       const kind: DirectiveKind = d.kind;
       const r = await submitDirective(cref, {
-        kind, title: d.title.trim(), receiver: d.receiver.trim(), body: d.body.trim(), themes: d.themes,
+        kind, title: d.title.trim(), body: d.body.trim(), themes: d.themes,
         covert: true, // a personal directive is always secret
         coauthors: kind === 'joint' ? d.coauthors : [],
-      });
+      } as DirectiveDraft); // no "To": the receiver is left out and the database stores none
       if (r.ok) {
         notifyOk(`Directive ${dirNumber({ no: r.no, cabinet_no: (r as { cabinet_no?: number | null }).cabinet_no ?? null })} sent`);
         setD(EMPTY);
@@ -205,7 +203,7 @@ export default function DirectiveForm({
       )}
 
       <div className="grid gap-3">
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div>
           <div>
             <FieldLabel>Kind</FieldLabel>
             <Segmented<FormKind>
@@ -223,17 +221,6 @@ export default function DirectiveForm({
                 From the whole cabinet{cabinetName ? `, ${cabinetName}` : ''}.
               </p>
             )}
-          </div>
-          <div>
-            <FieldLabel htmlFor="dir-themes" hint="Optional">Themes</FieldLabel>
-            <MultiSelect
-              id="dir-themes"
-              ariaLabel="Themes"
-              options={themeOptions}
-              value={d.themes}
-              onChange={(v) => set('themes', v)}
-              placeholder="Pick any that fit"
-            />
           </div>
         </div>
 
@@ -253,15 +240,9 @@ export default function DirectiveForm({
           </div>
         )}
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <FieldLabel htmlFor="dir-title">Title</FieldLabel>
-            <input id="dir-title" value={d.title} onChange={(e) => set('title', e.target.value)} maxLength={160} style={fieldStyle} placeholder="A short name for it" />
-          </div>
-          <div>
-            <FieldLabel htmlFor="dir-to">To</FieldLabel>
-            <input id="dir-to" value={d.receiver} onChange={(e) => set('receiver', e.target.value)} maxLength={160} style={fieldStyle} placeholder="Who must do it? For example the Navy" />
-          </div>
+        <div>
+          <FieldLabel htmlFor="dir-title">Title</FieldLabel>
+          <input id="dir-title" value={d.title} onChange={(e) => set('title', e.target.value)} maxLength={160} style={fieldStyle} placeholder="A short name for it" />
         </div>
 
         <div>
@@ -271,7 +252,19 @@ export default function DirectiveForm({
               {words}{wordLimit > 0 ? ` / ${wordLimit}` : ''} words
             </span>
           </div>
-          <textarea id="dir-body" value={d.body} onChange={(e) => set('body', e.target.value)} rows={10} style={{ ...fieldStyle, resize: 'vertical', boxShadow: over ? 'inset 0 0 0 2px rgba(163,65,47,0.6)' : fieldStyle.boxShadow }} placeholder="Say what you do, how, and when." />
+          <textarea id="dir-body" value={d.body} onChange={(e) => set('body', e.target.value)} rows={8} style={{ ...fieldStyle, resize: 'vertical', boxShadow: over ? 'inset 0 0 0 2px rgba(163,65,47,0.6)' : fieldStyle.boxShadow }} placeholder="Say what you do, how, and when." />
+        </div>
+
+        <div>
+          <FieldLabel htmlFor="dir-themes" hint="Optional">Themes</FieldLabel>
+          <MultiSelect
+            id="dir-themes"
+            ariaLabel="Themes"
+            options={themeOptions}
+            value={d.themes}
+            onChange={(v) => set('themes', v)}
+            placeholder="Pick any that fit"
+          />
         </div>
 
         {problem && <p role="alert" style={{ margin: 0, fontSize: 13.5, fontWeight: 600, color: CK.danger }}>{problem}</p>}

@@ -2,13 +2,14 @@
 // Gavelling Crisis: "Front Rooms" (each cabinet's live room, re-read every 15 s) and "Backroom" (who has what).
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Eye, Gavel, Hash, KeyRound, Lightbulb, Presentation, Radio, Siren, Timer, UsersRound } from 'lucide-react';
+import { Eye, Gavel, Hash, KeyRound, Lightbulb, Presentation, Radio, UsersRound } from 'lucide-react';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { assignDirective, crisisError, type CrisisRef } from '@/lib/crisis/api';
 import { ROLE_LABEL, type Cabinet, type Directive, type Member } from '@/lib/crisis/types';
 import { Btn, Card, CardTitle, CK, OverhangCard, Skeleton, cabinetTint } from '../../crisisKit';
 import { loadRoomStates, minutesLabel, staffLoads, suggestRebalance, type RoomState } from './commandData';
 import { EmptyLine, LinkBtn } from './commandParts';
+import RoomLivePanel from './commandRoomLive';
 
 // ─────────── Front rooms ───────────
 
@@ -44,24 +45,33 @@ function useRoomStates(cref: CrisisRef, cabinets: Cabinet[]): { rooms: RoomState
   return { rooms, failed };
 }
 
-const TONE_DOT = { live: '#3D7A52', quiet: CK.warn, ended: '#9A9086' } as const;
+const ROOM_SIZE = 44; // the round emblem; a third of it hangs over the card's top edge, like the organiser Live Status cards
+const ROOM_INSET = Math.round(ROOM_SIZE / 3);
 
-export function FrontRoomsCard({ cref, cabinets, base }: { cref: CrisisRef; cabinets: Cabinet[]; base: string }) {
+export function FrontRoomsCard({ cref, cabinets }: { cref: CrisisRef; cabinets: Cabinet[] }) {
   const { rooms, failed } = useRoomStates(cref, cabinets);
   const byCab = useMemo(() => new Map((rooms ?? []).map((r) => [r.cabinetId, r])), [rooms]);
 
   return (
-    <Card warm className="cmd-card">
-      <CardTitle icon={<Presentation size={17} strokeWidth={1.5} />} right={<LinkBtn href={`${base}/news`} tone="red" icon={<Siren size={13} strokeWidth={1.5} />}>Send a crisis break</LinkBtn>}>Front Rooms</CardTitle>
+    <Card warm className="cmd-card cmd-rooms" style={{ display: 'flex', flexDirection: 'column' }}>
+      <CardTitle icon={<Presentation size={17} strokeWidth={1.5} />}>Front Rooms</CardTitle>
       {cabinets.length === 0 ? <EmptyLine>No cabinets yet.</EmptyLine> : (
-        <div className="flex flex-col" style={{ gap: 0 }}>
+        <div className="flex flex-col" style={{ gap: 0, flex: 1, minHeight: 0 }}>
           {cabinets.map((cab) => {
             const r = byCab.get(cab.id);
             return (
-              <OverhangCard key={cab.id} name={cab.short_name || cab.name} src={cab.logo_url} color={cab.color} size={36} style={{ boxShadow: CK.shadowSm, padding: '7px 12px 8px 60px', marginTop: 16 }}>
-                <div className="flex flex-wrap items-center justify-between" style={{ gap: '4px 8px' }}>
+              <OverhangCard
+                key={cab.id}
+                name={cab.short_name || cab.name}
+                src={cab.logo_url}
+                color={cab.color}
+                size={ROOM_SIZE}
+                style={{ boxShadow: CK.shadowSm, padding: '8px 14px 12px', marginTop: 20, flex: '1 1 auto', display: 'flex', flexDirection: 'column', gap: 8, minHeight: 0 }}
+              >
+                {/* The header sits beside the emblem; the dashboard below it uses the whole card width. */}
+                <div className="flex flex-wrap items-center justify-between" style={{ gap: '4px 8px', paddingLeft: ROOM_INSET + ROOM_SIZE + 12 - 14, minHeight: ROOM_SIZE - ROOM_INSET + 2 }}>
                   {/* The name keeps its words whole; the buttons wrap below it when the card is narrow. */}
-                  <b style={{ fontSize: 14, color: cab.color, overflowWrap: 'break-word', flex: '1 1 120px', minWidth: 'min(120px, 100%)' }}>{cab.name}</b>
+                  <b style={{ fontSize: 14, color: cab.color, overflowWrap: 'break-word', flex: '1 1 110px', minWidth: 'min(110px, 100%)' }}>{cab.name}</b>
                   {r?.code && (
                     <span className="flex flex-wrap justify-end" style={{ gap: 6 }}>
                       {/* The silent secretariat view is read only on purpose; Join as chair is the full console. */}
@@ -71,20 +81,15 @@ export function FrontRoomsCard({ cref, cabinets, base }: { cref: CrisisRef; cabi
                   )}
                 </div>
                 {r?.code && (
-                  <p className="flex items-center flex-wrap" style={{ margin: '2px 0 0', gap: '2px 12px', fontSize: 12, color: CK.inkSoft, fontVariantNumeric: 'tabular-nums' }}>
+                  <p className="flex items-center flex-wrap" style={{ margin: 0, gap: '2px 12px', fontSize: 12, color: CK.inkSoft, fontVariantNumeric: 'tabular-nums' }}>
                     <span className="inline-flex items-center" style={{ gap: 4 }}><Hash size={12} strokeWidth={1.5} aria-hidden />Room code <b style={{ color: CK.ink, letterSpacing: '0.06em' }}>{r.code}</b></span>
                     {r.chairPassword && <span className="inline-flex items-center" style={{ gap: 4 }}><KeyRound size={12} strokeWidth={1.5} aria-hidden />Chair password <b style={{ color: CK.ink, letterSpacing: '0.06em' }}>{r.chairPassword}</b></span>}
                   </p>
                 )}
-                <div className="flex items-center flex-wrap" style={{ gap: '2px 6px', marginTop: 2, fontSize: 12.5, color: CK.inkSoft }}>
-                  {rooms === null && !failed ? <Skeleton h={14} w="55%" /> : r?.phaseLabel ? (
-                    <>
-                      <span aria-hidden style={{ width: 7, height: 7, borderRadius: '50%', background: TONE_DOT[r.tone], boxShadow: `0 0 0 3px ${cabinetTint(TONE_DOT[r.tone], 0.2)}`, flex: 'none' }} />
-                      <b style={{ color: CK.ink }}>{r.phaseLabel}</b>
-                      {r.speaker && <span className="inline-flex items-center" style={{ gap: 4, overflowWrap: 'anywhere' }}><Timer size={12} strokeWidth={1.5} aria-hidden />{r.speaker} speaking</span>}
-                    </>
-                  ) : failed && rooms === null ? <span>Could not read this room</span> : <span className="inline-flex items-center" style={{ gap: 4 }}><Radio size={12} strokeWidth={1.5} aria-hidden />No room linked</span>}
-                </div>
+                {rooms === null && !failed ? <Skeleton h={14} w="55%" />
+                  : r?.sessionId ? <RoomLivePanel sessionId={r.sessionId} color={cab.color} />
+                  : failed && rooms === null ? <span style={{ fontSize: 12.5, color: CK.inkSoft }}>Could not read this room</span>
+                  : <span className="inline-flex items-center" style={{ gap: 4, fontSize: 12.5, color: CK.inkSoft }}><Radio size={12} strokeWidth={1.5} aria-hidden />No room linked</span>}
               </OverhangCard>
             );
           })}

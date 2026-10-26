@@ -9,9 +9,13 @@ import { crisisError, decideMeeting, type CrisisRef } from '@/lib/crisis/api';
 import type { Cabinet, Meeting, MeetingStatus, Member } from '@/lib/crisis/types';
 import { Btn, CK, fieldStyle, waitLabel } from '../../crisisKit';
 import { AvatarStack, Fact, NameList, StatusLine, requesterName, whenText, type Person } from './meetingKit';
+import { InTheRoom, MeetingClockControls, MeetingClockReadout } from './MeetingClock';
+import { meetingRunning } from '@/lib/crisis/meetings';
 
-export default function StaffMeetingCard({ m, refx, people, cabinets, members, canAct, now }: {
+export default function StaffMeetingCard({ m, refx, people, cabinets, members, canAct, canClock = false, onChanged, now }: {
   m: Meeting; refx: CrisisRef; people: Map<string, Person>; cabinets: Cabinet[]; members: Member[]; canAct: boolean; now: number;
+  /** Staff and chairs may start and stop the meeting clock. */
+  canClock?: boolean; onChanged?: () => void;
 }) {
   const [form, setForm] = useState<null | 'decline' | 'held'>(null);
   const [note, setNote] = useState('');
@@ -45,6 +49,13 @@ export default function StaffMeetingCard({ m, refx, people, cabinets, members, c
         <Fact label="When">{whenText(m)}</Fact>
         <Fact label="Asked by">{requesterName(m, people, members)}</Fact>
       </div>
+      {m.started_at && (m.status === 'approved' || m.status === 'held') && (
+        <div className="flex flex-col" style={{ gap: 10, marginTop: 12 }}>
+          <MeetingClockReadout m={m} />
+          {meetingRunning(m) && <InTheRoom m={m} people={people} cabinets={cabinets} />}
+        </div>
+      )}
+      {canClock && m.status === 'approved' && <div style={{ marginTop: 12 }}><MeetingClockControls m={m} refx={refx} onChanged={onChanged} /></div>}
       {m.staff_note && <p style={{ margin: '10px 0 0', fontSize: 13, color: CK.inkSoft }}><b>Note to the delegates: </b>{m.staff_note}</p>}
       {m.outcome_note && <p style={{ margin: '8px 0 0', fontSize: 13, color: CK.inkSoft }}><b>What was agreed: </b>{m.outcome_note}</p>}
 

@@ -236,7 +236,7 @@ export async function listNotes(ref: CrisisRef, directiveId: string): Promise<Di
 }
 
 export interface DirectiveDraft {
-  kind: DirectiveKind; title: string; receiver: string; body: string; themes: string[];
+  kind: DirectiveKind; title: string; receiver?: string | null; body: string; themes: string[];
   resources_used?: string; goal?: string; affects?: string; covert?: boolean; coauthors?: string[];
 }
 export type SubmitResult =

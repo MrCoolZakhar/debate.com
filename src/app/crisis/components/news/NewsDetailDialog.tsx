@@ -9,17 +9,14 @@ import type { News } from '@/lib/crisis/types';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { CK } from '../../crisisKit';
 import CrisisDialog from '../delegate/CrisisDialog';
-import { NewsMeta, NewsNumber } from './NewsList';
+import { NewsMeta, NewsNumber, NewsPicture } from './NewsList';
 
 /** `preview` is the composer's "Preview": the story exactly as players see it, with the number still to come. */
 export function NewsDetailBody({ n, preview }: { n: News; preview?: boolean }) {
   const { core } = useCrisis();
   return (
     <article style={{ fontFamily: CK.font }}>
-      {n.banner_url && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={n.banner_url} alt="" style={{ display: 'block', width: '100%', aspectRatio: '16 / 6', objectFit: 'cover', background: CK.well }} />
-      )}
+      <NewsPicture n={n} />
       <div style={{ padding: '16px 20px 24px' }}>
         <div className="flex items-center flex-wrap" style={{ gap: '6px 16px' }}>
           <NewsNumber n={n} preview={preview} />

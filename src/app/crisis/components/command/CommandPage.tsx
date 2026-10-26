@@ -13,7 +13,7 @@ import type { Directive, News, Resource, ResourceType } from '@/lib/crisis/types
 import { Card, CardTitle, CK, Skeleton } from '../../crisisKit';
 import { crisisBase, useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { loadLastChanges } from './commandData';
-import { ApprovalCard, CommandHeader, LinkBtn, NewsCard, ResourcesCard } from './commandParts';
+import { ApprovalCard, CommandHeader, LinkBtn, ResourcesCard } from './commandParts';
 import { DirectiveDrawer, WaitingCard } from './commandQueue';
 import { BackroomCard, FrontRoomsCard } from './commandRooms';
 
@@ -22,32 +22,33 @@ const WarMap = dynamic(() => import('../map/WarMap'), {
   loading: () => <Skeleton h={300} r={16} />,
 });
 
-// Crisis Command fits one screen from 1240px wide: the grid takes the height left under the header
-// (56px bar, 4px top, 8px page top, 48px strip, 10px gap, 18px bottom), every card scrolls inside itself
-// and the map fills its cell. Below 1240px the cards stack and the page scrolls as usual.
+// Layout (owner, 26 Oct 2026: "too much on one page", "awkward gaps around the war map").
+// From 1240px the first row is exactly the screen under the header (56px bar, 4px top, 8px page top, 48px strip,
+// 10px gap, 18px bottom): Waiting for a Reply over Needs Your Approval on the left, the War Map filling its card
+// in the middle, the Front Rooms on the right. Every card in a column shares the column's full height and scrolls
+// inside itself, so nothing leaves an empty band. Cabinet Resources and the Backroom sit in a second row under it
+// and the page scrolls to them. Below 1240px the cards stack and the page scrolls as usual.
 const GRID_CSS = `
-.cmd-grid { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); grid-template-areas: "map" "needs" "side" "res"; }
+.cmd-grid { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); grid-template-areas: "map" "needs" "side" "res" "back"; }
 .cmd-col { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-.cmd-needs { grid-area: needs; } .cmd-map { grid-area: map; min-width: 0; } .cmd-side { grid-area: side; } .cmd-res { grid-area: res; min-width: 0; }
-.cmd-mapbox { position: relative; height: clamp(320px, 50vh, 560px); border-radius: 16px; overflow: hidden; }
+.cmd-needs { grid-area: needs; } .cmd-map { grid-area: map; min-width: 0; } .cmd-side { grid-area: side; } .cmd-res { grid-area: res; min-width: 0; } .cmd-back { grid-area: back; min-width: 0; }
+.cmd-mapbox { position: relative; display: flex; flex-direction: column; height: clamp(320px, 50vh, 560px); border-radius: 16px; overflow: hidden; }
+.cmd-mapbox .wm-root { flex: 1 1 0; height: auto; min-height: 0; }
+.cmd-mapbox .wm-body { min-height: 0; }
 @media (min-width: 768px) and (max-width: 1239px) {
-  .cmd-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "map map" "needs side" "res res"; }
+  .cmd-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "map map" "needs side" "res res" "back back"; }
 }
 @media (min-width: 1240px) {
-  .cmd-grid { height: calc(100dvh - 146px); min-height: 540px; grid-template-columns: minmax(300px, 330px) minmax(0, 1fr) minmax(290px, 320px); grid-template-rows: minmax(0, 1fr) auto; grid-template-areas: "needs map side" "needs res side"; }
-  .cmd-col { min-height: 0; }
+  .cmd-grid { grid-template-columns: minmax(300px, 340px) minmax(0, 1fr) minmax(310px, 380px); grid-template-rows: max(560px, calc(100dvh - 146px)) auto; grid-template-areas: "needs map side" "res res back"; padding-bottom: 28px; }
+  .cmd-needs, .cmd-side { min-height: 0; }
   .cmd-map > section { height: 100%; overflow: hidden; }
   .cmd-mapbox { flex: 1 1 0; height: auto; min-height: 0; }
-  .cmd-mapbox .wm-root { min-height: 0; }
-  .cmd-mapbox .wm-body { min-height: 0; }
-  .cmd-card { min-height: 0; overflow: auto; flex: 0 1 auto; }
+  .cmd-needs > .cmd-card, .cmd-side > .cmd-card { min-height: 0; overflow: auto; flex: 0 1 auto; }
   .cmd-wait { flex: 1 1 0; min-height: 0; display: flex; }
   .cmd-wait > section { flex: 1; min-height: 0; overflow: auto; }
-  .cmd-needs > .cmd-card:nth-child(2) { max-height: 30%; }
-  .cmd-needs > .cmd-card:nth-child(3) { max-height: 27%; }
-  .cmd-side > .cmd-card:first-child { max-height: 55%; }
-  .cmd-side > .cmd-card:last-child { flex: 1 1 0; }
-  .cmd-res > .cmd-card { max-height: 210px; }
+  .cmd-needs > .cmd-approval { max-height: 45%; min-height: 128px; }
+  .cmd-side > .cmd-rooms { flex: 1 1 0; }
+  .cmd-res > .cmd-card, .cmd-back > .cmd-card { height: 100%; }
 }
 `;
 
@@ -131,7 +132,6 @@ export default function CommandPage() {
             <WaitingCard directives={directives} base={base} now={now} onOpen={(d) => setOpen(d.id)} />
           </div>
           <ApprovalCard news={news} cabinets={core.cabinets} members={core.members} cref={ref} base={base} now={now} onChanged={() => { void readNews(); }} />
-          <NewsCard news={news} cabinets={core.cabinets} members={core.members} base={base} now={now} />
         </section>
 
         <section className="cmd-map">
@@ -149,12 +149,15 @@ export default function CommandPage() {
         </section>
 
         <section className="cmd-col cmd-side">
-          <FrontRoomsCard cref={ref} cabinets={core.cabinets} base={base} />
-          <BackroomCard cref={ref} members={core.members} directives={directives} base={base} onChanged={() => { void readDirectives(); }} />
+          <FrontRoomsCard cref={ref} cabinets={core.cabinets} />
         </section>
 
         <section className="cmd-res">
-          <ResourcesCard cabinets={core.cabinets} types={res?.types ?? []} resources={res?.resources ?? []} changes={changes} loaded={res !== null} base={base} />
+          <ResourcesCard cabinets={core.cabinets} types={res?.types ?? []} resources={res?.resources ?? []} changes={changes} loaded={res !== null} />
+        </section>
+
+        <section className="cmd-back">
+          <BackroomCard cref={ref} members={core.members} directives={directives} base={base} onChanged={() => { void readDirectives(); }} />
         </section>
       </div>
 

@@ -1,4 +1,7 @@
-'use client';
-import TimelinePage from '../../../components/timeline/TimelinePage';
+import { redirect } from 'next/navigation';
 
-export default function Page() { return <TimelinePage />; }
+// The timeline placeholder is gone: the History page replaces it.
+export default async function Page({ params }: { params: Promise<{ conference: string; crisis: string }> }) {
+  const { conference, crisis } = await params;
+  redirect(`/crisis/${conference}/${crisis}/history`);
+}
