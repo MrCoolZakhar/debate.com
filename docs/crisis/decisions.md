@@ -99,3 +99,31 @@ Delegates
 - The directive form has no "To": title, "What do you want to happen?", themes. Joint co-authors are picked with their pictures.
 - "Characters" becomes "Cabinet". A delegate never sees another character's directives or performance (profile only). The director decides whether delegates see the other cabinet and how much (Settings: hidden, names and pictures, full profiles).
 - News without a picture is all text (no empty picture space). Delegates are not told whether news went to every room or only their cabinet.
+
+## Round 5 (Peter, 27 Oct 2026)
+
+Map
+- It is called "Map", never "War map". History is a tab inside the Map page for everybody (/map?tab=history); /history redirects there.
+- Tools: Select and Borders. No "Extend territory". Select picks a unit OR a territory (a country or a drawn area). A selected territory's border can be dragged: corners where there are few, otherwise press on or near the border to pull it out from that point. Borders: click a country to select and hand it over; click anywhere that is not a country to draw a new territory.
+- No overlap: growing a territory over another's land cuts that land out of the other (crisis_map_regions.geometry holds edited country outlines).
+- No "suspected" units.
+- Fog of war: each cabinet sees its own countries and areas, plus a sight circle around each of its own units (army 450 km, navy 650, air 950, missiles 800, base 450, spy 220, submarine 500, other 400). Any other cabinet's unit inside one of those circles is visible to it automatically (enforced by the database); the backroom can still reveal a unit by hand.
+- Characters stand on an exact spot (picked on a map) and appear on the map for the backroom and the director only.
+
+Command (again: one screen, no page scroll at 1440x900)
+- Map card: the cabinet view tabs at the very top with "Open the full map" beside them; no fog or fit view in the preview; the map fills the card with no gap.
+- Cabinet Resources under the map, compact (an overview).
+- "Crisis news" opens the composer in a pop-up.
+- Waiting for a Reply rows: the title runs the full width; the character (portrait, surname, title) sits underneath.
+- Front Rooms: "Join as chair" is the primary button; the other is "Watch only" (the read-only secretariat view, which cannot change roll call).
+
+Backroom directive pop-up
+- Looks like a chat, like the delegate's view: the directive and every note as bubbles, internal notes marked "Only staff", a composer at the bottom with the outcome chips, "Add internal note" and "Send reply".
+- "What happens when you send" starts empty with a "+"; each chosen action is a card; several character changes, unit moves and borders can be added.
+
+Chair
+- Cabinet directives go to the cabinet's chair first (setting, on by default); the chair sends them to the backroom or sends them back with a note.
+- The director can "Try it as" a chair and the press. Test chairs and press exist in the test crisis.
+
+Test committee
+- Each character's picture is its seat's picture in the live room (kept in sync by the database).

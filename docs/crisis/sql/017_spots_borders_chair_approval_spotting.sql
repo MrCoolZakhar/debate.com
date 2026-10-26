@@ -1,0 +1,12 @@
+-- Gavelling Crisis, part 17 (applied 27 Oct 2026 as crisis_part17_spots_borders_chair_approval_spotting).
+-- 1. crisis_characters.location_lng / location_lat: a character stands on an exact spot (staff see them on the map).
+-- 2. crisis_map_regions.geometry: an edited country outline for this crisis (GeoJSON Polygon/MultiPolygon), null = the map's own.
+-- 3. Directive status 'awaiting_chair': a cabinet (committee) directive waits for its cabinet's chair when
+--    settings.chairApprovesCabinetDirectives is on (default) and that cabinet has a chair. crisis_submit_directive sets it
+--    (and returns awaiting_chair), crisis_chair_review_directive(p_directive, p_approve, p_note) sends it on to the
+--    character's backroomer or turns it back (answered, denied, "Your chair did not send this to the backroom."),
+--    chairs are notified, backroomers cannot read it until it is sent on (the director can).
+-- 4. Fog of war: units_read lets a cabinet see any unit within sight range of one of its own units
+--    (crisis_sight_km by kind: army 450, navy 650, air 950, missile 800, base 450, spy 220, sub 500, other 400 km),
+--    replacing "suspected". The map log counts those cabinets too.
+-- Test members added: chairs TSTCHEX1 / TSTCHPR1 and press TSTPRES1 (passwords in .claude/crisis-test-codes.md).
