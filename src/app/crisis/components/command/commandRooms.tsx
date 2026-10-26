@@ -59,8 +59,9 @@ export function FrontRoomsCard({ cref, cabinets, base }: { cref: CrisisRef; cabi
             const r = byCab.get(cab.id);
             return (
               <OverhangCard key={cab.id} name={cab.short_name || cab.name} src={cab.logo_url} color={cab.color} size={36} style={{ boxShadow: CK.shadowSm }}>
-                <div className="flex items-center justify-between" style={{ gap: 8 }}>
-                  <b style={{ fontSize: 14, color: cab.color, overflowWrap: 'anywhere', minWidth: 0 }}>{cab.name}</b>
+                <div className="flex flex-wrap items-center justify-between" style={{ gap: '4px 8px' }}>
+                  {/* The name keeps its words whole; the buttons wrap below it when the card is narrow. */}
+                  <b style={{ fontSize: 14, color: cab.color, overflowWrap: 'break-word', flex: '1 1 120px', minWidth: 'min(120px, 100%)' }}>{cab.name}</b>
                   {r?.code && (
                     <span className="flex flex-wrap justify-end" style={{ gap: 6 }}>
                       {/* The silent secretariat view is read only on purpose; Join as chair is the full console. */}

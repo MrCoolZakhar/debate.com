@@ -52,7 +52,8 @@ const SMALL: CSSProperties = {
   width: '100%', flexDirection: 'column', justifyContent: 'center', gap: 4, padding: '9px 6px', fontSize: 12.5, borderRadius: 12,
   whiteSpace: 'normal', textAlign: 'center', lineHeight: 1.2,
 };
-const FULL_ROW: CSSProperties = { gridColumn: '1 / -1' };
+// The reason lines span both columns and come after the two buttons (order), so the buttons stay side by side.
+const FULL_ROW: CSSProperties = { gridColumn: '1 / -1', order: 3 };
 
 /** The red button, plus a one-line reason underneath (ordered last in the wrapping row). */
 function RequestToSpeak({ committee, seat }: { committee: Committee; seat: Delegate }) {
