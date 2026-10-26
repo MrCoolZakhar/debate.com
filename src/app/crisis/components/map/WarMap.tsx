@@ -11,9 +11,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { GeoJSONSource, Map as MLMap, MapMouseEvent, Marker as MLMarker } from 'maplibre-gl';
 import type { Feature, FeatureCollection } from 'geojson';
 import { Cloud, Flag, MousePointer2, Pentagon, Plus, Ship, Maximize2 } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
 import GSelect from '@/components/GSelect';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { amount as fmtAmount } from '@/lib/crisis/format';
+import { geometryBbox, readMapFocus, type MapFocus } from '@/lib/crisis/mapFocus';
 import {
   crisisError, deleteShape, deleteUnit, loadMap, saveShape, saveUnit, setRegionOwner,
 } from '@/lib/crisis/api';
@@ -603,12 +605,38 @@ export default function WarMap({ compact = false }: { compact?: boolean }) {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  // First fit once there is data.
+  // Where to open: a link from a notification or a history row names a unit, a country or an area
+  // (src/lib/crisis/mapFocus.ts). The small map on Command ignores it.
+  const searchParams = useSearchParams();
+  const focusKey = compact ? '' : (searchParams?.toString() ?? '');
+  const appliedFocus = useRef<string | null>(null);
+  const focusOn = useCallback((f: MapFocus): boolean => {
+    const map = mapRef.current;
+    if (!map) return false;
+    if (f.unit) {
+      const hit = shownUnits.find((x) => x.u.id === f.unit);
+      if (!hit) return false; // gone, or not visible to this viewer
+      map.jumpTo({ center: [hit.u.lng, hit.u.lat], zoom: Math.max(map.getZoom(), 6) });
+      setSelUnit(hit.u.id);
+      return true;
+    }
+    const b = f.region ? geometryBbox(world?.byKey.get(f.region)?.geometry as { coordinates?: unknown } | undefined) : f.bbox;
+    if (!b) return false;
+    if (b[0] === b[2] && b[1] === b[3]) map.jumpTo({ center: [b[0], b[1]], zoom: 6 });
+    else map.fitBounds([[b[0], b[1]], [b[2], b[3]]], { padding: compact ? 50 : 110, maxZoom: 6, duration: 0 });
+    return true;
+  }, [shownUnits, world, compact]);
+
+  // First fit once there is data, and again whenever the link names a new place.
   useEffect(() => {
-    if (!world || !data || didFit.current) return;
+    if (!world || !data) return;
+    const focus = focusKey ? readMapFocus(focusKey) : null;
+    const key = focus ? focusKey : '';
+    if (didFit.current && appliedFocus.current === key) return;
     didFit.current = true;
-    fitView();
-  }, [world, data, fitView]);
+    appliedFocus.current = key;
+    if (!focus || !focusOn(focus)) fitView();
+  }, [world, data, fitView, focusKey, focusOn]);
 
   // ── countries: owner colours ──
   const applied = useRef(new Map<string, string>());

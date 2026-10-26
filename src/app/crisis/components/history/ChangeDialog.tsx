@@ -9,6 +9,7 @@ import { useRouter } from 'next/navigation';
 import { Eye, Map as MapIcon } from 'lucide-react';
 import type { HistoryChange } from '@/lib/crisis/history';
 import { timeAgo } from '@/lib/crisis/format';
+import { focusForChange, mapHref } from '@/lib/crisis/mapFocus';
 import { Btn, CK } from '../../crisisKit';
 import { crisisBase, useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import CrisisDialog from '../delegate/CrisisDialog';
@@ -48,7 +49,7 @@ export function ChangeBody({ change, reveal, onClose, ctx }: { change: HistoryCh
         </div>
       </div>
       <div className="flex flex-wrap" style={{ gap: 8, marginTop: 18 }}>
-        <Btn tone="red" icon={<MapIcon size={16} strokeWidth={1.6} aria-hidden />} onClick={() => { onClose(); router.push(`${crisisBase(ref)}/map`); }}>Open the map</Btn>
+        <Btn tone="red" icon={<MapIcon size={16} strokeWidth={1.6} aria-hidden />} onClick={() => { onClose(); router.push(mapHref(crisisBase(ref), focusForChange(change))); }}>Open the map</Btn>
         <Btn tone="ghost" onClick={onClose}>Close</Btn>
       </div>
     </div>

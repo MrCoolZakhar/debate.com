@@ -5,6 +5,7 @@
 // If the row cannot be found (an older notification, or the change is no longer visible) it says what the
 // notification said and still offers the map.
 
+import { focusForChange, mapHref } from '@/lib/crisis/mapFocus';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Map as MapIcon } from 'lucide-react';
@@ -44,7 +45,14 @@ export default function NotificationDetail({ n, kindLabel, onClose }: { n: Crisi
   const ready = res && res.id === n.id ? res : null;
   const reveal = n.kind === 'reveal';
   const heading = useMemo(() => (ready?.change ? changeHeading(ready.change, ctx, reveal) : null), [ready, ctx, reveal]);
-  const openMap = () => { onClose(); router.push(`${crisisBase(ref)}/map`); };
+  const openMap = () => {
+    // The place it is about: the change if we found it, else what the notification points at.
+    const focus = ready?.change ? focusForChange(ready.change)
+      : n.ref_key ? { region: n.ref_key }
+      : (n.kind === 'unit' || n.kind === 'reveal') && n.ref_id ? { unit: n.ref_id } : null;
+    onClose();
+    router.push(mapHref(crisisBase(ref), focus));
+  };
 
   return (
     <CrisisDialog title={heading?.title ?? n.title} eyebrow={kindLabel} onClose={onClose} width={660}>
