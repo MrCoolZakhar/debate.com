@@ -2,7 +2,7 @@
 
 A crisis committee tool built on Gavelling's live rooms: a Crisis Director dashboard (Crisis Command), a backroom queue, the existing chair console as the front room, a crisis tab on the delegate phone, and a war map with fog of war. Started 25 Oct 2026 on the `crisis` branch.
 
-Status: phase 1 build. Owner decisions are in `decisions.md`. Database parts 1 to 4 are applied (`sql/`). Code: `src/lib/crisis/` (types, client, api, live) and `src/app/crisis/` (entry, shell, pages).
+Status: phase 1 build. Owner decisions are in `decisions.md`. Database parts 1 to 11 are applied (`sql/`). Code: `src/lib/crisis/` (types, client, api, live) and `src/app/crisis/` (entry, shell, pages).
 
 ## What is here
 

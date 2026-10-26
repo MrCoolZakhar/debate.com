@@ -51,3 +51,16 @@ Peter's answers to the 42 plan questions (25 Oct 2026), plus the follow-ups the 
 - SQL is applied directly from the crisis chat (Peter, 25 Oct 2026); every applied change is kept in `docs/crisis/sql/`.
 - Every update is checked in a real room on Gavelling Test MUN 2027 (test codes in the git-ignored `.claude/crisis-test-codes.md`).
 - Design: Gavelling ivory with a lot more red (dark red gradient rail, red tints, red gradient on bigger surfaces and some buttons), green accents kept.
+
+## Round 3 (26 Oct 2026)
+- Delegate page: three columns (small left column with the character, Request to speak and Chat side by side, the date, directives open, resources two per row; Send a Directive in the middle on one screen; News above My Directives on the right). No top status bar.
+- Delegates can write clarifications on a directive at any time, like a chat. Drafts are never lost (directives, news, backroom replies autosave).
+- News is numbered per cabinet; a story for every room takes the next number in every cabinet. The number shows big with the source.
+- Backroom: the character is the focus (big name, title, cabinet logo); small tags for waiting, last heard back, length, backroomer; goals behind a disclosure; staff notes are always internal; a "+" adds actions to a reply (resources, news, a character's status, a unit move, a border); never hand a directive to yourself.
+- Characters: visible to every role; backroomers edit only when the CD allows it (Edit characters power); the character pop-up is central with Profile, Directives and Performance (points).
+- Points: directives sent, approved, partly worked, denied, cabinet and joint directives, meetings held; every value editable in Settings (src/lib/crisis/points.ts).
+- Meetings: requested by delegates, approved by a backroomer or the CD, seen by chairs, marked held with what was agreed.
+- Notifications: a bell for every role; rows are written by database triggers (troop movements a person can see, reveals, territory gained or lost, answers, news, meetings, status changes; for staff new and handed directives, clarifications, meeting requests).
+- The sidebar is complete for every role (pages being built say so).
+- Overlapping avatars copy the organiser Live Status emblem (one third outside the card's top edge).
+- Organiser Live Status cards of a crisis room carry "Open Gavelling Crisis"; Manage committees carries the switch-on button.
