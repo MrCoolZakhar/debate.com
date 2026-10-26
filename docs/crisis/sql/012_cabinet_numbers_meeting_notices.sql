@@ -1,0 +1,5 @@
+-- Gavelling Crisis, part 12 (applied as crisis_part12_cabinet_numbers_meeting_notices), after the
+-- independent review of 26 Oct 2026: directives get a per-cabinet number (crisis_directives.cabinet_no,
+-- assigned by a BEFORE INSERT trigger under an advisory lock, backfilled in order); the staff notice for a
+-- new directive names the character and uses that number; meeting notices say who asked to meet whom.
+-- Full text: see the applied migration (crisis_directive_cabinet_no, crisis_notify_directive, crisis_notify_meeting).

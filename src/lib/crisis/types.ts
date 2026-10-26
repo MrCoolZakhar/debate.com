@@ -146,7 +146,8 @@ export const THEMES = ['Military', 'Intelligence', 'Diplomatic', 'Economic', 'Pr
 export interface Directive {
   id: string;
   crisis_id: string;
-  no: number;
+  no: number;                  // crisis-wide sequence (internal)
+  cabinet_no: number | null;   // the number people see: per cabinet (docs/crisis/sql/012)
   kind: DirectiveKind;
   cabinet_id: string | null;
   author_member_id: string | null;
