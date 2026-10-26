@@ -67,7 +67,7 @@ export default function AskMeeting({ refx, people, cabinets, myCharacterId, onDo
 
   return (
     <Card warm>
-      <CardTitle sub="Meetings happen in person. Your request goes to the backroom.">Ask for a meeting</CardTitle>
+      <CardTitle>Ask for a meeting</CardTitle>
       <FieldLabel>Who do you want to meet</FieldLabel>
       <div className="flex flex-col" style={{ gap: 12, marginBottom: 14 }}>
         {groups.out.map((g) => (

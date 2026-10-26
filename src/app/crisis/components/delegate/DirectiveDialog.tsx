@@ -9,11 +9,12 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Send } from 'lucide-react';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { addNote, crisisError, type CrisisRef } from '@/lib/crisis/api';
+import { dirNumber } from '@/lib/crisis/format';
 import { OUTCOME_LABEL, type Directive, type DirectiveNote } from '@/lib/crisis/types';
 import { Btn, cabinetTint, CK, fieldStyle, ThemeTag } from '../../crisisKit';
 import CrisisDialog from './CrisisDialog';
 import type { PersonRef } from './MyDirectives';
-import { KIND_WORD, kindIcon, outcomeColor, outcomeIcon, statusColor, statusIcon, STATUS_WORDS, whenLabel } from './directiveUi';
+import { KIND_WORD, kindIcon, outcomeColor, outcomeIcon, statusColor, statusIcon, STATUS_WORDS, whenLabel, whenTitle } from './directiveUi';
 
 interface Bubble { key: string; mine: boolean; who: string; at: string | null; body: string; sort: number }
 
@@ -25,7 +26,7 @@ function BubbleView({ b, lead }: { b: Bubble; lead?: string }) {
         background: b.mine ? cabinetTint(CK.forest, 0.13) : CK.card, boxShadow: b.mine ? 'none' : CK.shadowSm,
       }}>
         <p style={{ margin: 0, fontSize: 11.5, fontWeight: 800, color: b.mine ? CK.forest : CK.red, overflowWrap: 'anywhere' }}>
-          {lead ? `${lead}, ` : ''}{b.who}{b.at ? `, ${whenLabel(b.at)}` : ''}
+          {lead ? `${lead}, ` : ''}{b.who}{b.at ? <span title={whenTitle(b.at)}>{`, ${whenLabel(b.at)}`}</span> : ''}
         </p>
         <p style={{ margin: '2px 0 0', fontSize: 14.5, lineHeight: 1.55, color: CK.ink, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{b.body}</p>
       </div>
@@ -84,11 +85,11 @@ export default function DirectiveDialog({
   const verdictIcon = d.outcome ? outcomeIcon(d.outcome, 30) : statusIcon(d.status, 30);
 
   return (
-    <CrisisDialog title={`Directive ${d.no}`} onClose={onClose} width={720} flush>
+    <CrisisDialog title={`Directive ${dirNumber(d)}`} onClose={onClose} width={720} flush>
       <div style={{ background: CK.redGrad, color: '#FFF4E6', padding: '14px 22px 16px' }}>
         <p className="flex items-center justify-between gap-3 flex-wrap" style={{ margin: 0, fontSize: 12.5, fontWeight: 700, color: 'rgba(255,232,214,0.85)' }}>
-          <span className="inline-flex items-center gap-1.5">{kindIcon(d.kind, 15)}Directive {d.no}, {KIND_WORD[d.kind]}</span>
-          <span>{whenLabel(d.created_at)}</span>
+          <span className="inline-flex items-center gap-1.5">{kindIcon(d.kind, 15)}Directive {dirNumber(d)}, {KIND_WORD[d.kind]}</span>
+          <span title={whenTitle(d.created_at)}>{whenLabel(d.created_at)}</span>
         </p>
         <h3 style={{ margin: '5px 0 0', fontSize: 22, lineHeight: 1.2, fontWeight: 800, overflowWrap: 'anywhere' }}>{d.title}</h3>
       </div>

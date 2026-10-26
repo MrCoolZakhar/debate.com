@@ -1,0 +1,3 @@
+-- Gavelling Crisis, part 13 (applied as crisis_part13_submit_returns_cabinet_no): crisis_submit_directive also
+-- returns cabinet_no (the per-cabinet number people see), so the delegate's confirmation shows the right number.
+-- Same body as part 1 otherwise.

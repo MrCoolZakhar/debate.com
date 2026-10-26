@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { OUTCOME_LABEL, type Directive, type DirectiveKind, type DirectiveOutcome, type DirectiveStatus } from '@/lib/crisis/types';
+import { timeAgo } from '@/lib/crisis/format';
 import { CK, THEME_STYLE } from '../../crisisKit';
 
 export const STATUS_WORDS: Record<DirectiveStatus, string> = {
@@ -86,9 +87,15 @@ export function StatusLine({ s }: { s: DirectiveStatus }) {
   );
 }
 
+/** Real-world time as "12 min ago" (the crisis has its own in-world date, so never a calendar date). */
 export function whenLabel(iso: string | null | undefined): string {
-  if (!iso) return '';
-  try { return new Date(iso).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); } catch { return ''; }
+  return timeAgo(iso);
+}
+
+/** The exact time, for a title tooltip. */
+export function whenTitle(iso: string | null | undefined): string | undefined {
+  if (!iso) return undefined;
+  try { return new Date(iso).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); } catch { return undefined; }
 }
 
 /** The line icon for a theme, in the theme's own colour. */

@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Check, PauseCircle, Send, Timer } from 'lucide-react';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { crisisError, submitDirective, type CrisisRef } from '@/lib/crisis/api';
+import { dirNumber } from '@/lib/crisis/format';
 import { THEMES, type Character, type DirectiveKind } from '@/lib/crisis/types';
 import { Btn, Card, CK, FieldLabel, fieldStyle, Segmented } from '../../crisisKit';
 import MultiSelect, { type MultiOption } from './MultiSelect';
@@ -152,7 +153,7 @@ export default function DirectiveForm({
         coauthors: kind === 'joint' ? d.coauthors : [],
       });
       if (r.ok) {
-        notifyOk(`Directive ${r.no} sent`);
+        notifyOk(`Directive ${dirNumber({ no: r.no, cabinet_no: (r as { cabinet_no?: number | null }).cabinet_no ?? null })} sent`);
         setD(EMPTY);
         onSent();
       } else if (r.reason === 'cooldown') {

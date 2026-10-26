@@ -10,6 +10,7 @@ import {
   ChevronRight, Coins, Crosshair, ImagePlus, Landmark, Newspaper, Skull, X, type LucideIcon,
 } from 'lucide-react';
 import GSelect from '@/components/GSelect';
+import { amount as fmtAmount } from '@/lib/crisis/format';
 import { notifyErr } from '@/lib/appNotify';
 import { crisisError, loadMap, loadResources, uploadCrisisBanner, type AnswerEffects, type CrisisRef } from '@/lib/crisis/api';
 import type { CharacterStatus, MapRegion, MapUnit, Resource, ResourceType } from '@/lib/crisis/types';
@@ -176,14 +177,14 @@ function ResourcesStep({ crisisRef, authorCharacterId, cabinetId, onAdd }: {
       .map((r) => {
         const t = typeById.get(r.type_id);
         const owner = r.character_id ? (chars.get(r.character_id) ?? 'Character') : (cabs.get(r.cabinet_id ?? '') ?? 'Cabinet');
-        return { value: r.id, label: `${t?.name ?? 'Resource'}, ${owner}: ${r.amount}${t?.unit ? ` ${t.unit}` : ''}`, short: `${t?.name ?? 'Resource'}, ${owner}` };
+        return { value: r.id, label: `${t?.name ?? 'Resource'}, ${owner}: ${fmtAmount(r.amount)}${t?.unit ? ` ${t.unit}` : ''}`, short: `${t?.name ?? 'Resource'}, ${owner}` };
       });
   }, [data, core, authorCharacterId, cabinetId]);
 
   const valid = rows.map((r) => ({ id: r.id, delta: Number(r.delta) })).filter((r) => r.id && Number.isFinite(r.delta) && r.delta !== 0);
   const submit = () => {
     const byId = new Map(options.map((o) => [o.value, o.short]));
-    onAdd(valid.map((r) => ({ id: newId(), kind: 'resource' as const, resourceId: r.id, delta: r.delta, label: `${byId.get(r.id) ?? 'Resource'} ${r.delta > 0 ? '+' : ''}${r.delta}` })));
+    onAdd(valid.map((r) => ({ id: newId(), kind: 'resource' as const, resourceId: r.id, delta: r.delta, label: `${byId.get(r.id) ?? 'Resource'} ${r.delta > 0 ? '+' : r.delta < 0 ? '-' : ''}${fmtAmount(Math.abs(r.delta))}` })));
   };
 
   return (
@@ -319,7 +320,7 @@ function UnitStep({ crisisRef, onAdd }: { crisisRef: CrisisRef; onAdd: (m: Reply
 
   const unit = units?.find((u) => u.id === unitId);
   const unitOptions = useMemo(() => (units ?? []).map((u) => ({
-    value: u.id, label: u.name, hint: [KIND_META[u.kind]?.label, cabById.get(u.owner_cabinet_id ?? '')?.name, `amount ${u.strength}`].filter(Boolean).join(', '),
+    value: u.id, label: u.name, hint: [KIND_META[u.kind]?.label, cabById.get(u.owner_cabinet_id ?? '')?.name, `amount ${fmtAmount(u.strength)}`].filter(Boolean).join(', '),
   })), [units, cabById]);
   const otherOptions = useMemo(() => (units ?? []).filter((u) => u.id !== unitId).map((u) => ({
     value: u.id, label: u.name, hint: [KIND_META[u.kind]?.label, cabById.get(u.owner_cabinet_id ?? '')?.name].filter(Boolean).join(', '),
@@ -349,7 +350,7 @@ function UnitStep({ crisisRef, onAdd }: { crisisRef: CrisisRef; onAdd: (m: Reply
     if (!unit) return;
     const parts: string[] = [];
     if (dest) parts.push(`Moves ${unit.name} to ${dest.name}`);
-    if (amountChanged) parts.push(dest ? `amount ${amountNum}` : `${unit.name}: amount ${amountNum}`);
+    if (amountChanged) parts.push(dest ? `amount ${fmtAmount(amountNum)}` : `${unit.name}: amount ${fmtAmount(amountNum)}`);
     onAdd({
       id: newId(), kind: 'unit', unitId: unit.id,
       lng: dest ? dest.lng : undefined, lat: dest ? dest.lat : undefined, strength: amountChanged ? amountNum : undefined,

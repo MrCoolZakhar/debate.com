@@ -23,6 +23,7 @@ import {
   KIND_LABEL, OUTCOME_LABEL, ROLE_LABEL, type Character, type CharacterSecret, type CharacterStatus, type Directive, type Meeting,
 } from '@/lib/crisis/types';
 import { Avatar, BigCount, Btn, CK, FieldLabel, Skeleton, ThemeTag, cabinetTint, fieldStyle } from '../../crisisKit';
+import { dirNumber, timeAgo } from '@/lib/crisis/format';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { ConfirmInline, responsibleMembers } from '../command/setupKit';
 import { KIND_ICON, OUTCOME_STYLE } from '../directives/directiveKit';
@@ -41,7 +42,8 @@ const nul = (s: string): string | null => (s.trim() ? s.trim() : null);
 
 const isImage = (url: string) => /\.(png|jpe?g|webp|gif)(\?|$)/i.test(url);
 const isPdf = (url: string, name: string | null) => /\.pdf(\?|$)/i.test(url) || /\.pdf$/i.test(name ?? '');
-const dateLabel = (iso: string) => new Date(iso).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+const dateLabel = (iso: string) => timeAgo(iso);
+const dateTitle = (iso: string) => new Date(iso).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
 export default function CharacterModal({ characterId, onClose, initialTab }: CharacterModalProps) {
   const v = useCrisis();
@@ -235,7 +237,7 @@ function ModalBody({ char, onClose, initialTab }: { char: Character; onClose: ()
   ];
 
   const openStep = step.kind === 'directive' ? mine?.find((x) => x.id === step.id) ?? null : null;
-  const stepTitle = step.kind === 'guide' ? 'Character Guide' : step.kind === 'map' ? 'Pick a Location' : step.kind === 'directive' ? `Directive ${openStep?.no ?? ''}` : '';
+  const stepTitle = step.kind === 'guide' ? 'Character Guide' : step.kind === 'map' ? 'Pick a Location' : step.kind === 'directive' ? `Directive ${openStep ? dirNumber(openStep) : ''}` : '';
 
   const tabs: Array<{ value: Tab; label: string }> = [
     { value: 'profile', label: 'Profile' }, { value: 'directives', label: 'Directives' }, { value: 'performance', label: 'Performance' },
@@ -253,8 +255,8 @@ function ModalBody({ char, onClose, initialTab }: { char: Character; onClose: ()
           @keyframes crisis-char-in { from { opacity: 0; transform: translateY(12px) scale(0.985); } to { opacity: 1; transform: none; } }
           .crisis-char-panel { animation: crisis-char-in 200ms cubic-bezier(0.22,1,0.36,1); }
           @media (prefers-reduced-motion: reduce) { .crisis-char-panel { animation: none; } }
-          .crisis-char-head { padding-left: ${AVATAR + 40}px; }
-          @media (max-width: 520px) { .crisis-char-head { padding-left: 16px; padding-top: ${OVERHANG + AVATAR / 2}px; } }
+          .crisis-char-head { padding-left: ${AVATAR + 40}px; padding-top: 14px; }
+          @media (max-width: 520px) { .crisis-char-head { padding-left: 16px; padding-top: ${OVERHANG + AVATAR / 2 + 4}px; } }
         `}</style>
         <div aria-hidden onMouseDown={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(58,14,15,0.42)' }} />
         <div
@@ -296,7 +298,7 @@ function ModalBody({ char, onClose, initialTab }: { char: Character; onClose: ()
 
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', borderRadius: 26, background: CK.surface, boxShadow: '0 24px 60px rgba(58,14,15,0.35)' }}>
             {/* Header */}
-            <div className="crisis-char-head flex items-start gap-3" style={{ padding: '14px 14px 12px 0', background: CK.card, borderBottom: `1px solid ${CK.hair}` }}>
+            <div className="crisis-char-head flex items-start gap-3" style={{ paddingRight: 14, paddingBottom: 12, background: CK.card, borderBottom: `1px solid ${CK.hair}` }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="flex items-baseline flex-wrap" style={{ gap: '2px 10px' }}>
                   <h2 style={{ margin: 0, fontSize: 20, lineHeight: 1.2, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{char.name}</h2>
@@ -615,12 +617,12 @@ function DirectiveRow({ d, wrote, onOpen }: { d: Directive; wrote: boolean; onOp
       <span style={{ flex: 1, minWidth: 0 }}>
         <span className="flex items-center flex-wrap" style={{ gap: '2px 10px' }}>
           <b style={{ fontSize: 14.5, overflowWrap: 'anywhere' }}>{d.title}</b>
-          <span className="inline-flex items-center" style={{ gap: 4, fontSize: 12, color: CK.inkSoft }}><K size={13} strokeWidth={1.5} aria-hidden />No. {d.no}{wrote ? '' : ' (co-written)'}</span>
+          <span className="inline-flex items-center" style={{ gap: 4, fontSize: 12, color: CK.inkSoft }}><K size={13} strokeWidth={1.5} aria-hidden />No. {dirNumber(d)}{wrote ? '' : ' (co-written)'}</span>
         </span>
         <span title={first} style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', fontSize: 13, color: CK.inkSoft, marginTop: 2, overflowWrap: 'anywhere' }}>{first}</span>
         <span className="flex items-center flex-wrap" style={{ gap: '2px 12px', marginTop: 5 }}>
           <OutcomeMark d={d} />
-          <span style={{ fontSize: 12, color: CK.muted }}>{dateLabel(d.created_at)}</span>
+          <span title={dateTitle(d.created_at)} style={{ fontSize: 12, color: CK.muted }}>{dateLabel(d.created_at)}</span>
         </span>
       </span>
       <ChevronRight size={18} strokeWidth={1.5} aria-hidden style={{ color: CK.muted, flex: 'none', marginTop: 2 }} />
@@ -643,8 +645,8 @@ function DirectiveView({ d }: { d: Directive }) {
   return (
     <article>
       <div className="flex items-center flex-wrap" style={{ gap: '4px 12px', fontSize: 12.5, color: CK.inkSoft }}>
-        <span className="inline-flex items-center" style={{ gap: 5, fontWeight: 700 }}><K size={14} strokeWidth={1.5} aria-hidden />{KIND_LABEL[d.kind]} No. {d.no}</span>
-        <span>Sent {dateLabel(d.created_at)}</span>
+        <span className="inline-flex items-center" style={{ gap: 5, fontWeight: 700 }}><K size={14} strokeWidth={1.5} aria-hidden />{KIND_LABEL[d.kind]} No. {dirNumber(d)}</span>
+        <span title={dateTitle(d.created_at)}>Sent {dateLabel(d.created_at)}</span>
         {d.covert && <span style={{ fontWeight: 700, color: CK.red }}>Covert</span>}
       </div>
       <h3 style={{ margin: '6px 0 8px', fontSize: 20, lineHeight: 1.25, fontWeight: 800, overflowWrap: 'anywhere' }}>{d.title}</h3>
@@ -661,7 +663,7 @@ function DirectiveView({ d }: { d: Directive }) {
         ) : (
           <p style={{ margin: '6px 0 0', fontSize: 13.5, color: CK.inkSoft }}>No reply yet.</p>
         )}
-        {d.answered_at && <p style={{ margin: '6px 0 0', fontSize: 12, color: CK.muted }}>Answered {dateLabel(d.answered_at)}</p>}
+        {d.answered_at && <p title={dateTitle(d.answered_at)} style={{ margin: '6px 0 0', fontSize: 12, color: CK.muted }}>Answered {dateLabel(d.answered_at)}</p>}
       </div>
     </article>
   );

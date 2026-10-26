@@ -6,7 +6,7 @@
 import { Newspaper, Radio } from 'lucide-react';
 import type { News } from '@/lib/crisis/types';
 import { Btn, Card, CardTitle, CK, Skeleton } from '../../crisisKit';
-import { newsTime } from '../news/NewsList';
+import { newsTime, newsTimeTitle } from '../news/NewsList';
 
 const SHOWN = 3;
 
@@ -49,7 +49,7 @@ export default function NewsPanel({ items, cabinetId, onOpen, onAll }: {
                       <span className="inline-flex items-center" style={{ gap: 4, overflowWrap: 'anywhere' }}>
                         <Radio size={12} strokeWidth={1.5} aria-hidden />{n.source_label || 'Crisis update'}
                       </span>
-                      <span style={{ color: CK.muted, fontWeight: 600 }}>{newsTime(n.published_at ?? n.created_at)}</span>
+                      <span title={newsTimeTitle(n.published_at ?? n.created_at)} style={{ color: CK.muted, fontWeight: 600 }}>{newsTime(n.published_at ?? n.created_at)}</span>
                     </span>
                     <b title={n.title} style={{ display: '-webkit-box', marginTop: 2, fontSize: 14, lineHeight: 1.3, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{n.title}</b>
                   </span>

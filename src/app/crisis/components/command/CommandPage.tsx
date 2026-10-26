@@ -15,7 +15,6 @@ import { crisisBase, useCrisis } from '../../[conference]/[crisis]/CrisisContext
 import { loadLastChanges } from './commandData';
 import { ApprovalCard, CommandHeader, LinkBtn, NewsCard, ResourcesCard } from './commandParts';
 import { DirectiveDrawer, WaitingCard } from './commandQueue';
-import TryAsPanel from './TryAsPanel';
 import { BackroomCard, FrontRoomsCard } from './commandRooms';
 
 const WarMap = dynamic(() => import('../map/WarMap'), {
@@ -24,7 +23,7 @@ const WarMap = dynamic(() => import('../map/WarMap'), {
 });
 
 // Crisis Command fits one screen from 1240px wide: the grid takes the height left under the header
-// (56px bar, 4px top, 8px page top, 52px strip, 12px gap, 18px bottom), every card scrolls inside itself
+// (56px bar, 4px top, 8px page top, 48px strip, 10px gap, 18px bottom), every card scrolls inside itself
 // and the map fills its cell. Below 1240px the cards stack and the page scrolls as usual.
 const GRID_CSS = `
 .cmd-grid { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); grid-template-areas: "map" "needs" "side" "res"; }
@@ -35,7 +34,7 @@ const GRID_CSS = `
   .cmd-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "map map" "needs side" "res res"; }
 }
 @media (min-width: 1240px) {
-  .cmd-grid { height: calc(100dvh - 152px); min-height: 540px; grid-template-columns: minmax(300px, 330px) minmax(0, 1fr) minmax(290px, 320px); grid-template-rows: minmax(0, 1fr) auto; grid-template-areas: "needs map side" "needs res side"; }
+  .cmd-grid { height: calc(100dvh - 146px); min-height: 540px; grid-template-columns: minmax(300px, 330px) minmax(0, 1fr) minmax(290px, 320px); grid-template-rows: minmax(0, 1fr) auto; grid-template-areas: "needs map side" "needs res side"; }
   .cmd-col { min-height: 0; }
   .cmd-map > section { height: 100%; overflow: hidden; }
   .cmd-mapbox { flex: 1 1 0; height: auto; min-height: 0; }
@@ -157,10 +156,6 @@ export default function CommandPage() {
         <section className="cmd-res">
           <ResourcesCard cabinets={core.cabinets} types={res?.types ?? []} resources={res?.resources ?? []} changes={changes} loaded={res !== null} base={base} />
         </section>
-      </div>
-
-      <div style={{ marginTop: 14 }}>
-        <TryAsPanel cref={ref} compact />
       </div>
 
       {openDirective && <DirectiveDrawer directive={openDirective} onClose={closeDrawer} />}

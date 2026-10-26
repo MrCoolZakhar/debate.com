@@ -1,6 +1,7 @@
 // Gavelling Crisis: the backroom inbox rules in one place (lanes, filters, queue order, names).
 import { CircleCheck, CircleDashed, CircleHelp, CircleX, Clock, Landmark, Lock, Megaphone, Newspaper, Users, type LucideIcon } from 'lucide-react';
 import { getCrisisClient } from '@/lib/crisis/client';
+import { dirNumber } from '@/lib/crisis/format';
 import type { CrisisRef } from '@/lib/crisis/api';
 import type { Cabinet, Character, Directive, DirectiveKind, DirectiveOutcome, Member } from '@/lib/crisis/types';
 
@@ -82,7 +83,7 @@ export function matchesFilters(d: Directive, f: Filters, n: Names): boolean {
   if (f.kind && d.kind !== (f.kind as DirectiveKind)) return false;
   const q = f.search.trim().toLowerCase();
   if (q) {
-    const hay = `${d.no} no ${d.no} ${d.title} ${authorName(d, n)} ${d.body}`.toLowerCase();
+    const hay = `${dirNumber(d)} no ${dirNumber(d)} ${d.title} ${authorName(d, n)} ${d.body}`.toLowerCase();
     if (!hay.includes(q.replace(/^#/, ''))) return false;
   }
   return true;

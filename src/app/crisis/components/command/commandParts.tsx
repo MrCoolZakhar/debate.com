@@ -11,6 +11,7 @@ import { crisisError, patchCrisis, publishNews, type CrisisRef } from '@/lib/cri
 import type { Cabinet, Crisis, Member, News, Resource, ResourceType } from '@/lib/crisis/types';
 import { Btn, Card, CardTitle, CK, cabinetTint, Eyebrow, fieldStyle, resourceIcon, scenarioLabel, Skeleton, waitLabel } from '../../crisisKit';
 import { formatAmount, groupResourcesByCabinet } from './commandData';
+import { TryAsButton } from './TryAsPanel';
 
 // ─────────── Shared bits ───────────
 
@@ -46,13 +47,6 @@ export function EmptyLine({ children }: { children: ReactNode }) {
 const ago = (iso: string | null | undefined, now: number) => {
   const w = waitLabel(iso, now);
   return w === 'just now' ? w : `${w} ago`;
-};
-
-const hhmm = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-const dayAndTime = (iso: string, now: number) => {
-  const d = new Date(iso);
-  const same = d.toDateString() === new Date(now).toDateString();
-  return same ? hhmm(iso) : `${d.toLocaleDateString([], { day: 'numeric', month: 'short' })} ${hhmm(iso)}`;
 };
 
 // ─────────── Header and status strip ───────────
@@ -157,7 +151,7 @@ export function CommandHeader({ crisis, cref, acronym, logoUrl, members, now, on
   };
 
   return (
-    <div className="flex items-center flex-wrap" style={{ gap: '8px 18px', marginBottom: 12, minHeight: 52 }}>
+    <div className="flex items-center flex-wrap" style={{ gap: '6px 18px', marginBottom: 10, minHeight: 48 }}>
       <div className="flex items-center" style={{ gap: 10, flex: '1 1 260px', minWidth: 0 }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={logoUrl || '/committee-emblems/crisis.svg'} alt="" width={34} height={34} style={{ width: 34, height: 34, borderRadius: '50%', objectFit: 'cover', flex: 'none' }} />
@@ -203,6 +197,7 @@ export function CommandHeader({ crisis, cref, acronym, logoUrl, members, now, on
           <span style={{ fontSize: 14.5, fontWeight: 800, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{online} of {members.length}</span>
         </StripCell>
       </div>
+      <TryAsButton cref={cref} />
       <style>{'.cmd-strip .cmd-cell + .cmd-cell { border-left: 1px solid rgba(255,255,255,0.14); }'}</style>
 
       {pop?.kind === 'date' && (
@@ -355,8 +350,8 @@ export function NewsCard({ news, cabinets, members, base, now }: { news: News[] 
           const aud = n.audience_cabinet_id ? cabinets.find((c) => c.id === n.audience_cabinet_id)?.name ?? 'One room' : 'Every room';
           const by = members.find((m) => m.id === n.published_by)?.display_name;
           return (
-            <div key={n.id} className="flex" style={{ gap: 10, padding: '6px 0', borderTop: i === 0 ? 0 : `1px solid ${CK.hair}` }}>
-              <span style={{ flex: 'none', minWidth: 44, fontSize: 11.5, fontWeight: 800, color: CK.red, fontVariantNumeric: 'tabular-nums' }}>{dayAndTime(n.published_at as string, now)}</span>
+            <div key={n.id} className="flex" style={{ gap: 10, padding: '4px 0', borderTop: i === 0 ? 0 : `1px solid ${CK.hair}` }}>
+              <span title={new Date(n.published_at as string).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} style={{ flex: 'none', minWidth: 62, fontSize: 11.5, fontWeight: 800, color: CK.red }}>{ago(n.published_at, now)}</span>
               <div style={{ minWidth: 0 }}>
                 <b style={{ display: 'block', fontSize: 13, color: CK.ink, overflowWrap: 'anywhere' }}>{n.title}</b>
                 <span style={{ display: 'block', fontSize: 11.5, color: CK.inkSoft, overflowWrap: 'anywhere' }}>{aud}{by ? ` · ${by}` : ''}</span>

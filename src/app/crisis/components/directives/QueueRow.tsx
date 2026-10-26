@@ -9,6 +9,7 @@
 import { useState } from 'react';
 import { Clock, MessageCircle } from 'lucide-react';
 import type { Directive } from '@/lib/crisis/types';
+import { dirNumber } from '@/lib/crisis/format';
 import { Avatar, CK, ThemeTag } from '../../crisisKit';
 import CharacterModal from '../character/CharacterModal';
 import { CabinetLogo, StaffPic } from './directiveParts';
@@ -63,7 +64,7 @@ export default function QueueRow({ d, names, whenLabel, sev, selected, delegateN
             <StaffPic member={backroomer} size={20} />
           </span>
           <span title={d.title} style={{ display: 'block', marginTop: 2, fontSize: 12.5, fontWeight: 600, color: CK.inkSoft, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            No. {d.no} {d.title}
+            No. {dirNumber(d)} {d.title}
           </span>
         </button>
         {characterOpen && ch && <CharacterModal characterId={ch.id} initialTab="directives" onClose={() => setCharacterOpen(false)} />}
@@ -122,7 +123,7 @@ export default function QueueRow({ d, names, whenLabel, sev, selected, delegateN
 
         <span className="flex items-start" style={{ gap: 6, marginTop: 8, fontSize: 13.5, fontWeight: 700, lineHeight: 1.35, overflowWrap: 'break-word' }}>
           <KindIcon size={15} strokeWidth={1.5} aria-label={d.kind} style={{ flex: 'none', marginTop: 2, color: CK.red }} />
-          <span style={{ minWidth: 0 }}><span style={{ color: CK.muted, fontWeight: 600 }}>No. {d.no} </span>{d.title}</span>
+          <span style={{ minWidth: 0 }}><span style={{ color: CK.muted, fontWeight: 600 }}>No. {dirNumber(d)} </span>{d.title}</span>
         </span>
 
         <span className="flex flex-wrap items-center" style={{ gap: '4px 8px', marginTop: 6 }}>

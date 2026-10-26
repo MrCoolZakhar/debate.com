@@ -10,7 +10,7 @@ import type { News } from '@/lib/crisis/types';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { Btn, Card, CardTitle, CK } from '../../crisisKit';
 import NewsComposer from './NewsComposer';
-import { audienceLabel, newsTime, NewsHistory } from './NewsList';
+import { audienceLabel, newsTime, newsTimeTitle, NewsHistory } from './NewsList';
 import { useCrisisNews } from './useCrisisNews';
 import { ALL_ROOMS, useNewsDraft } from './useNewsDraft';
 
@@ -122,7 +122,7 @@ export default function NewsPage() {
             )}
             <b style={{ display: 'block', fontSize: 14, color: CK.ink, overflowWrap: 'anywhere' }}>{n.title}</b>
             <span style={{ fontSize: 12, color: CK.muted }}>
-              {n.source_label ? `${n.source_label} · ` : ''}{audienceLabel(n, cabinets)} · {newsTime(n.created_at)}
+              {n.source_label ? `${n.source_label} · ` : ''}{audienceLabel(n, cabinets)} · <span title={newsTimeTitle(n.created_at)}>{newsTime(n.created_at)}</span>
             </span>
             <p style={{ margin: '4px 0 8px', fontSize: 13, color: CK.inkSoft, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', maxHeight: 180, overflowY: 'auto' }}>{n.body}</p>
             {n.attachment_url && (

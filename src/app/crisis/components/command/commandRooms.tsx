@@ -58,7 +58,7 @@ export function FrontRoomsCard({ cref, cabinets, base }: { cref: CrisisRef; cabi
           {cabinets.map((cab) => {
             const r = byCab.get(cab.id);
             return (
-              <OverhangCard key={cab.id} name={cab.short_name || cab.name} src={cab.logo_url} color={cab.color} size={36} style={{ boxShadow: CK.shadowSm }}>
+              <OverhangCard key={cab.id} name={cab.short_name || cab.name} src={cab.logo_url} color={cab.color} size={36} style={{ boxShadow: CK.shadowSm, padding: '7px 12px 8px 60px', marginTop: 16 }}>
                 <div className="flex flex-wrap items-center justify-between" style={{ gap: '4px 8px' }}>
                   {/* The name keeps its words whole; the buttons wrap below it when the card is narrow. */}
                   <b style={{ fontSize: 14, color: cab.color, overflowWrap: 'break-word', flex: '1 1 120px', minWidth: 'min(120px, 100%)' }}>{cab.name}</b>
@@ -133,7 +133,7 @@ export function BackroomCard({ cref, members, directives, base, onChanged }: {
                 const n = l.open.length;
                 const heavy = n >= 4;
                 return (
-                  <OverhangCard key={l.member.id} name={l.member.display_name} src={l.member.picture_url} color={heavy ? CK.red : CK.forest2} size={33} style={{ boxShadow: CK.shadowSm }}>
+                  <OverhangCard key={l.member.id} name={l.member.display_name} src={l.member.picture_url} color={heavy ? CK.red : CK.forest2} size={33} style={{ boxShadow: CK.shadowSm, padding: '6px 12px 7px 56px', minHeight: 0, marginTop: 15 }}>
                     <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 84px', gap: 9, alignItems: 'center' }}>
                       <span style={{ minWidth: 0 }}>
                         <b style={{ display: 'block', fontSize: 13, color: CK.ink, overflowWrap: 'anywhere' }}>{l.member.display_name}</b>

@@ -198,7 +198,7 @@ export default function NotificationBell() {
                       {firstLine(n.body) && (
                         <span title={n.body ?? undefined} style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', fontSize: 13, color: CK.inkSoft, overflowWrap: 'anywhere' }}>{firstLine(n.body)}</span>
                       )}
-                      <span style={{ display: 'block', marginTop: 2, fontSize: 12, fontWeight: 600, color: CK.muted }}>{ago(n.created_at, now)}</span>
+                      <span title={new Date(n.created_at).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} style={{ display: 'block', marginTop: 2, fontSize: 12, fontWeight: 600, color: CK.muted }}>{ago(n.created_at, now)}</span>
                     </span>
                   </button>
                 ))

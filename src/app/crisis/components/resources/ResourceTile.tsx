@@ -4,6 +4,7 @@
 import { useState } from 'react';
 import { Minus, Plus } from 'lucide-react';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
+import { amount } from '@/lib/crisis/format';
 import { adjustResource, createResource, crisisError, type CrisisRef } from '@/lib/crisis/api';
 import type { Resource, ResourceType } from '@/lib/crisis/types';
 import { Avatar, Btn, CK, fieldStyle, resourceIcon } from '../../crisisKit';
@@ -11,7 +12,7 @@ import { Avatar, Btn, CK, fieldStyle, resourceIcon } from '../../crisisKit';
 export interface LastChange { delta: number; reason: string | null }
 
 export function fmt(n: number): string {
-  return new Intl.NumberFormat('en', { maximumFractionDigits: 2 }).format(n);
+  return amount(n);
 }
 export function signed(n: number): string { return `${n > 0 ? '+' : n < 0 ? '−' : ''}${fmt(Math.abs(n))}`; }
 

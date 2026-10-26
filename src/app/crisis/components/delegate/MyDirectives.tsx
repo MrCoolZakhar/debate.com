@@ -6,6 +6,7 @@
 // directive when there is no reply, clamped to the same number of lines. A click opens the conversation.
 
 import { useState } from 'react';
+import { dirNumber } from '@/lib/crisis/format';
 import { OUTCOME_LABEL, type Directive, type DirectiveNote } from '@/lib/crisis/types';
 import type { CrisisRef } from '@/lib/crisis/api';
 import { Avatar, Card, CK, Skeleton } from '../../crisisKit';
@@ -18,7 +19,6 @@ export interface PersonRef { name: string; picture_url: string | null; color: st
 const CARD_HEIGHT = 112;
 const PORTRAIT = 48;
 const OVERHANG = PORTRAIT / 3;
-const LINES = 3;
 
 function DirectiveCard({ d, author, onOpen }: { d: Directive; author: PersonRef; onOpen: () => void }) {
   const tagColor = d.outcome ? outcomeColor(d.outcome) : statusColor(d.status);
@@ -31,7 +31,7 @@ function DirectiveCard({ d, author, onOpen }: { d: Directive; author: PersonRef;
     <button
       type="button"
       onClick={onOpen}
-      aria-label={`Directive ${d.no}, ${d.title}. ${tagWord}`}
+      aria-label={`Directive ${dirNumber(d)}, ${d.title}. ${tagWord}`}
       className="relative text-left w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] transition-transform active:scale-[0.99]"
       style={{
         height: CARD_HEIGHT, display: 'flex', gap: 10, padding: 0, cursor: 'pointer', fontFamily: CK.font, color: CK.ink,
@@ -60,12 +60,13 @@ function DirectiveCard({ d, author, onOpen }: { d: Directive; author: PersonRef;
       </span>
 
       <span className="flex flex-col min-w-0" style={{ flex: 1, padding: '15px 14px 10px 0' }}>
-        <b title={d.title} style={{ display: '-webkit-box', fontSize: 14.5, lineHeight: 1.3, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+        <b title={d.title} className="line-clamp-2 xl:line-clamp-1" style={{ fontSize: 14.5, lineHeight: 1.3, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>
           {d.title}
         </b>
         <span
           title={text}
-          style={{ display: '-webkit-box', marginTop: 3, fontSize: 13, lineHeight: 1.42, color: CK.inkSoft, overflowWrap: 'anywhere', whiteSpace: 'pre-wrap', WebkitLineClamp: LINES, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+          className="line-clamp-2 xl:line-clamp-3"
+          style={{ marginTop: 3, fontSize: 13, lineHeight: 1.42, color: CK.inkSoft, overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}
         >
           {reply && <b style={{ color: CK.red }}>Reply: </b>}{text}
         </span>

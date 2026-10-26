@@ -3,17 +3,24 @@
 
 import { useState } from 'react';
 import { Clock, Landmark, Newspaper, Radio, Users } from 'lucide-react';
+import { timeAgo } from '@/lib/crisis/format';
 import type { Cabinet, News } from '@/lib/crisis/types';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { CK, Card } from '../../crisisKit';
 import NewsDetailDialog from './NewsDetailDialog';
 
+/** "12 min ago": never a calendar date (the crisis has its own in-world date). */
 export function newsTime(iso: string | null | undefined): string {
-  if (!iso) return '';
+  return timeAgo(iso);
+}
+
+/** The exact time, for a title tooltip. */
+export function newsTimeTitle(iso: string | null | undefined): string | undefined {
+  if (!iso) return undefined;
   try {
     return new Date(iso).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
   } catch {
-    return '';
+    return undefined;
   }
 }
 
@@ -80,7 +87,7 @@ export function NewsMeta({ n, cabinets, size = 14 }: { n: News; cabinets: Cabine
         {n.source_label ? <Radio size={size} strokeWidth={1.5} aria-hidden /> : <Newspaper size={size} strokeWidth={1.5} aria-hidden />}
         {n.source_label || 'Crisis update'}
       </span>
-      <span className="inline-flex items-center gap-1.5" style={{ color: CK.muted, fontWeight: 600 }}>
+      <span className="inline-flex items-center gap-1.5" title={newsTimeTitle(n.published_at ?? n.created_at)} style={{ color: CK.muted, fontWeight: 600 }}>
         <Clock size={size - 1} strokeWidth={1.5} aria-hidden />{newsTime(n.published_at ?? n.created_at)}
       </span>
       <span className="inline-flex items-center gap-1.5" style={{ color: CK.muted, fontWeight: 600, overflowWrap: 'anywhere' }}>

@@ -217,9 +217,9 @@ export default function RoomActions({ room, onChat }: { room: CrisisRoom; onChat
       {ready ? (
         <RequestToSpeak key={room.committee!.id + room.seat!.id} committee={room.committee!} seat={room.seat!} />
       ) : (
-        <Btn tone="red" icon={<Hand size={16} strokeWidth={1.5} aria-hidden />} disabled style={SMALL}>Request to speak</Btn>
+        <Btn tone="ghost" icon={<Hand size={16} strokeWidth={1.5} aria-hidden />} disabled title={chatReason ?? undefined} aria-disabled style={SMALL}>Request to speak</Btn>
       )}
-      <Btn tone="ghost" icon={<MessagesSquare size={16} strokeWidth={1.5} aria-hidden />} disabled={!ready} onClick={onChat} style={SMALL} aria-label={room.unread > 0 ? `Chat, ${room.unread} unread` : 'Chat'}>
+      <Btn tone="ghost" icon={<MessagesSquare size={16} strokeWidth={1.5} aria-hidden />} disabled={!ready} title={chatReason ?? undefined} onClick={onChat} style={SMALL} aria-label={room.unread > 0 ? `Chat, ${room.unread} unread` : 'Chat'}>
         <span className="inline-flex items-baseline" style={{ gap: 5 }}>
           Chat
           {room.unread > 0 && <b aria-hidden style={{ color: CK.red, fontSize: 14, fontVariantNumeric: 'tabular-nums' }}>{room.unread}</b>}

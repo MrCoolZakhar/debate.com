@@ -13,6 +13,7 @@ import type { Feature, FeatureCollection } from 'geojson';
 import { Cloud, Flag, MousePointer2, Pentagon, Plus, Ship, Maximize2 } from 'lucide-react';
 import GSelect from '@/components/GSelect';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
+import { amount as fmtAmount } from '@/lib/crisis/format';
 import {
   crisisError, deleteShape, deleteUnit, loadMap, saveShape, saveUnit, setRegionOwner,
 } from '@/lib/crisis/api';
@@ -108,6 +109,7 @@ export default function WarMap({ compact = false }: { compact?: boolean }) {
   const writes = useRef(0);
   const seq = useRef(0);
   const [busy, setBusy] = useState(false);
+  const [mapReady, setMapReady] = useState(false);
   const [last, setLast] = useState<{ at: number; text: string } | null>(null);
 
   useEffect(() => { dataRef.current = data; }, [data]);
@@ -187,7 +189,8 @@ export default function WarMap({ compact = false }: { compact?: boolean }) {
 
   // New units and claims go to the cabinet being viewed, else the first cabinet.
   const defaultOwner = viewer ?? cabinets[0]?.id ?? null;
-  const brush: string = brushState !== undefined && (brushState === '' || cabById.has(brushState)) ? brushState : defaultOwner ?? '';
+  // The chosen owner is state, never derived from loaded data, so a live reload cannot reset it.
+  const brush: string = brushState !== undefined ? brushState : defaultOwner ?? '';
   const freshDraft = useCallback((): Draft => ({
     sid: new Date().getTime(), shapeId: null, phase: 'draw', points: [], owner: defaultOwner,
   }), [defaultOwner]);
@@ -259,7 +262,14 @@ export default function WarMap({ compact = false }: { compact?: boolean }) {
     });
   }, [ref, run]);
 
-  const pickOwner = useCallback(async (key: string, name: string, owner: string | null) => {
+  const [undoBorder, setUndoBorder] = useState<{ key: string; name: string; prev: string | null; sid: number } | null>(null);
+  useEffect(() => {
+    if (!undoBorder) return;
+    const t = window.setTimeout(() => setUndoBorder(null), 10000);
+    return () => window.clearTimeout(t);
+  }, [undoBorder]);
+
+  const pickOwner = useCallback(async (key: string, name: string, owner: string | null, isUndo = false) => {
     const before = dataRef.current;
     if (!before) return;
     const current = before.regions.find((r) => r.region_key === key)?.owner_cabinet_id ?? null;
@@ -274,6 +284,7 @@ export default function WarMap({ compact = false }: { compact?: boolean }) {
         await setRegionOwner(ref, key, owner);
         const who = owner ? cabById.get(owner)?.name ?? 'a cabinet' : 'nobody';
         setLast({ at: new Date().getTime(), text: `You gave ${name} to ${who}` });
+        setUndoBorder(isUndo ? null : { key, name, prev: current, sid: new Date().getTime() });
       } catch (e) {
         setData(before);
         notifyErr(crisisError(e, 'Could not change the border.'), 'crisis-map');
@@ -545,6 +556,7 @@ export default function WarMap({ compact = false }: { compact?: boolean }) {
           m.on('zoom', syncLabels);
           syncLabels();
           setWorld(w);
+          m.once('idle', () => { if (!cancelled) setMapReady(true); });
           // Re-measure and draw once the page has settled: the first frame was sometimes never painted.
           m.resize(); m.triggerRepaint();
           window.requestAnimationFrame(() => { if (!cancelled) { m.resize(); m.triggerRepaint(); } });
@@ -907,7 +919,7 @@ export default function WarMap({ compact = false }: { compact?: boolean }) {
   const compactInfo = compact && selUnitRow
     ? selUnitRow.suspected
       ? 'Suspected site'
-      : `${selUnitRow.u.name} · ${KIND_META[selUnitRow.u.kind].label} · ${selUnitRow.u.strength.toLocaleString('en-GB')}`
+      : `${selUnitRow.u.name} · ${KIND_META[selUnitRow.u.kind].label} · ${fmtAmount(selUnitRow.u.strength)}`
     : null;
 
   return (
@@ -969,6 +981,20 @@ export default function WarMap({ compact = false }: { compact?: boolean }) {
                 <p style={{ margin: '0 0 10px' }}>{mapError ?? loadError}</p>
                 {!mapError && <button type="button" className="wm-tool" style={{ margin: '0 auto' }} onClick={() => { void reload(); }}>Try again</button>}
               </div>
+            </div>
+          )}
+          {!mapReady && !mapError && !loadError && (
+            <div role="status" aria-live="polite" style={{ position: 'absolute', inset: 0, zIndex: 5, display: 'grid', placeItems: 'center', background: 'rgba(255,255,255,0.55)', pointerEvents: 'none' }}>
+              <span className="inline-flex items-center" style={{ gap: 10, fontFamily: CK.font, fontSize: 14, fontWeight: 700, color: CK.ink }}>
+                <span className="animate-spin" aria-hidden style={{ width: 18, height: 18, borderRadius: '50%', border: `2.5px solid ${CK.hair}`, borderTopColor: CK.ink }} />
+                Loading the map
+              </span>
+            </div>
+          )}
+          {undoBorder && (
+            <div role="status" className="wm-move" style={{ fontFamily: CK.font, width: 'auto', top: 'auto', bottom: 56, left: '50%', transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: 10, zIndex: 6 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: CK.ink, overflowWrap: 'anywhere' }}>{undoBorder.name} changed hands</span>
+              <Btn size="sm" tone="ghost" onClick={() => { const u = undoBorder; setUndoBorder(null); void pickOwner(u.key, u.name, u.prev, true); }}>Undo</Btn>
             </div>
           )}
           {hint && <div className="wm-hint">{hint}</div>}

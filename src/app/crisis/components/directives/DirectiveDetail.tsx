@@ -14,6 +14,7 @@ import GSelect from '@/components/GSelect';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { addNote, answerDirective, assignDirective, crisisError, listNotes, loadSecrets } from '@/lib/crisis/api';
 import { getCrisisClient } from '@/lib/crisis/client';
+import { dirNumber, timeAgo } from '@/lib/crisis/format';
 import {
   KIND_LABEL, OUTCOME_LABEL, ROLE_LABEL,
   type Directive, type DirectiveNote, type DirectiveOutcome,
@@ -54,7 +55,6 @@ function Tile({ icon, label, value }: { icon: ReactNode; label: string; value: R
   );
 }
 
-const timeOf = (iso: string) => new Date(iso).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
 const PORTRAIT = 92;
 const OVERHANG = Math.round(PORTRAIT / 3);
@@ -318,7 +318,7 @@ function DirectiveDetailInner({ directive, onClose, onChanged, notesVersion = 0 
       <div>
         <div className="flex items-center" style={{ gap: 6 }}>
           <span aria-hidden style={{ color: CK.red, lineHeight: 0 }}><KindIcon size={15} strokeWidth={1.5} /></span>
-          <Eyebrow>{`${KIND_LABEL[d.kind].toUpperCase()} · NO. ${d.no}`}</Eyebrow>
+          <Eyebrow>{`${KIND_LABEL[d.kind].toUpperCase()} · NO. ${dirNumber(d)}`}</Eyebrow>
         </div>
         <h3 style={{ margin: '3px 0 0', fontSize: 20, fontWeight: 800, lineHeight: 1.25, color: CK.ink, overflowWrap: 'break-word' }}>{d.title}</h3>
       </div>
@@ -377,7 +377,7 @@ function DirectiveDetailInner({ directive, onClose, onChanged, notesVersion = 0 
                   <span style={{ color: CK.ink }}>{fromAuthor ? `${who}, the delegate` : memberName(n.member_id, names, 'Staff')}</span>
                   {!fromAuthor && n.internal && <span className="inline-flex items-center" style={{ gap: 3, color: CK.goldDeep }}><Lock size={11} strokeWidth={1.6} aria-hidden />Internal note</span>}
                   {!fromAuthor && !n.internal && <span style={{ fontWeight: 600, color: CK.muted }}>Seen by the delegate</span>}
-                  <span style={{ fontWeight: 500, color: CK.muted }}>{timeOf(n.created_at)}</span>
+                  <span title={new Date(n.created_at).toLocaleString()} style={{ fontWeight: 500, color: CK.muted }}>{timeAgo(n.created_at)}</span>
                 </p>
                 <p style={{ margin: '4px 0 0', fontSize: 13.5, whiteSpace: 'pre-wrap', overflowWrap: 'break-word' }}>{n.body}</p>
               </div>
@@ -441,10 +441,10 @@ function DirectiveDetailInner({ directive, onClose, onChanged, notesVersion = 0 
           <div style={{ position: 'relative' }}>
             <textarea value={reply} onChange={(e) => { setReply(e.target.value); setSaved(false); }} rows={5} maxLength={8000}
               aria-label="Reply to the delegate" placeholder={`Reply to ${who}`} style={{ ...fieldStyle, resize: 'vertical', background: CK.page, paddingBottom: 48 }} />
-            <button type="button" onClick={() => setActionsOpen(true)} aria-label="Do more with this reply" title="Do more with this reply"
-              className="grid place-items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] active:scale-[0.95] transition-transform"
-              style={{ position: 'absolute', left: 10, bottom: 10, width: 32, height: 32, borderRadius: '50%', border: 0, background: CK.greenBtn, color: '#fff', boxShadow: CK.shadowSm, cursor: 'pointer' }}>
-              <Plus size={18} strokeWidth={1.8} />
+            <button type="button" onClick={() => setActionsOpen(true)}
+              className="inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] active:scale-[0.97] transition-transform"
+              style={{ position: 'absolute', left: 10, bottom: 10, gap: 6, height: 32, padding: '0 14px 0 10px', borderRadius: 12, border: 0, background: CK.greenBtn, color: '#fff', boxShadow: CK.shadowSm, cursor: 'pointer', fontFamily: CK.font, fontSize: 13, fontWeight: 700 }}>
+              <Plus size={16} strokeWidth={1.8} aria-hidden />Add an action
             </button>
             {saved && (
               <span className="inline-flex items-center" aria-live="polite" style={{ position: 'absolute', right: 14, bottom: 14, gap: 4, fontSize: 11.5, fontWeight: 700, color: CK.muted }}>

@@ -4,13 +4,15 @@
 // their own account). "View as" adds a token for this device only; "Back to my account" in the
 // top bar removes it. Used on /crisis and on the Command page.
 
-import { useEffect, useMemo, useState } from 'react';
-import { Eye, Gavel, GraduationCap } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Eye, Gavel, GraduationCap, X } from 'lucide-react';
+import Portal from '@/components/Portal';
+import { useAuth } from '@/components/AuthProvider';
 import { notifyErr } from '@/lib/appNotify';
 import { clearCrisisToken, getCrisisClient } from '@/lib/crisis/client';
 import { crisisError, viewAs, type CrisisRef } from '@/lib/crisis/api';
 import { MEMBER_COLUMNS, ROLE_LABEL, type Cabinet, type Character, type Member } from '@/lib/crisis/types';
-import { Avatar, CK, Card, CardTitle, Skeleton } from '../../crisisKit';
+import { Avatar, Btn, CK, Card, CardTitle, Skeleton } from '../../crisisKit';
 
 interface Loaded {
   members: Member[];
@@ -65,12 +67,16 @@ export default function TryAsPanel({ cref, compact }: { cref: CrisisRef; compact
   const [data, setData] = useState<Loaded | null>(null);
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  // "View as" needs the director's own Gavelling account: someone signed in with a personal code has none.
+  const { user, loading: authLoading } = useAuth();
+  const noAccount = !authLoading && !user;
 
   useEffect(() => {
+    if (noAccount || authLoading) return;
     let cancelled = false;
     loadTryAs(cref.id).then((d) => { if (!cancelled) setData(d); }).catch(() => { if (!cancelled) setFailed(true); });
     return () => { cancelled = true; };
-  }, [cref.id]);
+  }, [cref.id, noAccount, authLoading]);
 
   const charName = useMemo(() => new Map((data?.characters ?? []).map((c) => [c.id, c.name])), [data]);
   const charPicture = useMemo(() => new Map((data?.characters ?? []).map((c) => [c.id, c.picture_url])), [data]);
@@ -108,9 +114,10 @@ export default function TryAsPanel({ cref, compact }: { cref: CrisisRef; compact
       <CardTitle icon={<Eye size={17} strokeWidth={1.5} />} sub="Open the crisis as someone else on this device. Use Back to my account at the top to return.">
         Try It As
       </CardTitle>
-      {failed && <p style={{ margin: 0, fontSize: 13, color: CK.danger }}>Could not load the people in this crisis.</p>}
-      {!data && !failed && <div className="grid" style={{ gap: 8 }}><Skeleton h={30} /><Skeleton h={30} /></div>}
-      {data && (
+      {noAccount && <p style={{ margin: 0, fontSize: 14, color: CK.inkSoft }}>Try it as works when you are signed in with your Gavelling account.</p>}
+      {!noAccount && failed && <p style={{ margin: 0, fontSize: 13, color: CK.danger }}>Could not load the people in this crisis.</p>}
+      {!noAccount && !data && !failed && <div className="grid" style={{ gap: 8 }}><Skeleton h={30} /><Skeleton h={30} /></div>}
+      {!noAccount && data && (
         <div className="grid" style={{ gap: compact ? 10 : 14 }}>
           {staff.length > 0 && (
             <div>
@@ -157,5 +164,52 @@ export default function TryAsPanel({ cref, compact }: { cref: CrisisRef; compact
         </div>
       )}
     </Card>
+  );
+}
+
+/** The compact header button: "Try it as" opens the panel in a scrollable pop-up (loaded only when opened). */
+export function TryAsButton({ cref }: { cref: CrisisRef }) {
+  const [open, setOpen] = useState(false);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !e.defaultPrevented) setOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    closeRef.current?.focus();
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open]);
+  return (
+    <>
+      <Btn tone="ghost" size="sm" icon={<Eye size={14} strokeWidth={1.5} aria-hidden />} onClick={() => setOpen(true)} aria-haspopup="dialog" aria-expanded={open}>
+        Try it as
+      </Btn>
+      {open && (
+        <Portal>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 250, display: 'grid', placeItems: 'center', padding: 12, fontFamily: CK.font }}>
+            <div aria-hidden onMouseDown={() => setOpen(false)} style={{ position: 'absolute', inset: 0, background: 'rgba(58,14,15,0.42)' }} />
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Try it as"
+              style={{ position: 'relative', width: 'min(760px, 100%)', maxHeight: 'calc(100dvh - 48px)', overflowY: 'auto', borderRadius: 24, background: CK.surface, boxShadow: '0 24px 60px rgba(58,14,15,0.35)' }}
+            >
+              <button
+                ref={closeRef}
+                type="button"
+                onClick={() => setOpen(false)}
+                aria-label="Close"
+                className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+                style={{ position: 'absolute', top: 12, right: 12, zIndex: 1, border: 0, background: CK.card, borderRadius: 10, width: 34, height: 34, cursor: 'pointer', color: CK.forest, boxShadow: CK.shadowSm, display: 'grid', placeItems: 'center' }}
+              >
+                <X size={18} strokeWidth={1.6} />
+              </button>
+              <TryAsPanel cref={cref} compact />
+            </div>
+          </div>
+        </Portal>
+      )}
+    </>
   );
 }

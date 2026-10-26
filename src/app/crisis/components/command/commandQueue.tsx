@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { Hourglass, X } from 'lucide-react';
 import Portal from '@/components/Portal';
+import { dirNumber } from '@/lib/crisis/format';
 import type { Directive } from '@/lib/crisis/types';
 import { Card, CardTitle, CK, Skeleton, cabinetTint, waitLabel, waitSeverity } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
@@ -88,7 +89,7 @@ export function DirectiveDrawer({ directive, onClose }: { directive: Directive; 
         <div onClick={onClose} aria-hidden style={{ position: 'absolute', inset: 0, background: cabinetTint(CK.redDeep, 0.4) }} />
         <aside
           role="dialog"
-          aria-label={`Directive ${directive.no}`}
+          aria-label={`Directive ${dirNumber(directive)}`}
           style={{
             position: 'absolute', top: 0, right: 0, bottom: 0, width: 'min(560px, 100vw)', background: CK.page, boxShadow: '-14px 0 40px rgba(58,14,15,0.28)',
             display: 'flex', flexDirection: 'column', animation: 'cmd-drawer-in 220ms cubic-bezier(0.22,1,0.36,1)', fontFamily: CK.font, color: CK.ink,

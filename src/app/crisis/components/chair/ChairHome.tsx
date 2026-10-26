@@ -2,6 +2,7 @@
 // Gavelling Crisis: the chair's home, "Front Room". The live chair console, the in-world date,
 // the news, the directives the chair may read and the cabinet's resources.
 
+import { dirNumber } from '@/lib/crisis/format';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Boxes, CalendarClock, MonitorPlay, ScrollText } from 'lucide-react';
@@ -149,7 +150,7 @@ export default function ChairHome() {
           <div className="grid gap-3">
             {(directives ?? []).map((d) => (
               <Card key={d.id}>
-                <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: CK.muted }}>Directive {d.no} · {KIND_LABEL[d.kind]} · {whenLabel(d.created_at)}</p>
+                <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: CK.muted }}>Directive {dirNumber(d)} · {KIND_LABEL[d.kind]} · {whenLabel(d.created_at)}</p>
                 <h3 style={{ margin: '2px 0 4px', fontSize: 15, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{d.title}</h3>
                 <StatusLine s={d.status} />
                 {charName(d.author_character_id) && <p style={{ margin: '4px 0 0', fontSize: 12.5, color: CK.inkSoft, overflowWrap: 'anywhere' }}>From {charName(d.author_character_id)}</p>}

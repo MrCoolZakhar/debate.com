@@ -63,12 +63,15 @@ function navFor(role: CrisisRole, base: string): NavItem[] {
 function Rail({ v, items }: { v: CrisisContextValue; items: NavItem[] }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  // A new page closes the rail (adjusted while rendering, so no effect sets state).
+  const [shownPath, setShownPath] = useState(pathname);
+  if (shownPath !== pathname) { setShownPath(pathname); setOpen(false); }
   return (
     <aside
       aria-label="Crisis navigation"
       onMouseEnter={() => setOpen(true)}
       onMouseLeave={() => setOpen(false)}
-      onFocus={() => setOpen(true)}
+      onFocus={(e) => { if (e.target instanceof Element && e.target.matches(':focus-visible')) setOpen(true); }}
       onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setOpen(false); }}
       className="hidden md:flex flex-col fixed"
       style={{
@@ -102,6 +105,7 @@ function Rail({ v, items }: { v: CrisisContextValue; items: NavItem[] }) {
               )}
               <Link
                 href={it.href}
+                onClick={() => setOpen(false)}
                 title={open ? undefined : it.label}
                 className="flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]"
                 style={{

@@ -5,7 +5,7 @@
 //   directives open or paused) and the resources, two per row.
 //   Middle: Send a Directive, sized to fit one screen at 1440x900.
 //   Right: the latest news (with this cabinet's big numbers), then My Directives.
-// On a phone it stacks: character and buttons, send directive, news, my directives, facts and resources.
+// On a phone it stacks: character and buttons, my directives (where replies arrive), send directive, speakers list, news, facts and resources.
 // The live room is loaded once (useCrisisRoom) and shared by the speakers list, the request and the chat.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -120,27 +120,31 @@ export default function DelegateHome() {
       <div className="flex flex-col gap-6 xl:grid xl:items-start xl:gap-5 xl:grid-cols-[280px_minmax(0,6fr)_minmax(0,5fr)]">
         {/* Left: the character, the buttons, the speakers list; the facts and resources come last on a phone. */}
         <div className="contents xl:flex xl:flex-col xl:gap-5 xl:min-w-0">
-          <div className="order-1 xl:order-none min-w-0 flex flex-col gap-3">
-            <section aria-label="My profile">
-              <ProfileCard me={me} cabinet={cabinet} color={myColor} onOpen={() => setDialog('character')} />
-            </section>
-            <section aria-label="Actions">
-              <RoomActions room={room} onChat={() => setDialog('chat')} />
-            </section>
-            <Card style={{ padding: '10px 12px 12px' }}>
-              <section aria-label="Speakers list">
-                <h2 style={{ margin: '0 0 4px', fontSize: 13.5, fontWeight: 800, color: CK.ink }}>Speakers List</h2>
-                <SpeakersList room={room} characters={everyone} />
+          <div className="contents xl:flex xl:flex-col xl:gap-3 xl:min-w-0">
+            <div className="order-1 xl:order-none min-w-0 flex flex-col gap-3">
+              <section aria-label="My profile">
+                <ProfileCard me={me} cabinet={cabinet} color={myColor} onOpen={() => setDialog('character')} />
               </section>
-            </Card>
+              <section aria-label="Actions">
+                <RoomActions room={room} onChat={() => setDialog('chat')} />
+              </section>
+            </div>
+            <div className="order-4 xl:order-none min-w-0">
+              <Card style={{ padding: '10px 12px 12px' }}>
+                <section aria-label="Speakers list">
+                  <h2 style={{ margin: '0 0 4px', fontSize: 13.5, fontWeight: 800, color: CK.ink }}>Speakers List</h2>
+                  <SpeakersList room={room} characters={everyone} />
+                </section>
+              </Card>
+            </div>
           </div>
-          <div className="order-5 xl:order-none min-w-0">
+          <div className="order-6 xl:order-none min-w-0">
             <FactsCard crisis={crisis} types={res?.types ?? null} resources={myResources} characterId={characterId} color={myColor} />
           </div>
         </div>
 
         {/* Middle: the most important thing on the page. */}
-        <div className="order-2 xl:order-none min-w-0 xl:pt-[38px]">
+        <div className="order-3 xl:order-none min-w-0 xl:pt-[38px]">
           <DirectiveForm
             cref={ref}
             memberId={memberId}
@@ -157,7 +161,7 @@ export default function DelegateHome() {
 
         {/* Right: the news, then my directives. */}
         <div className="contents xl:flex xl:flex-col xl:gap-6 xl:min-w-0 xl:pt-[38px]">
-          <div className="order-3 xl:order-none min-w-0">
+          <div className="order-5 xl:order-none min-w-0">
             <NewsPanel
               items={news.items}
               cabinetId={cabinetId}
@@ -165,7 +169,7 @@ export default function DelegateHome() {
               onAll={() => { setStory(null); setDialog('news'); }}
             />
           </div>
-          <div className="order-4 xl:order-none min-w-0">
+          <div className="order-2 xl:order-none min-w-0">
             <MyDirectives
               cref={ref}
               directives={directives}

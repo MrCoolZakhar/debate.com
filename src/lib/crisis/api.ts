@@ -240,7 +240,7 @@ export interface DirectiveDraft {
   resources_used?: string; goal?: string; affects?: string; covert?: boolean; coauthors?: string[];
 }
 export type SubmitResult =
-  | { ok: true; id: string; no: number }
+  | { ok: true; id: string; no: number; cabinet_no?: number | null }
   | { ok: false; reason: 'paused'; note?: string | null }
   | { ok: false; reason: 'cooldown'; wait_seconds: number }
   | { ok: false; reason: 'too_long'; limit: number };

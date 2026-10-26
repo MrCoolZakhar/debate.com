@@ -2,6 +2,7 @@
 // adds locally (the front rooms' live state and the resource log); everything else comes from api.ts.
 
 import { getCrisisClient } from '@/lib/crisis/client';
+import { amount } from '@/lib/crisis/format';
 import type { Cabinet, Directive, Member, Resource } from '@/lib/crisis/types';
 import type { CrisisRef } from '@/lib/crisis/api';
 import { isOpenStatus } from '../directives/directiveKit';
@@ -89,7 +90,7 @@ export async function loadLastChanges(ref: CrisisRef): Promise<Map<string, numbe
 }
 
 export function formatAmount(n: number): string {
-  return Number.isInteger(n) ? n.toLocaleString('en-US') : n.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  return amount(n);
 }
 
 // ─────────── Backroom load ───────────

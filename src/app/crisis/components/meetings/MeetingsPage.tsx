@@ -63,9 +63,9 @@ export default function MeetingsPage() {
 
   if (isDelegate) {
     return (
-      <div style={{ paddingBottom: 40 }}>
+      <div style={{ paddingBottom: 40, width: '100%', minWidth: 0 }}>
         {heading}
-        <div className="grid items-start" style={{ gap: 18, gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 420px), 1fr))' }}>
+        <div className="grid items-start" style={{ gap: 18, gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 460px), 1fr))' }}>
           <AskMeeting refx={ref} people={people} cabinets={core.cabinets} myCharacterId={characterId} onDone={() => void load()} />
           <div>
             <h2 style={{ margin: '0 0 4px', fontSize: 16, fontWeight: 800, color: CK.ink }}>Your meetings</h2>
@@ -100,9 +100,9 @@ export default function MeetingsPage() {
   ];
 
   return (
-    <div style={{ paddingBottom: 40 }}>
+    <div style={{ paddingBottom: 40, width: '100%', minWidth: 0 }}>
       {heading}
-      <div className="grid items-start" style={{ gap: 18, gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))' }}>
+      <div className="grid items-start" style={{ gap: 18, gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))' }}>
         {lanes.map((l) => (
           <section key={l.key} aria-label={l.label} style={{ minWidth: 0 }}>
             <div className="flex items-baseline gap-2" style={{ color: l.color }}>

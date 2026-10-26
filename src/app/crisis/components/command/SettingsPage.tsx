@@ -62,7 +62,8 @@ function SettingsBody() {
   return (
     <div style={{ fontFamily: CK.font }}>
       <PageHeading eyebrow="SET UP" title="Settings" />
-      <div style={{ display: 'grid', gap: 14, gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 420px), 1fr))', alignItems: 'start' }}>
+      <div className="crisis-settings-cols">
+        <style>{`.crisis-settings-cols{column-width:420px;column-gap:14px}.crisis-settings-cols>*{break-inside:avoid;margin-bottom:14px;display:block}`}</style>
         <Card>
           <CardTitle icon={<ScrollText size={16} strokeWidth={1.5} />}>Directives</CardTitle>
           <ChoiceRow title="Time between directives" hint="How long a delegate waits before sending another directive.">
@@ -105,15 +106,7 @@ function SettingsBody() {
         </Card>
 
         <Card>
-          <CardTitle icon={<MessageSquare size={16} strokeWidth={1.5} />}>Messages</CardTitle>
-          <ChoiceRow title="Messages between delegates" hint="Free: delegates write to each other at once and backroomers can read them. Need approval: the backroom approves each message. Off: no messages.">
-            <Segmented
-              ariaLabel="Messages between delegates"
-              value={s.messages}
-              onChange={(x) => save('messages', x)}
-              options={[{ value: 'free', label: 'Free' }, { value: 'approval', label: 'Need backroom approval' }, { value: 'off', label: 'Off' }]}
-            />
-          </ChoiceRow>
+          <CardTitle icon={<MessageSquare size={16} strokeWidth={1.5} />}>Meetings</CardTitle>
           <ToggleRow title="Meetings need approval" checked={s.meetingsNeedApproval} onChange={(on) => save('meetingsNeedApproval', on)} hint="Meetings happen in person. The backroomer or the Crisis Director approves the request." />
         </Card>
 

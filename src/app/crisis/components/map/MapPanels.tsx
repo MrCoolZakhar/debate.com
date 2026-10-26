@@ -6,6 +6,7 @@
 import { useState, type ReactNode } from 'react';
 import { Check, Trash2, X, Undo2 } from 'lucide-react';
 import GSelect from '@/components/GSelect';
+import { amount as fmtAmount } from '@/lib/crisis/format';
 import { Btn, CK, FieldLabel, fieldStyle } from '../../crisisKit';
 import type { MapUnit, UnitKind } from '@/lib/crisis/types';
 import { KIND_META, KIND_ORDER } from './mapData';
@@ -248,7 +249,7 @@ export function UnitViewer({ unit, suspected, cabinets, onClose }: { unit: MapUn
       ) : (
         <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '6px 12px', fontSize: 13.5 }}>
           <dt style={{ color: CK.muted }}>Kind</dt><dd style={{ margin: 0 }}>{KIND_META[unit.kind].label}</dd>
-          <dt style={{ color: CK.muted }}>Amount</dt><dd style={{ margin: 0, fontVariantNumeric: 'tabular-nums' }}>{unit.strength.toLocaleString('en-GB')}</dd>
+          <dt style={{ color: CK.muted }}>Amount</dt><dd style={{ margin: 0, fontVariantNumeric: 'tabular-nums' }}>{fmtAmount(unit.strength)}</dd>
           <dt style={{ color: CK.muted }}>Held by</dt>
           <dd className="flex items-center" style={{ margin: 0, gap: 6, overflowWrap: 'anywhere' }}>
             {owner ? (<><Dot color={owner.color} />{owner.name}</>) : 'Nobody'}
