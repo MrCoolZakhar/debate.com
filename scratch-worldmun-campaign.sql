@@ -1,5 +1,5 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- SECTION 1 APPLIED 28 Oct 2026 (Peter: audience 18+, send today). SECTION 2 INSERTED as worldmun-2027-apply, audience conference-nonapplicants-18, started_at NULL (Budapest line removed). Test sent to wearegavelling@gmail.com. Owner starts it.
+-- SECTION 1 APPLIED, campaign worldmun-2027-apply STARTED 28 Oct 2026 09:51 UTC (Peter): audience conference-nonapplicants-18, 3,232 people, only WorldMUN applicants, chairs, organisers and invites left out.
 --
 -- Harvard WorldMUN 2027: apply-now campaign to every Gavelling user who is not
 -- connected to WorldMUN. Written 28 Oct 2026 by a Claude Code run that may not
