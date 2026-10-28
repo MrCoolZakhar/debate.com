@@ -520,6 +520,19 @@ const FLOOR_FLAG_CSS = `clamp(96px, calc(100cqh - 246px), ${FLOOR_FLAG_PX}px)`;
 const FLOOR_DISC_CSS = `clamp(96px, calc(100cqh - 246px), ${FLOOR_DISC_PX}px)`;
 const FLOOR_CLOCK_FONT = 'clamp(3rem, calc(87cqh - 214px), 5rem)';
 const FLOOR_FLAG_FIT = { width: FLOOR_FLAG_CSS, height: FLOOR_FLAG_CSS, minWidth: FLOOR_FLAG_CSS } as const;
+// The unmoderated caucus and the Consultation of the Whole (28 Oct 2026): the same guarantee.
+// Their middle (clock, progress bar, delegation board) is a FLOOR_ZONE_STYLE container between
+// the header and the button row, which sits BELOW it in normal flow, so nothing in the middle
+// can reach the buttons. The board gives way first (it is a flex column that shrinks, down to
+// one row of tiles, see CowDelegationBoard), then the clock steps down to 2.5rem; the gaps
+// shrink with the zone too. 191px = the rest of a Consultation's middle (bar 40, gaps 48, the
+// board's smallest 123) and 60px = the plain caucus's (bar 40, gap 24) with a little slack, so
+// a plain caucus keeps the full 5rem clock in every case. Pure CSS: nothing measured, no state.
+const UNMOD_CLOCK_FONT = 'clamp(2.5rem, calc(87cqh - 60px), 5rem)';
+const UNMOD_CLOCK_FONT_COW = 'clamp(2.5rem, calc(87cqh - 191px), 5rem)';
+const UNMOD_GAP_CLOCK = 'clamp(8px, 4cqh, 24px)';
+const UNMOD_GAP_BAR = 'clamp(8px, 5.4cqh, 32px)';
+const UNMOD_GAP_BOARD = 'clamp(4px, 4cqh, 24px)';
 
 function DraggableSpeakersQueue({ list, onReorder, onRemove, onRemoveCurrent, lastSpeakerDelegateId, currentSpeakerDelegateId, onDeckDelegateId, header, isRoomOrderTdT }: {
   list: { delegateId: string; country: string }[];
@@ -977,7 +990,7 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false, ga
   const plainLabel = (label: string) => label.replace(/[▶►⏸→←‖]/g, '').replace(/\s+/g, ' ').trim();
 
   return (
-    <div className="relative flex-1 flex flex-col items-center px-8 pb-12">
+    <div className="relative flex-1 min-h-0 flex flex-col items-center px-8 pb-6">
       {/* The motion's name, who raised it and the topic: the SAME header, in the same place,
           as the moderated caucus and the Tour de Table (FloorModeHeader, Oct 2026, owner). */}
       <div className="w-full flex justify-center pt-2 shrink-0">
@@ -988,7 +1001,9 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false, ga
           trailing: caucus.proposedBy ? <CaucusProposer proposedBy={caucus.proposedBy} size={24} fontSize={14} hideName /> : null,
         }} />
       </div>
-      <div className="flex-1 w-full flex flex-col items-center justify-center pt-4">
+      {/* The middle: a size container between the header and the button row (UNMOD_* sizes
+          above). overflow-hidden is a backstop only; the board and the clock shrink first. */}
+      <div className="flex-1 min-h-0 w-full overflow-hidden flex flex-col items-center justify-center pt-4" style={FLOOR_ZONE_STYLE}>
       {/* liveTotal, not caucus.remainingTime — the stored field is the value at the anchor,
           so rendering it raw is a clock that only moves when the chair writes. */}
       {/* A Commenter's gavel cue (Oct 2026): below the committee's gavel mark the running
@@ -999,21 +1014,22 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false, ga
           nothing about who can start or pause the caucus changes (25 Oct 2026). */}
       <SpeakerClock
         running={running}
-        className={`floor-emblem-anchor font-black font-mono tabular-nums mb-6 ${
+        className={`floor-emblem-anchor shrink-0 font-black font-mono tabular-nums ${
           isViewOnly && !!unmodAnchor && liveTotal > 0 && liveTotal <= clampGavelSeconds(committee.dbSettings?.gavelSoundAtSeconds) ? 'uc-pulse' : ''}`}
-        style={{ fontSize: FLOOR_CLOCK_FONT, lineHeight: 1.15, color: liveTotal <= 30 ? '#8B2020' : '#1C1410' }}
+        style={{ fontSize: caucus.isConsultation ? UNMOD_CLOCK_FONT_COW : UNMOD_CLOCK_FONT, lineHeight: 1.15, marginBottom: UNMOD_GAP_CLOCK, color: liveTotal <= 30 ? '#8B2020' : '#1C1410' }}
       >
         {formatTime(liveTotal)}
       </SpeakerClock>
-      <div className="w-full max-w-sm h-2 bg-[#DDD4C0] rounded-full overflow-hidden mb-8">
+      <div className="w-full max-w-sm shrink-0 h-2 bg-[#DDD4C0] rounded-full overflow-hidden" style={{ marginBottom: UNMOD_GAP_BAR }}>
         <div className="h-full bg-[#B6871F] rounded-full transition-all" style={{ width: `${caucus.totalTime > 0 ? (liveTotal / caucus.totalTime) * 100 : 0}%` }} />
       </div>
       {/* Consultation of the Whole — live open-floor delegation board (tap to set speaker; Commenters too) */}
       {caucus.isConsultation && (
-        <div className="w-full max-w-xl mb-6">
+        <div className="w-full max-w-xl min-h-0 flex flex-col" style={{ marginBottom: UNMOD_GAP_BOARD }}>
           <CowDelegationBoard committee={committee} onTap={cowCanTap ? handleCowTap : undefined} />
         </div>
       )}
+      </div>
       {/* The floor's button row, in SpeakerControls' pieces (25 Oct 2026): Start / Pause as the
           primary, Extend and the Consultation timer as icon tiles with their word beneath, End
           caucus in the palette red. Same handlers as before. */}
@@ -1136,7 +1152,7 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false, ga
         </DraggablePopover>
       )}
       {showExtendUnmod && (
-        <div className="mt-4 rounded-xl px-4 py-3" style={{ minWidth: '180px', backgroundColor: POPOVER_TONES.time.surface, boxShadow: `0 0 0 1px ${POPOVER_TONES.time.accent}, 0 2px 6px rgba(27,56,40,0.10), 0 14px 34px rgba(27,56,40,0.22)` }}>
+        <div className="mt-4 shrink-0 rounded-xl px-4 py-3" style={{ minWidth: '180px', backgroundColor: POPOVER_TONES.time.surface, boxShadow: `0 0 0 1px ${POPOVER_TONES.time.accent}, 0 2px 6px rgba(27,56,40,0.10), 0 14px 34px rgba(27,56,40,0.22)` }}>
           <div className="flex gap-1.5 mb-2 justify-center">
             {(() => {
               const halfMins = caucus.totalTime / 120;
@@ -1169,7 +1185,6 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false, ga
           </button>
         </div>
       )}
-      </div>
     </div>
   );
 }
@@ -1513,7 +1528,7 @@ function ModeratedCaucusMain({
           <div className="relative flex-1 min-h-0 overflow-hidden flex flex-col items-center justify-center px-4 py-2" style={FLOOR_ZONE_STYLE}>
             {isRoomOrderTdT ? (
               <div className="floor-emblem-anchor relative rounded-full bg-[#DDD4C0] shrink-0 flex items-center justify-center" style={{ width: FLOOR_DISC_CSS, height: FLOOR_DISC_CSS }}>
-                <span className="font-black" style={{ color: '#1B3828', fontSize: '4.5rem' }}>{(() => {
+                <span className="font-black leading-none" style={{ color: '#1B3828', fontSize: `calc(${FLOOR_DISC_CSS} * 0.42)` }}>{(() => {
                   const match = floorCountry.match(/(\d+)$/);
                   return match ? match[1] : '1';
                 })()}</span>
