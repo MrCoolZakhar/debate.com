@@ -466,6 +466,14 @@ function JoinPageInner() {
   // end; an allocated user never takes it and still goes straight to their locked seat.
   const openPath = isConferenceSession && !checkingConference && !authLoading && !allocationLoading
     && !hasVerifiedRole && (openSeatCount > 0 || chairsOpen);
+  // An OPEN DAIS for the conference's own organisers and advisors (owner, 28 Oct 2026): they
+  // keep the advisor board as the default, and are also offered Chair with the chair password
+  // while no chair account is on the dais (chairsOpen). Chosen, Chair takes the open-path chair
+  // flow exactly (name, password against dbChairJoinSuffix, the Moderator question).
+  const chairChoicePath = isConferenceSession && !checkingConference && !authLoading && !allocationLoading
+    && (verifiedKind === 'organizer' || verifiedKind === 'advisor') && chairsOpen;
+  /** This press takes the password chair flow (the open path, or an organiser or advisor choosing Chair). */
+  const chairViaPassword = openPath || (chairChoicePath && mode === 'chair');
   // Signed out on a conference code with reserved seats: the visitor may point at a
   // reserved seat to see who it is held for (masked) and sign up / sign in as them.
   const canPointReserved = isConferenceSession && !checkingConference && !authLoading && !user && reservedCountries.length > 0;
@@ -540,7 +548,7 @@ function JoinPageInner() {
     // ── Conference-linked session fork ──
     // Only for people the conference records know, or when nothing here is open to them.
     // Everyone else on a conference code takes the open path: the anonymous flow below.
-    if (isConferenceSession && !openPath) {
+    if (isConferenceSession && !chairViaPassword) {
       if (!user) {
         goSignIn();
         return;
@@ -656,7 +664,7 @@ function JoinPageInner() {
   const selectedChairName = effectiveNameMode === 'new' ? newChairName.trim() : chairName;
   // The chair's name as the chair page will know it: the profile name on the verified
   // conference path, else the name picked or typed below.
-  const myChairIdentity = isConferenceSession && !openPath
+  const myChairIdentity = isConferenceSession && !chairViaPassword
     ? safeChairName(chairIdentity(profile?.display_name, user?.email), (foundCommittee?.delegates ?? []).map((d) => d.country))
     : selectedChairName;
   // An ended room is read only, so nobody takes the gavel there: no question, Commenter.
@@ -675,7 +683,7 @@ function JoinPageInner() {
   const chairAlreadyActive = !!selectedChairName && activeChairNames.has(selectedChairName);
   const requiresChairCode = !!foundCommittee && !!(foundCommittee.dbChairJoinSuffix ?? getSettings(foundCommittee.code).chairJoinSuffix);
 
-  const joinDisabled = isConferenceSession && !openPath
+  const joinDisabled = isConferenceSession && !chairViaPassword
     ? (!foundCommittee || !user || allocationLoading || allocationError !== '' ||
        (mode === 'delegate' && !allocatedCountry) || chairRoleMissing)
     : (
@@ -689,7 +697,7 @@ function JoinPageInner() {
         : !foundCommittee
     );
 
-  const joinLabel = isConferenceSession && !openPath
+  const joinLabel = isConferenceSession && !chairViaPassword
     ? (allocatedCountry
         ? (returnSeat ? t('join_take_your_seat') : t('join_btn_as', { country: getCountryDisplayName(allocatedCountry.name, language) }))
         : noArrow(t('join_btn_delegate')))
@@ -697,7 +705,7 @@ function JoinPageInner() {
     ? noArrow(foundCommittee?.endedAt ? t('join_btn_delegate_ended') : t('join_btn_delegate'))
     : mode === 'chair' ? noArrow(t('join_btn_chair')) : t('join_advisor_follow_btn');
 
-  const showRoleFlow = !!foundCommittee && (!isConferenceSession || openPath) && !checkingConference;
+  const showRoleFlow = !!foundCommittee && (!isConferenceSession || openPath || chairChoicePath) && !checkingConference;
   const signedInName = (profile?.display_name || user?.email || '').trim();
 
   // ── The room, for the brand panel ──────────────────────────────────────────
@@ -1003,7 +1011,7 @@ function JoinPageInner() {
                         />
                       )}
 
-                      {mode === 'chair' && !openPath && hasVerifiedRole && (
+                      {mode === 'chair' && !chairViaPassword && hasVerifiedRole && (
                         <div className="flex items-center gap-3 rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(27,56,40,0.06)', boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.12)' }}>
                           <Gavel size={18} strokeWidth={2.2} color={C.forest} />
                           <p style={{ fontFamily: OUTFIT, fontSize: 13.5, color: C.forest }}>
@@ -1023,9 +1031,12 @@ function JoinPageInner() {
                     ];
                     // Open path: only what needs no conference role. Delegate when an open seat
                     // exists, chair when the dais is open. The advisor view is not offered.
+                    // An organiser or advisor on an open dais: exactly Chair and the advisor board.
                     const roleCards = openPath
                       ? allCards.filter((c) => (c.key === 'delegate' && (openSeatCount > 0 || canPointReserved)) || (c.key === 'chair' && chairsOpen))
-                      : allCards;
+                      : chairChoicePath
+                        ? allCards.filter((c) => c.key === 'chair' || c.key === 'advisor')
+                        : allCards;
                     const cols = roleCards.length >= 3 ? 'grid-cols-3' : roleCards.length === 2 ? 'grid-cols-2' : 'grid-cols-1';
                     return (
                       <div>

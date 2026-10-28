@@ -7,10 +7,12 @@ import Portal from '@/components/Portal';
 // The CHAIR PASSWORD (13 Oct 2026: shown and copied as the 4 digits of chairJoinSuffix
 // alone, no longer as "{session code}-{suffix}"; the join page asks for exactly that) for a
 // committee whose dais
-// is OPEN: no assigned chair, no pending chair invite, no unclaimed imported
-// chair. On an open dais the join page lets chairs in with this code exactly
-// like a standalone session, and nothing else under /manage shows it, so
-// without this chip nobody could chair the room.
+// is OPEN: no chair account on it yet (conference_committees.chair_user_ids is
+// empty). Since 28 Oct 2026 (owner) a pending chair invite or an imported chair
+// who has not made an account no longer closes it: invited is not joined. On an
+// open dais the join page lets chairs in with this code exactly like a
+// standalone session, and nothing else under /manage shows it, so without this
+// chip nobody could chair the room.
 //
 // Open or gated is decided by the server's own `session_join_rules(p_code)`
 // (its `chairs_open`), the same RPC the join page reads, so this chip can never
@@ -21,7 +23,7 @@ import Portal from '@/components/Portal';
 type Client = ReturnType<typeof getAuthedClient>;
 
 const EASE = 'cubic-bezier(0.22,1,0.36,1)';
-const HINT = 'Chairs need this only while nobody is added or invited to chair this committee. Once chairs are added, they join without it. Share it only with your chairs.';
+const HINT = 'Chairs use this until a chair has joined this committee with their Gavelling account. Invited chairs who have not accepted yet still need it. Share it only with your chairs.';
 const FOCUS = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]/40';
 
 /** One batched pass for the whole grid: one `committees` read for every
