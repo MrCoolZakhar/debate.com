@@ -353,6 +353,32 @@
   font-weight: 400;
 }
 
+/* ── A tutorial video (TutorialVideoPlayer.tsx) ───────────────────────────── */
+/* The long video takes the column; a Short is a 9:16 phone frame, centred.
+   The frame's aspect ratio is set on the element, so the space is reserved
+   before anything loads. */
+
+.gv-prose .gv-video {
+  margin: 1.75rem 0;
+}
+
+.gv-prose .gv-video-short {
+  max-width: 360px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.gv-prose .gv-video figcaption {
+  margin-top: 0.6rem;
+  font-size: var(--gv-caption);
+  line-height: 1.55;
+  color: var(--gv-ink-soft);
+}
+
+.gv-prose .gv-video-short figcaption {
+  text-align: center;
+}
+
 /* ── A small print note ───────────────────────────────────────────────────── */
 
 .gv-prose .gv-note {

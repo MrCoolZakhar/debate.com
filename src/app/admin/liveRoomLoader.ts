@@ -23,10 +23,13 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { supabase as anonSupabase } from '@/lib/supabase';
+import { fetchAllRows } from '@/lib/fetchAllRows';
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
-import { getScoringConfig } from '@/lib/scoring';
+import { getScoringConfig, everPresentFromHistory } from '@/lib/scoring';
 import type { ScoringConfig } from '@/lib/settingsStore';
 import { sessionHeadlineScores } from '@/lib/conferenceScoreboard';
+import { readStatusHistory } from '@/lib/attendanceHistory';
+import { seatGroupFromRow } from '@/lib/committeeService';
 import { fetchPendingChairInvites, pendingInviteName } from '@/lib/chairInvites';
 import type {
   LiveCommittee, ChairPerson, PendingChairPerson, CaucusJson,
@@ -54,7 +57,7 @@ export interface AdminRoom {
 export async function loadAdminRoom(sessionId: string, conferenceId: string | null): Promise<AdminRoom> {
   const authed = await getFreshAuthedClient();
 
-  const [sRes, csRes, dRes, qRes, docRes, msgRes, fbRes] = await Promise.all([
+  const [sRes, csRes, dRes, qRes, docRes, msgRes, fbRes, statusHistory] = await Promise.all([
     anonSupabase.from('committees')
       .select('id, code, name, phase, caucus, chair_names, suspended_at, ended_at, settings, updated_at, resuming_chair')
       .eq('id', sessionId)
@@ -63,22 +66,29 @@ export async function loadAdminRoom(sessionId: string, conferenceId: string | nu
       .select('committee_id, country, time_remaining, started_at')
       .eq('committee_id', sessionId),
     anonSupabase.from('delegates')
-      .select('committee_id, country, status, is_observer, logo_url')
+      .select('committee_id, country, status, is_observer, logo_url, group_color, group_short')
       .eq('committee_id', sessionId),
     anonSupabase.from('speakers_list')
       .select('committee_id, country, position, list_type')
       .eq('committee_id', sessionId)
       .order('position', { ascending: true }),
     anonSupabase.from('documents')
-      .select('committee_id, type, status, doc_code, title, sponsors, file_url, file_name, content, created_at')
+      .select('committee_id, type, status, doc_code, title, sponsors, approval, file_url, file_name, content, created_at')
       .eq('committee_id', sessionId),
-    anonSupabase.from('messages')
-      .select('committee_id, sender, recipient, content, created_at')
-      .eq('committee_id', sessionId),
+    // Paged: one request stops at 1,000 rows.
+    fetchAllRows((from, to) => anonSupabase.from('messages')
+      .select('id, committee_id, sender, recipient, content, created_at')
+      .eq('committee_id', sessionId)
+      .order('created_at', { ascending: true }).order('id', { ascending: true })
+      .range(from, to)),
     anonSupabase.from('feedback')
       .select('committee_id, country, chair_name, content, created_at, level, factor_scores, speech_context, speech_seconds, speech_topic, spoken_at')
       .eq('committee_id', sessionId)
       .order('created_at', { ascending: true }),
+    // The roll-call history, for attendance "present at any point" like the chair's
+    // board. Read with the staff member's token; a refused or failed read (a
+    // standalone room) is null and attendance follows the current status.
+    readStatusHistory(authed, sessionId),
   ]);
 
   if (sRes.error) throw new Error('room');
@@ -253,6 +263,8 @@ export async function loadAdminRoom(sessionId: string, conferenceId: string | nu
       status: d.status as string,
       isObserver: (d.is_observer as boolean | null) ?? false,
       logoUrl: (d.logo_url as string | null) ?? null,
+      // A custom committee seat's party, drawn as the chair draws it.
+      ...seatGroupFromRow(d),
     })),
     gslQueue: queues.filter((q) => q.list_type === 'gsl').map((q) => q.country as string),
     caucusQueue: queues.filter((q) => q.list_type === 'caucus').map((q) => q.country as string),
@@ -270,7 +282,7 @@ export async function loadAdminRoom(sessionId: string, conferenceId: string | nu
     speechLogs,
     eventLogs,
     scores: sRow
-      ? sessionHeadlineScores(sRow, delegates, messages, documents, feedback).map((x) => ({ country: x.country, total: x.headline }))
+      ? sessionHeadlineScores(sRow, delegates, messages, documents, feedback, { everPresent: everPresentFromHistory(statusHistory) }).map((x) => ({ country: x.country, total: x.headline }))
       : [],
     lastActivityAt,
     lastMessageAt,

@@ -1,5 +1,6 @@
 'use client';
 
+import Loader from '@/components/Loader';
 import { leaveVotingPhaseKeepalive, markVotingTabAlive } from '@/lib/votingPhaseUnload';
 import { openAuth } from '@/lib/authModal';
 import { use, useEffect, useRef, useState } from 'react';
@@ -13,8 +14,7 @@ import { getCountryDisplayName, compareCountryNames } from '@/lib/countries';
 import SeatName from '@/components/SeatName';
 import { SeatArtProvider } from '@/components/SeatFlag';
 import { SeatCircleFlag } from '@/components/CircleFlag';
-import { Emoji } from '@/components/Emoji';
-import { Check, CornerDownRight, Crown, Eye, EyeOff, Flag, Minus, RotateCcw, ShieldAlert, ShieldCheck, SkipForward, Undo2, X } from 'lucide-react';
+import { Armchair, Check, CornerDownRight, Crown, Eye, EyeOff, Flag, Minus, RotateCcw, SearchX, ShieldAlert, ShieldCheck, SkipForward, Undo2, UserPlus, X } from 'lucide-react';
 import { VotingRollCall } from '@/components/voting/VotingRollCall';
 import { DeviceVoteGate, DeviceVotingPanel } from '@/components/voting/DeviceVotingPanel';
 import { VotingHeader, type VotingHeaderProps } from '@/components/voting/VotingHeader';
@@ -195,7 +195,7 @@ function RosterNotice({ names, notInVote, onOpenRollCall, onDismiss }: {
         className="w-full max-w-3xl rounded-xl px-4 py-2.5 flex items-center gap-3"
         style={{ backgroundColor: 'rgba(182,135,31,0.14)', border: '1px solid rgba(182,135,31,0.40)' }}
       >
-        <Emoji size="1.1rem">🪧</Emoji>
+        <UserPlus size={18} strokeWidth={1.5} aria-hidden className="shrink-0" style={{ color: '#1C1410' }} />
         <div className="flex-1 min-w-0">
           <p className="text-sm font-bold text-[#1C1410]">{t('voting_roster_joined', { names: names.join(', ') })}</p>
           <p className="text-xs text-[#6A5A4A]">
@@ -212,9 +212,9 @@ function RosterNotice({ names, notInVote, onOpenRollCall, onDismiss }: {
         <button
           onClick={onDismiss}
           aria-label={t('voting_dismiss')}
-          className="shrink-0 text-[#9A8A78] hover:text-[#1C1410] transition-colors focus:outline-none"
+          className="shrink-0 text-[#9A8A78] hover:text-[#1C1410] transition-colors focus:outline-none inline-flex"
         >
-          ✕
+          <X size={18} strokeWidth={1.5} aria-hidden />
         </button>
       </div>
     </div>
@@ -254,7 +254,7 @@ function VotingBanner({ tone, text, actionLabel, onAction, onDismiss }: {
           </button>
         )}
         {onDismiss && (
-          <button onClick={onDismiss} aria-label={t('voting_dismiss')} className="shrink-0 text-[#9A8A78] hover:text-[#1C1410] focus:outline-none">✕</button>
+          <button onClick={onDismiss} aria-label={t('voting_dismiss')} className="shrink-0 text-[#9A8A78] hover:text-[#1C1410] focus:outline-none inline-flex"><X size={18} strokeWidth={1.5} aria-hidden /></button>
         )}
       </div>
     </div>
@@ -273,7 +273,7 @@ function ObserverWriteFailedBanner({ onDismiss }: { onDismiss: () => void }) {
         role="alert"
       >
         <span className="flex-1 text-sm font-semibold leading-snug">{t('voting_observer_write_failed')}</span>
-        <button onClick={onDismiss} aria-label={t('voting_dismiss')} className="shrink-0 opacity-80 hover:opacity-100 focus:outline-none">✕</button>
+        <button onClick={onDismiss} aria-label={t('voting_dismiss')} className="shrink-0 opacity-80 hover:opacity-100 focus:outline-none inline-flex"><X size={18} strokeWidth={1.5} aria-hidden /></button>
       </div>
     </Portal>
   );
@@ -354,25 +354,7 @@ function GavelLoader() {
   const t = useT();
   return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-4" style={{ backgroundColor: '#EDE7D8' }}>
-      <style>{`
-        @keyframes gavel-strike {
-          0%   { transform: rotate(-30deg); }
-          35%  { transform: rotate(15deg); }
-          50%  { transform: rotate(10deg); }
-          65%  { transform: rotate(15deg); }
-          100% { transform: rotate(-30deg); }
-        }
-        .gavel-anim {
-          animation: gavel-strike 1s ease-in-out infinite;
-          transform-origin: 85% 85%;
-        }
-      `}</style>
-      <svg className="gavel-anim" width="72" height="72" viewBox="0 0 72 72" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect x="38" y="38" width="8" height="28" rx="3" transform="rotate(-45 38 38)" fill="#1B3828" />
-        <rect x="8" y="14" width="36" height="16" rx="5" transform="rotate(-45 8 14)" fill="#B6871F" />
-        <rect x="10" y="16" width="36" height="7" rx="3" transform="rotate(-45 10 16)" fill="#6A5A4A" opacity="0.4" />
-        <circle cx="56" cy="56" r="3" fill="#1B3828" opacity="0.5" />
-      </svg>
+      <Loader size={72} label={t('session_loading_label')} />
       <span className="sr-only" role="status">{t('session_loading')}</span>
     </div>
   );
@@ -1094,10 +1076,11 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     return (
       <div className="min-h-screen bg-[#F6F1E9] flex items-center justify-center">
         <div className="text-center">
-          <div className="mb-4"><Emoji size="2.5rem">🔍</Emoji></div>
+          <div className="mb-4 flex justify-center" style={{ color: '#1C1410' }}><SearchX size={40} strokeWidth={1.5} aria-hidden /></div>
           <h1 className="text-2xl font-bold text-[#1C1410] mb-2">{t('voting_not_found_title')}</h1>
           <p className="text-[#6A5A4A] mb-6">{t('voting_not_found_body', { code })}</p>
-          <Link href="/sessions" className="bg-[#1B3828] hover:bg-[#2A5A3C] text-white px-6 py-3 rounded-lg font-semibold transition-colors">
+          <Link href="/sessions" className="inline-flex items-center justify-center px-6 text-white font-semibold focus:outline-none focus-visible:shadow-[0_0_0_3px_#EDE7D8,0_0_0_5px_#1B3828] active:scale-[0.96] transition-transform"
+            style={{ minHeight: 52, borderRadius: 16, backgroundColor: '#1B3828', backgroundImage: 'linear-gradient(135deg, #2E6446 0%, #1F4230 42%, #1B3828 62%, #122A1D 100%)', boxShadow: 'inset 0 1px 0 rgba(238,217,138,0.22), inset 0 0 0 1px rgba(238,217,138,0.14), 0 2px 4px rgba(27,56,40,0.16), 0 12px 28px rgba(27,56,40,0.26)' }}>
             {t('session_back_home')}
           </Link>
         </div>
@@ -1134,7 +1117,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     return (
       <div className="min-h-screen bg-[#EDE7D8] flex items-center justify-center px-6">
         <div className="w-full max-w-sm text-center">
-          <div className="mb-3"><Emoji size="2.25rem">🪑</Emoji></div>
+          <div className="mb-3 flex justify-center" style={{ color: '#1B3828' }}><Armchair size={36} strokeWidth={1.5} aria-hidden /></div>
           <h1 className="text-2xl font-bold mb-2" style={{ color: '#1B3828' }}>{t('voting_chair_gate_title')}</h1>
           <p className="mb-6 text-sm leading-relaxed" style={{ color: '#6A5A4A' }}>
             {t('voting_chair_gate_body', { code: committee.code })}
@@ -1241,7 +1224,8 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   const withRightsAll = votes
     .filter((v) => v.choice === 'for-rights' || v.choice === 'against-rights')
     .sort((a, b) => compareCountryNames(a.country, b.country, language));
-  const withRights = withRightsAll.slice(0, 10);
+  // Every rights speaker, however many (owner, 23 Oct 2026: no cap of 10).
+  const withRights = withRightsAll;
 
   // Unanimous mode looks at every present delegate (P and PV). Both of these are
   // frozen with the ballot: they are the unanimity/quorum numerator and the
@@ -1441,21 +1425,15 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     const keys = Object.keys(patch) as (keyof CommitteeSettings)[];
     if (keys.length === 0) return;
     for (const key of keys) updateSetting(committee.code, key, patch[key] as CommitteeSettings[typeof key]);
-    const next: CommitteeSettings = { ...settings, ...patch };
     // ONLY the changed keys, in ONE patch, so two keys that belong together (a veto
     // mode and its list) land together and the verdict below sees both.
     // chairJoinSuffix, headChair, headChairDevice and agendaTopicIndex can never ride
     // along (rules 12 and 13).
     saveCommitteeSettings(committee.id, patch, committee.code, suffix);
-    // Result already on screen: the verdict can flip, so the DR's stored status
-    // has to follow it rather than keeping the value from the first evaluation.
-    if (phase === 'result' && selectedDoc) {
-      const v = verdictOf(next, votes);
-      if (v.result !== (passed ? 'passed' : 'failed') || v.vetoed !== !!vote?.vetoed) {
-        persistResult(selectedDoc.id, v.result);
-        updateVote(() => v);
-      }
-    }
+    // A FINISHED ballot is never re-judged (owner, 23 Oct 2026): its recorded result and
+    // veto stand, and a rule changed afterwards applies to the next ballot. Only a new
+    // ballot (startNewVote) or Back from the result changes a recorded result. A ballot
+    // still open is judged live, so the verdict it reaches follows the rules in force.
   };
 
   /** Veto seats a chair can pick: every non-observer delegation on the roster. */
@@ -1501,6 +1479,13 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       // Frozen with the ballot: changing the setting later never changes a vote in progress.
       method: settings.votingMethod === 'device' ? 'device' : 'rollcall',
     }));
+    // A re-vote has started: the old verdict no longer stands, so the paper goes back to
+    // `introduced`, written once this ballot's vote state has landed (flushBackStatus,
+    // exactly as Back from the result does). A paper never voted on is already there.
+    const docStatus = committee.documents.find((d) => d.id === docId)?.status;
+    if ((docStatus === 'passed' || docStatus === 'failed') && pendingSeqRef.current[docId] != null) {
+      backStatusSeqRef.current[docId] = pendingSeqRef.current[docId];
+    }
   };
 
   /** Re-open an unfinished vote after a reload, exactly where it stopped. */
@@ -1544,7 +1529,6 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       ? step.votes
         .filter((v) => v.choice === 'for-rights' || v.choice === 'against-rights')
         .sort((a, b) => compareCountryNames(a.country, b.country, language))
-        .slice(0, 10)
       : [];
     if (rights.length > 0) {
       updateVote(() => ({ ...step, status: 'rights-speakers', rightsOrder: rights, rightsIndex: 0 }));
@@ -1723,8 +1707,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       .map((v) => (allowRights ? v : v.choice === 'for-rights' ? { ...v, choice: 'for' as const } : v.choice === 'against-rights' ? { ...v, choice: 'against' as const } : v));
     const rights = (allowRights ? list : [])
       .filter((v) => v.choice === 'for-rights' || v.choice === 'against-rights')
-      .sort((a, b) => compareCountryNames(a.country, b.country, language))
-      .slice(0, 10);
+      .sort((a, b) => compareCountryNames(a.country, b.country, language));
     const base = { votes: list, passedIds: [] as string[], currentVoterIndex: cur.order.length };
     if (rights.length > 0) {
       updateVote(() => ({ ...base, status: 'rights-speakers', rightsOrder: rights, rightsIndex: 0 }));
@@ -2328,7 +2311,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
           <div className="h-9 shrink-0 flex items-center gap-2">
             {isSecondAsk ? (
               <span className="inline-flex items-center gap-2 h-9 ps-3 pe-4 rounded-full text-[13.5px] font-semibold" style={{ backgroundColor: 'rgba(182,135,31,0.16)', color: '#6A4A0A' }}>
-                <SkipForward size={15} strokeWidth={2.5} aria-hidden />
+                <SkipForward size={15} strokeWidth={2.5} aria-hidden style={{ transform: language === 'ar' ? 'scaleX(-1)' : undefined }} />
                 {t('voting_again_title')}
                 <span className="font-medium tabular-nums">· {t('voting_pass_round_sub', { current: currentVoterIndex - mainCount + 1, total: passedIds.length })}</span>
               </span>
@@ -2339,7 +2322,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                 </span>
                 {passedWaiting > 0 && (
                   <span className="inline-flex items-center gap-1.5 h-7 ps-2.5 pe-3 rounded-full text-[12.5px] font-semibold" style={{ backgroundColor: 'rgba(182,135,31,0.14)', color: '#6A4A0A' }}>
-                    <SkipForward size={13} strokeWidth={2.5} aria-hidden />
+                    <SkipForward size={13} strokeWidth={2.5} aria-hidden style={{ transform: language === 'ar' ? 'scaleX(-1)' : undefined }} />
                     {t('voting_passed_waiting', { n: passedWaiting })}
                   </span>
                 )}
@@ -2531,92 +2514,98 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
         const presets = [30, 45, 60, 90, 120];
         const lastRights = rightsIndex + 1 >= orderedRights.length;
         return (
+          // The queue column shrinks with the console (iPad portrait, a narrow window) instead
+          // of a fixed 400px squeezing the speaker to nothing, and the speaker column scrolls
+          // inside the 820px-tall FitToScreen frame if a two-row name and wrapped controls
+          // make it taller (my-auto centres it while it fits, never cuts the top off).
           <div className="flex-1 min-h-0 flex gap-8 px-10 py-6">
-            <div className="flex-1 min-w-0 flex flex-col items-center justify-center">
-              <p className="text-[15px] font-medium mb-6 tabular-nums" style={{ color: '#6A5A4A' }}>
-                {t('voting_rights_header', { current: rightsIndex + 1, total: orderedRights.length })}
-              </p>
-              <span key={speaker.delegateId} className="gv-name-in rounded-full" style={{ boxShadow: '0 0 0 9px #F6F1E9, 0 0 0 15px #D9B44A, 0 24px 56px rgba(27,56,40,0.28)' }}>
-                <SeatCircleFlag seat={rightsSeat} size={220} decorative />
-              </span>
-              <h1 key={`n-${speaker.delegateId}`} className="gv-name-in text-[46px] font-bold text-[#1C1410] text-center mt-8 leading-[1.05] tracking-[-0.018em] [text-wrap:balance]">
-                <SeatName name={getCountryDisplayName(speaker.country, language)} max={26} block align="center" subScale={0.46} subStyle={{ fontWeight: 500, marginTop: 6 }} />
-              </h1>
-              <p className="text-[17px] font-medium mt-2" style={{ color: '#6A5A4A' }}>
-                {hideVotes
-                  ? t('voting_with_rights_label')
-                  : speaker.choice === 'for-rights' ? t('voting_rights_for') : t('voting_rights_against')}
-              </p>
-              {/* The rights clock runs on the driving device only (nothing per-second is ever
-                  written), so a Commenter does not get a clock that would sit still. */}
-              {!isViewOnly && (
-                <>
-                  <div
-                    className="text-[88px] font-bold mt-4 tabular-nums leading-none tracking-[-0.025em]"
-                    style={{ color: rightsSpeakerTime <= 10 ? '#8B2020' : rightsSpeakerTime <= 20 ? '#8A6414' : '#1C1410' }}
-                  >
-                    {clock(rightsSpeakerTime)}
-                  </div>
-                  {/* The controls in the GSL's manner (owner, 17 Sep 2026: "next speaker and
-                      back next to the Start button"): Back, Restart, Start / Pause, Next. */}
-                  <div className="flex gap-2 mt-5 items-center flex-wrap justify-center">
-                    {backButton(t('voting_step_back'))}
-                    <button
-                      type="button"
-                      onClick={() => { setRightsRunning(false); setRightsSpeakerTime(rightsTimerLimit); }}
-                      aria-label={t('voting_rights_restart')}
-                      title={t('voting_rights_restart')}
-                      className="h-12 w-12 rounded-full flex items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-transform duration-150 active:scale-[0.96] hover:bg-[rgba(27,56,40,0.13)]"
-                      style={{ backgroundColor: 'rgba(27,56,40,0.07)', color: '#1B3828' }}
+            <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-y-auto overflow-x-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div className="my-auto w-full flex flex-col items-center">
+                <p className="text-[15px] font-medium mb-6 tabular-nums" style={{ color: '#6A5A4A' }}>
+                  {t('voting_rights_header', { current: rightsIndex + 1, total: orderedRights.length })}
+                </p>
+                <span key={speaker.delegateId} className="gv-name-in rounded-full" style={{ boxShadow: '0 0 0 9px #F6F1E9, 0 0 0 15px #D9B44A, 0 24px 56px rgba(27,56,40,0.28)' }}>
+                  <SeatCircleFlag seat={rightsSeat} size={220} decorative />
+                </span>
+                <h1 key={`n-${speaker.delegateId}`} className="gv-name-in text-[46px] font-bold text-[#1C1410] text-center mt-8 leading-[1.05] tracking-[-0.018em] [text-wrap:balance]">
+                  <SeatName name={getCountryDisplayName(speaker.country, language)} max={26} block align="center" subScale={0.46} subStyle={{ fontWeight: 500, marginTop: 6 }} />
+                </h1>
+                <p className="text-[17px] font-medium mt-2" style={{ color: '#6A5A4A' }}>
+                  {hideVotes
+                    ? t('voting_with_rights_label')
+                    : speaker.choice === 'for-rights' ? t('voting_rights_for') : t('voting_rights_against')}
+                </p>
+                {/* The rights clock runs on the driving device only (nothing per-second is ever
+                    written), so a Commenter does not get a clock that would sit still. */}
+                {!isViewOnly && (
+                  <>
+                    <div
+                      className="text-[88px] font-bold mt-4 tabular-nums leading-none tracking-[-0.025em]"
+                      style={{ color: rightsSpeakerTime <= 10 ? '#8B2020' : rightsSpeakerTime <= 20 ? '#8A6414' : '#1C1410' }}
                     >
-                      <RotateCcw size={19} strokeWidth={2.4} aria-hidden />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { if (!rightsRunning) setRightsStarted(true); setRightsRunning((r) => !r); }}
-                      className="h-12 px-8 rounded-full font-semibold text-[15px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-transform duration-150 active:scale-[0.96]"
-                      style={{ backgroundColor: rightsRunning ? '#8A6414' : '#2F6B45', color: '#FFFFFF' }}
-                    >
-                      {rightsRunning ? t('voting_pause') : t('voting_start')}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { setRightsRunning(false); handleNextRightsSpeaker(); }}
-                      className="inline-flex items-center gap-2 h-12 ps-5 pe-6 rounded-full font-semibold text-[15px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-transform duration-150 active:scale-[0.96] motion-reduce:transition-none"
-                      style={{ backgroundColor: '#1B3828', color: '#EED98A', boxShadow: '0 2px 4px rgba(27,56,40,0.2), 0 8px 18px rgba(27,56,40,0.2)' }}
-                    >
-                      {lastRights ? t('voting_see_result') : t('voting_next_rights')}
-                      <SkipForward size={17} strokeWidth={2.5} aria-hidden style={{ transform: language === 'ar' ? 'scaleX(-1)' : undefined }} />
-                    </button>
-                  </div>
-                  {/* ONE speaking time for the whole rights round, the GSL's presets plus a
-                      typed field. No per-speaker override any more. */}
-                  <div className="mt-5 flex items-center gap-2 flex-wrap justify-center">
-                    <span className="text-[13px] font-semibold" style={{ color: '#6A5A4A' }}>{t('voting_rights_default_time')}</span>
-                    {presets.map((p) => (
+                      {clock(rightsSpeakerTime)}
+                    </div>
+                    {/* The controls in the GSL's manner (owner, 17 Sep 2026: "next speaker and
+                        back next to the Start button"): Back, Restart, Start / Pause, Next. */}
+                    <div className="flex gap-2 mt-5 items-center flex-wrap justify-center">
+                      {backButton(t('voting_step_back'))}
                       <button
-                        key={p}
                         type="button"
-                        onClick={() => setRightsTimerLimit(p)}
-                        aria-pressed={rightsTimerLimit === p}
-                        className="h-9 min-w-10 px-3 rounded-full font-medium text-[13px] tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-[background-color,transform] duration-150 active:scale-[0.96]"
-                        style={{ backgroundColor: rightsTimerLimit === p ? '#1B3828' : 'rgba(27,56,40,0.07)', color: rightsTimerLimit === p ? '#EED98A' : '#4A3F33' }}
+                        onClick={() => { setRightsRunning(false); setRightsSpeakerTime(rightsTimerLimit); }}
+                        aria-label={t('voting_rights_restart')}
+                        title={t('voting_rights_restart')}
+                        className="h-12 w-12 rounded-full flex items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-transform duration-150 active:scale-[0.96] hover:bg-[rgba(27,56,40,0.13)]"
+                        style={{ backgroundColor: 'rgba(27,56,40,0.07)', color: '#1B3828' }}
                       >
-                        {p}s
+                        <RotateCcw size={19} strokeWidth={2.4} aria-hidden />
                       </button>
-                    ))}
-                    <RightsTimeField
-                      seconds={rightsTimerLimit}
-                      custom={!presets.includes(rightsTimerLimit)}
-                      label={t('voting_rights_default_time')}
-                      onCommit={(secs) => { if (secs != null) setRightsTimerLimit(secs); }}
-                    />
-                  </div>
-                </>
-              )}
+                      <button
+                        type="button"
+                        onClick={() => { if (!rightsRunning) setRightsStarted(true); setRightsRunning((r) => !r); }}
+                        className="h-12 px-8 rounded-full font-semibold text-[15px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-transform duration-150 active:scale-[0.96]"
+                        style={{ backgroundColor: rightsRunning ? '#8A6414' : '#2F6B45', color: '#FFFFFF' }}
+                      >
+                        {rightsRunning ? t('voting_pause') : t('voting_start')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setRightsRunning(false); handleNextRightsSpeaker(); }}
+                        className="inline-flex items-center gap-2 h-12 ps-5 pe-6 rounded-full font-semibold text-[15px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-transform duration-150 active:scale-[0.96] motion-reduce:transition-none"
+                        style={{ backgroundColor: '#1B3828', color: '#EED98A', boxShadow: '0 2px 4px rgba(27,56,40,0.2), 0 8px 18px rgba(27,56,40,0.2)' }}
+                      >
+                        {lastRights ? t('voting_see_result') : t('voting_next_rights')}
+                        <SkipForward size={17} strokeWidth={2.5} aria-hidden style={{ transform: language === 'ar' ? 'scaleX(-1)' : undefined }} />
+                      </button>
+                    </div>
+                    {/* ONE speaking time for the whole rights round, the GSL's presets plus a
+                        typed field. No per-speaker override any more. */}
+                    <div className="mt-5 flex items-center gap-2 flex-wrap justify-center">
+                      <span className="text-[13px] font-semibold" style={{ color: '#6A5A4A' }}>{t('voting_rights_default_time')}</span>
+                      {presets.map((p) => (
+                        <button
+                          key={p}
+                          type="button"
+                          onClick={() => setRightsTimerLimit(p)}
+                          aria-pressed={rightsTimerLimit === p}
+                          className="h-9 min-w-10 px-3 rounded-full font-medium text-[13px] tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-[background-color,transform] duration-150 active:scale-[0.96]"
+                          style={{ backgroundColor: rightsTimerLimit === p ? '#1B3828' : 'rgba(27,56,40,0.07)', color: rightsTimerLimit === p ? '#EED98A' : '#4A3F33' }}
+                        >
+                          {p}s
+                        </button>
+                      ))}
+                      <RightsTimeField
+                        seconds={rightsTimerLimit}
+                        custom={!presets.includes(rightsTimerLimit)}
+                        label={t('voting_rights_default_time')}
+                        onCommit={(secs) => { if (secs != null) setRightsTimerLimit(secs); }}
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
 
-            <div className="w-[400px] shrink-0 flex flex-col justify-center min-h-0">
+            <div className="w-[clamp(240px,32%,400px)] shrink-0 flex flex-col justify-center min-h-0">
               <RightsQueue
                 speakers={orderedRights}
                 currentIndex={rightsIndex}
@@ -2641,9 +2630,20 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
         // do NOT break unanimity: an abstaining delegation chose not to oppose, which is what the
         // word means in a committee record. Derived from the votes on screen, never stored:
         // `documents.status` stays `passed` and `vote_state` gains nothing.
-        const unanimous = passed && againstCount === 0 && forCount > 0
+        //
+        // THE RECORDED VERDICT IS DRAWN (owner, 23 Oct 2026): a finished ballot shows its stored
+        // `result` / `vetoed`, never a re-evaluation against today's settings, so a rule changed
+        // after the count cannot repaint it. Only a ballot stored without a result (older data)
+        // falls back to the live evaluation. The lines that explain the verdict from the rules
+        // are shown only while today's rules still reach the same verdict.
+        const storedPassed = vote?.result ? vote.result === 'passed' : passed;
+        const storedVetoed = vote?.result ? (vote.result === 'failed' && !!vote.vetoed) : p5Veto;
+        const rulesAgree = storedPassed === passed && storedVetoed === p5Veto;
+        const showVeto = storedVetoed;
+        const showUnanFail = rulesAgree && unanimousFail;
+        const unanimous = storedPassed && againstCount === 0 && forCount > 0
           && presentDelegates.every((d) => votes.some((v) => v.delegateId === d.id));
-        const kind: 'passed' | 'failed' | 'vetoed' | 'unanimous' = unanimous ? 'unanimous' : passed ? 'passed' : p5Veto ? 'vetoed' : 'failed';
+        const kind: 'passed' | 'failed' | 'vetoed' | 'unanimous' = unanimous ? 'unanimous' : storedPassed ? 'passed' : storedVetoed ? 'vetoed' : 'failed';
         const look = {
           passed: { bg: '#1B3828', chipBg: '#EED98A', chipFg: '#1B3828', title: '#EED98A', soft: 'rgba(238,217,138,0.78)', shadow: '0 2px 4px rgba(27,56,40,0.2), 0 24px 64px rgba(27,56,40,0.30)' },
           failed: { bg: '#8B2020', chipBg: '#FFE1D6', chipFg: '#8B2020', title: '#FFFFFF', soft: 'rgba(255,222,210,0.82)', shadow: '0 2px 4px rgba(90,20,20,0.2), 0 24px 64px rgba(139,32,32,0.30)' },
@@ -2668,7 +2668,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
               )}
               <div className="relative">
               {kind === 'unanimous' && (
-                <p className="mb-3 text-[12px] font-bold uppercase tracking-[0.18em]" style={{ color: '#D9B44A' }}>{t('voting_result_unanimous_eyebrow')}</p>
+                <p className="mb-3 text-[14px] font-semibold" style={{ color: '#D9B44A' }}>{t('voting_result_unanimous_eyebrow')}</p>
               )}
               <div className="flex items-center justify-center gap-3">
                 <span className="w-10 h-10 rounded-full flex items-center justify-center" style={{ backgroundColor: look.chipBg, color: look.chipFg }} aria-hidden>
@@ -2700,26 +2700,26 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                 ))}
               </div>
               <div className="mt-6 space-y-1.5 text-[13.5px] font-medium tabular-nums" style={{ color: '#FFFFFF' }}>
-                {p5Veto && (
+                {showVeto && (
                   <p className="flex items-center gap-1.5 justify-center"><ShieldAlert size={16} strokeWidth={2.5} aria-hidden /> {settings.vetoMode === 'custom' ? t('voting_veto_exercised') : t('voting_p5_veto')}</p>
                 )}
-                {unanimousFail && <p>{t('voting_unanimous_fail')}</p>}
+                {showUnanFail && <p>{t('voting_unanimous_fail')}</p>}
                 {kind === 'unanimous' && (
                   <p style={{ color: '#EED98A' }}>{abstainCount > 0 ? t('voting_result_unanimous_note_abst', { n: abstainCount }) : t('voting_result_unanimous_note')}</p>
                 )}
-                {!p5Veto && !unanimousFail && settings.substantiveThreshold === 'supermajority-2-3' && (
+                {rulesAgree && !p5Veto && !unanimousFail && settings.substantiveThreshold === 'supermajority-2-3' && (
                   <p style={{ color: soft }}>{t('voting_supermajority', { for: forCount, total: totalDecisive, pct: totalDecisive > 0 ? Math.round(forCount / totalDecisive * 100) : 0 })}</p>
                 )}
-                {!p5Veto && !unanimousFail && settings.substantiveThreshold === 'consensus' && (
+                {rulesAgree && !p5Veto && !unanimousFail && settings.substantiveThreshold === 'consensus' && (
                   <p style={{ color: soft }}>{t('voting_consensus', { against: againstCount })}</p>
                 )}
-                {!p5Veto && !unanimousFail && settings.substantiveThreshold === 'simple' && (
+                {rulesAgree && !p5Veto && !unanimousFail && settings.substantiveThreshold === 'simple' && (
                   <p style={{ color: soft }}>{t('voting_result_simple', { for: forCount, total: totalDecisive, needed: outcome.needed })}</p>
                 )}
-                {!outcome.quorumMet && (
+                {rulesAgree && !outcome.quorumMet && (
                   <p>{t('voting_result_quorum_not_met', { present: presentAndPvDelegates.length, needed: outcome.quorumNeeded })}</p>
                 )}
-                {outcome.countsAbstentions && abstainCount > 0 && (
+                {rulesAgree && outcome.countsAbstentions && abstainCount > 0 && (
                   <p className="text-[13px]" style={{ color: soft }}>{t('voting_result_abst_counted')}</p>
                 )}
               </div>

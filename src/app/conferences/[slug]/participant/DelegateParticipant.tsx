@@ -7,10 +7,9 @@
 // active `section`. Every card here stays MOUNTED and is hidden with
 // display:none when its section is not shown (Pane), so switching never
 // refetches a card or loses a half-uploaded position paper.
-//   overview    published awards (only when there are some), then the seat
-//               for an independent delegate (the assignment hero). Anyone in
-//               a delegation has their seat, guide, paper and payment on the
-//               delegation Overview (DelegationOverview, owner 21 Oct 2026)
+//   overview    published awards (only when there are some). The seat is the
+//               Overview's left card: DelegationOverview in a delegation,
+//               RoleOverview's SeatCard for an independent delegate
 //   delegation  members of a delegation only, second: the leader or member card
 //   committee   the committee's members only, like the leader card's committee
 //               pop-up, each with their paper once it is in (owner, 21 Oct 2026)
@@ -20,8 +19,7 @@
 // one page, with Payment and Support placed by the parent.
 
 import { useState } from 'react';
-import { FileText, Flag, Landmark, Users } from 'lucide-react';
-import AssignmentHero from './AssignmentHero';
+import { FileText, Landmark, Users } from 'lucide-react';
 import MyCommitteeSection from './delegation/committee/MyCommitteeSection';
 import StudyGuideCard from './StudyGuideCard';
 import PositionPaperCard from './PositionPaperCard';
@@ -95,26 +93,16 @@ export default function DelegateParticipant({ conferenceId, conferenceSlug, conf
   // "appears once you are assigned": the phone page leaves them out.
   const assigned = !!myAllocation;
 
-  const inDelegation = !!application.society_id;
 
   return (
     <>
-      {/* Overview: published awards (only once the secretariat publishes an
-          honour for this allocation), then the seat. */}
-      {/* Anyone in a delegation has their seat on the delegation Overview
-          (DelegationOverview, owner 21 Oct 2026): this pane then draws only
-          the awards. */}
-      <Pane show={section === 'overview'} title={inDelegation ? undefined : 'Your Assignment'} icon={Flag}>
+      {/* Overview: published awards, only once the secretariat publishes an
+          honour for this allocation. */}
+      {/* The seat itself is the Overview's left card for everyone now
+          (ParticipantView's RoleOverview: SeatCard, owner 22 Oct 2026), and
+          Join session is its What's Next button. */}
+      <Pane show={section === 'overview'}>
         <MyAwardsCard conferenceId={conferenceId} conferenceSlug={conferenceSlug} myAllocation={myAllocation} />
-        {inDelegation ? null : (
-          <AssignmentHero
-            committee={committee}
-            myAllocation={myAllocation}
-            conferenceStartDate={conferenceStartDate}
-            independent
-            joinFromXlOnly={stacked}
-          />
-        )}
       </Pane>
 
       {/* One delegation card for everyone in a delegation (25 Sep 2026): the

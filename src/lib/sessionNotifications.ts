@@ -157,6 +157,11 @@ export function notify(n: SessionNotification): void {
   emit();
 }
 
+/** Is a card with this key on the stack right now (shown or held back by suppression)? */
+export function hasNotification(key: string): boolean {
+  return items.some((i) => i.key === key);
+}
+
 /** Idempotent. Does NOT fire `onExpire` — that is reserved for real timeouts. */
 export function dismiss(key: string): void {
   held.delete(key);

@@ -38,7 +38,7 @@ interface PositionPaper {
 
 const ppStatusMap: Record<string, { bg: string; color: string }> = {
   submitted: { bg: 'color-mix(in srgb, var(--gv-accent-light) 20%, transparent)', color: '#B8844A' },
-  reviewed: { bg: 'rgba(154,138,120,0.15)', color: '#9A8A78' },
+  reviewed: { bg: 'rgba(154,138,120,0.15)', color: '#6B5F52' },
   approved: { bg: 'color-mix(in srgb, var(--gv-main-light) 12%, transparent)', color: 'var(--gv-main-light)' },
   rejected: { bg: 'rgba(139,32,32,0.1)', color: '#8B2020' },
 };
@@ -568,7 +568,7 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
           <div className="fixed inset-0 z-50 flex items-center justify-center px-6" style={{ backgroundColor: 'rgba(28,20,16,0.5)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}>
             <div className="rounded-[20px] p-6 max-w-sm w-full" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', boxShadow: '0 24px 64px rgba(16,28,21,0.35)' }}>
               <h3 className="font-semibold text-base mb-2" style={{ color: '#1C1410', fontFamily: OUTFIT }}>Replace Position Paper?</h3>
-              <p className="text-sm" style={{ color: '#9A8A78', fontFamily: OUTFIT, marginBottom: deadlinePassed ? 8 : 24 }}>
+              <p className="text-sm" style={{ color: '#6B5F52', fontFamily: OUTFIT, marginBottom: deadlinePassed ? 8 : 24 }}>
                 This uploads a new version and reopens it for review. The conversation with your reviewer stays intact.
               </p>
               {deadlinePassed && (
@@ -610,7 +610,7 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
         <CardHeading title="Position Paper" />
         {dueLine}
         {paperLoad === 'loading' ? (
-          <p className="text-sm" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>Loading your paper…</p>
+          <p className="text-sm" style={{ color: '#6B5F52', fontFamily: OUTFIT }}>Loading your paper…</p>
         ) : (
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm" style={{ color: '#4A4238', fontFamily: OUTFIT, margin: 0 }}>

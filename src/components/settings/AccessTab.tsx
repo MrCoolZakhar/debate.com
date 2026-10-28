@@ -1,10 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { Ban, BellRing, Check, Timer, Copy, Eye, Gavel, KeyRound, Lock, MessageCircle, MessageSquareText, Smartphone, Volume2, Users } from 'lucide-react';
+import { Ban, BellRing, Check, Timer, Copy, DoorOpen, Eye, Gavel, KeyRound, Lock, MessageCircle, MessageSquareText, Smartphone, Volume2, Users } from 'lucide-react';
 import { clampGavelSeconds, primeGavelAudio, playGavelKnock, GAVEL_MIN_SECONDS, GAVEL_MAX_SECONDS, GAVEL_DEFAULT_SECONDS } from '@/lib/gavelSound';
 import { getCountryByName, getCountryDisplayName } from '@/lib/countries';
-import { SeatFlag } from '@/components/SeatFlag';
 import { CircleFlag, flagMonogram } from '@/components/CircleFlag';
 import { ACTION_SKINS, DG } from '@/components/delegate/DelegateUI';
 import { K, T, W, LH, Section, SettingRow, GavelSwitch, InfoHint, TimeChooser } from './settingsKit';
@@ -153,17 +152,20 @@ function RollCallReplica({ caption }: { caption: string }) {
 /**
  * The request a chair gets when a delegation asks to join: the chair page's Waiting Room bar
  * (the `join-request` strip under the top bar), drawn with a sample delegation asking for
- * Present and Voting. Same pieces in the same order: the forest Waiting Room pill with its
- * count, then the request chip (flag, name, P+V, Approve, Deny).
+ * Present and Voting. Same pieces in the same order: the door icon with the count and its
+ * word, then the request chip (flag, name, P+V, Approve, Deny).
  */
 function JoinRequestReplica({ waitingRoom, country, approve, deny }: { waitingRoom: string; country: string; approve: string; deny: string }) {
   return (
     <span className="flex flex-col items-start" style={{ gap: 10, padding: 10, borderRadius: 12, background: '#F3EEE2', boxShadow: 'inset 0 -1px 0 rgba(27,56,40,0.4)', maxWidth: '100%' }}>
-      <span className="inline-flex items-center gap-1.5" style={{ padding: '4px 10px', borderRadius: 999, background: DG.forest, color: '#EED98A', fontSize: T.caption, fontWeight: W.title, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-        <span>🚪</span>{waitingRoom} · 1
+      {/* Style A, like the chair page's bar: a fine-line door, the count, the word beside it. */}
+      <span className="inline-flex items-center gap-2" style={{ color: DG.forest }}>
+        <DoorOpen size={20} strokeWidth={1.5} aria-hidden className="shrink-0" />
+        <span className="stg-num" style={{ fontSize: T.section, fontWeight: W.title, color: K.ink, lineHeight: 1 }}>1</span>
+        <span style={{ fontSize: T.body, fontWeight: W.section, color: DG.body, lineHeight: 1 }}>{waitingRoom}</span>
       </span>
       <span className="flex flex-wrap items-center" style={{ gap: 8, padding: '5px 8px', borderRadius: 12, background: '#FAF8F3', border: '1px solid #DDD4C0', maxWidth: '100%' }}>
-        <SeatFlag country="France" size={20} className="object-contain shrink-0" />
+        <CircleFlag country="France" size={20} decorative className="shrink-0" />
         <span style={{ fontSize: T.body, fontWeight: W.section, color: K.ink }}>{country}</span>
         <span className="stg-num" style={{ padding: '2px 8px', borderRadius: 999, background: DG.forest, color: '#EED98A', fontSize: T.caption, fontWeight: W.title }}>P+V</span>
         <span style={{ padding: '4px 10px', borderRadius: 8, background: DG.forest, color: '#EED98A', fontSize: T.caption, fontWeight: W.title }}>{approve}</span>
@@ -288,7 +290,7 @@ export default function AccessTab({ committee, s, upd, isViewOnly, myChairName, 
             <DelegateAbility id="stg-can-join" label={t('stg_can_join')} hint={t('stg_can_join_note')}
               onLabel={t('stg_can_on')} offLabel={t('stg_can_off')}
               invert allowed={!s.requireChairApproval} onChange={(v) => upd('requireChairApproval', !v)}>
-              <JoinRequestReplica waitingRoom={t('stg_waiting_room')} country={getCountryDisplayName('France', language)}
+              <JoinRequestReplica waitingRoom={t('waiting_room_word')} country={getCountryDisplayName('France', language)}
                 approve={t('session_approve')} deny={t('session_deny')} />
             </DelegateAbility>
           </div>

@@ -199,16 +199,27 @@ export function useAllocationPartner(
 }
 
 // ── Session release time ────────────────────────────────────────────────
-// A session "opens" at its own release timestamp if set, otherwise the
-// conference's start date at midnight. Shared by the delegate release gate
-// (conference_committees.released_to_delegates_at) and the advisor/observer
-// one (conferences.session_release_advisors_at) — same fallback rule,
-// different source column.
+// There is no organiser release date any more (owner, 23 Oct 2026: "there should
+// be no organisers release date anymore anyways, so it just goes out 1 week
+// before and 1 day before"). Delegates, advisors and observers see their room
+// from the conference's first day (its start date at midnight); chairs see it
+// from a week before (`chairRoomOpensAt`), the moment the first chair email goes
+// out. The old columns (`released_to_delegates_at`, `released_to_chairs_at`,
+// `session_release_advisors_at`) are still passed by some callers and IGNORED
+// here, so no stale stamp can hide or reveal a room early.
 
-export function effectiveReleaseTime(releaseAt: string | null, conferenceStartDate: string | null): number | null {
-  if (releaseAt) return new Date(releaseAt).getTime();
-  if (conferenceStartDate) return new Date(conferenceStartDate + 'T00:00:00').getTime();
+export function effectiveReleaseTime(_releaseAt: string | null, conferenceStartDate: string | null): number | null {
+  if (conferenceStartDate) return new Date(conferenceStartDate.slice(0, 10) + 'T00:00:00').getTime();
   return null;
+}
+
+/** A chair's room code shows from 7 days before the conference starts (local midnight),
+ *  the day `queue_chair_session_reminders` sends the week-before email. A conference with
+ *  no dates yet has nothing to wait for, so its room shows at once (null). */
+export const CHAIR_ROOM_LEAD_DAYS = 7;
+export function chairRoomOpensAt(conferenceStartDate: string | null): number | null {
+  const start = effectiveReleaseTime(null, conferenceStartDate);
+  return start === null ? null : start - CHAIR_ROOM_LEAD_DAYS * 86_400_000;
 }
 
 const RELEASE_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];

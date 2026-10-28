@@ -2,7 +2,12 @@ import type { Metadata } from 'next';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import Link from 'next/link';
 import ArticleLayout from '@/components/blog/ArticleLayout';
+import TutorialVideo, { TutorialVideoJsonLd } from '@/components/blog/TutorialVideo';
 import { H2, H3, Callout } from '@/components/blog/prose';
+
+// Tutorial videos appear on release (src/lib/tutorialVideos.ts); the hourly
+// revalidation brings the server HTML and the VideoObject JSON-LD up to date.
+export const revalidate = 3600;
 
 export const metadata: Metadata = pageMetadata({
   title: 'MUN Director Guide: How to Run a Model UN Conference',
@@ -43,6 +48,7 @@ export default function Article() {
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
+      <TutorialVideoJsonLd ids={['jaYmgylFMVs']} />
       <ArticleLayout
         slug="mun-director-guide"
         pitch="Set up all your conference committees in Gavelling before conference day: sessions, delegates, and settings ready to go."
@@ -88,6 +94,10 @@ export default function Article() {
           <li><strong>Set up committee management software.</strong> Gavelling allows directors to create committee sessions in advance, with one chair code for the whole dais, delegate lists, and settings pre-configured before conference day.</li>
           <li><strong>Brief your dais team in full.</strong> Run a mock committee session with your chairs if possible.</li>
         </ul>
+
+        <TutorialVideo id="jaYmgylFMVs">
+          For chairs who have never used Gavelling, our twenty-minute chair guide is the briefing: send it to the dais before the mock session.
+        </TutorialVideo>
 
         <H2>Conference Day: Director Operations</H2>
         <p>On conference day, your primary job is problem-solving. Committees will have issues: a chair drops out, a room has no projector, two committees request the same delegate for a joint crisis session. Keep a live list of all open issues and assign team members to resolve them.</p>

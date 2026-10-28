@@ -2,7 +2,12 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import ArticleLayout from '@/components/blog/ArticleLayout';
+import TutorialVideo, { TutorialVideoJsonLd } from '@/components/blog/TutorialVideo';
 import { H2, H3 } from '@/components/blog/prose';
+
+// Tutorial videos appear on release (src/lib/tutorialVideos.ts); the hourly
+// revalidation brings the server HTML and the VideoObject JSON-LD up to date.
+export const revalidate = 3600;
 
 export const metadata: Metadata = pageMetadata({
   title: 'How to Chair Your First MUN Committee: A Practical Guide for New Chairs',
@@ -43,6 +48,7 @@ export default function Article5() {
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
+      <TutorialVideoJsonLd ids={['jaYmgylFMVs', 'aFiXg0WtvH8']} />
       <ArticleLayout
         slug="how-to-chair-first-mun"
         title="How to Chair Your First MUN Committee: A Practical Guide for New Chairs"
@@ -95,6 +101,10 @@ export default function Article5() {
           If you are writing the study guide yourself, our guide to <Link href="/blog/mun-background-guide-writing" style={{ color: '#1B3828', fontWeight: 600 }}>writing a MUN background guide</Link> covers it.
         </p>
 
+        <TutorialVideo id="jaYmgylFMVs">
+          If you will chair on Gavelling, our twenty-minute chair guide runs through a whole committee, from roll call to the final vote. Watch it once the week before.
+        </TutorialVideo>
+
         <H2>3. Day-Of Setup (30 Minutes Before)</H2>
         <ul>
           <li><strong>Arrange the room.</strong> Placards at each seat. Name plates if available. Enough space for delegates to raise their placards clearly.</li>
@@ -103,6 +113,10 @@ export default function Article5() {
           <li><strong>Confirm your co-chair is set up and knows their role.</strong> Run a quick verbal briefing. Three sentences is enough.</li>
           <li><strong>Test your gavel.</strong> This sounds trivial. It is not. A gavel that slips or a surface that absorbs the sound undermines your authority immediately.</li>
         </ul>
+
+        <TutorialVideo id="aFiXg0WtvH8">
+          On Gavelling your co-chair joins the same room as a Commenter, with private notes on every speech (and ratings, if you turn them on), and the gavel can change hands whenever you agree to swap.
+        </TutorialVideo>
 
         <H2>4. Opening the Session</H2>
         <p>

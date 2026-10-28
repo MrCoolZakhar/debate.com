@@ -131,6 +131,11 @@ export function DelegateStyles() {
          whatever height is left after the hero, and the queue renders only
          the rows that genuinely fit rather than overflowing. */
       .dgv-board { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: clamp(6px, 1.8vw, 16px) }
+      /* The page itself. One screen where it fits; where it does not (a short phone, a
+         phone on its side, the Absent banner on top) it SCROLLS instead of clipping the
+         three action keys, whose labels must never be cut. Below 620px of height the
+         board stops squeezing into the viewport at all and takes its natural height. */
+      .dgv-root { height: 100dvh; overflow-x: hidden; overflow-y: auto; overscroll-behavior-y: contain }
       /* The hero is CAPPED and centred, and that cap is what makes the arc wrap
          work above phone width. The middle track is 1fr, so on a laptop it would
          otherwise swallow every spare pixel and strand the two side rails 150px+
@@ -159,7 +164,7 @@ export function DelegateStyles() {
          39px word + slack. */
       /* position:relative anchors the roll-call footnote, which hangs off the
          hero as an absolute overlay so it costs the layout nothing when idle. */
-      .dgv-hero { position: relative; flex-shrink: 0; display: grid; grid-template-columns: 82px minmax(0, 1fr) 82px; align-items: center; gap: clamp(2px, 0.8vw, 10px); max-inline-size: 620px; margin-inline: auto; inline-size: 100% }
+      .dgv-hero { position: relative; flex-shrink: 0; display: grid; grid-template-columns: 90px minmax(0, 1fr) 90px; align-items: center; gap: clamp(2px, 0.8vw, 10px); max-inline-size: 620px; margin-inline: auto; inline-size: 100% }
       @media (min-width: 700px) {
         .dgv-hero { grid-template-columns: 132px minmax(0, 1fr) 150px }
       }
@@ -181,6 +186,13 @@ export function DelegateStyles() {
       .dgv-bottom { flex: 1; min-height: 0; display: grid; grid-template-columns: 1.32fr 1fr; gap: clamp(7px, 2.6vw, 18px) }
       .dgv-queue { min-height: 0; display: flex; flex-direction: column; overflow: hidden }
       .dgv-actions { min-height: 0; display: flex; flex-direction: column; gap: clamp(7px, 2.2vw, 14px) }
+      /* Short screens (see .dgv-root): natural heights, the page scrolls. Declared after
+         the band rules above so it wins over their min-height:0. */
+      @media (max-height: 620px) {
+        .dgv-root { height: auto; min-height: 100dvh }
+        .dgv-board { flex: none }
+        .dgv-bottom { flex: none; min-height: 236px }
+      }
 
       /* Tablet and up keep the same board — the brief was "similar on laptop
          and iPad", so this scales rather than re-flowing into a new shape. */
@@ -519,7 +531,11 @@ export function StatRow({
                by the longest word here. Every 1px shaved off this gives ~3px
                back to the disc across both rails. */
             fontSize: '9px', letterSpacing: '0.03em',
-            textTransform: 'uppercase', lineHeight: 1.18, marginTop: 2, overflowWrap: 'anywhere',
+            /* Words break at hyphenation points in the page's language (French
+               "INTERVENTIONS", Portuguese "DISCURSOS" used to split mid-word);
+               break-word is only the last resort for a word with none. */
+            textTransform: 'uppercase', lineHeight: 1.18, marginTop: 2,
+            overflowWrap: 'break-word', hyphens: 'auto', WebkitHyphens: 'auto',
           }}
         >
           {label}
@@ -605,7 +621,9 @@ export function SquareButton({
       onTouchStart={() => {}}
       className="dgv-focus"
       style={{
-        position: 'relative', flex: 1, width: '100%', minHeight: 0,
+        /* Never shorter than its own content (the glyph and a two-line label): a short
+           phone scrolls the board (.dgv-root) rather than clipping a key. */
+        position: 'relative', flex: 1, width: '100%', minHeight: 'auto',
         display: 'block', padding: `0 0 ${EDGE}px`, border: 'none',
         background: s.edge, borderRadius: 18, overflow: 'hidden',
         cursor: disabled ? 'default' : 'pointer',
@@ -621,7 +639,7 @@ export function SquareButton({
              strands the glyph and the label at the extremes with a void
              between them and they stop reading as one control. */
           display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
-          justifyContent: 'center', gap: 'clamp(6px, 1.6vw, 10px)', height: '100%',
+          justifyContent: 'center', gap: 'clamp(6px, 1.6vw, 10px)', height: '100%', minHeight: 56 - EDGE,
           padding: 'clamp(10px, 2.8vw, 16px)', borderRadius: 18,
           background: s.bg, color: s.fg,
           border: `2px solid ${DG.forest}`,
@@ -1292,6 +1310,36 @@ export function Sheet({
   children,
 }: { open: boolean; onClose: () => void; title: string; children: React.ReactNode }) {
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+
+  // Phones: keep the sheet above the on-screen keyboard, so a chat thread's header and its
+  // composer both stay in view while typing. The covered height is written to the node as
+  // --dgv-kb (never state), only when it changes; the wrap lifts the panel by it and the
+  // panel (and the chat inside it) shrinks by it. Same approach as the join page's Join bar.
+  useEffect(() => {
+    if (!open) return;
+    const vv = typeof window !== 'undefined' ? window.visualViewport : null;
+    const node = wrapRef.current;
+    if (!vv || !node) return;
+    let last = -1;
+    let raf = 0;
+    const place = () => {
+      raf = 0;
+      const covered = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+      if (covered === last) return;
+      last = covered;
+      node.style.setProperty('--dgv-kb', covered + 'px');
+    };
+    const schedule = () => { if (!raf) raf = requestAnimationFrame(place); };
+    place();
+    vv.addEventListener('resize', schedule);
+    vv.addEventListener('scroll', schedule);
+    return () => {
+      vv.removeEventListener('resize', schedule);
+      vv.removeEventListener('scroll', schedule);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [open]);
 
   // `body { overflow: hidden }` used to be inlined here; it does not hold on
   // iOS Safari, which is exactly where this bottom sheet lives. Shared hook.
@@ -1327,15 +1375,17 @@ export function Sheet({
 
   return createPortal(
     <div
+      ref={wrapRef}
       onClick={onClose}
       style={{
         position: 'fixed', inset: 0, zIndex: 1000,
         background: 'rgba(12,20,15,0.52)',
+        paddingBottom: 'var(--dgv-kb, 0px)',
         /* Bottom sheet on phones where the thumb is; a centred dialog once
            there is room, so it does not read as a giant docked panel. */
         display: 'flex', justifyContent: 'center',
         alignItems: 'flex-end',
-        padding: 0,
+        paddingTop: 0, paddingInline: 0,
         animation: `dgv-fade 200ms ${EASE} both`,
       }}
       className="dgv-sheet-wrap"
@@ -1349,10 +1399,11 @@ export function Sheet({
         onClick={stop}
         className="dgv-scroll dgv-sheet-panel"
         style={{
-          width: '100%', maxWidth: 720, maxHeight: '86vh', overflowY: 'auto',
+          width: '100%', maxWidth: 720, maxHeight: 'calc(86dvh - var(--dgv-kb, 0px))', overflowY: 'auto',
           background: DG.surface,
           borderRadius: '24px 24px 0 0',
-          padding: '10px 16px 24px',
+          /* The home indicator: the last line clears it when the page draws edge to edge. */
+          padding: '10px 16px calc(24px + env(safe-area-inset-bottom, 0px))',
           boxShadow: '0 -20px 60px rgba(27,56,40,0.32)',
           animation: `dgv-sheet 300ms ${EASE} both`,
           outline: 'none',

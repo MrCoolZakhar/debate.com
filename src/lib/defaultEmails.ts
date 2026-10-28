@@ -36,6 +36,8 @@ export interface DefaultEventEmail {
 // the product doesn't actually do. Button labels are sentence case: SHOUTING
 // CAPS read as an ad, and these are not ads.
 
+/** The press seat email's product shots (public/email/shots, see public/email/README.md). */
+const PRESS_SHOTS = 'https://gavelling.com/email/shots/';
 const VIEW_CONFERENCE_BUTTON: EmailBlock = { type: 'button', label: 'View my conference', destination: 'documents' };
 
 /** The receipt is the email a delegate keeps, and the next thing they need
@@ -181,6 +183,34 @@ export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
         { label: 'Representing', value: '{{country}}', iconFrom: 'country' },
       ] },
       { type: 'paragraph', content: "That's your brief for the whole conference, so it's worth starting early. Study guides and position paper details appear in your conference view as your chairs publish them." },
+      VIEW_CONFERENCE_BUTTON,
+    ],
+  },
+  // A press committee's seat gets this instead of allocation_assigned
+  // (queueAllocationEmails). It SHOWS the desk (owner, 23 Oct 2026: "they should
+  // reflect and show what they can actually do through some images"): three real
+  // Press Desk screens, captured with fictional demo data (public/email/README.md),
+  // each with one plain line. The test send in scratch-press-and-parties.sql
+  // (section T) is the older text-only copy and is not this email any more.
+  press_allocation_assigned: {
+    subject: 'Your press seat at {{conference_name}}',
+    blocks: [
+      { type: 'paragraph', variant: 'heading', content: 'You are on the press team' },
+      { type: 'paragraph', content: 'Hi {{delegate_name}},\n\nYou are on the press team for {{conference_name}}. During the conference you report from your Press Desk. Here is what you can do there.' },
+      { type: 'facts', items: [
+        { label: 'Committee', value: '{{committee}}', iconFrom: 'committee' },
+        { label: 'Your outlet', value: '{{country}}' },
+      ] },
+      { type: 'paragraph', variant: 'heading', content: 'Follow every committee room live' },
+      { type: 'image', url: `${PRESS_SHOTS}press-desk-rooms.jpg`, alt: 'Two committee rooms on the Press Desk: who is speaking, who is next, and the papers introduced, each with a Read link.' },
+      { type: 'paragraph', content: 'See who is speaking, what each room is debating and every paper introduced, which you can open and read in full.' },
+      { type: 'paragraph', variant: 'heading', content: 'Write a press release' },
+      { type: 'image', url: `${PRESS_SHOTS}press-release-composer.jpg`, alt: 'The press release form: up to 600 characters, Add a photo, and the committee rooms to send it to.' },
+      { type: 'paragraph', content: 'Up to 600 characters, with a photo if you like. Pick the rooms it goes to, or send it to all of them. It appears in their chat under your outlet\'s name. If your press chair has approval on, they OK it before it goes out.' },
+      { type: 'paragraph', variant: 'heading', content: 'Keep track of what you sent' },
+      { type: 'image', url: `${PRESS_SHOTS}press-releases-sent.jpg`, alt: 'A sent press release with its photo, marked Sent to 3 rooms.' },
+      { type: 'paragraph', content: 'Every release stays on your desk with the rooms it reached. You can send 3 in any 24 hours, and you can join the press room itself from the desk.' },
+      { type: 'paragraph', variant: 'small', content: 'The Press Desk opens from your conference page once the conference starts.' },
       VIEW_CONFERENCE_BUTTON,
     ],
   },

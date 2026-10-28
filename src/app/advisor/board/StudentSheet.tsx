@@ -11,7 +11,7 @@ import { useLanguage, useT } from '@/contexts/LanguageContext';
 import { describeMotion, type MotionFields } from '@/lib/motionLog';
 import { serverNow } from '@/lib/serverClock';
 import {
-  countsFor, cuesFor, papersFor, roomAverage, timelineFor,
+  countsFor, cuesFor, foldMotions, localMidnight, papersFor, roomAverage, timelineFor,
   type MotionItem, type SeatState, type TimelineItem,
 } from '@/lib/advisorBoard/derive';
 import type { FollowedSeat, RoomData } from '@/lib/advisorBoard/types';
@@ -67,9 +67,12 @@ export default function StudentSheet({
 
   const data = useMemo(() => {
     if (!room) return null;
+    // "Today" is today on the advisor's device, from midnight, for the student and the
+    // room average alike (a three-day conference must not add up every day).
+    const since = localMidnight(serverNow());
     return {
-      counts: countsFor(room, country),
-      average: roomAverage(room),
+      counts: countsFor(room, country, foldMotions(room.events), since),
+      average: roomAverage(room, since),
       timeline: timelineFor(room, country),
       papers: papersFor(room, country),
     };
@@ -102,7 +105,7 @@ export default function StudentSheet({
 
         {data && (
           <>
-            <h3 className="mb-2 mt-6" style={{ fontSize: 13, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.forestSoft }}>{t('adv_today')}</h3>
+            <h3 className="mb-2 mt-6" style={{ fontSize: 16, fontWeight: 700, color: C.ink }}>{t('adv_today')}</h3>
             <div className="grid grid-cols-2 gap-2">
               <Stat label={t('adv_stat_speeches')} value={String(data.counts.speeches)} average={data.average ? avg(data.average.speeches) : null} />
               <Stat label={t('adv_stat_time')} value={duration(data.counts.seconds)} average={data.average ? duration(data.average.seconds) : null} />
@@ -114,18 +117,18 @@ export default function StudentSheet({
               {t('adv_average_note')}
             </p>
 
-            <h3 className="mb-2 mt-6" style={{ fontSize: 13, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.forestSoft }}>{t('adv_timeline')}</h3>
+            <h3 className="mb-2 mt-6" style={{ fontSize: 16, fontWeight: 700, color: C.ink }}>{t('adv_timeline')}</h3>
             {data.timeline.length === 0 ? (
               <p style={{ fontSize: 14, color: C.inkSoft }}>{t('adv_timeline_empty')}</p>
             ) : (
               <ol className="flex flex-col">
-                {data.timeline.map((item, i) => <TimelineRow key={i} item={item} />)}
+                {data.timeline.map((item, i) => <TimelineRow key={i} item={item} motionNames={room?.motionNames ?? null} />)}
               </ol>
             )}
 
             {data.papers.length > 0 && (
               <>
-                <h3 className="mb-2 mt-6" style={{ fontSize: 13, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.forestSoft }}>{t('adv_papers')}</h3>
+                <h3 className="mb-2 mt-6" style={{ fontSize: 16, fontWeight: 700, color: C.ink }}>{t('adv_papers')}</h3>
                 <ul className="flex flex-col gap-1.5">
                   {data.papers.map((p, i) => (
                     <li key={i} className="flex items-center gap-3 rounded-xl px-3 py-2.5" style={{ backgroundColor: C.surface }}>
@@ -173,7 +176,7 @@ function Stat({ label, value, average }: { label: string; value: string; average
   );
 }
 
-function TimelineRow({ item }: { item: TimelineItem }) {
+function TimelineRow({ item, motionNames }: { item: TimelineItem; motionNames: Record<string, unknown> | null }) {
   const t = useT();
   const { language } = useLanguage();
   let icon: React.ReactNode;
@@ -193,7 +196,8 @@ function TimelineRow({ item }: { item: TimelineItem }) {
       motionType: m.motionType as MotionFields['motionType'],
       topic: m.topic, totalTime: m.totalTime, speakingTime: m.speakingTime,
     };
-    title = describeMotion(null, fields, language) ?? t('adv_motion');
+    // The room's own motion names (settings.motionNames), through the shared helper.
+    title = describeMotion(motionNames ? { dbSettings: { motionNames } } : null, fields, language) ?? t('adv_motion');
     detail = m.outcome ? t(OUTCOME_KEY[m.outcome]) : null;
   }
   return (

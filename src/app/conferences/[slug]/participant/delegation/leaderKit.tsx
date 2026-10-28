@@ -11,7 +11,8 @@ import ProfileLink from '@/components/ProfileLink';
 export const FONT = OUTFIT;
 export const INK = NEU.ink;
 export const INK_SOFT = NEU.inkSoft;
-export const FOREST = NEU.forest;
+/** The conference's own main colour (never Gavelling forest on /conferences/[slug]). */
+export const FOREST = 'var(--gv-main)';
 export const LINE = 'color-mix(in srgb, var(--gv-main) 9%, transparent)';
 export const OK_GREEN = '#1F6B45';
 export const OWE = '#9A4A12';
@@ -30,7 +31,7 @@ const BTN_BASE: React.CSSProperties = {
   borderRadius: 10, fontFamily: FONT, fontSize: 14, fontWeight: 600, cursor: 'pointer', textDecoration: 'none',
 };
 export const primaryBtn: React.CSSProperties = {
-  ...BTN_BASE, border: 'none', color: '#FFFFFF', background: 'linear-gradient(180deg, #26503D, var(--gv-main))',
+  ...BTN_BASE, border: 'none', color: 'var(--gv-on-main)', background: 'linear-gradient(180deg, var(--gv-main-mid), var(--gv-main))',
 };
 export const secondaryBtn: React.CSSProperties = {
   ...BTN_BASE, border: '1px solid color-mix(in srgb, var(--gv-main) 16%, transparent)', color: 'var(--gv-main)', background: '#FFFFFF',

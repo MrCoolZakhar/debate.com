@@ -9,7 +9,8 @@ import { BookOpen, Check, FileText, Mic, Vote, X } from 'lucide-react';
 import { CircleFlag } from '@/components/CircleFlag';
 import SeatName from '@/components/SeatName';
 import { OUTFIT } from '@/components/neu';
-import { CommitteeEmblem, TwoRowName, committeeShort } from '../participant/dashboardKit';
+import { TwoRowName, committeeShort } from '../participant/dashboardKit';
+import { CommitteeDisc, committeeEmblemSrc } from '../participant/delegation/leaderKit';
 import type { PressDocument, PressRoom } from '@/lib/press';
 import { CARD_SHADOW, FOREST, INK, INK_SOFT, SLATE, SeatLine, roomMode } from './pressKit';
 
@@ -46,7 +47,7 @@ export default function PressRoomCard({ room, onOpenDoc }: {
     >
       {/* Who the room is, and what it is doing */}
       <header className="flex items-start gap-3">
-        <CommitteeEmblem logoUrl={room.logoUrl} name={room.name} abbreviation={room.abbreviation} size={42} isCrisis={room.committeeType === 'crisis'} />
+        <CommitteeDisc src={committeeEmblemSrc(room.logoUrl, room.name, room.abbreviation)} size={42} />
         <div className="min-w-0 flex-1">
           <TwoRowName short={short} full={room.name} size={17} />
           {topic && (
@@ -136,13 +137,14 @@ export default function PressRoomCard({ room, onOpenDoc }: {
 }
 
 /** A delegation named in a paper's sponsor list, flag and name, for the reader's header. */
-export function SponsorChips({ sponsors }: { sponsors: string[] }) {
+export function SponsorChips({ sponsors, logos }: { sponsors: string[]; logos?: Record<string, string> }) {
   if (sponsors.length === 0) return null;
   return (
     <div className="flex flex-wrap gap-x-4 gap-y-2">
       {sponsors.map((sp, i) => (
         <span key={`${sp}-${i}`} className="inline-flex items-center gap-1.5">
-          <CircleFlag country={sp} size={20} decorative />
+          {/* The seat's own crest when the room has one (a party, a character), else its flag. */}
+          <CircleFlag country={sp} logoUrl={logos?.[sp] ?? null} size={20} decorative />
           <SeatName name={sp} style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, color: INK }} subStyle={{ color: INK_SOFT, fontWeight: 500 }} />
         </span>
       ))}

@@ -366,7 +366,7 @@ export default function MemberMenu({ member, societyId, openSeats, conferenceId,
             Cancel
           </button>
           <button type="button" onClick={() => { void doAction(action); }} disabled={busy} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-main)]"
-            style={{ minHeight: 40, padding: '0 12px', borderRadius: 8, border: 'none', background: c.danger ? DANGER : 'var(--gv-main)', color: '#FFFFFF', fontFamily: FONT, fontSize: 13.5, fontWeight: 600, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1 }}>
+            style={{ minHeight: 40, padding: '0 12px', borderRadius: 8, border: 'none', background: c.danger ? DANGER : 'var(--gv-main)', color: c.danger ? '#FFFFFF' : 'var(--gv-on-main)', fontFamily: FONT, fontSize: 13.5, fontWeight: 600, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1 }}>
             {c.yes}
           </button>
         </div>

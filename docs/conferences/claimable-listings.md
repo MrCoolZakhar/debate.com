@@ -22,7 +22,7 @@ List real upcoming Model UN conferences that are not on Gavelling yet, as short 
 - No Apply button and no fees until it is claimed. The main button is "Visit their website".
 - Removal on request, no questions asked.
 - No personal data: no secretariat names, no emails, no photos of people.
-- No organiser is emailed or contacted by us. They find the listing (Google, their own delegates) and claim it themselves.
+- ~~No organiser is emailed or contacted by us.~~ Changed 22 Oct 2026 (owner): each listing's own general address is collected into `conferences.contact_email` (never shown on the page) and the conference gets ONE outreach email offering the listing, written as a Gmail draft in Peter's connected Gmail (petizakhar@gmail.com) that he reviews and sends himself, never through Resend (its Acceptable Use Policy forbids cold email and could close the account that sends all of Gavelling's mail). No follow-ups unless they reply. `listing_meta.outreach.drafted_at` marks a drafted listing and survives the daily job's re-checks.
 - Discovery does NOT scrape mymun's directory (EU database right; mymun is German). The list of which conferences exist comes from open sources; mymun is only a manual cross-check by a person. Details always come from the conference's own website, respecting its robots.txt.
 - A listing below the quality bar is noindex and stays out of the sitemap.
 

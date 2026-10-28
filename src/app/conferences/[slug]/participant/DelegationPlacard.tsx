@@ -89,7 +89,7 @@ export default function DelegationPlacard({ societyId, paymentStatus, selfPaid, 
       <p className="font-bold text-[15px]" style={{ color: '#1C1410', fontFamily: OUTFIT, margin: 0 }}>
         {societyName ?? 'Delegation'}
       </p>
-      <p className="text-xs mt-1.5" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+      <p className="text-xs mt-1.5" style={{ color: '#6B5F52', fontFamily: OUTFIT }}>
         {advisorNames.length > 0 ? advisorNames.join(', ') : 'No faculty advisor listed'}
       </p>
     </SectionCard>

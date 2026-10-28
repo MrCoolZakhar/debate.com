@@ -2,10 +2,15 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import ArticleLayout from '@/components/blog/ArticleLayout';
+import TutorialVideo, { TutorialVideoJsonLd } from '@/components/blog/TutorialVideo';
 import { PhotoFigure } from '@/components/blog/BlogPhoto';
 import { H2, H3, FactCard, TableWrap } from '@/components/blog/prose';
 import Faq, { type FaqItem } from '@/components/blog/Faq';
 import { ReferenceSheet } from '@/components/blog/ReferenceSheet';
+
+// Tutorial videos appear on release (src/lib/tutorialVideos.ts); the hourly
+// revalidation brings the server HTML and the VideoObject JSON-LD up to date.
+export const revalidate = 3600;
 
 const TITLE = 'Motions in MUN: Every Motion and How to Raise One';
 const DESCRIPTION =
@@ -75,6 +80,7 @@ export default function Article4() {
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
+      <TutorialVideoJsonLd ids={['NRMjbXmLqaY']} />
       <ArticleLayout
         slug="mun-motions-explained"
         pitch="Gavelling&apos;s motion queue tracks and sorts every motion automatically, so you can focus on running the vote."
@@ -116,7 +122,7 @@ export default function Article4() {
         </p>
 
         <H2>3. The Most Common MUN Motions</H2>
-        <ReferenceSheet id="motions" caption="The common motions, the vote each needs and what to say." />
+        <ReferenceSheet variant="side" id="motions" caption="The common motions, the vote each needs and what to say." />
 
         <FactCard title="Motion to Open / Continue the Speakers List">Opens or reopens the General Speakers List after a caucus. Requires: none specified (chair may open it directly). Vote threshold: typically no vote needed. The chair opens it as a matter of course.</FactCard>
 
@@ -198,6 +204,10 @@ export default function Article4() {
           <li><strong>Use a motion queue.</strong> Gavelling maintains a live motion queue sorted by disruptiveness, so the chair always knows which motion to vote on first without mental arithmetic.</li>
           <li><strong>Never let motions drag.</strong> Take the second, call the vote, record the result, move on. Drawn-out motion procedure kills committee energy.</li>
         </ul>
+
+        <TutorialVideo id="NRMjbXmLqaY">
+          Gavelling holds up to fifteen motions on the floor at once, ranked by disruptiveness, so the order of the vote is never in doubt.
+        </TutorialVideo>
         <p>
           See also: <Link href="/blog/how-to-run-mun-committee" style={{ color: '#1B3828', fontWeight: 600 }}>How to Run a MUN Committee</Link> for a complete session walkthrough.
         </p>

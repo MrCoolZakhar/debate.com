@@ -3,6 +3,8 @@
 import { useSyncExternalStore, useCallback } from 'react';
 import type { ChatMessage } from './types';
 import type { ChatConvKey } from './chatConversations';
+import { newRowId } from './offlineResilience';
+import { supabase } from './supabase';
 
 // ─── Chat outbox ────────────────────────────────────────────────────────────
 //
@@ -17,8 +19,15 @@ import type { ChatConvKey } from './chatConversations';
 export type OutboxStatus = 'sending' | 'failed';
 
 export interface OutboxMsg {
-  /** Client-generated id. Also the reconcile key — see matchOutboxEcho below. */
+  /** Client-generated id of the bubble (the outbox's own key). */
   id: string;
+  /**
+   * The `messages` row id this entry is inserted with, a UUID chosen once at creation and
+   * sent on the first send AND every retry. A retry of a send whose first insert landed
+   * (response lost) then hits the primary key instead of posting the message twice, and
+   * the arriving row retires this entry by id (reconcileOutbox).
+   */
+  rowId: string;
   convKey: ChatConvKey;
   sender: string;
   content: string;
@@ -61,6 +70,45 @@ export function subscribeOutbox(committeeId: string, fn: () => void): () => void
 
 export function newOutboxId(): string {
   return `out-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/** A UUID for an outbox entry's `rowId` (falls back to getRandomValues off a secure context). */
+export function newOutboxRowId(): string {
+  return newRowId();
+}
+
+const ROW_CHECK_TIMEOUT_MS = 10_000;
+
+/**
+ * After a send reported failure: is the row there anyway? `sendMessage` reports every error
+ * the same way, so a duplicate key (the first insert of a retried send DID land) cannot be
+ * told apart from a refusal by its answer. The row itself can: `messages` is readable by
+ * anyone with the room, and a refused insert leaves no row. true = delivered, false = not
+ * there, null = could not ask (treated as not delivered: the bubble keeps Retry, and a retry
+ * is safe because it reuses the same row id).
+ */
+export async function outboxRowExists(rowId: string): Promise<boolean | null> {
+  try {
+    const read = supabase.from('messages').select('id').eq('id', rowId).maybeSingle()
+      .then(({ data, error }) => (error ? null : !!data));
+    const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), ROW_CHECK_TIMEOUT_MS));
+    return await Promise.race([read, timeout]);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The entry's row is known to exist. When this committee has already been shown that row,
+ * no echo is coming to retire the bubble, so it goes now; otherwise it waits as 'sending'
+ * and reconcileOutbox retires it by id when the row arrives.
+ */
+export function settleOutboxDelivered(committeeId: string, id: string) {
+  const cur = getOutbox(committeeId);
+  const entry = cur.find((m) => m.id === id);
+  if (!entry) return;
+  if (seenIds.get(committeeId)?.has(entry.rowId)) removeOutbox(committeeId, id);
+  else if (entry.status !== 'sending') markOutboxSending(committeeId, id);
 }
 
 export function addOutbox(committeeId: string, msg: OutboxMsg) {
@@ -145,6 +193,9 @@ export function reconcileOutbox(committeeId: string, rows: ChatMessage[]) {
   let changed = false;
 
   for (const row of fresh) {
+    // The row this entry was inserted with: an exact match, whatever its status.
+    const byId = remaining.findIndex((p) => p.rowId === row.id);
+    if (byId !== -1) { remaining.splice(byId, 1); changed = true; continue; }
     const matches = (p: OutboxMsg) =>
       row.sender === p.sender &&
       row.content === p.content &&

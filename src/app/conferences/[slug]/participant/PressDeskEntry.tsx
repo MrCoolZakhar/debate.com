@@ -8,11 +8,13 @@
 // applied (`my_press_access` missing), sees nothing: no heading, no empty card.
 
 import { useEffect, useState } from 'react';
-import { Newspaper } from 'lucide-react';
+import Link from 'next/link';
+import { ArrowRight, Newspaper } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
-import { Emoji3D, OUTFIT } from '@/components/neu';
+import { OUTFIT } from '@/components/neu';
 import { fetchMyPressAccess, type PressAccess } from '@/lib/press';
-import { DashCard, ForestLink, INK, INK_SOFT, Pane } from './dashboardKit';
+import { INK, INK_SOFT, Pane } from './dashboardKit';
+import { BTN_CLASS, cardStyle, secondaryBtn, STROKE } from './delegation/leaderKit';
 
 export default function PressDeskEntry({ conferenceId, conferenceSlug, show }: {
   conferenceId: string;
@@ -39,22 +41,28 @@ export default function PressDeskEntry({ conferenceId, conferenceSlug, show }: {
 
   return (
     <Pane show={show} title="Press Desk" icon={Newspaper} anchor="press-desk">
-      <DashCard>
-        <div className="flex items-start gap-4 flex-wrap">
-          <span aria-hidden className="inline-flex items-center justify-center flex-shrink-0" style={{ width: 52, height: 52, borderRadius: 999, backgroundColor: 'rgba(47,96,118,0.12)' }}>
-            <Emoji3D name="Newspaper" size={32} />
-          </span>
-          <div className="min-w-0 flex-1" style={{ minWidth: 200 }}>
-            <h3 style={{ fontFamily: OUTFIT, fontSize: 19, fontWeight: 800, color: INK, margin: 0, lineHeight: 1.25 }}>Press Desk</h3>
-            <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 14, color: INK_SOFT, margin: '4px 0 0 0', lineHeight: 1.5 }}>
-              {press
-                ? 'Follow every committee live, read their papers and send press releases to every room'
-                : 'Follow every committee live and read their papers'}
+      {/* One white lifted card like the Overview's (fine-line icon, no 3D
+          emoji): the desk, the outlet a release is signed with, one light
+          button (the view's one primary stays the next step). */}
+      <section aria-label="Press Desk" className="flex items-center gap-4 flex-wrap p-[18px] sm:px-6 sm:py-[20px]" style={cardStyle}>
+        <Newspaper size={30} strokeWidth={STROKE} aria-hidden style={{ color: INK, flexShrink: 0 }} />
+        <div className="min-w-0 flex-1" style={{ minWidth: 200 }}>
+          <h3 style={{ fontFamily: OUTFIT, fontSize: 19, fontWeight: 600, color: INK, margin: 0, lineHeight: 1.25 }}>Press Desk</h3>
+          {press && access.label && (
+            <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 14.5, fontWeight: 600, color: INK, margin: '2px 0 0 0' }}>
+              Press · {access.label}
             </p>
-          </div>
-          <ForestLink href={`/conferences/${conferenceSlug}/press`}>Open the press desk</ForestLink>
+          )}
+          <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 14, color: INK_SOFT, margin: '4px 0 0 0', lineHeight: 1.5 }}>
+            {press
+              ? 'Follow every committee live, read their papers and send press releases to every room'
+              : 'Follow every committee live and read their papers'}
+          </p>
         </div>
-      </DashCard>
+        <Link href={`/conferences/${conferenceSlug}/press`} className={BTN_CLASS} style={secondaryBtn}>
+          Open the press desk <ArrowRight size={16} strokeWidth={STROKE} aria-hidden />
+        </Link>
+      </section>
     </Pane>
   );
 }

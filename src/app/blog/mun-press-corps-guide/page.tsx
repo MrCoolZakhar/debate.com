@@ -80,6 +80,7 @@ export default function Article() {
         <H3>News report</H3>
         <p>The core form and the one you will write most. Inverted pyramid: what happened, who did it, why it matters, then the detail in descending order of importance. The first sentence carries the news and names the committee. Around 300 to 500 words, written to be cut from the bottom.</p>
         <p className="gv-note">Example opening, from a fictional committee: &quot;The World Health Organization committee passed its first resolution this afternoon by 71 votes to 19, after a two-hour dispute over whether member states should be required to report outbreak data within 48 hours. The reporting requirement survived, but only after sponsors removed the sanctions attached to it.&quot;</p>
+        <p>The short form of the same thing, sent into committee rooms during session, is the press release; <Link href="/blog/how-to-write-mun-press-release">how to write a MUN press release</Link> covers it with examples.</p>
         <H3>Interview</H3>
         <p>Five to eight questions, cut to the three or four answers that said something. Introduce the delegate, their delegation and why they matter to the story, then run question and answer. Never invent or tidy a quote into something they did not say.</p>
         <H3>Opinion or editorial</H3>
@@ -139,6 +140,7 @@ export default function Article() {
           <li><strong>Publish visibly.</strong> If the conference never sees the output, the committee feels pointless by Sunday morning, which is the most common way press committees fail.</li>
         </ol>
         <p>Brief your reporters on procedure too. A journalist who does not know what a motion to close debate is will misreport the vote that follows it, so send them our <Link href="/blog/mun-motions-explained">motions reference</Link> before the conference and spend fifteen minutes on it in the first editorial meeting. Press covering a crisis committee needs more: the room moves fast and half the action is invisible, so read the <Link href="/blog/mun-crisis-committee-guide">crisis guide</Link> too.</p>
+        <p>For the full editorial workflow, approval and crisis leaks, see <Link href="/blog/how-to-run-mun-press-corps">how to run a press corps at a MUN conference</Link>; your reporters will want <Link href="/blog/mun-journalist-guide">the MUN journalist&apos;s guide</Link>, <Link href="/blog/mun-press-conference-guide">how MUN press conferences work</Link> and <Link href="/blog/mun-press-delegate-awards">how press delegates are judged</Link>.</p>
 
         <H2>Ethics, and the line</H2>
         <p>Three rules, and they are not negotiable in either model.</p>

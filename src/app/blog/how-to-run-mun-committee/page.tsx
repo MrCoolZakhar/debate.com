@@ -2,10 +2,15 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import ArticleLayout from '@/components/blog/ArticleLayout';
+import TutorialVideo, { TutorialVideoJsonLd } from '@/components/blog/TutorialVideo';
 import { PhotoFigure } from '@/components/blog/BlogPhoto';
 import { H2, H3 } from '@/components/blog/prose';
 import Faq, { type FaqItem } from '@/components/blog/Faq';
 import { ReferenceSheet } from '@/components/blog/ReferenceSheet';
+
+// Tutorial videos appear on release (src/lib/tutorialVideos.ts); the hourly
+// revalidation brings the server HTML and the VideoObject JSON-LD up to date.
+export const revalidate = 3600;
 
 const TITLE = 'MUN Chair Guide: How to Run a Model UN Committee';
 const DESCRIPTION =
@@ -75,6 +80,7 @@ export default function Article1() {
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
+      <TutorialVideoJsonLd ids={['vcL53n4CRJM', 'H3KBZVen978']} />
       <ArticleLayout
         slug="how-to-run-mun-committee"
         pitch="Gavelling automates roll call, GSL queue, motion tracking, and voting, so you can focus on running a great debate."
@@ -106,6 +112,10 @@ export default function Article1() {
           Using a digital tool like <strong>Gavelling</strong> lets you pre-load your delegate roster, set speaking times, and configure voting thresholds before you walk into the room. Delegates receive a 6-character session code and join on their own devices: no downloads, no paper lists. Setting this up the evening before means your opening is seamless.
         </p>
 
+        <TutorialVideo id="vcL53n4CRJM">
+          Setting up a committee on Gavelling takes about a minute: name it, add the countries, the observers and your co-chair, then share the session code.
+        </TutorialVideo>
+
         <PhotoFigure id="mun-chairs-dais" caption="The dais runs the room: student chairs presiding over a Security Council committee." />
 
 
@@ -126,6 +136,10 @@ export default function Article1() {
         <p>
           Quorum is typically 50% + 1 of total delegations. If you have 20 delegations, you need at least 11 present to proceed. If quorum is not met, the chair usually recesses the session briefly and takes attendance again after a short wait. If quorum still cannot be met, the session may be postponed.
         </p>
+
+        <TutorialVideo id="H3KBZVen978">
+          In Gavelling you can mark the whole room present at once or go delegation by delegation, and the quorum figures update as you do.
+        </TutorialVideo>
 
         <H2>3. Setting the Agenda</H2>
         <p>

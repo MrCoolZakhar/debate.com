@@ -2,16 +2,18 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
-import { RefreshCw, Radio, PauseCircle, Megaphone } from 'lucide-react';
+import { RefreshCw, Radio, PauseCircle, Megaphone, Newspaper } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
 import { getFreshAuthedClient, refreshSessionNow } from '@/lib/supabase-auth';
 import { supabase as anonSupabase } from '@/lib/supabase';
+import { fetchAllRows } from '@/lib/fetchAllRows';
 import {
   NeuCard, NeuInset, NeuIconDisc, Emoji3D,
   NEU, NEU_GRADIENTS, OUTFIT, EASE,
 } from '@/components/neu';
-import { getScoringConfig } from '@/lib/scoring';
+import { getScoringConfig, everPresentFromHistory } from '@/lib/scoring';
+import { readStatusHistory } from '@/lib/attendanceHistory';
 import type { ScoringConfig } from '@/lib/settingsStore';
 import { loadConferenceScoreboard, sessionHeadlineScores, type ConferenceScoreboard } from '@/lib/conferenceScoreboard';
 import { getAwardsConfig } from '@/lib/awards';
@@ -22,8 +24,8 @@ import {
 import { fetchPendingChairInvites, pendingInviteName } from '@/lib/chairInvites';
 import {
   BroadcastComposer, RecentBroadcasts, broadcastTargets, groupBroadcasts,
-  mapBroadcastRow, deleteBroadcastGroup,
-  type BroadcastRow, type BroadcastGroup,
+  mapBroadcastRow, deleteBroadcastGroup, applyDueBroadcast,
+  type BroadcastRow, type BroadcastGroup, type BroadcastRoomState,
 } from './BroadcastComposer';
 import { CommitteeCard, GridFootnote } from './CommitteeCard';
 import { FloorDetail, useNowTick } from './PhaseVariants';
@@ -41,6 +43,7 @@ import { SOFT, AMBER_INK, RED } from './tokens';
 import { GoldWord } from '@/components/BrandHeading';
 import { friendlyError } from '@/lib/friendlyError';
 import { notifyErr, clearErr } from '@/lib/appNotify';
+import { seatGroupFromRow } from '@/lib/committeeService';
 
 /** Deadline on the in-flight load guard. Longer than any healthy load (the
  *  batch is eight indexed `in` queries) but short enough that a hung request
@@ -109,6 +112,11 @@ export default function LiveStatusPage() {
   // (`src/lib/slotGroups.ts`). Loaded beside the committee list on each pass
   // and handed to every card; a failed read keeps the last index.
   const [seatArt, setSeatArt] = useState<SlotArtIndex>(() => new Map());
+  // True when the conference has a press committee: the header then offers
+  // the Press Desk (/conferences/<slug>/press), the same read-only desk the
+  // press seats use. Read from the committee list this page already loads.
+  const [hasPress, setHasPress] = useState(false);
+  const [pressHover, setPressHover] = useState(false);
   const loadingRef = useRef(false);
   const loadStartedRef = useRef(0);
 
@@ -133,11 +141,10 @@ export default function LiveStatusPage() {
       }
       const { data: confCommittees, error: confErr } = await authed
         .from('conference_committees')
-        // `released_to_chairs_at` and `delegation_size` are new here and are both
-        // read-only: the first lets a never-opened room say whether its dais has
-        // actually been invited (the not-started nudge on the card), the second
-        // is the double-delegation flag. Neither is ever written by this page.
-        .select('id, name, abbreviation, logo_url, topics, difficulty, committee_type, total_slots, session_id, session_code, chair_user_ids, display_chairs, released_to_chairs_at, delegation_size')
+        // `delegation_size` is the double-delegation flag, read only. The chairs'
+        // release stamp is no longer read: there is no organiser release date
+        // any more (owner, 23 Oct 2026).
+        .select('id, name, abbreviation, logo_url, topics, difficulty, committee_type, total_slots, session_id, session_code, chair_user_ids, display_chairs, delegation_size')
         .eq('conference_id', conference.id)
         .order('name', { ascending: true });
 
@@ -150,6 +157,7 @@ export default function LiveStatusPage() {
       }
 
       const confRows = confCommittees ?? [];
+      setHasPress(confRows.some((c) => c.committee_type === 'press'));
       void loadSlotArtIndex(authed, confRows.map((c) => c.id)).then(setSeatArt).catch(() => {});
       const sessionIds = confRows.map((c) => c.session_id).filter((id): id is string => !!id);
 
@@ -203,6 +211,10 @@ export default function LiveStatusPage() {
       let documents: Record<string, unknown>[] = [];
       let sysMessages: Record<string, unknown>[] = [];
       let feedback: Record<string, unknown>[] = [];
+      // Delegations ever present per session (the roll-call history), so attendance
+      // scores "present at any point" like the chair's board. A failed read is null:
+      // that room's attendance follows the current status.
+      const everPresentBy = new Map<string, Set<string> | null>();
 
       if (sessionIds.length > 0) {
         // The `motions` table is NOT read here. The cards state the stage a room
@@ -226,7 +238,9 @@ export default function LiveStatusPage() {
             // side at seed time — see `src/lib/sessionFlags.ts`. It lets a card
             // draw a delegation's real mark without the slot index having to
             // resolve it by name.
-            .select('committee_id, country, status, is_observer, logo_url')
+            // group_color / group_short: a custom committee seat's party
+            // (live since 23 Oct 2026), drawn as the chair draws it.
+            .select('committee_id, country, status, is_observer, logo_url, group_color, group_short')
             .in('committee_id', sessionIds),
           anonSupabase.from('speakers_list')
             .select('committee_id, country, position, list_type')
@@ -237,7 +251,7 @@ export default function LiveStatusPage() {
           // same `file_url` in its inline viewer (DocumentsModal.tsx:877), and
           // `documents` carries a public SELECT policy, so no new RLS is needed.
           anonSupabase.from('documents')
-            .select('committee_id, type, status, doc_code, title, sponsors, file_url, file_name, content, created_at')
+            .select('committee_id, type, status, approval, doc_code, title, sponsors, file_url, file_name, content, created_at')
             .in('committee_id', sessionIds),
           // The `sender = '__system__'` filter is deliberately GONE. The ledger
           // still only ever comes from `__system__` rows (filtered below), but
@@ -253,9 +267,13 @@ export default function LiveStatusPage() {
           // narrowing the clock back to `updated_at`.
           // `recipient` is what marks a ledger row (`__log__`) for scoring.ts, which scores
           // this committee exactly as the chair's board does (`sessionHeadlineScores`).
-          anonSupabase.from('messages')
-            .select('committee_id, sender, recipient, content, created_at')
-            .in('committee_id', sessionIds),
+          // Paged (fetchAllRows): one request stops at 1,000 rows across EVERY room here,
+          // silently, so a conference past that scored its rooms from a cut ledger.
+          fetchAllRows((from, to) => anonSupabase.from('messages')
+            .select('id, committee_id, sender, recipient, content, created_at')
+            .in('committee_id', sessionIds)
+            .order('created_at', { ascending: true }).order('id', { ascending: true })
+            .range(from, to)),
           // Chair feedback: ratings AND private notes. In practice almost every
           // row is a factor rating with no prose, so factor_scores is as much
           // the payload as `content` is.
@@ -281,6 +299,9 @@ export default function LiveStatusPage() {
         documents = docRes.data ?? [];
         sysMessages = msgRes.data ?? [];
         feedback = fbRes.data ?? [];
+
+        const histories = await Promise.all(sessionIds.map((id) => readStatusHistory(authed, id)));
+        sessionIds.forEach((id, i) => everPresentBy.set(id, everPresentFromHistory(histories[i])));
 
         // Everything failed: the floor is unknown, not empty. Do not draw it and
         // do not stamp a refresh time over it.
@@ -420,7 +441,6 @@ export default function LiveStatusPage() {
             totalSlots: (c.total_slots as number) ?? 0,
             sessionId: sid,
             sessionCode: (c.session_code as string | null) ?? null,
-            releasedToChairsAt: (c.released_to_chairs_at as string | null) ?? null,
             // NOT NULL DEFAULT 1 in the schema; the coalesce is for the type.
             delegationSize: (c.delegation_size as number | null) ?? 1,
             chairUserIds,
@@ -463,6 +483,7 @@ export default function LiveStatusPage() {
                 status: d.status as string,
                 isObserver: (d.is_observer as boolean | null) ?? false,
                 logoUrl: (d.logo_url as string | null) ?? null,
+                ...seatGroupFromRow(d),
               }))
             : [],
           gslQueue: sid ? bySession(queues, sid).filter((q) => q.list_type === 'gsl').map((q) => q.country as string) : [],
@@ -485,7 +506,7 @@ export default function LiveStatusPage() {
           // The chair's own arithmetic (scoring.ts over this committee's config, blend
           // included), so the live wall, the organiser scoreboard and the chair's board agree.
           scores: sid && sRow
-            ? sessionHeadlineScores(sRow, bySession(delegates, sid), bySession(sysMessages, sid), bySession(documents, sid), bySession(feedback, sid))
+            ? sessionHeadlineScores(sRow, bySession(delegates, sid), bySession(sysMessages, sid), bySession(documents, sid), bySession(feedback, sid), { everPresent: everPresentBy.get(sid) ?? null })
                 .map((x) => ({ country: x.country, total: x.headline }))
             : [],
           lastActivityAt,
@@ -534,15 +555,22 @@ export default function LiveStatusPage() {
     if (!conference || !authUserId) return;
     const authed = await getFreshAuthedClient();
     if (!authed) return;
-    const { data } = await authed
+    // Press releases (source 'press') share the table and are not the organisers' sends:
+    // they are left out IN THE QUERY, so a busy press corps can never push the organisers'
+    // own broadcasts past the 120-row limit. '*' because an older database had no `source`
+    // column; that answer (42703) is read again without the filter.
+    const base = () => authed
       .from('session_broadcasts')
-      // '*' rather than BROADCAST_COLUMNS: press releases (source 'press', scratch-press.sql)
-      // share the table and are not the organisers' sends, so they are left out of this list.
-      // The column may not exist yet; a row without it is the organisers'.
       .select('*')
-      .eq('conference_id', conference.id)
+      .eq('conference_id', conference.id);
+    let { data, error } = await base()
+      .or('source.is.null,source.eq.organiser')
       .order('created_at', { ascending: false })
       .limit(120);
+    if (error && (error.code === '42703' || /source/i.test(error.message ?? ''))) {
+      ({ data, error } = await base().order('created_at', { ascending: false }).limit(120));
+    }
+    if (error) return;
     setBroadcasts(((data ?? []) as Record<string, unknown>[]).filter((r) => r.source !== 'press').map(mapBroadcastRow));
   }, [conference?.id, authUserId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -717,6 +745,31 @@ export default function LiveStatusPage() {
   );
   const broadcastGroups = useMemo(() => groupBroadcasts(broadcasts).slice(0, 5), [broadcasts]);
 
+  // Each room by session id, so a due Pause / End can say whether it took (owner,
+  // 23 Oct 2026: it only happens on the Moderator's device if one is open).
+  const broadcastRooms = useMemo(() => {
+    const map = new Map<string, BroadcastRoomState>();
+    for (const r of rows ?? []) {
+      if (!r.session) continue;
+      map.set(r.session.id, {
+        label: r.conf.abbreviation?.trim() || r.conf.name,
+        suspendedAt: r.session.suspendedAt,
+        endedAt: r.session.endedAt,
+        updatedAt: r.session.updatedAt,
+      });
+    }
+    return map;
+  }, [rows]);
+
+  async function handleApplyNow(g: BroadcastGroup, ids: string[]) {
+    setBroadcastBusyKey(g.key);
+    clearErr('live');
+    const err = await applyDueBroadcast(ids);
+    setBroadcastBusyKey(null);
+    if (err) { notifyErr(err, 'live'); return; }
+    await loadAll();
+  }
+
   async function handleWithdraw(g: BroadcastGroup) {
     setBroadcastBusyKey(g.key);
     clearErr('live');
@@ -760,6 +813,27 @@ export default function LiveStatusPage() {
             <RefreshCw size={17} className={refreshing ? 'animate-spin' : ''} />
             Refresh
           </button>
+          {hasPress && conference && (
+            <a
+              href={`/conferences/${conference.slug}/press`}
+              target="_blank"
+              rel="noopener noreferrer"
+              onMouseEnter={() => setPressHover(true)}
+              onMouseLeave={() => setPressHover(false)}
+              className="inline-flex items-center gap-2 rounded-full px-5 text-[15px] font-bold focus:outline-none"
+              style={{
+                minHeight: 46,
+                color: NEU.forest, backgroundColor: NEU.surface, textDecoration: 'none',
+                fontFamily: OUTFIT,
+                boxShadow: pressHover ? NEU.outSmHover : NEU.outSm,
+                transition: `box-shadow 200ms ${EASE}`,
+              }}
+              title="Open the Press Desk in a new tab"
+            >
+              <Newspaper size={17} strokeWidth={1.75} aria-hidden />
+              Press Desk
+            </a>
+          )}
           {/* Broadcast — writes session_broadcasts rows, one per targeted
               committee. Nothing here suspends or ends a session itself. */}
           <button
@@ -871,6 +945,8 @@ export default function LiveStatusPage() {
       {/* What the secretariat has already sent to the floor */}
       <RecentBroadcasts
         groups={broadcastGroups}
+        rooms={broadcastRooms}
+        onApplyNow={(g, ids) => { void handleApplyNow(g, ids); }}
         onDelete={(g) => { void handleWithdraw(g); }}
         busyKey={broadcastBusyKey}
       />

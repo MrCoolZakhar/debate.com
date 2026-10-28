@@ -112,6 +112,9 @@ interface Application {
   organizer_note: string | null;
   resubmitted_at: string | null;
   custom_answers: CustomAnswers | null;
+  // The financial aid form's answers (a separate form from custom_answers);
+  // read only by the Excel export.
+  aid_custom_answers: CustomAnswers | null;
   assigned_committee_id: string | null;
   assigned_country_code: string | null;
   assigned_country_name: string | null;
@@ -2127,7 +2130,7 @@ export default function ApplicationsPage() {
         .select(`
           id, user_id, invited_email, invited_name, role, status, is_head_delegate, experience_level,
           experience_entries,
-          payment_status, submitted_at, checked_in_at, organizer_note, resubmitted_at, custom_answers,
+          payment_status, submitted_at, checked_in_at, organizer_note, resubmitted_at, custom_answers, aid_custom_answers,
           assigned_committee_id, assigned_country_code, assigned_country_name,
           self_paid, attending, pledge_type, spots_pledged, pledge_confirmed_at, society_id,
           aid_requested, aid_statement, aid_status, aid_requested_amount, fee_waiver_source,
@@ -3665,8 +3668,8 @@ export default function ApplicationsPage() {
     }
   }
 
-  // The export is an Excel workbook (exportWorkbook.ts): the overview, then one
-  // answers sheet per role. Built from what the page already loaded; SheetJS
+  // The export is an Excel workbook (exportWorkbook.ts): an Overview sheet and a
+  // Full information sheet with every answer in its own column. Built from what the page already loaded; SheetJS
   // loads inside the click.
   async function handleExportExcel() {
     if (exportBusy) return;
@@ -3677,6 +3680,7 @@ export default function ApplicationsPage() {
         acronym: conference?.acronym,
         applications,
         roleConfigs,
+        aidQuestions: conference?.aid_questions,
         labels: {
           role: roleLabel,
           status: (st) => STATUS_PILL[st]?.label ?? st,

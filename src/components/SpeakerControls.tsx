@@ -53,6 +53,10 @@ export const SPEAKER_TONES = {
   reply: { bg: '#FAD0A4', hover: '#F6C18C', fg: '#7A3A0C' },
   // Yield (Oct 2026): a soft sage; deep green on it is ~8:1.
   yield: { bg: '#D3E8DC', hover: '#C1DECC', fg: '#124A34' },
+  // End caucus (unmoderated floor, 25 Oct 2026): the palette red with white, ~8.6:1.
+  end: { bg: '#8B2020', hover: '#7A1C1C', fg: '#FFFFFF' },
+  // Consultation timer (unmoderated floor, 25 Oct 2026): pale gold; forest on it is ~9:1.
+  consult: { bg: '#F1E3B0', hover: '#EAD898', fg: '#1B3828' },
 } satisfies Record<string, Tone>;
 const TONES = SPEAKER_TONES;
 
@@ -69,6 +73,8 @@ export const POPOVER_TONES = {
   reply: { surface: '#FCE3C8', headerBg: '#AD4F18', headerFg: '#FFF6EC', ink: '#5A2A08', accent: 'rgba(173,79,24,0.45)', btn: '#AD4F18', btnHover: '#964313', btnFg: '#FFF6EC', chip: '#F7CFA2', chipOn: '#AD4F18' },
   // Yield (Oct 2026): header #1F5A43 / #ECF7F1 ≈ 8.3:1, body #0F3B2C on #DCEEE4 ≈ 11:1.
   yield: { surface: '#DCEEE4', headerBg: '#1F5A43', headerFg: '#ECF7F1', ink: '#0F3B2C', accent: 'rgba(31,90,67,0.45)', btn: '#1F5A43', btnHover: '#174A37', btnFg: '#ECF7F1', chip: '#C3E0D0', chipOn: '#1F5A43' },
+  // Consultation timer (25 Oct 2026): header forest / gold ≈ 8.7:1, body ink on pale gold ≈ 14:1.
+  consult: { surface: '#F7EFD4', headerBg: '#1B3828', headerFg: '#EED98A', ink: '#1C1410', accent: 'rgba(27,56,40,0.45)', btn: '#1B3828', btnHover: '#24503A', btnFg: '#EED98A', chip: '#EBDDB0', chipOn: '#1B3828' },
 } as const;
 
 /**
@@ -79,6 +85,16 @@ export const POPOVER_TONES = {
 export interface ControlLock { reason: string; onAttempt: () => void }
 
 const ACTIVE_RING = (fg: string) => `inset 0 0 0 2px ${fg}, 0 1px 2px rgba(27,56,40,0.10), 0 4px 10px rgba(27,56,40,0.16)`;
+
+/**
+ * One floor button, exported for the other floors (the unmoderated caucus and Consultation,
+ * 25 Oct 2026) so every floor's buttons share one look: the tones above, `gv-lift`,
+ * aria-disabled with the reason as the tooltip. `variant="tile"` is the icon with a short
+ * word beneath that is allowed to be wider than the square (a long locale word).
+ */
+export function FloorControlButton(props: Parameters<typeof ControlButton>[0]) {
+  return <ControlButton {...props} />;
+}
 
 function ControlButton({
   tone, label, title, blockedReason, onClick, onBlockedClick, children, variant = 'normal', active = false, tutorial, className = '', stacked, anchor,
@@ -93,8 +109,9 @@ function ControlButton({
   /** Called instead when the control is blocked (a Commenter's attempt raises a notice). */
   onBlockedClick?: () => void;
   children: ReactNode;
-  /** grow = the primary (Start / Pause), next = shares the rest of the row, icon = square. */
-  variant?: 'normal' | 'grow' | 'next' | 'icon';
+  /** grow = the primary (Start / Pause), next = shares the rest of the row, icon = square,
+   *  tile = icon with `stacked` beneath, at least square, wider for a long word. */
+  variant?: 'normal' | 'grow' | 'next' | 'icon' | 'tile';
   active?: boolean;
   tutorial?: string;
   /** `data-floor-anchor`: a popover this button opens places itself above it. */
@@ -110,6 +127,7 @@ function ControlButton({
   // needs and truncates only when the row is genuinely too narrow.
   const sizing = variant === 'grow' ? 'flex-[1.4_1_auto] min-w-0 px-4'
     : variant === 'next' ? 'flex-[1_1_auto] min-w-0 px-4'
+    : variant === 'tile' ? 'shrink-0 min-w-12 px-2.5 flex-col gap-0.5'
     : stacked ? 'shrink-0 w-12 flex-col gap-0.5'
     : variant === 'icon' ? 'shrink-0 w-12' : 'shrink-0 px-4';
   return (
@@ -139,7 +157,7 @@ function ControlButton({
       } as CSSProperties}
     >
       {children}
-      {stacked && <span aria-hidden className="leading-none" style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.04em' }}>{stacked}</span>}
+      {stacked && <span aria-hidden className={`leading-none ${variant === 'tile' ? 'whitespace-nowrap' : ''}`} style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.04em' }}>{stacked}</span>}
       {!iconOnly && <span className="min-w-0 truncate">{label}</span>}
     </button>
   );

@@ -47,6 +47,7 @@ select public.upsert_gavelling_listing('{ ... }'::jsonb);
 - `banner_url`: the conference's own banner/hero image from its site if there is one; otherwise a free-to-use photo of the city from Wikimedia Commons (public domain, CC0, CC BY or CC BY-SA only; use the direct upload.wikimedia.org file URL) with `banner_credit`: `{ "author": "...", "source_url": "<the Commons file page>", "license": "CC BY-SA 4.0", "license_url": "https://creativecommons.org/licenses/by-sa/4.0/" }`. Never use a photo of people.
 - Image rules (21 Oct 2026, after 35 banners and 3 logos failed to load on the live site): `/api/listing-image` refuses SVG and anything over 5 MB. A Wikimedia banner is ALWAYS its thumbnail URL, `https://upload.wikimedia.org/wikipedia/commons/thumb/<a>/<ab>/<File>/1920px-<File>` (never the original file, which is usually far over 5 MB); never an SVG logo (use a PNG, JPG or WebP from the site, or leave `logo_url` null); and open every image URL once before sending it: it must answer 200 with an image type.
 - `committees`: `[{ "name": "...", "abbreviation": "...", "type": "general-assembly|specialised|crisis|press", "difficulty": "beginner|intermediate|advanced|expert", "topics": ["..."] }]` from their site, study guides or public pages. Up to 3 topics each. `difficulty` is the conference's own label when it gives one; otherwise the usual level: expert for crisis, historical committees and courts (ICJ, ICC); advanced for the Security Council, NATO, the G20, the African Union and other small specialised councils; intermediate for General Assembly main committees (DISEC, SPECPOL, ECOSOC, SOCHUM, Legal), UNODC, trade, development and press; beginner for UNESCO, UNEP, WHO, the Human Rights Council, UN Women, youth and middle school committees.
+- `contact_email` (owner, 22 Oct 2026): the conference's own general address, for one outreach email offering them the listing. Look on its website (Contact, About, Imprint or Impressum, the footer, the FAQ), then its mymun.com page. Prefer a general or role address on the conference's own domain (info@, contact@, secretariat@, sg@, mun@). Never a named private person's address (a personal gmail of the Secretary-General, a teacher's name), never a guessed or constructed one: it must appear verbatim on a page you opened, and that page goes in `sources`. None found: leave it out (the listing keeps our inbox). It is never shown on the page; a later re-check without it keeps the stored one.
 - `sources`: every page you used, as `[{ "url": "..." }]`
 - `checked_at`: now
 
@@ -54,26 +55,26 @@ A listing goes live only when it passes the quality bar (real dates, a place, a 
 
 ## Rules
 
-- No personal data: no names of secretariat members, no emails, no phone numbers, no photos of people.
+- No personal data: no names of secretariat members, no personal emails, no phone numbers, no photos of people. The one email collected is the conference's own general address (`contact_email` above).
 - Facts only; if unsure about a fact, leave it out.
 - Never touch a conference whose `listed_by` is `organiser`. The upsert refuses anyway.
 - Never call any function that sends email. The upsert sends none.
 
-## This week's plan (20 to 26 October 2026)
+## This week's plan (27 October to 2 November 2026)
 
-Written 19 Oct 2026. Names are candidates, not facts: every date and detail still comes from the conference's own site, and a candidate that fails a check is skipped for the next one in the reserve. About 7 of every 10 are European. Already on Gavelling and never added again: BERMUN, BIMUN ESADE, BIMUN/SINUB, CBSMUN, HMUN Dubai, HNMUN, ILMUNC India, MUNoV, OxIMUN, PRAMUN, LIMUN.
+Written 26 Oct 2026. Names are candidates, not facts: every date and detail still comes from the conference's own site, and a candidate that fails a check is skipped for the next one in the reserve. About 7 of every 10 are European. Many names on the first week's list were guesses that turned out not to exist, so this list leans on conferences a run has already confirmed are real (several were skipped only because their own site had no 2027 dates yet; check those again). When a day's names run dry, search by city and month ("Model United Nations February 2027 <city>") and check the result against the database. Already on Gavelling and never added again: BERMUN, BIMUN ESADE, BIMUN/SINUB, CBSMUN, HMUN Dubai, HNMUN, ILMUNC India, MUNoV, OxIMUN, PRAMUN, LIMUN, TIMUN (Tilburg), KULMUN (Leuven), NORMUN (Oslo). Hidden on purpose, never added: IEUMUN and every Change the World MUN (CWMUN) edition. "QMUN" is also an Indian organiser conference: Queen Mary's is listed as "QMUN London".
 
 | Day | Europe (7) | Elsewhere (3) |
 |---|---|---|
-| Tue 20 Oct | LSEMUN (London), KCLMUN (London), Cambridge CUIMUN, DurMUN (Durham), EdMUN (Edinburgh), WarMUN (Warwick), TCD MUN (Dublin) | THIMUN Qatar (Doha), LUMUN (Lahore), CIMUN (Cairo) |
-| Wed 21 Oct | THIMUN (The Hague), Leiden LIDMUN, MaMUN (Maastricht), EuroMUN (Maastricht), GrMUN (Groningen), RMUN (Rotterdam), AMUN (Amsterdam) | YMUN (Yale, New Haven), Dubai MUN (DMUN), Delhi Public School MUN |
-| Thu 22 Oct | MUNich (Munich), HeidelMUN (Heidelberg), HamMUN (Hamburg), FrankMUN (Frankfurt), CologneMUN, DresdenMUN, ZuMUN (Zurich) | NMUN New York, Karachi MUN (KMUN), AUC MUN (Cairo) |
-| Fri 23 Oct | PIMUN (Paris), Sciences Po MUN (Paris), LyonMUN, StrasMUN (Strasbourg), GIMUN (Geneva), BelMUN (Brussels), LUXMUN (Luxembourg) | ChoMUN (Chicago), Mumbai MUN, Abu Dhabi MUN |
-| Sat 24 Oct | RomeMUN (Rome), BoMUN (Bologna), MilanMUN, MadMUN (Madrid), LxMUN (Lisbon), PortoMUN, AthensMUN | CMUNCE (Columbia, New York), Islamabad MUN, Sharjah MUN |
-| Sun 25 Oct | VIMUN (Vienna), BudMUN (Budapest), WMUN (Warsaw), KrakMUN (Krakow), RIGAMUN (Riga), TalMUN (Tallinn), ViMUN (Vilnius) | NCSC (Georgetown, Washington), Bangalore MUN, Alexandria MUN |
-| Mon 26 Oct | HELMUN (Helsinki), SMUN (Stockholm), LundMUN (Lund), CopMUN (Copenhagen), OsloMUN, AarhusMUN, GöteborgMUN | UPenn ILMUNC (Philadelphia), Hyderabad MUN, Doha MUN |
+| Tue 27 Oct | LSEMUN (London), BrisMUN (Bristol), SOTONMUN (Southampton), DurMUN (Durham), KCLMUN (London), WarwickMUN, FWWMUN London | HMUN (Harvard, Boston, high school), CIMUN (Chicago), Hofstra MUN (New York) |
+| Wed 28 Oct | ZuMUN (Zurich), GIMUN (Geneva), BaMUN (Basel), LUXMUN (Luxembourg), StrasMUN (Strasbourg), PIMUN (Paris), MUN'ICP (Reims) | NHSMUN (New York), CMUNC (Cornell), DUMUNC (Duke) |
+| Thu 29 Oct | POITIERSMUN (Poitiers), MUNLM (Le Mans), HeiMUN (Heidelberg), MAMUN (Mannheim), FREIMUN (Freiburg), RiMUN (Nijmegen), GeMUN (Germany) | JHUMUNC (Baltimore), UFMUN (Gainesville), THIMUN Qatar (Doha) |
+| Fri 30 Oct | HELIMUN (Helsinki), Mothenburg MUN (Gothenburg), SCANDMUN, SISMUN Scandinavia, KattaMUN, MUNOM (Malmö, next edition), VIMUN (Vienna) | CIMUN AUC (Cairo), AitchMUN (Lahore), HMUN India |
+| Sat 31 Oct | SPLIMUN (Split), MEDMUN, HDMUN, URJCmun (Madrid), SeviMUN (Seville), ROMUN (Rome), MUIMUN | GIKMUN (Topi), Delhi MUN, IMUN India |
+| Sun 1 Nov | Davis College MUN (Cork), UCDMUN (Dublin), TCD MUN (Dublin), YorkMUN (York), LeedsMUN, NottsMUN (Nottingham), ExMUN (Exeter) | Kuwait MUN, Bahrain MUN, Muscat MUN |
+| Mon 2 Nov | ViMUN (Vilnius), RIGAMUN (Riga), KrakMUN (Krakow), ZagrebMUN, SofiaMUN, BelgradeMUN, CoimbraMUN | Kolkata MUN, Pune MUN, Peshawar MUN |
 
-**Reserve** (in order): St Andrews MUN, GlasMUN (Glasgow), ManMUN (Manchester), BristolMUN, ExMUN (Exeter), Utrecht MUN, NijMUN (Nijmegen), MannMUN (Mannheim), BonnMUN school edition, BaselMUN, LuxMUN school edition, SalzMUN (Salzburg), PragueMUN (university), BratMUN (Bratislava), ValMUN (Valencia), SevMUN (Seville), FloMUN (Florence), TurinMUN, CorkMUN, GalwayMUN, YorkMUN, NottMUN (Nottingham), LeedsMUN, SheffMUN (Sheffield), BathMUN, OxIMUN school edition, CamMUN school conference, The Hague MUN school (THIMUN Online), Tilburg MUN, Eindhoven MUN, Ghent MUN, LeuvenMUN, AntwerpMUN, FreiburgMUN, TübingenMUN, GöttingenMUN, MünsterMUN, LausanneMUN, BernMUN, InnsbruckMUN, GrazMUN, LjubljanaMUN, ZagrebMUN, BelgradeMUN, SofiaMUN, BucharestMUN, ThessMUN (Thessaloniki), MaltaMUN, CyprusMUN, NaplesMUN, PaduaMUN, GranadaMUN, BilbaoMUN, CoimbraMUN, ReykjavikMUN; elsewhere: BMUN (Berkeley), SMUNC (Stanford), Lahore Grammar MUN, Chennai MUN, Kuwait MUN, MUNUC (Chicago school), PMUNC (Princeton), McMUN (Montreal), NAIMUN (Georgetown school), Kolkata MUN, Pune MUN, Peshawar MUN, Riyadh MUN, Muscat MUN, Bahrain MUN.
+**Reserve** (in order): GrazMUN, InnsbruckMUN, LausanneMUN, BernMUN, GöttingenMUN, MünsterMUN, GalwayMUN, SheffMUN (Sheffield), GlasMUN (Glasgow), St Andrews MUN, Ghent MUN, Eindhoven MUN, TübingenMUN, LjubljanaMUN, MaltaMUN, PaduaMUN, GranadaMUN, ValMUN (Valencia), ReykjavikMUN, OsloMUN; elsewhere: Lahore Grammar MUN, Riyadh MUN, Hyderabad MUN, a UAE university conference (AUD, AUS), a Pakistani university conference (NUST, IBA).
 
 At the end of the week, write next week's plan here the same way, dropping everything that was added or skipped.
 

@@ -41,7 +41,7 @@ export default function AdvisorParticipant({ conferenceId, conferenceSlug, confe
           <DashCard>
             <CardHeading title="Your delegation" stackedHide />
             <p className="inline-flex items-center gap-2" style={{ fontFamily: OUTFIT, fontSize: 14, color: INK_SOFT, margin: 0 }}>
-              <Users size={16} strokeWidth={2.2} aria-hidden />
+              <Users size={18} strokeWidth={1.5} aria-hidden style={{ color: '#1C1410' }} />
               No delegation on file for this application yet.
             </p>
           </DashCard>

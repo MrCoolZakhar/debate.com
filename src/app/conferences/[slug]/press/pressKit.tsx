@@ -12,7 +12,7 @@ import { CircleFlag } from '@/components/CircleFlag';
 import SeatName from '@/components/SeatName';
 import { OUTFIT } from '@/components/neu';
 import { refreshSessionNow } from '@/lib/supabase-auth';
-import { fetchPressDesk, type PressDesk, type PressMotion, type PressRoomSession, type PressSeat } from '@/lib/press';
+import { fetchPressDesk, fetchReleasesBoard, type PressDesk, type PressMotion, type PressRoomSession, type PressSeat, type ReleasesBoard } from '@/lib/press';
 
 export const INK = '#1C1410';
 export const INK_SOFT = '#5A5046';
@@ -79,6 +79,43 @@ export function usePressDesk(conferenceId: string | null): {
   }, []);
 
   return { state, reload: () => { void load(); }, patchDesk };
+}
+
+/**
+ * The sent releases and the approval queue (press_releases_board), read on mount, after
+ * every send or review (`reload`), and every 20 s while the tab is visible so a press chair
+ * sees a new release waiting. Null until read, and while the SQL is not applied (`missing`)
+ * or the read fails: the panels then draw nothing.
+ */
+export function useReleasesBoard(conferenceId: string | null, enabled: boolean): {
+  board: ReleasesBoard | null;
+  reload: () => void;
+  patch: (p: Partial<ReleasesBoard>) => void;
+} {
+  const [board, setBoard] = useState<ReleasesBoard | null>(null);
+  const inFlight = useRef(false);
+  const load = useCallback(async () => {
+    if (!conferenceId || !enabled || inFlight.current) return;
+    inFlight.current = true;
+    try {
+      const r = await fetchReleasesBoard(conferenceId);
+      if (r.kind === 'ok') setBoard(r.value);
+      else if (r.kind !== 'error') setBoard(null);
+    } finally {
+      inFlight.current = false;
+    }
+  }, [conferenceId, enabled]);
+  useEffect(() => {
+    if (!conferenceId || !enabled) return;
+    const visible = () => typeof document === 'undefined' || document.visibilityState === 'visible';
+    const tick = () => { if (visible()) void load(); };
+    tick();
+    const poll = setInterval(tick, 20_000);
+    document.addEventListener('visibilitychange', tick);
+    return () => { clearInterval(poll); document.removeEventListener('visibilitychange', tick); };
+  }, [conferenceId, enabled, load]);
+  const patch = useCallback((p: Partial<ReleasesBoard>) => setBoard((b) => (b ? { ...b, ...p } : b)), []);
+  return { board, reload: () => { void load(); }, patch };
 }
 
 // ── What the room is doing, in words ────────────────────────────────────────

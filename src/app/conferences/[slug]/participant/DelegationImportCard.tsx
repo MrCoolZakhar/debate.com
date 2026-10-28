@@ -653,7 +653,7 @@ export default function DelegationImportCard({
           style={{
             minWidth: 220, height: 48,
             background: busy ? 'var(--gv-main-mid)' : 'linear-gradient(90deg, var(--gv-main) 0%, var(--gv-main-mid) 100%)',
-            color: '#FFFFFF',
+            color: 'var(--gv-on-main)',
             fontFamily: OUTFIT, letterSpacing: '0.01em', border: 'none',
             cursor: busy ? 'wait' : count === 0 ? 'not-allowed' : 'pointer',
             opacity: count === 0 ? 0.5 : busy ? 0.85 : 1,

@@ -2,9 +2,14 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import ArticleLayout from '@/components/blog/ArticleLayout';
+import TutorialVideo, { TutorialVideoJsonLd } from '@/components/blog/TutorialVideo';
 import { PhotoFigure } from '@/components/blog/BlogPhoto';
 import { H2, Callout, ChairScript } from '@/components/blog/prose';
 import Faq, { type FaqItem } from '@/components/blog/Faq';
+
+// Tutorial videos appear on release (src/lib/tutorialVideos.ts); the hourly
+// revalidation brings the server HTML and the VideoObject JSON-LD up to date.
+export const revalidate = 3600;
 
 const TITLE = 'Unmoderated Caucus in MUN: What It Is and How It Works';
 const DESCRIPTION =
@@ -74,6 +79,7 @@ export default function Article() {
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
+      <TutorialVideoJsonLd ids={['Sw4KzPPyYxE']} />
       <ArticleLayout
         slug="unmoderated-caucus-guide"
         pitch="Gavelling tracks caucus timers, the GSL, and motions all in one place."
@@ -115,6 +121,10 @@ export default function Article() {
         </ul>
         <ChairScript>&quot;Delegates, the unmoderated caucus will conclude in two minutes. Please return to your seats.&quot;</ChairScript>
         <p>When time expires, bring the committee back to order with your gavel and announce: &quot;The unmoderated caucus has concluded. The committee returns to formal debate. The next speaker on the General Speakers List is the delegate of Australia.&quot;</p>
+
+        <TutorialVideo id="Sw4KzPPyYxE">
+          On Gavelling the unmoderated caucus clock runs on the chair&apos;s screen and on every delegate&apos;s phone, and the chair can extend it from the same screen.
+        </TutorialVideo>
 
         <H2>The Difference Between Unmod, Consultation, and Tour de Table</H2>
         <p>Some conferences use &quot;consultation of the whole&quot; as a variant, essentially a named unmod. <Link href="/blog/tour-de-table-mun">Tour de Table</Link> is different: every delegation speaks in a fixed order, typically alphabetical, for a short fixed time. It is more structured than an unmod but less structured than the GSL. Not all conferences use tour de table; check your rules of procedure.</p>

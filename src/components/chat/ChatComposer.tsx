@@ -7,6 +7,7 @@ import { CHAT_ACCEPT, formatBytes } from '@/lib/chatAttachments';
 import type { GifItem } from '@/lib/gifClient';
 import { CHAT, useKeyboardInset, type TFn } from './chatTokens';
 import GifPicker from './GifPicker';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const MAX_H = 132;
 
@@ -58,6 +59,9 @@ const ChatComposer = forwardRef<HTMLTextAreaElement, {
   // The delegate chat lives inside FitToScreen's scaled root; on iOS the keyboard shrinks the
   // visual viewport without changing window.innerHeight, so absorb the overlap as padding.
   const keyboardInset = useKeyboardInset();
+  // The upload bar fills from the start of the line: the right edge in Arabic. transform-origin
+  // has no logical keyword, so it follows the page's direction (set from the language).
+  const rtl = useLanguage().language === 'ar';
   const draftReady = draft?.status === 'ready';
   const canSend = draft ? draftReady : value.trim().length > 0;
   const localRef = useRef<HTMLTextAreaElement | null>(null);
@@ -143,7 +147,7 @@ const ChatComposer = forwardRef<HTMLTextAreaElement, {
                   >
                     <span style={{
                       display: 'block', height: '100%', width: '100%', borderRadius: 999, background: NEU.forest,
-                      transform: `scaleX(${Math.max(0.03, draft.progress)})`, transformOrigin: 'left',
+                      transform: `scaleX(${Math.max(0.03, draft.progress)})`, transformOrigin: rtl ? 'right' : 'left',
                       transition: 'transform 180ms ease-out',
                     }} />
                   </span>

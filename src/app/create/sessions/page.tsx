@@ -19,6 +19,8 @@ import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { getCommitteeDisplayName, committeeDisplayName, deriveCommitteeAcronym, matchPresetEmblem } from '@/lib/presetNames';
 import ProfileAvatarMenu from '@/components/ProfileAvatar';
 import { GhostAction, PageBackdrop } from '@/app/join/joinUi';
+import { chairNameProblem, safeChairName } from '@/lib/chairNameRules';
+import { friendlyError } from '@/lib/friendlyError';
 import { C, ChairTokenField, CreateStyles, DelegationCount, INPUT_CLS, LiveCommitteeIdentity, OUTFIT, Panel, RowIconButton, SHADOW, SmallLabel, StartSessionButton, StepHeading } from './createUi';
 
 /** A dais rarely has more than this; the chips stay on one line of the field. */
@@ -258,6 +260,16 @@ function CreatePageInner() {
   const [showLangMenu, setShowLangMenu] = useState(false);
   const [requestLangOpen, setRequestLangOpen] = useState(false);
   const router = useRouter();
+  // Warm the chair page (25 Oct 2026): "Opening the room" stayed up until the chair route's
+  // code had downloaded AFTER the room was created, the largest page in the app. A full
+  // prefetch of any /chair/<code> URL loads the same route code, so it is fetched while the
+  // chair is still filling the form. Reads nothing and writes nothing (the chair page is a
+  // client page: its server render is only the shell). A no-op in development.
+  useEffect(() => {
+    try {
+      router.prefetch('/chair/PREVIEW', { kind: 'full' } as unknown as Parameters<typeof router.prefetch>[1]);
+    } catch { /* a prefetch is only a speed-up */ }
+  }, [router]);
   const { updateSetting } = useSettingsStore();
   // Chairs: committed chips plus the text still in the field. `chairNames` keeps the
   // exact shape handleCreate always used (the draft last), so one typed name and no
@@ -282,6 +294,14 @@ function CreatePageInner() {
   const [editingName, setEditingName] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState('');
   const [creating, setCreating] = useState(false);
+  // Inline lines, never an alert(): a chair name the room cannot use (under the chairs
+  // field) and a create that did not land (above Start session).
+  // The chair problem is shown only while the names and seats are the ones it was found
+  // for: any change may have fixed it, and Start checks again.
+  const [chairError, setChairError] = useState<{ msg: string; key: string } | null>(null);
+  const [createError, setCreateError] = useState('');
+  const chairCheckKey = JSON.stringify([chairs, chairDraft, delegates]);
+  const chairErrorShown = chairError && chairError.key === chairCheckKey ? chairError.msg : '';
   // The country typeahead opens upward when the add bar sits low in the window
   // (1280x800), so its rows are never cut off by the bottom edge.
   const addWrapRef = useRef<HTMLDivElement>(null);
@@ -297,20 +317,36 @@ function CreatePageInner() {
   const handleCreate = async () => {
     const names = chairNames.map((n) => n.trim()).filter(Boolean);
     if (!committeeName.trim() || !topic.trim()) return;
+    // The join page's rule (src/lib/chairNameRules.ts): a chair name is never a seat in the
+    // room and never a name the chat keeps for itself, or that seat vanishes from chat.
+    for (const n of names) {
+      const problem = chairNameProblem(n, delegates);
+      if (problem) {
+        setChairError({ msg: t(problem === 'seat' ? 'join_chair_name_is_seat' : 'join_chair_name_reserved'), key: chairCheckKey });
+        document.getElementById('create-chair-name')?.focus();
+        return;
+      }
+    }
+    // Nobody typed a name: the default must obey the same rule.
+    const chairList = names.length > 0 ? names : [safeChairName('Chair', delegates)];
+    setChairError(null);
+    setCreateError('');
     setCreating(true);
     try {
-      const result = await createCommitteeInDB(committeeName.trim(), topic.trim(), names.length > 0 ? names : ['Chair'], delegates, Array.from(observers));
+      const result = await createCommitteeInDB(committeeName.trim(), topic.trim(), chairList, delegates, Array.from(observers));
       if (result) {
         updateSetting(result.code, 'chairJoinSuffix', result.chairJoinSuffix);
-        const creatorName = names.length > 0 ? names[0] : 'Chair';
-        router.push(`/chair/${result.code}?chairName=${encodeURIComponent(creatorName)}`);
+        router.push(`/chair/${result.code}?chairName=${encodeURIComponent(chairList[0])}`);
       } else {
-        alert('Failed to create committee. Please try again.');
+        setCreateError(t('create_failed'));
         setCreating(false);
       }
     } catch (err) {
-      console.error('Create committee error:', err);
-      alert('Something went wrong. Please try again.');
+      // friendlyError logs and reports it; its sentence is English, so the translated line
+      // is shown in every other language.
+      const fallback = t('create_failed');
+      const shown = friendlyError(err, fallback);
+      setCreateError(language === 'en' ? shown : fallback);
       setCreating(false);
     }
   };
@@ -565,6 +601,7 @@ function CreatePageInner() {
                 addLabel={t('create_chair_add')}
                 removeLabel={(name) => t('create_chair_remove', { name })}
               />
+              {chairErrorShown && <p role="alert" className="mt-1.5 text-[13px] font-semibold" style={{ color: '#8A6414' }}>{chairErrorShown}</p>}
             </div>
           </div>
 
@@ -805,6 +842,7 @@ function CreatePageInner() {
 
           {/* The one primary action, pinned at the foot of the roster. */}
           <div className="mt-3.5 flex-shrink-0">
+            {createError && <p role="alert" className="mb-1.5 text-[13px] font-semibold" style={{ color: '#8A6414' }}>{createError}</p>}
             <StartSessionButton
               label={creating ? t('create_cta_creating') : t('create_cta_start')}
               sub={startSub}

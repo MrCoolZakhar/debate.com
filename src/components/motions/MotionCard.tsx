@@ -55,7 +55,8 @@ export function motionClock(totalSecs: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
-function ProposerFlag({ proposedBy, size }: { proposedBy: string; size: number }) {
+/** Who raised it: a round flag, or the gavel disc for the chair. */
+export function MotionProposerFlag({ proposedBy, size }: { proposedBy: string; size: number }) {
   if (proposedBy === MOTION_CHAIR_KEY) {
     return (
       <span aria-hidden className="inline-flex items-center justify-center rounded-full shrink-0"
@@ -158,7 +159,7 @@ export function MotionSummary({ motion, label, size, language, titleAddon }: {
       {/* 3. Who raised it */}
       {m.proposedBy ? (
         <div className="flex items-center min-w-0" style={{ gap: size === 'primary' ? 12 : 9 }}>
-          <ProposerFlag proposedBy={m.proposedBy} size={z.flag} />
+          <MotionProposerFlag proposedBy={m.proposedBy} size={z.flag} />
           <div className="min-w-0 flex flex-col">
             <span style={{ fontSize: z.whoLabel, lineHeight: 1.2, fontWeight: 600, color: MOTION_SOFT }}>{t('motion_card_raised_by')}</span>
             <SeatName name={whoName} max={size === 'primary' ? 26 : 20} block style={{ fontSize: z.who, lineHeight: 1.18, fontWeight: 800, color: INK }} subScale={0.8} />

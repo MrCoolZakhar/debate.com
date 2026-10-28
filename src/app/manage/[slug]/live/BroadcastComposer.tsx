@@ -69,6 +69,8 @@ export interface BroadcastRow {
 export interface BroadcastGroup {
   key: string;
   ids: string[];
+  /** The rows of this send, one per room: which broadcast went to which session. */
+  rows: { id: string; committeeId: string }[];
   count: number;
   kind: BroadcastKind;
   message: string;
@@ -157,12 +159,14 @@ export function groupBroadcasts(rows: BroadcastRow[]): BroadcastGroup[] {
     const existing = byKey.get(key);
     if (existing) {
       existing.ids.push(r.id);
+      existing.rows.push({ id: r.id, committeeId: r.committeeId });
       existing.count += 1;
       continue;
     }
     byKey.set(key, {
       key,
       ids: [r.id],
+      rows: [{ id: r.id, committeeId: r.committeeId }],
       count: 1,
       kind: r.kind,
       message: r.message,
@@ -187,6 +191,69 @@ export function groupBroadcasts(rows: BroadcastRow[]): BroadcastGroup[] {
 export function canWithdraw(g: BroadcastGroup, now: number): boolean {
   if (g.kind === 'actionable') return g.actionAt ? Date.parse(g.actionAt) > now : false;
   return g.expiresAt ? Date.parse(g.expiresAt) > now : true;
+}
+
+// ── Has a scheduled pause / end actually happened? ─────────────────────────
+//
+// The chair console carries out a scheduled Pause or End, and only on the
+// Moderator's device, and only if that device is open within five minutes of the
+// moment (owner, 23 Oct 2026: "Not applied yet, no chair device open" so the
+// organiser can act). For each room of a send that is due, this says whether it
+// took: the room is suspended or ended at or after `action_at` (minus a little
+// clock slack), or the room has been written to since that moment (a chair
+// device was open: it applied the action and the room may have been resumed
+// since, which must not read as "not applied"). Read only.
+
+export interface BroadcastRoomState {
+  label: string;
+  suspendedAt: string | null;
+  endedAt: string | null;
+  /** `committees.updated_at`: the room's last write of any kind. */
+  updatedAt: string | null;
+}
+
+const APPLIED_SLACK_MS = 60_000;
+
+/** The rooms of a due actionable send where the action has NOT happened. Empty when it
+ *  is not actionable, not due yet, expired, or applied everywhere. */
+export function unappliedRooms(
+  g: BroadcastGroup,
+  rooms: Map<string, BroadcastRoomState>,
+  now: number,
+): { id: string; committeeId: string; label: string }[] {
+  if (g.kind !== 'actionable' || !g.action || !g.actionAt) return [];
+  const at = Date.parse(g.actionAt);
+  if (!Number.isFinite(at) || at > now) return [];
+  if (g.expiresAt && Date.parse(g.expiresAt) <= now) return [];
+  const after = (iso: string | null) => !!iso && Date.parse(iso) >= at - APPLIED_SLACK_MS;
+  const out: { id: string; committeeId: string; label: string }[] = [];
+  for (const r of g.rows) {
+    const room = rooms.get(r.committeeId);
+    if (!room) continue;                                   // no longer on the wall
+    if (room.endedAt) continue;                            // ended: nothing left to do
+    if (g.action === 'pause' && room.suspendedAt) continue;
+    if (after(room.updatedAt)) continue;                   // a chair device was active since
+    out.push({ ...r, label: room.label });
+  }
+  return out;
+}
+
+/** The server fallback (scratch-conference-rooms.sql, section C3): apply one due
+ *  pause / end through the same single update as the chair console. Before that
+ *  function exists the call answers PGRST202 and this says so in a sentence. */
+export async function applyDueBroadcast(ids: string[]): Promise<string | null> {
+  const supabase = await getFreshAuthedClient();
+  if (!supabase) return EXPIRED_SESSION;
+  for (const id of ids) {
+    const { data, error } = await supabase.rpc('apply_due_broadcast_action', { p_broadcast: id });
+    if (error) {
+      if (error.code === 'PGRST202') return 'Applying it from here is not switched on yet. Ask a chair to open their room.';
+      return friendlyError(error, "Couldn't apply it. Ask a chair to open their room.");
+    }
+    const answer = (data ?? null) as { ok?: boolean; message?: string } | null;
+    if (answer && answer.ok === false) return answer.message ?? "Couldn't apply it. Ask a chair to open their room.";
+  }
+  return null;
 }
 
 /** Rows for one send. The ONLY place the kind/action pairing is assembled. */
@@ -953,13 +1020,20 @@ export function RecentBroadcasts({
   groups,
   onDelete,
   busyKey,
+  rooms,
+  onApplyNow,
 }: {
   groups: BroadcastGroup[];
   onDelete: (g: BroadcastGroup) => void;
   busyKey: string | null;
+  /** Each room on the wall by session id, to say whether a due pause / end took. */
+  rooms?: Map<string, BroadcastRoomState>;
+  /** Apply a due pause / end to these broadcast rows from here (server fallback). */
+  onApplyNow?: (g: BroadcastGroup, ids: string[]) => void;
 }) {
   const now = useNow(groups.length > 0);
   const [confirmKey, setConfirmKey] = useState<string | null>(null);
+  const [applyKey, setApplyKey] = useState<string | null>(null);
 
   if (groups.length === 0) return null;
 
@@ -978,6 +1052,7 @@ export function RecentBroadcasts({
           const withdrawable = canWithdraw(g, now);
           const busy = busyKey === g.key;
           const confirming = confirmKey === g.key;
+          const notApplied = rooms ? unappliedRooms(g, rooms, now) : [];
           return (
             <div
               key={g.key}
@@ -1006,6 +1081,36 @@ export function RecentBroadcasts({
                 <p className="text-sm truncate" style={{ color: NEU.ink, fontFamily: OUTFIT, marginBlockStart: 2 }} title={g.message}>
                   {g.message}
                 </p>
+                {notApplied.length > 0 && (
+                  <div className="flex items-center gap-2 flex-wrap" style={{ marginBlockStart: 4 }}>
+                    <span className="inline-flex items-start gap-1 text-[12px] font-bold" style={{ color: '#7A5A10', fontFamily: OUTFIT }}>
+                      <AlertTriangle size={12} style={{ flexShrink: 0, marginBlockStart: 2 }} aria-hidden />
+                      <span className="[overflow-wrap:anywhere]">
+                        Not applied yet in {notApplied.map((r) => r.label).join(', ')}, no chair device open
+                      </span>
+                    </span>
+                    {onApplyNow && (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => {
+                          if (applyKey === g.key) { setApplyKey(null); onApplyNow(g, notApplied.map((r) => r.id)); return; }
+                          setApplyKey(g.key);
+                          setTimeout(() => setApplyKey((k) => (k === g.key ? null : k)), 4000);
+                        }}
+                        className="inline-flex items-center rounded-full focus:outline-none"
+                        style={{
+                          padding: '4px 11px', border: 'none', backgroundColor: NEU.surface, boxShadow: NEU.outSm,
+                          color: applyKey === g.key ? '#9A3030' : NEU.forest, fontFamily: OUTFIT, fontSize: 11, fontWeight: 800,
+                          cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1,
+                        }}
+                        title={g.action === 'end' ? 'End debate in these rooms now' : 'Pause these rooms now'}
+                      >
+                        {applyKey === g.key ? 'Confirm' : g.action === 'end' ? 'End it now' : 'Pause now'}
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
               {withdrawable ? (
                 <button
@@ -1031,7 +1136,7 @@ export function RecentBroadcasts({
                   {busy ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
                   {confirming ? 'Confirm' : g.kind === 'actionable' ? 'Cancel' : 'Withdraw'}
                 </button>
-              ) : (
+              ) : notApplied.length > 0 ? null : (
                 <span
                   className="inline-flex items-center gap-1 text-[12px] font-bold flex-shrink-0"
                   style={{ color: '#6B5F52', fontFamily: OUTFIT }}

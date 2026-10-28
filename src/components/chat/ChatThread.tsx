@@ -282,7 +282,7 @@ export default function ChatThread({
   return (
     <div className="relative flex flex-col flex-1 min-h-0 min-w-0">
       {/* Header */}
-      <div className="shrink-0 flex items-center gap-2.5 px-3" style={{ height: 64, background: 'var(--chat-bar)', boxShadow: 'var(--chat-bar-shadow)' }}>
+      <div className="shrink-0 flex items-center gap-2.5 px-3 py-2" style={{ minHeight: 64, background: 'var(--chat-bar)', boxShadow: 'var(--chat-bar-shadow)' }}>
         {onBack && (
           <button
             type="button"

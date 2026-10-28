@@ -3,8 +3,10 @@
 // The faculty advisor's Committees section on the You page (owner, 20 Oct
 // 2026): only the committees the delegation sits in, most of its people first,
 // then A to Z. Each committee is one white lifted card: the round logo, the
-// acronym over the full name, the topics, a way to follow the live room once
-// the organisers release codes to advisors, "Your People" (every member seated
+// acronym over the full name, the topics, a way to follow the live room from
+// the conference's first day (owner, 23 Oct 2026: the start date is the only
+// gate; the board already follows these rooms, so "Follow live" opens /advisor),
+// "Your People" (every member seated
 // there and every open seat), and, only while DELEGATIONS_V2_DB, the whole
 // committee list (my_committee_roster) with the delegation's own rows tinted.
 // Two cards side by side from a wide content column, one column on a phone.
@@ -18,8 +20,8 @@ import { CircleFlag } from '@/components/CircleFlag';
 import { SkeletonBlock } from '@/components/Skeleton';
 import { committeeDisplayName } from '@/lib/presetNames';
 import { useNow } from '@/lib/useNow';
+import { conferenceWindow, formatStartDay, type ConferenceWindowState } from '@/lib/advisorBoard/conferenceWindow';
 import CommitteesSessionsCard from '../../CommitteesSessionsCard';
-import { effectiveReleaseTime, formatReleaseDate } from '../../shared';
 import {
   BTN_CLASS, CommitteeDisc, FONT, FOREST, INK, INK_SOFT, RoundAvatar, STROKE, StatNumber,
   cardStyle, committeeEmblemSrc, linkStyle, primaryBtn,
@@ -72,11 +74,14 @@ export default function AdvisorCommitteesSection({ conferenceId, conferenceStart
 
   if (state.kind === 'error') {
     return (
-      <div style={{ ...cardStyle, padding: 24 }} className="flex items-center gap-3" role="alert">
+      <div style={{ ...cardStyle, padding: 24 }} className="flex items-center gap-3 flex-wrap" role="alert">
         <Landmark size={22} strokeWidth={STROKE} style={{ color: INK, flexShrink: 0 }} aria-hidden />
-        <p style={{ fontFamily: FONT, fontSize: 15, color: INK_SOFT, margin: 0 }}>
-          Your delegation&rsquo;s committees could not be read. Refresh the page to try again.
+        <p className="flex-1 min-w-0" style={{ fontFamily: FONT, fontSize: 15, color: INK_SOFT, margin: 0 }}>
+          Your delegation&rsquo;s committees could not be read.
         </p>
+        <button type="button" onClick={state.retry} className={BTN_CLASS} style={{ ...linkStyle, flexShrink: 0 }}>
+          Try again
+        </button>
       </div>
     );
   }
@@ -97,8 +102,7 @@ export default function AdvisorCommitteesSection({ conferenceId, conferenceStart
     );
   }
 
-  const releaseMs = effectiveReleaseTime(state.releaseAt, conferenceStartDate);
-  const released = releaseMs !== null && releaseMs <= now;
+  const live = conferenceWindow(state.dates, now);
   const count = state.committees.length;
 
   return (
@@ -106,7 +110,7 @@ export default function AdvisorCommitteesSection({ conferenceId, conferenceStart
       <StatNumber n={count} word={count === 1 ? 'committee with your delegation' : 'committees with your delegation'} />
       <div className="grid grid-cols-1 @[900px]:grid-cols-2 gap-4 @[640px]:gap-6 items-start">
         {state.committees.map(c => (
-          <AdvisorCommitteeCard key={c.key} committee={c} released={released} releaseMs={releaseMs} />
+          <AdvisorCommitteeCard key={c.key} committee={c} live={live} />
         ))}
       </div>
     </div>
@@ -115,10 +119,9 @@ export default function AdvisorCommitteesSection({ conferenceId, conferenceStart
 
 // ── One committee ──────────────────────────────────────────────────────────
 
-function AdvisorCommitteeCard({ committee: c, released, releaseMs }: {
+function AdvisorCommitteeCard({ committee: c, live }: {
   committee: AdvisorCommittee;
-  released: boolean;
-  releaseMs: number | null;
+  live: ConferenceWindowState;
 }) {
   const short = (c.abbreviation ?? '').trim() || committeeDisplayName(c.name, c.abbreviation);
   const showFull = c.name.trim() !== short.trim();
@@ -150,19 +153,23 @@ function AdvisorCommitteeCard({ committee: c, released, releaseMs }: {
         </div>
       )}
 
-      {released && c.sessionCode ? (
+      {/* The board already follows this room from my_advisor_delegation: /advisor, never
+          /advisor?add=CODE (that opened the add flow and put the room on twice). */}
+      {live.state === 'open' && c.sessionCode ? (
         <Link
-          href={`/advisor?add=${encodeURIComponent(c.sessionCode)}`}
+          href="/advisor"
           className={BTN_CLASS}
           style={{ ...primaryBtn, alignSelf: 'flex-start' }}
         >
           <Radio size={17} strokeWidth={STROKE} aria-hidden />
           Follow live
         </Link>
-      ) : !released && releaseMs !== null ? (
+      ) : live.state === 'before' || live.state === 'tbd' ? (
         <div className="flex items-center gap-2.5" style={{ fontFamily: FONT, fontSize: 14, color: INK_SOFT }}>
           <Radio size={17} strokeWidth={STROKE} style={{ color: INK, flexShrink: 0 }} aria-hidden />
-          Live room opens on {formatReleaseDate(releaseMs)}
+          {live.state === 'before'
+            ? `Live room opens on ${formatStartDay(live.startDate, 'en-GB')}, the first day of the conference`
+            : 'Live room opens when the conference starts'}
         </div>
       ) : null}
 

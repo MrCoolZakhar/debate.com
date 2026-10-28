@@ -61,7 +61,7 @@ export const INK = '#1C1410';
 // lockup whose square crop reads as a crescent "C" — see the note in
 // `src/lib/seo.ts`. Here the container is square, so the square mark is the
 // only correct file.
-const MARK_DATA_URI: string | null = (() => {
+export const MARK_DATA_URI: string | null = (() => {
   const candidates = [
     join(process.cwd(), 'src/app/api/og/_shared/gavelling-mark-120.png'),
     (() => {

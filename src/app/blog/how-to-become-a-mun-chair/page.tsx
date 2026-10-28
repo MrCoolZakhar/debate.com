@@ -2,7 +2,12 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import ArticleLayout from '@/components/blog/ArticleLayout';
+import TutorialVideo, { TutorialVideoJsonLd } from '@/components/blog/TutorialVideo';
 import { H2, H3, Callout, FactCard, TableWrap } from '@/components/blog/prose';
+
+// Tutorial videos appear on release (src/lib/tutorialVideos.ts); the hourly
+// revalidation brings the server HTML and the VideoObject JSON-LD up to date.
+export const revalidate = 3600;
 
 export const metadata: Metadata = pageMetadata({
   title: 'How to Become a MUN Chair: Applying, Interviewing and Getting Picked',
@@ -42,6 +47,7 @@ export default function Article() {
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
+      <TutorialVideoJsonLd ids={['aFiXg0WtvH8']} />
       <ArticleLayout
         slug="how-to-become-a-mun-chair"
         pitch="Gavelling lists open chair and secretariat roles across conferences, and runs the committee once you get one."
@@ -166,6 +172,10 @@ export default function Article() {
           <li>Two weeks out: mark the position papers as they arrive, not in one night. Write one line per delegation while you read, and keep it, because on day one those lines are the only thing you know about the room.</li>
           <li>One week out: run through the opening in full, out loud, with your co-chair. Roll call, opening remarks, first speakers list, first motion. Fifteen minutes, and it removes most first-session nerves.</li>
         </ul>
+
+        <TutorialVideo id="aFiXg0WtvH8">
+          If the conference runs its rooms on Gavelling, rehearse in a real room: one of you holds the gavel and the other joins as a Commenter, writing private notes on every speech.
+        </TutorialVideo>
 
         <H2>Your first dais</H2>
         <p>Prepare three things and you will be fine. A printed or saved script for the moments you will otherwise fumble, which are roll call, the first motion and the vote: take it from our <Link href="/blog/mun-chair-script">MUN chair script</Link>. A way of tracking speakers, time and motions that is not a piece of paper you will lose, because a chair who loses the queue loses the room. And a plan for the first twenty minutes, in order, so that the room sees a dais that knows what happens next.</p>

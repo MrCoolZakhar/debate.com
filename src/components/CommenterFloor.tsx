@@ -111,7 +111,7 @@ export default function CommenterFloor({
   });
 
   return (
-    <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden pt-4">
+    <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden pt-2">
       {marker}
       {floorCountry ? (
         <div className="flex-1 min-h-0 flex items-center gap-6 px-6 pb-3">

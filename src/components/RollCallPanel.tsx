@@ -4,6 +4,7 @@ import React, { useRef, useState, useEffect, useCallback, useLayoutEffect } from
 import { Committee, DelegateStatus } from '@/lib/types';
 import { getCountryDisplayName, compareCountryNames } from '@/lib/countries';
 import { SeatCircleFlag, SIDEBAR_MONOGRAM } from '@/components/CircleFlag';
+import SeatGroupTag from '@/components/SeatGroupTag';
 import SeatName from '@/components/SeatName';
 import { getCommitteeDisplayName } from '@/lib/presetNames';
 import {
@@ -15,6 +16,7 @@ import { liveCaucus } from '@/components/FeedbackLogPanel';
 import { GripVertical, Megaphone, Mic } from 'lucide-react';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
 import { notifyDelegationAbsent } from '@/lib/absentNotice';
+import { fitScaleNow } from '@/lib/fitScale';
 
 // ── FlagCircle ────────────────────────────────────────────────────────────────
 export function FlagCircle({ country, size = 'md' }: { country: string; size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' | 'hero' }) {
@@ -35,7 +37,7 @@ export const QUEUE_ROW_SCALE = 1.1;
 export const QUEUE_ROW_SCALE_SHORT_SCREEN = 1.155;
 function queueRowScaleNow(): number {
   if (typeof window === 'undefined') return QUEUE_ROW_SCALE;
-  const fit = window.innerHeight / 820; // FitToScreen BASE_H
+  const fit = fitScaleNow(); // FitToScreen's own scale, browser zoom included (src/lib/fitScale.ts)
   return fit > 0 && fit < 0.95 ? QUEUE_ROW_SCALE_SHORT_SCREEN : QUEUE_ROW_SCALE;
 }
 function useQueueRowScale(): number {
@@ -157,68 +159,6 @@ function StatusPicker({ status, onPick, country, isObserver = false, large = fal
 // Adding a seat is NOT this panel's job any more (16 Sep 2026): the "+ Add a seat" button and
 // its picker were replaced by a small type box beside the quorum tabs (SeatAddField, mounted
 // by the chair page in CommitteeIdentityBadge), in the sidebar and the pre-session roll call.
-
-// ── Full speakers list popup ──────────────────────────────────────────────────
-function FullListPopup({
-  list,
-  title,
-  onClose,
-  onRemove,
-}: {
-  list: { delegateId: string; country: string }[];
-  title: string;
-  onClose: () => void;
-  onRemove?: (delegateId: string) => void;
-}) {
-  const { language } = useLanguage();
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ background: 'rgba(5, 8, 20, 0.80)', backdropFilter: 'blur(4px)' }}
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      {/* #fit-root scaling trap: FitToScreen wraps this page in a `transform: scale()`d
-          box of FIXED height (820px). A transformed ancestor is the containing block for
-          `position: fixed` descendants, so the overlay above is 820px tall — but `vh`
-          still resolves against the REAL viewport. On any window taller than 820px a
-          `max-h-[..vh]` card is sized LARGER than the box it lives in and, being a centred
-          flex item, overflows equally top and bottom — pushing the header and close button
-          off the top of the screen. Always size against the containing block with a
-          PERCENTAGE here, never vh (matches DocumentsModal / ScoreboardPanel). */}
-      <div className="bg-[#EDE7D8] border-2 border-[#C8BAA8] rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden max-h-[92%] flex flex-col">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[#DDD4C0] shrink-0">
-          <h3 className="font-black text-[#1C1410] text-base">{title}</h3>
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-[#9A8A78] font-mono">{list.length} speakers</span>
-            <button onClick={onClose} className="text-[#9A8A78] hover:text-[#1C1410] text-xl leading-none">✕</button>
-          </div>
-        </div>
-        <div className="overflow-y-auto flex-1 min-h-0">
-          {list.length === 0 ? (
-            <div className="px-5 py-8 text-center text-[#9A8A78] text-sm">No speakers queued</div>
-          ) : (
-            list.map((s, i) => (
-              <div key={s.delegateId} className="flex items-center gap-3 px-4 py-2.5 border-b border-[#DDD4C0]/40 group hover:bg-[#DDD4C0]/30 transition-colors">
-                <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black shrink-0"
-                  style={{ backgroundColor: 'rgba(238,217,138,0.15)', color: '#EED98A', border: '1px solid rgba(238,217,138,0.25)' }}>
-                  {i + 1}
-                </span>
-                <FlagCircle country={s.country} size="xs" />
-                <SeatName name={getCountryDisplayName(s.country, language)} max={24} className="text-sm text-[#1C1410] flex-1 min-w-0 leading-tight" />
-                {onRemove && (
-                  <button
-                    onClick={() => onRemove(s.delegateId)}
-                    className="text-[#9A8A78] hover:text-[#8B2020] transition-colors text-xs opacity-0 group-hover:opacity-100 shrink-0"
-                  >✕</button>
-                )}
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ── MajorityPie ───────────────────────────────────────────────────────────────
 // arcFill: fixed fraction 0–1 for the arc shape (never changes per chart).
@@ -374,7 +314,6 @@ function RollCallPanelInner({
   const { language } = useLanguage();
   const t = useT();
   const queueRowScale = useQueueRowScale();
-  const [showFullList, setShowFullList] = useState(false);
   const [localStatuses, setLocalStatuses] = useState<Record<string, DelegateStatus>>({});
   const [localObservers, setLocalObservers] = useState<Record<string, boolean>>({});
   // Every optimistic observer placard: the value, the tap that set it (a newer tap on the same
@@ -574,14 +513,26 @@ function RollCallPanelInner({
 
   // Bulk set: localStatuses is flushed ATOMICALLY (one setState, one render) and
   // the parent owns the writes — one per delegate, not two.
+  // An observer is never present-voting, here as on a single press: "All P+V" sets every
+  // observer to Present instead, as a second bulk call with only their ids.
   const setAllStatuses = (status: DelegateStatus) => {
     if (isViewOnly) { onCommenterAttempt?.(); return; }
     const newStatuses: Record<string, DelegateStatus> = {};
     const at = Date.now();
-    committee.delegates.forEach((d) => { newStatuses[d.id] = status; pendingStatusRef.current[d.id] = { value: status, at }; });
+    const groups = new Map<DelegateStatus, string[]>();
+    committee.delegates.forEach((d) => {
+      const isObserver = (localObservers[d.id] ?? d.isObserver) === true;
+      const value: DelegateStatus = isObserver && status === 'present-voting' ? 'present' : status;
+      newStatuses[d.id] = value;
+      pendingStatusRef.current[d.id] = { value, at };
+      const ids = groups.get(value);
+      if (ids) ids.push(d.id); else groups.set(value, [d.id]);
+    });
     setLocalStatuses(newStatuses);
-    if (onBulkStatusChange) onBulkStatusChange(status, committee.delegates.map((d) => d.id));
-    else committee.delegates.forEach((d) => onStatusChange?.(d.id, status));
+    for (const [value, ids] of groups) {
+      if (onBulkStatusChange) onBulkStatusChange(value, ids);
+      else ids.forEach((id) => onStatusChange?.(id, value));
+    }
   };
 
   const handleAllPresent = () => setAllStatuses('present');
@@ -1147,13 +1098,17 @@ function RollCallPanelInner({
                       color: '#F4EFE3',
                     }}
                   />
+                  {/* The seat's party (custom committees), under the name. */}
+                  {d.groupShort && (
+                    <SeatGroupTag short={d.groupShort} color={d.groupColor} onDark size={sliderMode ? 11.5 : qr(11.5)} />
+                  )}
                   {isSpeakingRow && !sliderMode && (
-                    <span className="truncate uppercase" style={{ fontSize: qr(11), fontWeight: 800, letterSpacing: '0.08em', lineHeight: 1.3, color: '#EED98A' }}>
+                    <span className="[overflow-wrap:anywhere]" style={{ fontSize: qr(12), fontWeight: 700, lineHeight: 1.3, color: '#EED98A' }}>
                       {t('rollcall_speaking')}
                     </span>
                   )}
                   {isReadyRow && !sliderMode && (
-                    <span className="truncate uppercase" style={{ fontSize: qr(10.5), fontWeight: 700, letterSpacing: '0.08em', lineHeight: 1.3, color: 'rgba(238,217,138,0.72)' }}>
+                    <span className="[overflow-wrap:anywhere]" style={{ fontSize: qr(11.5), fontWeight: 600, lineHeight: 1.3, color: 'rgba(238,217,138,0.72)' }}>
                       {t('gsl_on_deck')}
                     </span>
                   )}
@@ -1273,14 +1228,6 @@ function RollCallPanelInner({
       </div>
       )}
 
-      {showFullList && (
-        <FullListPopup
-          list={committee.speakersList}
-          title="General Speakers List"
-          onClose={() => setShowFullList(false)}
-          onRemove={onRemoveFromList ? (id) => { onRemoveFromList(id); } : undefined}
-        />
-      )}
     </div>
   );
 }

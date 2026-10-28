@@ -28,7 +28,7 @@
  * draws the page inside `scale()`.
  */
 
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { GripVertical } from 'lucide-react';
 import { SeatCircleFlag } from '@/components/CircleFlag';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
@@ -151,6 +151,18 @@ export function RightsQueue({ speakers, currentIndex, hideTally, currentMovable 
   const firstMovable = currentIndex + (currentMovable ? 0 : 1);
   const upcoming = speakers.slice(firstMovable);
   const canMove = !!onMove && upcoming.length > 1;
+
+  // Any number of rights speakers (no cap since 23 Oct 2026): the list scrolls, and the
+  // speaker on the floor is kept in view as the round moves on. Only this list scrolls.
+  const currentId = speakers[currentIndex]?.delegateId ?? null;
+  useEffect(() => {
+    const list = listRef.current;
+    const row = currentId ? rowRefs.current.get(currentId) : null;
+    if (!list || !row || armedRef.current) return;
+    const top = row.offsetTop;
+    const bottom = top + row.offsetHeight;
+    if (top < list.scrollTop || bottom > list.scrollTop + list.clientHeight) list.scrollTop = Math.max(0, top - 8);
+  }, [currentId]);
 
   // Window listeners while a pointer is armed: a drag never depends on pointer capture or
   // on the pointer staying over its row. A LAYOUT effect, so the listeners are attached in the

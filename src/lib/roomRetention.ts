@@ -40,21 +40,38 @@ export const SUSPENDED_DEBATED_KEEP_HOURS = 72;
 export const ENDED_KEEP_HOURS = 24;
 export const REOPEN_WINDOW_HOURS = 24;
 
-/** The instant an ended room stops being reopenable, or null when it has not ended. */
-export function reopenWindowEndsAt(committee: Committee): Date | null {
+/**
+ * A CONFERENCE room stays restartable until the end of its conference's last day (owner,
+ * 23 Oct 2026: a room ended for good at the end of day 1, or ended by a chair trying the
+ * console a week early, was dead for the rest of the conference). `conferenceEndsAtMs` is
+ * that instant, from `loadConferenceRoomEndsAt` (src/lib/conferenceRoomWindow.ts); null
+ * when it is not known yet, or the conference has no dates, and then the room falls back
+ * to the standalone 24 hours. The window is never SHORTER than 24 hours after the end, so
+ * a room ended late on the last day can still be brought back the next morning.
+ *
+ * The database mirrors this rule in `start_my_chair_session` (scratch-conference-rooms.sql,
+ * section C1): past this instant an ended room is retired and the next Start mints a fresh
+ * room and relinks it. Change both together.
+ */
+export function reopenWindowEndsAt(committee: Committee, conferenceEndsAtMs?: number | null): Date | null {
   if (!committee.endedAt) return null;
   const ended = new Date(committee.endedAt).getTime();
   if (!Number.isFinite(ended)) return null;
-  return new Date(ended + REOPEN_WINDOW_HOURS * 3_600_000);
+  const standalone = ended + REOPEN_WINDOW_HOURS * 3_600_000;
+  if (committee.sessionOrigin === 'conference' && typeof conferenceEndsAtMs === 'number' && Number.isFinite(conferenceEndsAtMs)) {
+    return new Date(Math.max(standalone, conferenceEndsAtMs));
+  }
+  return new Date(standalone);
 }
 
 /**
- * Can this room be restarted right now? True for `REOPEN_WINDOW_HOURS` after it ended.
+ * Can this room be restarted right now? True for `REOPEN_WINDOW_HOURS` after it ended, and
+ * for a conference room until its conference's last day is over (see above).
  * `nowMs` is the DATABASE clock (serverNow), never Date.now (AGENTS.md RULE 6b): the
  * window is compared against a timestamp the database wrote.
  */
-export function canReopenEndedRoom(committee: Committee, nowMs: number): boolean {
-  const until = reopenWindowEndsAt(committee);
+export function canReopenEndedRoom(committee: Committee, nowMs: number, conferenceEndsAtMs?: number | null): boolean {
+  const until = reopenWindowEndsAt(committee, conferenceEndsAtMs);
   return !!until && nowMs < until.getTime();
 }
 

@@ -31,12 +31,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Users, FileText, ScrollText, Trophy, AlertTriangle, Info,
-  Mic, Timer, Pause, Flag, Moon, Copy, Check, Send, UserRound, Gavel, Clock3,
+  Mic, Timer, Pause, Flag, Moon, Copy, Check, UserRound, Gavel, Clock3, DoorOpen,
 } from 'lucide-react';
 import { LogoDisc } from '@/components/LogoDisc';
+import { secretariatRoomHref } from '@/lib/secretariatView';
 import { artFromIndex, slotArtKey, type SlotArtIndex } from '@/lib/slotGroups';
 import { type SessionSeat } from '@/lib/sessionFlags';
-import { SeatArtProvider } from '@/components/SeatFlag';
+import { SeatArtProvider, useSeatGroup } from '@/components/SeatFlag';
+import SeatGroupTag from '@/components/SeatGroupTag';
 import { SeatCircleFlag } from '@/components/CircleFlag';
 import { getCountryByCode } from '@/lib/countries';
 import Avatar from '@/components/Avatar';
@@ -233,7 +235,7 @@ function slotLogoFor(index: SlotArtIndex | null | undefined, ccId: string, count
  *  its crest already flattened to one URL — the same shape `delegates` has in a
  *  live session, so `<SeatFlag>` resolves identically on both sides. */
 export function mergedSeatRoster(
-  delegates: readonly { country: string; logoUrl?: string | null }[],
+  delegates: readonly { country: string; logoUrl?: string | null; groupColor?: string | null; groupShort?: string | null }[],
   index: SlotArtIndex | null | undefined,
   ccId: string,
 ): SessionSeat[] {
@@ -241,7 +243,9 @@ export function mergedSeatRoster(
   const seen = new Set<string>();
   for (const d of delegates) {
     if (!d?.country) continue;
-    out.push({ country: d.country, logoUrl: d.logoUrl ?? slotLogoFor(index, ccId, d.country) });
+    // The seat's party rides along, so a party member with no crest draws the
+    // party-colour disc exactly as the chair's sidebar does.
+    out.push({ country: d.country, logoUrl: d.logoUrl ?? slotLogoFor(index, ccId, d.country), groupColor: d.groupColor ?? null, groupShort: d.groupShort ?? null });
     seen.add(d.country.trim().toLowerCase());
   }
   // Slot rows for seats the session has no delegate row for. Named by country
@@ -284,6 +288,15 @@ function DelegationMark({ country, size }: { country: string; size: number }) {
       fallback={<UserRound size={Math.round(size * 0.6)} strokeWidth={2} style={{ color: NEU.forest }} />}
     />
   );
+}
+
+/** The floor speaker's party (custom committees): the colour dot and short
+ *  name, as the chair's sidebar shows it beside the seat. Nothing for a seat
+ *  without a party. Reads the card's SeatArtProvider roster. */
+function SpeakerParty({ country }: { country: string }) {
+  const group = useSeatGroup(country);
+  if (!group?.short) return null;
+  return <SeatGroupTag short={group.short} color={group.color} size={12} style={{ marginTop: 4 }} />;
 }
 
 /** One delegation in the up-next strip: a flag that grows under the pointer and
@@ -829,6 +842,7 @@ function NowPlayingPanel({
           >
             {np.headline}
           </p>
+          {np.flag && <SpeakerParty country={np.flag} />}
         </div>
       </div>
 
@@ -1035,29 +1049,17 @@ function Chip({
  *
  *    • the SESSION CODE, click-to-copy, flipping to "COPIED" for two seconds —
  *      `handleCopyCode` (`:937-941`) and the pill at `:1739-1767`;
- *    • whether the invite has gone to the chairs — `released_to_chairs_at`
- *      rendered through `CompactSendButton` (`:308-350`), whose three states are
- *      SCHEDULED (a future timestamp), SENT (a past one) and unsent.
+ *    • (whether the invite had gone to the chairs used to show here; there is
+ *      no organiser release any more, owner 23 Oct 2026).
  *
  *  It is READ-ONLY, and that is a hard constraint rather than an omission:
  *  nothing on this page writes to the database. Copying a code to the clipboard
  *  is the one thing here that touches no row. Minting a code and sending the
  *  invite are writes, so this says who still needs one and sends the organiser
  *  to the page that owns that write instead of growing a second one. */
-function NotStartedNudge({ data, now }: { data: LiveCommittee; now: number }) {
+function NotStartedNudge({ data }: { data: LiveCommittee }) {
   const [copied, setCopied] = useState(false);
   const code = data.conf.sessionCode;
-  const releasedAt = data.conf.releasedToChairsAt;
-  // Mirrors `releaseStatus` on the committees page: a timestamp in the future is
-  // a scheduled release, one in the past has already gone out.
-  //
-  // `now` is the PAGE's clock, handed down like every other time on this card.
-  // Reading `Date.now()` in a render body is impure, lints as such, and would
-  // let this pill disagree with the status word beside it in the same frame.
-  const releasedMs = releasedAt ? Date.parse(releasedAt) : NaN;
-  const sent = Number.isFinite(releasedMs) && releasedMs <= now;
-  const scheduled = Number.isFinite(releasedMs) && releasedMs > now;
-
   // Icon + plain word, sentence case (CLAUDE.md §8: no status pills). The
   // words are the committees page's own, only no longer set in capitals.
   const pill: React.CSSProperties = {
@@ -1118,22 +1120,9 @@ function NotStartedNudge({ data, now }: { data: LiveCommittee; now: number }) {
         </span>
       )}
 
-      {scheduled ? (
-        <span style={{ ...pill, color: AMBER_INK }}>
-          <Clock3 size={11} style={{ flexShrink: 0 }} />
-          Scheduled
-        </span>
-      ) : sent ? (
-        <span style={{ ...pill, color: GREEN_INK }}>
-          <Check size={11} style={{ flexShrink: 0 }} />
-          Sent to chairs
-        </span>
-      ) : (
-        <span style={{ ...pill, color: AMBER_INK }}>
-          <Send size={11} style={{ flexShrink: 0 }} />
-          Chairs not invited
-        </span>
-      )}
+      {/* "Sent to chairs / Chairs not invited" is gone: there is no organiser
+          release any more (owner, 23 Oct 2026). Chairs get their code by email
+          a week and a day before the conference, and on their page. */}
     </div>
   );
 }
@@ -1425,7 +1414,7 @@ export function CommitteeCard({
             ? { minHeight: WARNING_SLOT_HEIGHT, marginBlockStart: 8 }
             : undefined}
         >
-          {status === 'not-started' && <NotStartedNudge data={data} now={now} />}
+          {status === 'not-started' && <NotStartedNudge data={data} />}
           {top && (
             <span
               className="inline-flex items-start gap-1.5 rounded-2xl px-2.5 py-1 min-w-0"
@@ -1531,6 +1520,27 @@ export function CommitteeCard({
               </span>
             )}
           </Chip>
+
+          {/* The secretariat's way into the room itself (owner, 23 Oct 2026: "with no
+              warning and silently"): a read-only Commenter view with no chair name, no
+              password and no gavel (src/lib/secretariatView.ts). A new tab, so this
+              wall keeps polling. */}
+          {data.session && (
+            <a
+              href={secretariatRoomHref(data.session.code)}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center gap-1.5 text-[12px] font-bold px-2.5 py-[7px] rounded-full focus:outline-none flex-shrink-0 whitespace-nowrap"
+              style={{ color: NEU.forest, fontFamily: OUTFIT, textDecoration: 'none' }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+              title="Open this chair room as the secretariat. Read only; the chairs are not told."
+            >
+              <DoorOpen size={12} style={{ color: NEU.forest }} />
+              Open chair room
+            </a>
+          )}
 
         </div>
         </div>

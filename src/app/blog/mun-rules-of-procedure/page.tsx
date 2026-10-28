@@ -1,9 +1,14 @@
 import type { Metadata } from 'next';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import ArticleLayout from '@/components/blog/ArticleLayout';
+import TutorialVideo, { TutorialVideoJsonLd } from '@/components/blog/TutorialVideo';
 import { PhotoFigure } from '@/components/blog/BlogPhoto';
 import { H2, H3, Callout } from '@/components/blog/prose';
 import Link from 'next/link';
+
+// Tutorial videos appear on release (src/lib/tutorialVideos.ts); the hourly
+// revalidation brings the server HTML and the VideoObject JSON-LD up to date.
+export const revalidate = 3600;
 
 export const metadata: Metadata = pageMetadata({
   title: 'MUN Rules of Procedure: Complete Reference Guide',
@@ -44,6 +49,7 @@ export default function Article() {
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
+      <TutorialVideoJsonLd ids={['BCQyOGywPOg']} />
       <ArticleLayout
         slug="mun-rules-of-procedure"
         pitch="Gavelling enforces rules of procedure automatically: motions, timers, speakers lists, and voting all in one place."
@@ -107,6 +113,10 @@ export default function Article() {
 
         <H2>How Rules Differ Across Conferences</H2>
         <p>NMUN uses a parliamentary procedure adapted from actual UN practice, the most faithful simulation available. NAIMUN and HMUN have their own variations. School conferences often adapt rules further for accessibility. Our <Link href="/blog/mun-procedure-styles-compared">comparison of MUN procedure styles</Link> sets the main variations side by side. Always read the rules of procedure document for your specific conference before committee begins. When in doubt, ask the chair.</p>
+
+        <TutorialVideo id="BCQyOGywPOg">
+          If your conference&apos;s rules are not the defaults, Gavelling&apos;s settings let the dais match them: which motions exist, their order and names, what delegates can do from their phones, the timer sound and the points system.
+        </TutorialVideo>
       </ArticleLayout>
     </>
   );

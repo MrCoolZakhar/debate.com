@@ -6,12 +6,17 @@ import AdvisorBoard from './board/AdvisorBoard';
 // The Faculty Advisor board: every student an advisor follows, across every room, with
 // a reminder before each speech. Private to the device (noindex by the /advisor header
 // rule in next.config.ts as well).
-export const metadata: Metadata = pageMetadata({
-  title: 'My delegates',
-  description: 'Follow your delegates across every committee room and be there when they speak.',
-  path: '/advisor',
-  robots: { index: false, follow: true },
-});
+// Its own web app manifest (start_url /advisor): an advisor who adds the board to an
+// iPhone's Home Screen (required for web push on iOS 16.4+) lands back on the board.
+export const metadata: Metadata = {
+  ...pageMetadata({
+    title: 'My delegates',
+    description: 'Follow your delegates across every committee room and be there when they speak.',
+    path: '/advisor',
+    robots: { index: false, follow: true },
+  }),
+  manifest: '/advisor.webmanifest',
+};
 
 export default function AdvisorBoardPage() {
   return (

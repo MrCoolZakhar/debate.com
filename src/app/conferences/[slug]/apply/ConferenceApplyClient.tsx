@@ -2967,10 +2967,11 @@ function ConferenceApplyInner() {
         .eq('conference_id', conference!.id)
         .eq('role', role)
         .in('status', ['submitted', 'accepted', 'assigned', 'checked-in'])
-        .order('created_at', { ascending: false })
+        .order('submitted_at', { ascending: false, nullsFirst: false })
         .limit(1)
         .maybeSingle();
-      if (error) return null;
+      // Never blocks the submit, but a broken read is reported so it cannot hide again.
+      if (error) { reportBlocked('find my live application', error, { conferenceSlug: slug, role }); return null; }
       return (data as { id: string; status: string } | null) ?? null;
     }
     // Stop autosaving for the duration of the submit, so a debounce that

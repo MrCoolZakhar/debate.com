@@ -9,9 +9,9 @@ import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { Committee, PendingMotion, PendingMotionType } from '@/lib/types';
 import { getCountryDisplayName, compareCountryNames, matchesCountryQuery, startsWithCountryQuery } from '@/lib/countries';
 import SeatName from '@/components/SeatName';
-import { Emoji } from '@/components/Emoji';
+import { AlertTriangle, Info, ListChecks, X } from 'lucide-react';
 import { useSettingsStore, DEFAULT_MOTION_NAMES, MotionNames } from '@/lib/settingsStore';
-import { logFloorSpeech, creditRoomOrderTour, type FloorClock } from '@/lib/floorSpeech';
+import { logFloorSpeech, creditRoomOrderTour, logCowHolder, type FloorClock } from '@/lib/floorSpeech';
 import { interruptedGslSpeaker, returnSpeakerToGslFront, holdInterruptedGslSpeaker, settleHeldFloors } from '@/lib/gslFloorReturn';
 import {
   useTempMotionIds, isTempMotionId, raiseMotionOptimistic, removeMotionEverywhere,
@@ -31,31 +31,21 @@ import {
 import { logMotionRaised, logMotionPassed, logMotionFailed, logMotionEdited } from '@/lib/motionLog';
 import { OFFLINE_RESILIENCE } from '@/lib/offlineResilience';
 import { serverNow, serverNowIso } from '@/lib/serverClock';
-import { MotionSummary, MotionRankBadge, MOTION_SOFT } from '@/components/motions/MotionCard';
+import { MotionSummary, MotionRankBadge, MotionProposerFlag, MOTION_SOFT } from '@/components/motions/MotionCard';
 import { SeatCircleFlag } from '@/components/CircleFlag';
 
 type ModalView = 'list' | 'raise' | 'vote';
-type TypeMeta = Record<PendingMotionType, { icon: string; label: string; sub: string }>;
-
-const TYPE_STATIC: Record<PendingMotionType, { icon: string; sub: string }> = {
-  'end-debate':     { icon: '🏁', sub: 'Formally close the session' },
-  'suspend-debate': { icon: '⏸️', sub: 'Suspend the session temporarily' },
-  consultation:     { icon: '🤝', sub: 'Informal session, all together' },
-  tour:             { icon: '🔄', sub: 'Everyone speaks once, alphabetical order' },
-  unmoderated:      { icon: '💬', sub: 'Free time for delegates to talk' },
-  moderated:        { icon: '🎙️', sub: 'Structured speeches, blank slate to fill' },
-  custom:           { icon: '📝', sub: 'Handled in the room, the session carries on unchanged' },
-};
+type TypeMeta = Record<PendingMotionType, { label: string }>;
 
 function buildTypeMeta(motionNames: MotionNames): TypeMeta {
   return {
-    'end-debate':     { ...TYPE_STATIC['end-debate'],     label: motionNames.endDebate },
-    'suspend-debate': { ...TYPE_STATIC['suspend-debate'], label: motionNames.suspendDebate },
-    consultation:     { ...TYPE_STATIC.consultation,      label: motionNames.consultation },
-    tour:             { ...TYPE_STATIC.tour,              label: motionNames.tour },
-    unmoderated:      { ...TYPE_STATIC.unmoderated,       label: motionNames.unmoderated },
-    moderated:        { ...TYPE_STATIC.moderated,         label: motionNames.moderated },
-    custom:           { ...TYPE_STATIC.custom,            label: motionNames.custom },
+    'end-debate':     { label: motionNames.endDebate },
+    'suspend-debate': { label: motionNames.suspendDebate },
+    consultation:     { label: motionNames.consultation },
+    tour:             { label: motionNames.tour },
+    unmoderated:      { label: motionNames.unmoderated },
+    moderated:        { label: motionNames.moderated },
+    custom:           { label: motionNames.custom },
   };
 }
 
@@ -202,10 +192,10 @@ function InfoHint({ label, text }: { label: string; text: string }) {
         ref={btnRef} type="button" tabIndex={0} aria-label={label} aria-describedby={open ? tipId : undefined}
         onMouseEnter={show} onMouseLeave={hide} onFocus={show} onBlur={hide}
         onClick={(e) => e.preventDefault()}
-        className="shrink-0 w-[18px] h-[18px] rounded-full inline-flex items-center justify-center text-[11px] font-black leading-none transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A] gv-lift"
-        style={{ border: '1px solid #C5B9A8', color: '#6A5A4A', backgroundColor: '#FAF8F3', fontFamily: 'Georgia, serif' }}
+        className="shrink-0 w-[20px] h-[20px] rounded-full inline-flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A] hover:text-[#1C1410]"
+        style={{ color: '#5A4A3C' }}
       >
-        i
+        <Info size={16} strokeWidth={1.5} aria-hidden />
       </button>
       {open && pos && (
         <Portal>
@@ -312,7 +302,7 @@ function ProposerInput({ candidates, value, onChange, blockedCountries, optional
       {value && !open ? (
         <div className="flex items-center gap-3 bg-[#1B3828]/10 border-2 border-[#3D7A52]/40 rounded-xl px-4 py-3">
           {value === CHAIR_KEY
-            ? <span className="text-lg leading-none">🪑</span>
+            ? <MotionProposerFlag proposedBy={CHAIR_KEY} size={28} />
             : <SeatCircleFlag country={value} size={28} decorative fallback="initials" />}
           <SeatName name={dName(value)} max={26} className="text-sm text-[#1C1410] flex-1 font-semibold" />
           <button onClick={() => { setOpen(true); setQuery(''); onChange(''); inputRef.current?.focus(); }} className="text-xs font-bold transition-colors focus:outline-none" style={{ color: '#2A5A3C' }}>{t('motions_change')}</button>
@@ -350,7 +340,7 @@ function ProposerInput({ candidates, value, onChange, blockedCountries, optional
                     i === 0 ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'
                   }`}>
                   {isChair
-                    ? <span className="text-base leading-none">🪑</span>
+                    ? <MotionProposerFlag proposedBy={CHAIR_KEY} size={24} />
                     : <SeatCircleFlag country={country} size={24} decorative fallback="initials" />}
                   <SeatName name={dName(country)} max={26} className="text-sm flex-1" />
                   {isBlocked
@@ -451,11 +441,11 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
 
     const isSuspendOrEnd = type === 'suspend-debate' || type === 'end-debate';
     if (!isSuspendOrEnd) {
-      if ((type === 'moderated' || type === 'unmoderated') && totalTime === 0) {
+      if ((type === 'moderated' || type === 'unmoderated' || type === 'consultation') && totalTime === 0) {
         setError(t('motions_error_no_total_time'));
         return;
       }
-      if (type === 'moderated' && speakingTime === 0) {
+      if ((type === 'moderated' || type === 'tour') && speakingTime === 0) {
         setError(t('motions_error_no_speaking_time'));
         return;
       }
@@ -712,9 +702,10 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
         // hairline: `border-white/10` on ivory drew nothing, and the fields ran into the button.
         <div className="px-7 pb-7 pt-3 shrink-0 bg-[#FAF8F3]" style={{ boxShadow: '0 -1px 0 #DDD4C0, 0 -10px 16px -12px rgba(27,56,40,0.30)' }}>
           {belowQuorum && (
-            <div className="mb-4 p-3 bg-[#8B2020]/20 border border-[#8B2020]/40 rounded-xl text-xs text-[#8B2020]">
-              ⚠️ {t('motions_quorum_warning')}
-            </div>
+            <p role="status" className="mb-4 p-3 rounded-xl text-sm font-semibold flex items-start gap-2" style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.25)' }}>
+              <AlertTriangle size={18} strokeWidth={1.5} aria-hidden className="shrink-0 mt-px" />
+              <span>{t('motions_quorum_warning')}</span>
+            </p>
           )}
           {raiseBlocked && (
             <p role="status" className="mb-3 p-3 rounded-xl text-sm font-semibold" style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.25)' }}>
@@ -1201,12 +1192,24 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
   const handleEdited = (motion: Omit<PendingMotion, 'id' | 'disruptiveness'>) => {
     if (!editingMotionId) return;
     const oldId = editingMotionId;
+    const existing = committee.pendingMotions ?? [];
+    const original = existing.find((m) => m.id === oldId);
+    // One floor motion per delegation applies to an edit too (23 Oct 2026): an edit that
+    // hands the motion to a delegation (or the chair) already holding another floor motion
+    // is refused exactly like raising one, before anything is removed. Keeping the same
+    // proposer is never refused: the motion being edited is its own slot.
+    const proposerChanged = !original || original.proposedBy !== motion.proposedBy || !isFloorMotion(original);
+    if (motion.type !== 'custom' && proposerChanged
+      && existing.some((m) => m.id !== oldId && isFloorMotion(m) && m.proposedBy === motion.proposedBy)) {
+      showMotionNotice(committee.id, { kind: 'blocked', country: motion.proposedBy === CHAIR_KEY ? chairDisplayName(language) : motion.proposedBy });
+      return;
+    }
 
     // Remove old motion from local state immediately (same as handleRemove but inline
     // so committee.pendingMotions is clean before the re-add, avoiding the duplicate check)
     removeMotionEverywhere(committee, oldId, update);
 
-    // Add replacement, same logic as handleRaised but NO duplicate check
+    // Add replacement, same logic as handleRaised; the one-motion check ran above
     raiseMotionOptimistic({
       committee, motion, update, motionOrder,
       disruptiveness: localCalcDisruptiveness(motion.type, motion.totalTime),
@@ -1276,8 +1279,12 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
     const clearFloorForCaucus = () => {
       fellOtherFloorMotions({ committee, passedId: motion.id, update, motionOrder, rank: rankMotion });
       // A Room Order Tour de Table this caucus replaces has ended: one speech per delegation
-      // on its roster snapshot (idempotent per tour + country; no-op for any other caucus).
+      // on its roster snapshot, only when it ran to its end (idempotent per tour + country;
+      // no-op for any other caucus).
       void creditRoomOrderTour(committee);
+      // A Consultation of the Whole this caucus replaces: its floor holder spoke until now
+      // (same turn key as a flag tap; no-op for any other caucus). Before the caucus is replaced.
+      void logCowHolder(committee);
       if (floorSpeaker) {
         const clock = floorClock?.();
         // A GSL speaker with time left keeps their GSL place AND their time: back at the
@@ -1308,6 +1315,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
         // Total clock starts PAUSED — the chair presses play. remainingTime is the truth
         // until then, so every device reads the full time and nothing drains early.
         totalStartedAt: null,
+        acceptedAt: serverNowIso(),   // names this caucus instance (src/lib/caucusIdentity.ts)
       };
       update((c) => ({ ...c, phase: 'unmoderated-caucus', caucus, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== motion.id), caucusQueue: [], currentSpeaker: null }));
       onClose();
@@ -1325,6 +1333,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
         speakingTime: 0, speakerTimeRemaining: 0, currentSpeaker: null,
         proposerPosition: null, spokenCountries: [], isConsultation: true,
         totalStartedAt: null,   // paused until the chair presses play
+        acceptedAt: serverNowIso(),   // names this caucus instance (src/lib/caucusIdentity.ts)
       };
       // GSL preserved, caucusQueue cleared, phase → unmoderated-caucus
       update((c) => ({ ...c, phase: 'unmoderated-caucus', caucus, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== motion.id), caucusQueue: [], currentSpeaker: null }));
@@ -1343,6 +1352,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
         speakingTime: motion.speakingTime, speakerTimeRemaining: motion.speakingTime,
         currentSpeaker: null, proposerPosition: null, spokenCountries: [],
         totalStartedAt: null,   // paused until the chair starts the first speaker
+        acceptedAt: serverNowIso(),   // names this caucus instance (src/lib/caucusIdentity.ts)
       };
       update((c) => ({ ...c, phase: 'moderated-caucus', caucus, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== motion.id), caucusQueue: [], currentSpeaker: null }));
       onClose();
@@ -1372,10 +1382,14 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
           speakingTime: motion.speakingTime, speakerTimeRemaining: motion.speakingTime,
           currentSpeaker: null, proposerPosition: null, spokenCountries: [],
           totalStartedAt: null,   // paused until the chair starts the first speaker
+          acceptedAt: serverNowIso(),   // names this caucus instance (src/lib/caucusIdentity.ts)
           // Placeholders credit nobody per turn, so the room is snapshotted here and every
           // delegation on it gets ONE speech when the tour ends (creditRoomOrderTour).
           roomOrderCountries: alphabetical.map((d) => d.country),
           tourStartedAt: serverNowIso(),
+          // How many numbered turns: the queue is derived from this (src/lib/roomOrderQueue.ts),
+          // since a placeholder can never be stored in speakers_list.
+          roomOrderSize: n,
         };
         // Numbered placeholder queue, "Speaker 1", "Speaker 2", etc.
         const caucusQueue = alphabetical.map((_, i) => ({
@@ -1387,9 +1401,9 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
         clearFloorForCaucus();
         removePendingMotionInDB(motion.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
         setPhaseAndCaucusInDB(committee.id, 'moderated-caucus', caucus, committee.code, committee.dbChairJoinSuffix ?? undefined);   // one update (R-7)
-        clearCaucusListInDB(committee.id, committee.code, committee.dbChairJoinSuffix ?? undefined).then(() =>
-          batchAddToCaucusListInDB(committee.id, caucusQueue, committee.code, committee.dbChairJoinSuffix ?? undefined)
-        );
+        // Only the clear: the placeholders are not delegations and can never be stored (uuid
+        // column). Every device derives the queue from `caucus.roomOrderSize` instead.
+        clearCaucusListInDB(committee.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
         return;
       }
 
@@ -1412,6 +1426,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
         speakingTime: motion.speakingTime, speakerTimeRemaining: motion.speakingTime,
         currentSpeaker: null, proposerPosition: null, spokenCountries: [],
         totalStartedAt: null,   // paused until the chair starts the first speaker
+        acceptedAt: serverNowIso(),   // names this caucus instance (src/lib/caucusIdentity.ts)
       };
       const caucusQueue = presentDelegates.map((d) => ({ delegateId: d.id, country: d.country }));
 
@@ -1477,6 +1492,9 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
               // below returns (offline that await can take the whole write timeout).
               const pressedAt = serverNow();
               const pressedClock = floorClock?.();
+              // The committee as it was at the press: the Consultation floor holder below is
+              // logged from it, before the break freezes the caucus.
+              const atPress = committee;
               setSpecialDeleting(true);
               try {
                 await removePendingMotionInDB(motionId, committee.code, committee.dbChairJoinSuffix ?? undefined);
@@ -1494,6 +1512,10 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
               if (!isSuspend) void creditRoomOrderTour(committee);
               // End Debate: every held GSL part (src/lib/gslFloorReturn.ts) is logged now, once.
               if (!isSuspend) settleHeldFloors(committee, 'all');
+              // A Consultation of the Whole floor holder spoke up to the press (Suspend or End):
+              // logged once with the flag tap's turn key, before the break freezes the caucus
+              // (freezeCaucusForBreak nulls the holder and floorSince).
+              void logCowHolder(atPress, { at: pressedAt });
               const floor = committee.currentSpeaker;
               if (floor) {
                 // Suspend only: a GSL speaker with time left is back at the front of the GSL
@@ -1584,7 +1606,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
     >
       {(requestClose) => (<>
         <div className="flex items-center justify-end px-7 pt-6 pb-0 shrink-0">
-          <button onClick={requestClose} aria-label={t('sb_close')} className="text-[#5A4A3C] hover:text-[#1C1410] transition-colors text-xl leading-none focus:outline-none">✕</button>
+          <button onClick={requestClose} aria-label={t('sb_close')} className="text-[#5A4A3C] hover:text-[#1C1410] transition-colors leading-none focus:outline-none"><X size={22} strokeWidth={1.5} aria-hidden /></button>
         </div>
         <div className="flex-1 min-h-0 pt-2 flex flex-col">
           {view === 'raise' && (
@@ -1619,7 +1641,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
               <h2 className="text-3xl font-black text-[#1C1410]">{t('motions_title')}</h2>
               {pending.length === 0 ? (
                 <div className="text-center py-8">
-                  <div className="mb-3"><Emoji size="2.5rem">📋</Emoji></div>
+                  <div className="mb-3 flex justify-center" style={{ color: '#5A4A3C' }}><ListChecks size={40} strokeWidth={1.5} aria-hidden /></div>
                   <p className="text-[#6A5A4A]">{t('motions_no_raised')}</p>
                   <p className="text-sm mt-1" style={{ color: MOTION_SOFT }}>{t('motions_floor_open')}</p>
                 </div>
@@ -1634,10 +1656,8 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
                       <div key={m.id} className="relative rounded-xl ps-4 pe-3 py-4" style={rowIsCustom
                         ? { backgroundColor: '#F3EFE4', border: '1px dashed #9A8A78' }
                         : { backgroundColor: '#EDE7D8', border: '1px solid #C5B9A8' }}>
+                        <MotionRankBadge n={i + 1} />
                         <div className="flex items-start gap-3">
-                          <span aria-label={t('motion_card_rank', { n: i + 1 })}
-                            className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center tabular-nums text-[15px] font-black"
-                            style={{ backgroundColor: '#1B3828', color: '#EED98A' }}>{i + 1}</span>
                           <div className="flex-1 min-w-0 space-y-2">
                             <DisruptivenessBadge type={m.type} />
                             <MotionSummary motion={m} label={motionDisplayLabel(m, typeMeta, language)} size="list" language={language} />
@@ -1646,7 +1666,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
                             disabled={isTempMotionId(m.id)}
                             title={isTempMotionId(m.id) ? t('motions_saving') : t('motions_reject_btn')}
                             aria-label={t('motions_reject_btn')}
-                            className="shrink-0 w-9 h-9 rounded-full inline-flex items-center justify-center text-[#5A4A3C] hover:text-[#8B2020] hover:bg-[#8B2020]/10 disabled:opacity-40 disabled:cursor-not-allowed text-base transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]">✕</button>
+                            className="shrink-0 w-9 h-9 rounded-full inline-flex items-center justify-center text-[#5A4A3C] hover:text-[#8B2020] hover:bg-[#8B2020]/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"><X size={18} strokeWidth={1.5} aria-hidden /></button>
                         </div>
                       </div>
                     );

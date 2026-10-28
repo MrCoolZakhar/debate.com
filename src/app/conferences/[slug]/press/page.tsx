@@ -24,7 +24,11 @@ import { themeCssVars, type ConferenceTheme } from '@/lib/theme';
 import PressDesk from './PressDesk';
 import { CARD_SHADOW, INK, INK_SOFT } from './pressKit';
 
-interface ConferenceHead { id: string; full_name: string; acronym: string | null; theme: ConferenceTheme | null }
+interface ConferenceHead {
+  id: string; full_name: string; acronym: string | null; theme: ConferenceTheme | null;
+  /** The conference days: press releases are sent only during them (owner, 23 Oct 2026). */
+  start_date: string | null; end_date: string | null; dates_tbd: boolean | null; timezone: string | null;
+}
 
 export default function PressDeskPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -40,7 +44,7 @@ export default function PressDeskPage() {
     (async () => {
       const supabase = await getFreshAuthedClient();
       if (!supabase) { if (alive) setState('missing'); return; }
-      const { data } = await supabase.from('conferences').select('id, full_name, acronym, theme').eq('slug', slug).maybeSingle();
+      const { data } = await supabase.from('conferences').select('id, full_name, acronym, theme, start_date, end_date, dates_tbd, timezone').eq('slug', slug).maybeSingle();
       if (!alive) return;
       if (data) { setConference(data as ConferenceHead); setState('ok'); } else setState('missing');
     })();
@@ -75,7 +79,7 @@ export default function PressDeskPage() {
             <AuthLink
               next={`/conferences/${slug}/press`}
               className="mt-4 inline-flex items-center justify-center rounded-[10px] px-5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-accent)]"
-              style={{ minHeight: 44, background: 'linear-gradient(90deg, var(--gv-main) 0%, var(--gv-main-mid) 100%)', color: '#FFFFFF', fontFamily: OUTFIT, fontSize: 15, fontWeight: 700 }}
+              style={{ minHeight: 44, background: 'linear-gradient(90deg, var(--gv-main) 0%, var(--gv-main-mid) 100%)', color: 'var(--gv-on-main)', fontFamily: OUTFIT, fontSize: 15, fontWeight: 700 }}
             >
               Sign in
             </AuthLink>
@@ -85,7 +89,7 @@ export default function PressDeskPage() {
             <p style={{ fontFamily: OUTFIT, fontSize: 17, fontWeight: 800, color: INK, margin: 0 }}>Conference not found</p>
           </div>
         ) : (
-          <PressDesk conferenceId={conference.id} />
+          <PressDesk conferenceId={conference.id} dates={conference} />
         )}
       </main>
     </div>

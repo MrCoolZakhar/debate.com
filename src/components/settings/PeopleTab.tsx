@@ -5,7 +5,7 @@ import { Gavel, MessageSquareText, RefreshCw, Search, Smartphone, UserX } from '
 import { getCountryByName, getCountryDisplayName } from '@/lib/countries';
 import SeatName from '@/components/SeatName';
 import { seatKey } from '@/lib/seatClaims';
-import { getSessionParticipants, kickDelegateSeat, type SessionParticipants, type ParticipantSeat } from '@/lib/sessionParticipants';
+import { getSessionParticipants, kickDelegateSeat, kickDelegateSeatClaim, type SessionParticipants, type ParticipantSeat } from '@/lib/sessionParticipants';
 import { CircleFlag, SeatCircleFlag, flagMonogram } from '@/components/CircleFlag';
 import { delegationNameLabel, useSessionDelegationNames } from '@/lib/sessionDelegationNames';
 import { K, T, W, LH, Section } from './settingsKit';
@@ -125,6 +125,38 @@ export default function PeopleTab({ committee, t, language, isViewOnly, myChairN
     });
   };
 
+  // A double delegation: remove ONE of the people on the seat (owner, 23 Oct 2026: "kicking
+  // allow one person to be kicked"). Only offered when the server gave every claim its own id
+  // (scratch-seat-kick-and-allowance.sql); before that the seat keeps its one Kick above.
+  const claimLabel = (c: ParticipantSeat, i: number) => c.name ?? t('stg_kick_device', { n: c.ordinal ?? i + 1 });
+  const kickOne = (country: string, claim: ParticipantSeat, label: string) => {
+    const seatName = getCountryDisplayName(country, language);
+    const claimId = claim.claimId;
+    if (!claimId) return;
+    requestConfirm({
+      title: t('stg_kick_one_title', { name: label, country: seatName }),
+      body: t('stg_kick_one_body', { country: seatName }),
+      confirmLabel: t('stg_kick_confirm'),
+      tone: 'danger',
+      icon: UserX,
+      run: async () => {
+        const res = await kickDelegateSeatClaim(committee.code, suffix, committee.id, country, claimId);
+        if (!res.ok && res.reason !== 'gone') {
+          if (res.reason === 'reserved') { void load(); return t('stg_kick_reserved'); }
+          return t('stg_action_failed');
+        }
+        // `gone`: that person already left the seat, which is what the chair asked for.
+        setData((prev) => prev ? {
+          ...prev,
+          seats: prev.seats.filter((s) => s.claimId !== claimId),
+          recentKicks: res.ok ? [{ country, kickedAt: new Date(Date.now() + skew).toISOString() }, ...prev.recentKicks] : prev.recentKicks,
+        } : prev);
+        void load();
+        return true;
+      },
+    });
+  };
+
   const refresh = (
     <button type="button" onClick={() => { setLoading(true); void load(); }} aria-label={t('stg_refresh')} title={t('stg_refresh')}
       className="stg-focus stg-press inline-flex items-center justify-center shrink-0"
@@ -209,10 +241,12 @@ export default function PeopleTab({ committee, t, language, isViewOnly, myChairN
               // hollow = nobody holds the seat. The words are the dot's tooltip and name.
               const latest = claims.reduce<string | null>((acc, c) => (!acc || c.lastSeenAt > acc ? c.lastSeenAt : acc), null);
               const dotText = !joined ? t('stg_not_joined') : active ? t('stg_active_now') : latest ? ago(latest) : t('stg_not_joined');
+              // Two (or more) people on one seat, each with an id: one row and one Kick each.
+              const perClaim = claims.length > 1 && claims.every((c) => !!c.claimId);
               return (
                 <li key={d.id} className="flex items-center gap-3" style={{ minHeight: 52, padding: '6px 2px', borderTop: `1px solid ${K.hair}` }}>
                   <SeatCircleFlag seat={d} size={34} decorative fallback="initials" />
-                  <span className="flex-1 min-w-0">
+                  <div className="flex-1 min-w-0">
                     <span className="flex items-center gap-2 min-w-0">
                       <span role="img" aria-label={dotText} title={dotText} className="shrink-0" style={{
                         width: 9, height: 9, borderRadius: 9,
@@ -230,8 +264,35 @@ export default function PeopleTab({ committee, t, language, isViewOnly, myChairN
                     {isModerator && reservedOnly && (
                       <span className="block truncate" title={t('stg_kick_reserved')} style={{ marginTop: 1, fontSize: T.caption, fontWeight: W.label, color: K.inkSoft }}>{t('stg_kick_reserved')}</span>
                     )}
-                  </span>
-                  {isModerator && joined && !reservedOnly && (
+                    {perClaim && (
+                      <ul style={{ listStyle: 'none', margin: '4px 0 0', padding: 0 }}>
+                        {claims.map((c, i) => {
+                          const label = claimLabel(c, i);
+                          const seen = c.active ? t('stg_active_now') : ago(c.lastSeenAt);
+                          return (
+                            <li key={c.claimId ?? i} className="flex items-center gap-2" style={{ minHeight: 32 }}>
+                              <span role="img" aria-label={seen} title={seen} className="shrink-0" style={{
+                                width: 7, height: 7, borderRadius: 7,
+                                background: c.active ? '#3FA268' : K.deepGold,
+                              }} />
+                              <span className="flex-1 min-w-0 [overflow-wrap:anywhere]" style={{ fontSize: T.caption, fontWeight: W.label, color: K.inkSoft, lineHeight: LH.body }}>
+                                {label}
+                              </span>
+                              {isModerator && !c.reserved && (
+                                <button type="button" onClick={() => kickOne(d.country, c, label)}
+                                  aria-label={t('stg_kick_one_aria', { name: label, country: name })} title={t('stg_kick_one_aria', { name: label, country: name })}
+                                  className="stg-focus stg-press inline-flex items-center gap-1.5 shrink-0"
+                                  style={{ height: 28, padding: '0 9px', borderRadius: 9, border: 'none', background: 'transparent', color: K.danger, fontSize: T.caption, fontWeight: W.label, cursor: 'pointer', boxShadow: 'inset 0 0 0 1px rgba(155,44,34,0.25)' }}>
+                                  <UserX size={12} strokeWidth={2.4} aria-hidden />{t('stg_kick_short')}
+                                </button>
+                              )}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
+                  {isModerator && joined && !reservedOnly && !perClaim && (
                     <button type="button" onClick={() => kick(d.country)} aria-label={t('stg_kick_aria', { country: name })} title={t('stg_kick_aria', { country: name })}
                       className="stg-focus stg-press inline-flex items-center gap-1.5 shrink-0"
                       style={{ height: 30, padding: '0 10px', borderRadius: 9, border: 'none', background: 'transparent', color: K.danger, fontSize: T.body, fontWeight: W.label, cursor: 'pointer', boxShadow: 'inset 0 0 0 1px rgba(155,44,34,0.25)' }}>

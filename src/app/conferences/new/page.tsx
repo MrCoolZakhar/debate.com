@@ -1088,9 +1088,8 @@ export default function NewConferencePage() {
       // promises an INSERT returns its rows in input order.
       //
       // Written exactly as CommitteeEditorModal's own create writes them, one
-      // for one. No live session is minted here and none ever was: the
-      // committees page mints and seats any room that has none the moment the
-      // organiser lands on it, which is where these committees go next.
+      // for one. They go in BEFORE the live rooms below, because
+      // `start_my_chair_session` seats each room from these rows.
       //
       // NOT a rollback path, unlike the committees above. The conference and
       // its committees exist and are useful; a failed seat write is fixed in
@@ -1120,6 +1119,32 @@ export default function NewConferencePage() {
           console.error('Failed to seed committee seats:', slotsError.message);
         }
       }
+
+      // LIVE ROOMS. Every committee gets its session code and chair password
+      // the moment it is created, and minting happens here because this is the
+      // create press (owner, 23 Oct 2026); never from an effect, a page load,
+      // a publish or a cron. `start_my_chair_session` is the idempotent
+      // database primitive (one transaction under a per-committee lock: the
+      // room, its current_speaker row, the seats, the link back). At most 3 at
+      // a time. Never blocks or fails the creation: a committee whose room did
+      // not come is started later from its chair's "Start your committee
+      // room" button.
+      const toStart = (createdCommittees ?? []).map((r) => r.id);
+      let nextToStart = 0;
+      const startWorker = async () => {
+        while (nextToStart < toStart.length) {
+          const committeeId = toStart[nextToStart++];
+          try {
+            const { data: started, error: startError } = await supabase.rpc('start_my_chair_session', { p_committee: committeeId });
+            if (startError || (started as { ok?: boolean } | null)?.ok !== true) {
+              console.error('Failed to start the live room for committee', committeeId, startError?.message ?? started);
+            }
+          } catch (startErr) {
+            console.error('Failed to start the live room for committee', committeeId, startErr);
+          }
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(3, toStart.length) }, startWorker));
 
       // ── GOES LIVE IN 3 DAYS, NOT ON CREATE (owner, 20 Oct 2026) ─────────
       //

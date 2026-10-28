@@ -7,7 +7,12 @@
 // followed room, like the organiser live wall, plus ONE light realtime channel for all
 // of them, a 15 s poll while the tab is visible, and a catch-up on wake / online.
 //
-// Never read here: `committees.settings` (it holds the chair code), any `messages` row
+// The ledger is kept in memory per room (23 Oct 2026): a read fetches only the rows
+// created since the newest one held (minus 30 s, for rows that land out of order),
+// merged by id; every LEDGER_FULL_MS the whole ledger is read again (still paged).
+//
+// Never read here: `committees.settings` as a whole (it holds the chair code; only its
+// `motionNames` key is selected, as a JSON path), any `messages` row
 // that is not the scoring ledger (chat includes private conversations), `feedback`
 // (chair notes and ratings), `motions`. Nothing here writes.
 // ============================================================
@@ -15,11 +20,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '../supabase';
+import { fetchAllRows } from '../fetchAllRows';
 import { serverNow } from '../serverClock';
 import type { CaucusState } from '../types';
 import type { BoardLogEvent, RoomData, RoomDelegate, RoomDocument, RoomQueueRow } from './types';
 
-const COMMITTEE_COLUMNS = 'id, code, name, topic, phase, session_origin, ended_at, suspended_at, caucus, speaker_time_limit, updated_at';
+const COMMITTEE_COLUMNS = 'id, code, name, topic, phase, session_origin, ended_at, suspended_at, caucus, speaker_time_limit, updated_at, motion_names:settings->motionNames';
+/** Ledger rows created this long before the newest one held are read again. */
+const LEDGER_OVERLAP_MS = 30_000;
+/** A full ledger re-read, for a row that landed with an older stamp. */
+const LEDGER_FULL_MS = 4 * 60 * 1000;
 const POLL_MS = 15_000;
 const COALESCE_MS = 300;
 
@@ -143,7 +153,56 @@ export function parseLedger(rows: { content: string }[]): BoardLogEvent[] {
 
 type FetchResult = { ok: true; rooms: RoomData[]; foundCodes: Set<string> } | { ok: false; error: unknown };
 
-async function fetchRooms(by: { codes?: string[]; ids?: string[] }): Promise<FetchResult> {
+interface LedgerRow { id: string; content: string; created_at: string }
+
+/** One room's ledger as this page holds it. */
+interface LedgerCache {
+  rows: Map<string, LedgerRow>;
+  /** The newest `created_at` held (epoch ms). */
+  newest: number;
+  /** When the whole ledger was last read (epoch ms, this device: a pacing timer). */
+  fullAt: number;
+  /** The rows in ledger order, rebuilt only when a row was added. */
+  sorted: LedgerRow[];
+}
+
+export type LedgerStore = Map<string, LedgerCache>;
+
+const rowMs = (r: LedgerRow) => { const ms = new Date(r.created_at).getTime(); return Number.isFinite(ms) ? ms : 0; };
+
+function readLedger(id: string, store: LedgerStore) {
+  const held = store.get(id);
+  const full = !held || Date.now() - held.fullAt >= LEDGER_FULL_MS;
+  const since = !full && held && held.newest > 0 ? new Date(held.newest - LEDGER_OVERLAP_MS).toISOString() : null;
+  return fetchAllRows<LedgerRow>((from, to) => {
+    let q = supabase.from('messages').select('id, content, created_at')
+      .eq('committee_id', id).eq('recipient', '__log__').eq('sender', '__system__');
+    if (since) q = q.gte('created_at', since);
+    return q.order('created_at', { ascending: true }).order('id', { ascending: true }).range(from, to);
+  }).then((res) => ({ ...res, full }));
+}
+
+/** Merge a read into the room's held ledger (by id; a full read never drops a held row). */
+function mergeLedger(id: string, store: LedgerStore, rows: LedgerRow[], full: boolean): LedgerRow[] {
+  let held = store.get(id);
+  if (!held) { held = { rows: new Map(), newest: 0, fullAt: 0, sorted: [] }; store.set(id, held); }
+  let added = false;
+  for (const r of rows) {
+    if (!r || typeof r.id !== 'string') continue;
+    const prev = held.rows.get(r.id);
+    if (prev && prev.content === r.content && prev.created_at === r.created_at) continue;
+    held.rows.set(r.id, r);
+    added = true;
+    held.newest = Math.max(held.newest, rowMs(r));
+  }
+  if (full) held.fullAt = Date.now();
+  if (added) {
+    held.sorted = [...held.rows.values()].sort((a, b) => rowMs(a) - rowMs(b) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  }
+  return held.sorted;
+}
+
+async function fetchRooms(by: { codes?: string[]; ids?: string[] }, ledgers: LedgerStore): Promise<FetchResult> {
   try {
     let q = supabase.from('committees').select(COMMITTEE_COLUMNS);
     if (by.ids) q = q.in('id', by.ids);
@@ -161,10 +220,9 @@ async function fetchRooms(by: { codes?: string[]; ids?: string[] }): Promise<Fet
         .order('position', { ascending: true }).order('created_at', { ascending: true }).order('id', { ascending: true }),
       supabase.from('delegates').select('id, committee_id, country, is_observer, logo_url, status').in('committee_id', ids),
       supabase.from('documents').select('committee_id, type, status, doc_code, title, sponsors').in('committee_id', ids),
-      // The ledger ONLY, one read per room so the 1,000-row page cap applies per room.
-      ...ids.map((id) => supabase.from('messages').select('content, created_at')
-        .eq('committee_id', id).eq('recipient', '__log__').eq('sender', '__system__')
-        .order('created_at', { ascending: true })),
+      // The ledger ONLY, one paged read per room (a single request stops at 1,000 rows):
+      // only what is newer than the rows held, the whole ledger every LEDGER_FULL_MS.
+      ...ids.map((id) => readLedger(id, ledgers)),
     ]);
     for (const r of [csRes, slRes, dRes, docRes, ...msgRes]) if (r.error) return { ok: false, error: r.error };
 
@@ -194,7 +252,8 @@ async function fetchRooms(by: { codes?: string[]; ids?: string[] }): Promise<Fet
       const id = String(c.id);
       const cs = speakers.get(id)?.[0];
       const list = lists.get(id) ?? [];
-      const msgs = (msgRes[i]?.data ?? []) as { content: string }[];
+      const read = msgRes[i] as { data: LedgerRow[]; full: boolean } | undefined;
+      const msgs = mergeLedger(id, ledgers, read?.data ?? [], read?.full ?? false);
       return {
         id,
         code: String(c.code),
@@ -219,6 +278,8 @@ async function fetchRooms(by: { codes?: string[]; ids?: string[] }): Promise<Fet
         delegates: dels.get(id) ?? [],
         events: parseLedger(msgs),
         documents: docs.get(id) ?? [],
+        motionNames: c.motion_names && typeof c.motion_names === 'object' && !Array.isArray(c.motion_names)
+          ? (c.motion_names as Record<string, unknown>) : null,
         fetchedAt: now,
       };
     });
@@ -264,11 +325,16 @@ export function useBoardData(codes: string[]): BoardData {
   // realtime refetch that already landed.
   const seqRef = useRef(0);
   const roomSeqRef = useRef<Map<string, number>>(new Map());
+  // Each room's ledger, held across reads (fetchRooms reads only what is new).
+  const ledgersRef = useRef<LedgerStore>(new Map());
 
   const applyResult = useCallback((res: FetchResult, requestedCodes: string[] | null, key: string, seq: number) => {
     if (key !== codesRef.current.join(',')) return;   // the code set moved on meanwhile
     if (!res.ok) { setFailed(true); return; }
     setFailed(false);
+    // Forget the ledgers of rooms no longer followed.
+    const liveIds = new Set([...Object.values(roomsRef.current).map((r) => r.id), ...res.rooms.map((r) => r.id)]);
+    if (requestedCodes) for (const id of [...ledgersRef.current.keys()]) if (!liveIds.has(id)) ledgersRef.current.delete(id);
     setLastOkAt(serverNow());
     const live = new Set(codesRef.current);
     const accepted = res.rooms.filter((r) => live.has(r.code) && (roomSeqRef.current.get(r.code) ?? -1) < seq);
@@ -291,14 +357,14 @@ export function useBoardData(codes: string[]): BoardData {
     const key = list.join(',');
     if (list.length === 0) { setRooms({}); setMissing(new Set()); setLoadedKey(''); setLastOkAt(serverNow()); return; }
     const seq = ++seqRef.current;
-    const res = await fetchRooms({ codes: list });
+    const res = await fetchRooms({ codes: list }, ledgersRef.current);
     applyResult(res, list, key, seq);
   }, [applyResult]);
 
   const fetchIds = useCallback(async (ids: string[]) => {
     const key = codesRef.current.join(',');
     const seq = ++seqRef.current;
-    const res = await fetchRooms({ ids });
+    const res = await fetchRooms({ ids }, ledgersRef.current);
     applyResult(res, null, key, seq);
   }, [applyResult]);
 

@@ -2,8 +2,13 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import ArticleLayout from '@/components/blog/ArticleLayout';
+import TutorialVideo, { TutorialVideoJsonLd } from '@/components/blog/TutorialVideo';
 import { H2, H3, Callout, FactCard, TableWrap } from '@/components/blog/prose';
 import Faq, { type FaqItem } from '@/components/blog/Faq';
+
+// Tutorial videos appear on release (src/lib/tutorialVideos.ts); the hourly
+// revalidation brings the server HTML and the VideoObject JSON-LD up to date.
+export const revalidate = 3600;
 
 const TITLE = 'MUN Working Paper: Format, a Full Example, and How to Merge Two Papers';
 const DESCRIPTION =
@@ -96,6 +101,7 @@ export default function Article() {
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
+      <TutorialVideoJsonLd ids={['YhjHfNBSEKM']} />
       <ArticleLayout
         slug="mun-working-paper-guide"
         pitch="In a Gavelling session delegates submit working papers from their phones, the dais gets the code assigned automatically, and introduction is timed on screen."
@@ -230,6 +236,10 @@ export default function Article() {
         <p>
           In a committee run on <Link href="/create/sessions">Gavelling</Link>, a delegate submits a working paper or draft resolution from their phone, with the sponsoring delegations. The paper gets its code (WP 1.1, DR 1/1 and so on) from the session automatically, so two papers never share a number. The chair can require approval before a paper is introduced and can cap how many papers each committee accepts. Introduction runs as timed stages on the chair&rsquo;s screen: reading, presentation, then questions. Committees that call them something else can rename both document types in Settings.
         </p>
+
+        <TutorialVideo id="YhjHfNBSEKM">
+          The introduction runs with the paper and the stage timer on one screen, so the chair never needs a second tab.
+        </TutorialVideo>
 
         <H2>Frequently Asked Questions</H2>
         <Faq items={FAQ} />

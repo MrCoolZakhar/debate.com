@@ -45,8 +45,42 @@ import { listingOutboundLink } from './ListingParts';
 // 10 minutes, so an organiser's edit reaches crawlers and new link previews
 // soon after the page is next visited.
 export const revalidate = 600;
-export function generateStaticParams() {
-  return [];
+/* Every PUBLIC conference is prebuilt at deploy (25 Oct 2026, owner): with []
+   each slug rendered on its first visit, and a deploy clears the cache, so the
+   first visitor after every deploy waited for that render (seen at ~30 s from
+   Explore). Same visibility as the page's server seed and the sitemap
+   (`is_public`, which includes a live Gavelling listing); test and demo
+   conferences are public too and are built like the rest. Any other slug (a
+   private conference, one published after the deploy) still renders on its
+   first visit (dynamicParams stays on). A failed read must never fail the
+   build: it falls back to [] and every page renders on demand as before. */
+export async function generateStaticParams(): Promise<{ slug: string }[]> {
+  try {
+    const { data, error } = await supabase
+      .from('conferences')
+      .select('slug')
+      .eq('is_public', true);
+    if (error || !data) return [];
+    const slugs = new Set<string>();
+    for (const row of data as { slug: string | null }[]) {
+      const slug = row.slug?.trim();
+      if (slug) slugs.add(slug);
+    }
+    return [...slugs].map((slug) => ({ slug }));
+  } catch {
+    return [];
+  }
+}
+
+/** One retry on a failed read. Under a build that prebuilds every public
+ *  conference, a single hiccup among hundreds of reads must not fail it. */
+async function withOneRetry<T>(read: () => Promise<T>): Promise<T> {
+  try {
+    return await read();
+  } catch {
+    await new Promise((r) => setTimeout(r, 400));
+    return read();
+  }
 }
 
 interface ConfMeta {
@@ -84,7 +118,7 @@ interface ConfMeta {
 // cached as a 404 for the whole revalidate window, while a thrown render keeps
 // the last good copy (or answers 500, never cached). `getConference` keeps
 // the old forgiving shape (null on any failure) for ../reviews and ../awards.
-const readConference = cache(async (slug: string): Promise<ConfMeta | null> => {
+const readConference = cache((slug: string): Promise<ConfMeta | null> => withOneRetry(async () => {
   const { data, error } = await supabase
     .from('conferences')
     .select('id, fee_currency, full_name, acronym, description, banner_url, logo_url, city, country, start_date, end_date, is_public, format, dates_tbd, timezone, website_url, published_at, show_committees, instagram_url, listed_by, listing_meta')
@@ -92,7 +126,7 @@ const readConference = cache(async (slug: string): Promise<ConfMeta | null> => {
     .maybeSingle();
   if (error) throw new Error(`Conference read failed: ${error.code ?? 'unknown'}`);
   return (data as ConfMeta) ?? null;
-});
+}));
 
 export const getConference = cache(async (slug: string): Promise<ConfMeta | null> => {
   try {
@@ -125,7 +159,7 @@ const CONFERENCE_COLUMNS = `
   listed_by, listing_meta
 `;
 
-export const getConferenceFull = cache(async (slug: string) => {
+export const getConferenceFull = cache((slug: string) => withOneRetry(async () => {
   // Throws on a failed read for the same reason as readConference: a cached
   // copy without the seed would hide the page's content from crawlers.
   const { data, error } = await supabase
@@ -136,7 +170,7 @@ export const getConferenceFull = cache(async (slug: string) => {
     .maybeSingle();
   if (error) throw new Error(`Conference read failed: ${error.code ?? 'unknown'}`);
   return data ?? null;
-});
+}));
 
 /** Committee names and topics. These are the words a search for a topic or a
  *  committee actually matches, and they were reaching no crawler at all. */
@@ -270,6 +304,10 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   // only (a private one is noindex and must not leak its set-up into HTML).
   // A listing has no roles or fees of ours to describe (its roles are closed): no role read.
   const listing = isGavellingListing(conf);
+  // The stored-card probe (below) needs only the row: started now, alongside
+  // the committee and role reads, instead of after them.
+  const cardPath = conferenceCardPath(slug, ogVersion(conf));
+  const storedProbe = storedCardExists(cardPath, 400);
   const [committees, role] = conf.is_public
     ? await Promise.all([
         getCommittees(conf.id),
@@ -312,10 +350,12 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   // Under ISR this runs when the page is (re)rendered, i.e. on the first
   // visit after the cached copy is 10 minutes old: a changed card (new
   // ogVersion) is warmed and stored then, and the next render points at it.
-  const cardPath = conferenceCardPath(slug, ogVersion(conf));
-  const stored = await storedCardExists(cardPath, 400);
+  const stored = await storedProbe;
   const image = stored ? storedCardUrl(cardPath) : routeImage;
-  if (!stored) warmOgImage(routeImage);
+  // Never while the deploy is being BUILT (every public page is prebuilt
+  // now): gavelling.com is still the OLD deployment then, which would draw
+  // this new card URL with the old code and the CDN would keep that copy.
+  if (!stored && process.env.NEXT_PHASE !== 'phase-production-build') warmOgImage(routeImage);
 
   return pageMetadata({
     // Absolute: the brand is part of the template, so the root `%s | Gavelling`
@@ -463,7 +503,9 @@ function breadcrumbSchema(slug: string, conf: ConfMeta, hub: Hub | null): object
 
 export default async function ConferenceDetailPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const conf = await readConference(slug);
+  // The row and the full seed are read TOGETHER (both by slug; the seed is
+  // filtered to public rows, so a private conference gets null from it).
+  const [conf, fullRow0] = await Promise.all([readConference(slug), getConferenceFull(slug)]);
   // readConference has no is_public filter, so this is null ONLY when the row
   // genuinely doesn't exist — a private conference still comes back here
   // (with is_public: false) and must keep rendering for an owner holding the
@@ -471,12 +513,14 @@ export default async function ConferenceDetailPage({ params }: { params: Promise
   if (!conf) notFound();
   // Server-fetched seed for the client view. Public rows only; null for a
   // private conference, which leaves the client's existing authed path intact.
-  const full = conf?.is_public ? await getConferenceFull(slug) : null;
+  const full = conf.is_public ? fullRow0 : null;
   // A listing (src/lib/listings.ts): no role, fee or window is read or described, it applies on
   // its own website, and its delegate count is a placeholder unless it publishes one.
   const listing = isGavellingListing(conf);
   const listingInfo = listing ? listingMeta(conf) : null;
   const noRole = { price: TBD_PRICE as DelegatePrice, window: NO_WINDOW };
+  // Committees, roles and hubs are independent: one parallel batch (the role
+  // reads share one conference_public_fees read through cache()).
   const [committees, role, placeHubs, aboutRoles] = full
     ? await Promise.all([
         getCommittees((full as { id: string }).id),

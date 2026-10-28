@@ -39,6 +39,9 @@ export interface LiveRoomInfo {
   committeeName: string;
   committeeAbbreviation: string | null;
   committeeLogoUrl: string | null;
+  /** `conference_committees.committee_type` ('press' sends a reporter to the Press Desk).
+   *  Null from an older `my_live_rooms` (scratch-press-and-parties.sql, section P4). */
+  committeeType: string | null;
   conferenceName: string;
   conferenceAcronym: string | null;
   conferenceLogoUrl: string | null;
@@ -114,6 +117,7 @@ function roomFrom(r: Row): LiveRoomInfo | null {
     committeeName: name,
     committeeAbbreviation: str(r.committee_abbreviation),
     committeeLogoUrl: str(r.committee_logo_url),
+    committeeType: str(r.committee_type),
     conferenceName: str(r.conference_name) ?? '',
     conferenceAcronym: str(r.conference_acronym),
     conferenceLogoUrl: str(r.conference_logo_url),
@@ -214,6 +218,11 @@ function groupAdvisorRows(parsed: ParsedRow[]): LiveEntry[] {
   return out;
 }
 
+/** A delegate entry whose seat is in a press committee: it opens the Press Desk. */
+export function isPressSeat(e: LiveEntry): boolean {
+  return e.role === 'delegate' && e.room.committeeType === 'press' && !!e.room.conferenceSlug;
+}
+
 /** Where each entry goes: exactly the path the join page takes after verification. */
 export function liveEntryHref(e: LiveEntry): string {
   switch (e.role) {
@@ -224,6 +233,10 @@ export function liveEntryHref(e: LiveEntry): string {
       // and it records the chair name and the Moderator / Commenter choice.
       return `/join?code=${encodeURIComponent(e.room.sessionCode)}&mode=chair`;
     case 'delegate':
+      // A reporter (a seat of a press committee) works from the Press Desk, which follows
+      // every room and sends releases; the press room itself is one press away from there
+      // (owner, 23 Oct 2026).
+      if (isPressSeat(e)) return `/conferences/${encodeURIComponent(e.room.conferenceSlug!)}/press`;
       // What /join routes a verified allocated delegate to (join/page.tsx handleJoin):
       // the allocation's country NAME, locked.
       return `/delegate/${e.room.sessionCode}?country=${encodeURIComponent(e.countryName)}&locked=1`;
@@ -404,9 +417,9 @@ const getServerSnapshot = () => null;
 export function useLiveRooms(
   userId: string | null,
   accessToken: string | null,
-  opts: { enabled?: boolean; maxAgeMs?: number } = {},
+  opts: { enabled?: boolean; maxAgeMs?: number; recheckMs?: number } = {},
 ): { entries: LiveEntry[] | null } {
-  const { enabled = true, maxAgeMs = Infinity } = opts;
+  const { enabled = true, maxAgeMs = Infinity, recheckMs = 0 } = opts;
   const snap = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   // The token is read at fetch time only, so an hourly refresh never re-reads.
   const tokenRef = useRef<string | null>(accessToken);
@@ -418,6 +431,21 @@ export function useLiveRooms(
     const fresh = cache && cache.uid === userId && Date.now() - cache.at < maxAgeMs;
     if (!fresh) void load(userId, token);
   }, [enabled, userId, maxAgeMs, hasToken]);
+  // Re-check while the person stays on the site (owner, 25 Oct 2026: someone already
+  // browsing when their conference day starts must still get the prompt): every
+  // `recheckMs` while the tab is visible, and whenever the tab comes back into view.
+  useEffect(() => {
+    if (!enabled || !userId || !recheckMs) return;
+    const recheck = () => {
+      const token = tokenRef.current;
+      if (!token || document.visibilityState !== 'visible') return;
+      if (cache && cache.uid === userId && Date.now() - cache.at < recheckMs) return;
+      void load(userId, token);
+    };
+    const id = window.setInterval(recheck, recheckMs);
+    document.addEventListener('visibilitychange', recheck);
+    return () => { window.clearInterval(id); document.removeEventListener('visibilitychange', recheck); };
+  }, [enabled, userId, recheckMs]);
   if (!userId || !snap || snap.uid !== userId) return { entries: null };
   return { entries: snap.entries };
 }

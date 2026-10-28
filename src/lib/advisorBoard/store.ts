@@ -8,7 +8,7 @@
 // are theirs, and any first names they typed. Names never leave the device (owner).
 //
 //   localStorage `gavelling-advisor-board-v1`
-//     { rooms: [{ code, addedAt, endedSeenAt?, follows: [{ country, name? }] }],
+//     { rooms: [{ code, addedAt, endedSeenAt?, follows: [{ country, name?, name2? }] }],
 //       seen?: { [code]: epoch ms } }         // first time a conference room was seen
 //
 // A room is forgotten 7 days after it was first seen ended (`endedSeenAt`). Every access
@@ -27,6 +27,8 @@ export interface BoardFollow {
   country: string;
   /** First name typed by the advisor. Device only, never sent anywhere. */
   name?: string;
+  /** The second student of a double delegation (two people, one country). Device only. */
+  name2?: string;
 }
 
 export interface BoardRoom {
@@ -77,7 +79,8 @@ function parseState(raw: string | null): BoardState {
         if (seenCountries.has(key)) continue;
         seenCountries.add(key);
         const name = typeof f.name === 'string' ? f.name.trim().slice(0, 40) : '';
-        follows.push(name ? { country: f.country.trim(), name } : { country: f.country.trim() });
+        const name2 = typeof f.name2 === 'string' ? f.name2.trim().slice(0, 40) : '';
+        follows.push({ country: f.country.trim(), ...(name ? { name } : {}), ...(name2 ? { name2 } : {}) });
       }
       rooms.push({
         code,

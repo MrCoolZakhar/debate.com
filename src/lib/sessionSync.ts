@@ -42,6 +42,7 @@ import {
 } from './committeeService';
 import { OFFLINE_RESILIENCE } from './offlineResilience';
 import { nudgeParkedWrites } from './writeStatus';
+import { isRoomOrderCaucus, roomOrderQueueWith } from './roomOrderQueue';
 
 export type SyncSlice = 'row' | 'delegates' | 'lists' | 'currentSpeaker' | 'motions' | 'documents' | 'messages';
 
@@ -410,7 +411,9 @@ export function withCurrentSpeaker(prev: Committee, cs: SliceData['currentSpeake
       : prev.speakersList,
   };
   // In a moderated caucus (incl. Tour de Table) the visible speaker is caucus.currentSpeaker.
-  if (prev.caucus && prev.caucus.type === 'moderated') {
+  // Not in a Room Order tour: the current_speaker row can never hold a "Speaker N" placeholder
+  // (uuid column), so the caucus JSONB is the only truth for its floor and its queue.
+  if (prev.caucus && prev.caucus.type === 'moderated' && !isRoomOrderCaucus(prev.caucus)) {
     patched.caucus = { ...prev.caucus, currentSpeaker: cs.currentSpeaker?.country ?? null };
     patched.caucusQueue = cs.currentSpeaker
       ? prev.caucusQueue.filter((s) => s.delegateId !== cs.currentSpeaker!.delegateId)
@@ -419,13 +422,16 @@ export function withCurrentSpeaker(prev: Committee, cs: SliceData['currentSpeake
   return patched;
 }
 
-/** Land fresh speakers lists, never duplicating the current speaker into the GSL. */
+/** Land fresh speakers lists, never duplicating the current speaker into the GSL. A Room
+ *  Order Tour de Table's queue is never in speakers_list (its placeholders are not uuids): it
+ *  is derived from the caucus instead, so a lists fetch can no longer wipe it. */
 export function withLists(prev: Committee, lists: SliceData['lists']): Committee {
+  const roomOrder = prev.phase === 'moderated-caucus' ? roomOrderQueueWith(prev.caucus, lists.caucusQueue) : null;
   return {
     ...prev,
     speakersList: prev.currentSpeaker && gslDedupeApplies(prev)
       ? lists.speakersList.filter((s) => s.delegateId !== prev.currentSpeaker!.delegateId)
       : lists.speakersList,
-    caucusQueue: lists.caucusQueue,
+    caucusQueue: roomOrder ?? lists.caucusQueue,
   };
 }

@@ -6,9 +6,12 @@
 // ONE component for the General Speakers' List and all four caucus kinds (moderated,
 // unmoderated, Consultation of the Whole, Tour de Table), on the Moderator's floor and the
 // Commenter's floor alike, so they are drawn identically and only the values differ:
-//   line 1: the bare icon, the motion's name at the GSL size, then who raised it;
+//   line 1: the bare icon, the motion's name at the GSL size, then who raised it (the round
+//           flag only, 22 Oct 2026, owner; the name is the flag's tooltip);
 //   line 2: the motion's topic, much larger, wrapping to at most two lines. The topic is
 //           clipped after two lines, never given an ellipsis; the full topic is its title.
+//           Up to 84rem wide (22 Oct 2026, owner): most topics take one line, which gives the
+//           floor below its height back.
 // The GSL passes no `detail`, so it keeps its one line exactly as before.
 // Presentational only: no state, no writes.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -34,7 +37,7 @@ const TOPIC_LINE_HEIGHT = 1.2;
 export default function FloorModeHeader({ header, className = '' }: { header: StripHeader; className?: string }) {
   const detail = header.detail?.trim() || null;
   return (
-    <div className={`flex flex-col items-center mb-3 px-4 max-w-full ${className}`} style={{ color: '#1B3828' }}>
+    <div className={`flex flex-col items-center mb-1.5 px-4 max-w-full ${className}`} style={{ color: '#1B3828' }}>
       <div className="flex items-center justify-center gap-2 max-w-full">
         {header.icon && <span aria-hidden className="shrink-0 inline-flex">{header.icon}</span>}
         <span className="min-w-0 truncate text-[15px] tracking-tight font-black" title={header.label}>
@@ -52,7 +55,7 @@ export default function FloorModeHeader({ header, className = '' }: { header: St
             lineHeight: TOPIC_LINE_HEIGHT,
             maxHeight: `${TOPIC_LINE_HEIGHT * 2}em`,
             overflow: 'hidden',
-            maxWidth: 'min(100%, 60rem)',
+            maxWidth: 'min(100%, 84rem)',
             textWrap: 'balance',
           }}
         >

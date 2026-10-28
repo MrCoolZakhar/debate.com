@@ -67,14 +67,19 @@ export function StateLine({ state, big = false }: { state: SeatState; big?: bool
       text = t('adv_state_ahead', { n: state.ahead, wait: waitText(t, secs) });
       break;
     case 'in-room':
-      text = state.clock && state.mode === 'unmoderated'
+      text = phaseOnly(state.mode)
+        ? `${t(MODE_KEY[state.mode])} · ${presenceText(t, state)}`
+        : state.roomOrderLeft !== null
+        ? (state.roomOrderLeft === 1 ? t('adv_state_in_room_order_one') : t('adv_state_in_room_order', { n: state.roomOrderLeft }))
+        : state.clock && state.mode === 'unmoderated'
         ? t('adv_state_in_room_unmod', { time: clock(secs) })
         : state.clock && state.mode === 'consultation'
           ? t('adv_state_in_room_consult', { time: clock(secs) })
           : t('adv_state_in_room');
       break;
     case 'absent':
-      text = state.notOnRoster ? t('adv_state_not_on_roster') : t('adv_state_absent');
+      text = state.notOnRoster ? t('adv_state_not_on_roster') : phaseOnly(state.mode) ? t('adv_when_not_present') : t('adv_state_absent');
+      if (phaseOnly(state.mode)) text = `${t(MODE_KEY[state.mode])} · ${text}`;
       break;
     default:
       text = t(MODE_KEY[state.mode]);
@@ -87,13 +92,45 @@ export function StateLine({ state, big = false }: { state: SeatState; big?: bool
   );
 }
 
+/** Roll call or voting: the room is in session but has no queue; the row says whether
+ *  the delegation is present. */
+export function phaseOnly(mode: RoomMode): boolean {
+  return mode === 'roll-call' || mode === 'voting';
+}
+
+export function presenceText(t: ReturnType<typeof useT>, state: SeatState): string {
+  return state.delegate?.status === 'present-voting' ? t('adv_when_present_voting') : t('adv_when_present');
+}
+
+/** The students' names in one phrase ("Maya and Leo"), in the viewer's language. */
+export function joinNames(names: string[], language: string): string {
+  const list = names.map((n) => n.trim()).filter(Boolean);
+  if (list.length < 2) return list[0] ?? '';
+  try {
+    return new Intl.ListFormat(language, { style: 'long', type: 'conjunction' }).format(list);
+  } catch {
+    return list.join(' & ');
+  }
+}
+
 export function seatTitle(seat: FollowedSeat, language: string): string {
-  return seat.name?.trim() || getCountryDisplayName(seat.country, language);
+  return joinNames(seat.names, language) || getCountryDisplayName(seat.country, language);
+}
+
+/** Two names that would not fit one line are drawn one per row, never cut. */
+const NAMES_ONE_LINE_MAX = 24;
+
+function SeatNames({ names, language }: { names: string[]; language: string }) {
+  const list = names.map((n) => n.trim()).filter(Boolean);
+  if (list.length > 1 && joinNames(list, language).length > NAMES_ONE_LINE_MAX) {
+    return <>{list.map((n, i) => <span key={i} className="block [overflow-wrap:anywhere]">{n}</span>)}</>;
+  }
+  return <>{joinNames(list, language)}</>;
 }
 
 export function seatSubtitle(seat: FollowedSeat, committeeName: string, language: string): string {
   const committee = committeeDisplayName(getCommitteeDisplayName(committeeName, language), seat.committeeAbbreviation);
-  const parts = [seat.name?.trim() ? getCountryDisplayName(seat.country, language) : null, committee || null, seat.conferenceLabel];
+  const parts = [seat.names.length ? getCountryDisplayName(seat.country, language) : null, committee || null, seat.conferenceLabel];
   return parts.filter(Boolean).join(' · ');
 }
 
@@ -130,9 +167,16 @@ function useWhen(state: SeatState): { main: string; sub: string | null; tone: 'f
     case 'ahead':
       return { main: t('adv_when_ahead', { n: state.ahead }), sub: waitText(t, secs), tone: 'soon' };
     case 'in-room':
+      if (phaseOnly(state.mode)) return { main: presenceText(t, state), sub: null, tone: 'room' };
+      if (state.roomOrderLeft !== null) {
+        return { main: t('adv_state_in_room'), sub: state.roomOrderLeft === 1 ? t('adv_when_room_order_one') : t('adv_when_room_order', { n: state.roomOrderLeft }), tone: 'room' };
+      }
       return { main: t('adv_state_in_room'), sub: state.clock ? t('adv_when_left', { time: clock(secs) }) : null, tone: 'room' };
     case 'absent':
-      return { main: state.notOnRoster ? t('adv_state_not_on_roster') : t('adv_state_absent'), sub: null, tone: 'look' };
+      return {
+        main: state.notOnRoster ? t('adv_state_not_on_roster') : phaseOnly(state.mode) ? t('adv_when_not_present') : t('adv_state_absent'),
+        sub: null, tone: 'look',
+      };
     default:
       return { main: t(MODE_KEY[state.mode]), sub: null, tone: 'out' };
   }
@@ -197,7 +241,8 @@ function SeatRowInner({
   const when = useWhen(state);
   const speaking = state.kind === 'speaking';
   const title = seatTitle(seat, language);
-  const country = seat.name?.trim() ? getCountryDisplayName(seat.country, language) : null;
+  const country = seat.names.length ? getCountryDisplayName(seat.country, language) : null;
+  const longNames = seat.names.length > 1 && title.length > NAMES_ONE_LINE_MAX;
   const committee = committeeName ? committeeLabels(committeeName, seat.committeeAbbreviation, language) : null;
   const inSessionRow = state.kind !== 'not-in-session' && state.kind !== 'absent';
   const mode = showWhere && inSessionRow ? modeLabel(t, state) : null;
@@ -224,8 +269,10 @@ function SeatRowInner({
       </span>
       <span className="min-w-0 flex-1">
         <span className="block [overflow-wrap:anywhere]" style={{ fontSize: 15.5, fontWeight: 800, color: C.ink, letterSpacing: '-0.005em', lineHeight: 1.25 }}>
-          {title}
-          {country && <span style={{ fontWeight: 500, color: C.inkSoft }}>{' '}{country}</span>}
+          {seat.names.length ? <SeatNames names={seat.names} language={language} /> : title}
+          {country && (longNames
+            ? <span className="block" style={{ fontWeight: 500, color: C.inkSoft }}>{country}</span>
+            : <span style={{ fontWeight: 500, color: C.inkSoft }}>{' '}{country}</span>)}
         </span>
         {showWhere && (committee || mode) && (
           <span className="block [overflow-wrap:anywhere]" style={{ fontSize: 12.5, fontWeight: 500, color: C.inkSoft, lineHeight: 1.3 }} title={whereTitle || undefined}>

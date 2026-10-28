@@ -14,6 +14,12 @@ export interface Delegate {
    *  before. Resolve it with `sessionSeatArt` in `src/lib/sessionFlags.ts` —
    *  never read it raw at a render site. */
   logoUrl?: string | null;
+  /** A custom committee seat's party colour ("#1D4ED8") and short name ("EPP"), flattened
+   *  from `conference_committees.groups` when the room is seeded (`delegates.group_color` /
+   *  `group_short`). Absent on every other seat. Drawn as a coloured disc when the seat has
+   *  no crest (`SeatCircleFlag`), and as the short name beside the seat's name. */
+  groupColor?: string | null;
+  groupShort?: string | null;
 }
 
 export type SessionPhase =
@@ -135,9 +141,18 @@ export interface CaucusState {
    *  (every delegate not absent), credited one speech each when the tour ends
    *  (`creditRoomOrderTour`, src/lib/floorSpeech.ts). */
   roomOrderCountries?: string[];
+  /** Room Order Tour de Table only: how many numbered turns the tour has (the roster size at
+   *  accept, lowered by one for each placeholder removed from the queue). The queue itself is
+   *  derived from it (`roomOrderQueue`, src/lib/roomOrderQueue.ts), because a placeholder can
+   *  never be stored in speakers_list (uuid column). */
+  roomOrderSize?: number;
   /** Room Order Tour de Table only: database-clock ISO instant the motion passed. Names the
    *  tour instance in each credited speech's turn key. */
   tourStartedAt?: string;
+  /** Database-clock ISO instant the motion passed (23 Oct 2026). Names this caucus instance
+   *  (`caucusIdentityKey`, src/lib/caucusIdentity.ts), so an extension is never read as a new
+   *  caucus. Absent on caucuses accepted before it existed. */
+  acceptedAt?: string;
   /** Tour de Table only: the topic typed when the motion was raised (optional). A tour's
    *  `purpose` is an internal marker ("Tour de Table (A→Z)"), never a topic, so the topic
    *  rides here and the floor header shows it like every other caucus's topic. */

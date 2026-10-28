@@ -66,6 +66,7 @@ import { motionNames } from '@/lib/committeeFlags';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
 import { buildSessionScoreboardRows, sessionPointSlices, manualAuthorIndex, isDocumentNote } from '@/lib/sessionScoreboard';
 import { buildSessionHistory, type HistorySpeech } from '@/lib/sessionHistory';
+import { useEverPresent, readSessionStatusHistory, rosterStatusSig } from '@/lib/attendanceHistory';
 import {
   formatSpeakingTime,
 } from '@/lib/conferenceScoreboard';
@@ -190,9 +191,17 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
     sortDescending: t('sb_sort_desc'),
   }), [t]);
 
+  // Attendance counts a delegation present at ANY point of the session (owner, 23 Oct
+  // 2026): the roll-call history, re-read when a status moves. Until it lands (or when it
+  // is refused) the current status decides, as before.
+  const everPresent = useEverPresent(
+    committee.id,
+    () => readSessionStatusHistory(committee),
+    rosterStatusSig(committee.delegates),
+  );
   const allRows = useMemo(
-    () => buildSessionScoreboardRows(committee, feedback, language),
-    [committee, feedback, language],
+    () => buildSessionScoreboardRows(committee, feedback, language, { everPresent }),
+    [committee, feedback, language, everPresent],
   );
   const rows = useMemo(
     () => sortScoreboardRows(allRows, sortKey, language, sortDir),

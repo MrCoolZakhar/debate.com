@@ -47,7 +47,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState } from 'react';
-import Link from 'next/link';
+import IntentLink from './IntentLink';
 import { ArrowRight, Check, Users, CalendarDays, Gavel, MapPin, Monitor, Globe } from 'lucide-react';
 import { getCountryByName } from '@/lib/countries';
 import { currencySymbol, formatFeeAmountCompact } from '@/lib/utils';
@@ -640,7 +640,7 @@ export function ConferenceCard({
   // middle-click, open in new tab); `onClick` then runs as a side effect
   // only (record a spotlight click) and must not navigate itself.
   const listing = !heroCompact && href ? (
-    <Link
+    <IntentLink
       href={href}
       onClick={onClick}
       onMouseEnter={onHover}
@@ -649,7 +649,7 @@ export function ConferenceCard({
       style={{ textDecoration: 'none', color: 'inherit' }}
     >
       {card}
-    </Link>
+    </IntentLink>
   ) : card;
 
   // The Explore listing carries its spotlight as the gold edge and glow on
@@ -874,7 +874,7 @@ function ListingCard({
 
   if (!href) return article;
   return (
-    <Link
+    <IntentLink
       href={href}
       onClick={onClick}
       onMouseEnter={onHover}
@@ -883,7 +883,7 @@ function ListingCard({
       style={{ textDecoration: 'none', color: 'inherit' }}
     >
       {article}
-    </Link>
+    </IntentLink>
   );
 }
 

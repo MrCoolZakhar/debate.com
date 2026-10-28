@@ -94,7 +94,7 @@ export default function InPlaceConfirm({ anchor, align = 'start', title, line, y
             Cancel
           </button>
           <button type="button" data-confirm-yes onClick={onYes} disabled={busy} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-main)]"
-            style={{ minHeight: 40, padding: '0 12px', borderRadius: 8, border: 'none', background: danger ? DANGER : 'var(--gv-main)', color: '#FFFFFF', fontFamily: FONT, fontSize: 13.5, fontWeight: 600, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1 }}>
+            style={{ minHeight: 40, padding: '0 12px', borderRadius: 8, border: 'none', background: danger ? DANGER : 'var(--gv-main)', color: danger ? '#FFFFFF' : 'var(--gv-on-main)', fontFamily: FONT, fontSize: 13.5, fontWeight: 600, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1 }}>
             {yes}
           </button>
         </div>

@@ -227,13 +227,15 @@ export default function SpeakerStrip({
   const nameMax = dense ? 64 : 80;
 
   return (
-    <div className="flex flex-col items-center w-full mb-1 shrink-0 pt-4" data-tutorial="speakers-queue">
+    <div className="flex flex-col items-center w-full mb-1 shrink-0 pt-2" data-tutorial="speakers-queue">
       {/* The icon and the motion's name, then the caucus topic large beneath it: one shared
           header for the GSL and every caucus kind (FloorModeHeader, Oct 2026). */}
       {header && <FloorModeHeader header={header} />}
       <div
         ref={rowRef}
-        className={`flex flex-nowrap items-start justify-center min-w-0 px-2 ${dense ? 'gap-2' : 'gap-3'}`}
+        // pt-2: the X and the grip hang 8px above each flag (-top-2); the padding keeps them
+        // inside the row, clear of the header's topic above (22 Oct 2026).
+        className={`flex flex-nowrap items-start justify-center min-w-0 px-2 pt-2 ${dense ? 'gap-2' : 'gap-3'}`}
         onClickCapture={(e) => { if (suppressClick.current) { e.stopPropagation(); e.preventDefault(); } }}
       >
         {visible.map((s, i) => {
@@ -345,7 +347,7 @@ export default function SpeakerStrip({
         })}
       </div>
       {list.length > 0 && (
-        <div className="text-center h-10 flex items-start justify-center pt-1">
+        <div className="text-center h-7 flex items-start justify-center pt-1">
           {overflow > 0 && (
             <span className="text-xs font-medium tabular-nums" style={{ color: '#6A5A4A' }}>{t('gsl_more_in_queue').replace('{n}', String(overflow))}</span>
           )}

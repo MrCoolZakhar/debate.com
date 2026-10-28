@@ -31,7 +31,11 @@ import { createContext, useContext, useMemo, type CSSProperties, type ReactNode 
 import { FlagImg } from '@/components/FlagImg';
 import {
   buildSeatLogoIndex,
+  buildSeatGroupIndex,
+  seatGroupFor,
   sessionSeatArtByName,
+  type SeatGroup,
+  type SeatGroupIndex,
   type SeatLogoIndex,
   type SessionSeat,
   type SlotArt,
@@ -46,7 +50,22 @@ const SeatArtContext = createContext<SeatLogoIndex | null>(null);
  *  The index is rebuilt only when the roster array identity changes. */
 export function SeatArtProvider({ delegates, children }: { delegates: readonly SessionSeat[] | undefined | null; children: ReactNode }) {
   const index = useMemo(() => buildSeatLogoIndex(delegates), [delegates]);
-  return <SeatArtContext.Provider value={index}>{children}</SeatArtContext.Provider>;
+  const groups = useMemo(() => buildSeatGroupIndex(delegates), [delegates]);
+  return (
+    <SeatArtContext.Provider value={index}>
+      <SeatGroupContext.Provider value={groups}>{children}</SeatGroupContext.Provider>
+    </SeatArtContext.Provider>
+  );
+}
+
+// Each seat's party (custom committees: colour and short name), from the same roster.
+const SeatGroupContext = createContext<SeatGroupIndex | null>(null);
+
+/** The seat's party: from the Delegate when the call site holds one, else the roster. */
+export function useSeatGroup(country: string, seat?: SessionSeat | null): SeatGroup | null {
+  const index = useContext(SeatGroupContext);
+  if (seat && (seat.groupColor || seat.groupShort)) return { color: seat.groupColor ?? null, short: seat.groupShort ?? null };
+  return seatGroupFor(index, country);
 }
 
 /** The roster crest index in scope, or null outside a provider. */

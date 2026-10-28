@@ -31,6 +31,9 @@ export const floorToolsTranslations = {
     commenter_clock_paused: 'Paused',
     caucus_raised_by: 'Raised by',
     caucus_raised_by_aria: 'Raised by {name}',
+    // Chair floor clean-up (25 Oct 2026): the Waiting Room count word and the below-quorum line
+    waiting_room_word: 'in the waiting room',
+    gsl_below_quorum_line: 'Below quorum: speakers cannot be added until {n} delegates are present.',
   },
   es: {
     stg_speaker_clock: 'Reloj del orador',
@@ -57,6 +60,9 @@ export const floorToolsTranslations = {
     commenter_clock_paused: 'En pausa',
     caucus_raised_by: 'Propuesta por',
     caucus_raised_by_aria: 'Propuesta por {name}',
+    // Chair floor clean-up (25 Oct 2026): the Waiting Room count word and the below-quorum line
+    waiting_room_word: 'en la sala de espera',
+    gsl_below_quorum_line: 'Sin quórum: no se pueden agregar oradores hasta que haya {n} delegaciones presentes.',
   },
   fr: {
     stg_speaker_clock: 'Chrono de l’orateur',
@@ -83,6 +89,9 @@ export const floorToolsTranslations = {
     commenter_clock_paused: 'En pause',
     caucus_raised_by: 'Proposée par',
     caucus_raised_by_aria: 'Proposée par {name}',
+    // Chair floor clean-up (25 Oct 2026): the Waiting Room count word and the below-quorum line
+    waiting_room_word: "en salle d'attente",
+    gsl_below_quorum_line: "Quorum non atteint : impossible d'ajouter des orateurs avant que {n} délégations soient présentes.",
   },
   ar: {
     stg_speaker_clock: 'مؤقت المتحدث',
@@ -109,6 +118,9 @@ export const floorToolsTranslations = {
     commenter_clock_paused: 'متوقف مؤقتًا',
     caucus_raised_by: 'اقترحها',
     caucus_raised_by_aria: 'اقترحها {name}',
+    // Chair floor clean-up (25 Oct 2026): the Waiting Room count word and the below-quorum line
+    waiting_room_word: 'في غرفة الانتظار',
+    gsl_below_quorum_line: 'النصاب غير مكتمل: لا يمكن إضافة متحدثين حتى يحضر {n} من الوفود.',
   },
   // pt-BR: scaffold, values still English. Translate per .claude/pt-glossary.md.
   pt: {
@@ -140,5 +152,8 @@ export const floorToolsTranslations = {
     commenter_clock_paused: "Pausado",
     caucus_raised_by: "Proposta por",
     caucus_raised_by_aria: "Proposta por {name}",
+    // Chair floor clean-up (25 Oct 2026): the Waiting Room count word and the below-quorum line
+    waiting_room_word: 'na sala de espera',
+    gsl_below_quorum_line: 'Sem quórum: não é possível adicionar oradores até que {n} delegações estejam presentes.',
   },
 };

@@ -21,6 +21,9 @@ import { creatorCountryWithin } from './creatorCountry';
 // The one home for how long a room is kept (roomRetention.ts): End Debate's
 // expires_at and the reopen window must stay the same number.
 import { ENDED_KEEP_HOURS, REOPEN_WINDOW_HOURS } from './roomRetention';
+import { fetchAllRows } from './fetchAllRows';
+import { withRoomOrderQueue } from './roomOrderQueue';
+import { sendGslNudge } from './gslRequestNudge';
 import {
   Committee,
   type HeldGslFloor,
@@ -313,14 +316,20 @@ export async function createCommittee(
   delegateNames: string[],
   observerCountries: string[] = [],
 ): Promise<{ code: string; chairJoinSuffix: string } | null> {
-  const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 15000));
+  // The code and the chair password are chosen HERE, before anything is sent, so the timeout
+  // path below can look the room up by the code it was creating (owner, 23 Oct 2026).
+  const code = generateCode();
+  const chairJoinSuffix = Math.floor(1000 + Math.random() * 9000).toString();
+  // A delegates batch that errored: the room exists with a partial roster, so the create is
+  // reported as failed (the create page shows its error) instead of opening a half-built room.
+  let rosterFailed = false;
   const createPromise = async (): Promise<{ code: string; chairJoinSuffix: string } | null> => {
     // Where the room was created from (owner, 21 Oct 2026): our own /api/geo,
     // country code only, prefetched by /create/sessions; at most 1.5 s, and the
     // room is created without it when it is not there (src/lib/creatorCountry.ts).
-    const creatorCountry = await creatorCountryWithin();
-    const code = generateCode();
-    const chairJoinSuffix = Math.floor(1000 + Math.random() * 9000).toString();
+    // 600 ms, not the 1.5 s default (25 Oct 2026): the prefetch started when the page opened,
+    // so it has almost always answered; when it has not, the room opens without it.
+    const creatorCountry = await creatorCountryWithin(600);
     const client = sessionClient(code, chairJoinSuffix, { timeout: false });   // D6: creation + whole roster, never timed out
 
     const { data: committeeRow, error: committeeError } = await client
@@ -338,23 +347,56 @@ export async function createCommittee(
       return null;
     }
 
+    // The roster batches and the empty current_speaker row depend only on the committee id,
+    // so they go out TOGETHER (25 Oct 2026): they used to be one awaited round trip after
+    // another, each paying the full latency of venue Wi-Fi.
+    const speakerRowWrite = client.from('current_speaker').insert({
+      committee_id: committeeRow.id, delegate_id: null, country: null, time_remaining: 90,
+    });
+    const rosterWrites: PromiseLike<{ error: unknown }>[] = [];
     if (delegateNames.length > 0) {
       const obs = new Set(observerCountries.map((c) => c.toLowerCase()));
       const delegateRows = delegateNames.map((country) => ({ committee_id: committeeRow.id, country, status: 'absent', is_observer: obs.has(country.toLowerCase()) }));
       const BATCH_SIZE = 50;
       for (let i = 0; i < delegateRows.length; i += BATCH_SIZE) {
-        const batch = delegateRows.slice(i, i + BATCH_SIZE);
-        const { error: delegateError } = await client.from('delegates').insert(batch);
-        if (delegateError) console.error('Error inserting delegates batch:', delegateError);
+        rosterWrites.push(client.from('delegates').insert(delegateRows.slice(i, i + BATCH_SIZE)));
       }
     }
-
-    await client.from('current_speaker').insert({
-      committee_id: committeeRow.id, delegate_id: null, country: null, time_remaining: 90,
-    });
+    const [rosterResults] = await Promise.all([Promise.all(rosterWrites), speakerRowWrite]);
+    const delegateError = rosterResults.find((r) => r.error)?.error;
+    if (delegateError) {
+      console.error('Error inserting delegates batch:', delegateError);
+      rosterFailed = true;
+      return null;
+    }
     return { code, chairJoinSuffix };
   };
-  return Promise.race([createPromise(), timeoutPromise]);
+  const waitFor = async <T>(p: Promise<T>, ms: number): Promise<T | 'timeout'> => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timedOut = new Promise<'timeout'>((resolve) => { timer = setTimeout(() => resolve('timeout'), ms); });
+    try { return await Promise.race([p, timedOut]); } finally { if (timer) clearTimeout(timer); }
+  };
+  const creating = createPromise();
+  let outcome = await waitFor(creating, 15000);
+  // Slow Wi-Fi: the insert may still be running. Keep waiting on the SAME create for up to
+  // another 20 s before looking anything up: a lookup while the insert is in flight finds
+  // nothing, reports failure, and the chair's next tap makes a SECOND room.
+  if (outcome === 'timeout') outcome = await waitFor(creating, 20000);
+  if (outcome !== 'timeout') return outcome;
+  // Still no answer: the insert may have landed with its answer lost. Look the room up by the
+  // code it was creating, and only when it is not there (or its roster failed) report
+  // failure. The password check guards against a code another room already holds.
+  if (rosterFailed) return null;
+  try {
+    const { data: row, error } = await sessionReadClient().from('committees')
+      .select('id, settings').eq('code', code).maybeSingle();
+    if (error || !row) return null;
+    const stored = (row.settings as Record<string, unknown> | null)?.chairJoinSuffix;
+    if (stored !== chairJoinSuffix || rosterFailed) return null;
+    return { code, chairJoinSuffix };
+  } catch {
+    return null;
+  }
 }
 
 export async function getCommitteeByCode(code: string): Promise<Committee | null> {
@@ -379,11 +421,25 @@ export type CommitteeLoadResult =
   | { status: 'not_found' }
   | { status: 'error' };
 
+/** One attempt gives up after this long and answers 'error' (owner, 23 Oct 2026): the plain
+ *  client has no timeout, so a read that never answered kept the first load up forever with
+ *  no Try again. A timeout is never 'not_found'. */
+export const COMMITTEE_LOAD_TIMEOUT_MS = 15_000;
+
 export async function getCommitteeByCodeResult(code: string): Promise<CommitteeLoadResult> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<CommitteeLoadResult>((resolve) => {
+    timer = setTimeout(() => resolve({ status: 'error' }), COMMITTEE_LOAD_TIMEOUT_MS);
+  });
   try {
-    return await loadCommitteeByCode(code, true);
+    return await Promise.race([
+      loadCommitteeByCode(code, true).catch((): CommitteeLoadResult => ({ status: 'error' })),
+      timedOut,
+    ]);
   } catch {
     return { status: 'error' };
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 
@@ -443,7 +499,12 @@ async function loadCommitteeByCode(code: string, strict: boolean): Promise<Commi
     // level or request-to-speak and join requests silently break.
     supabase.from('motions').select('*').eq('committee_id', committeeRow.id).eq('status', 'pending').order('disruptiveness', { ascending: false }).retry(!strict),
     supabase.from('documents').select('*').eq('committee_id', committeeRow.id).order('created_at', { ascending: true }).retry(!strict),
-    supabase.from('messages').select('*').eq('committee_id', committeeRow.id).order('created_at', { ascending: true }).retry(!strict),
+    // Paged (fetchAllRows): one request stops at 1,000 rows WITHOUT saying so, and a busy
+    // conference room passes that (chat plus the scoring ledger). The newest rows were the ones
+    // lost: chat, scores, History and the speech-turn keys that stop a double log. `id` last so
+    // pages never overlap or skip a row.
+    fetchAllRows((from, to) => supabase.from('messages').select('*').eq('committee_id', committeeRow.id)
+      .order('created_at', { ascending: true }).order('id', { ascending: true }).range(from, to).retry(!strict)),
   ]);
   if (strict && subResults.some((r) => r.error)) return { status: 'error' };
   const [
@@ -460,6 +521,7 @@ async function loadCommitteeByCode(code: string, strict: boolean): Promise<Commi
     id: d.id as string, country: d.country as string, status: d.status as DelegateStatus,
     isObserver: (d.is_observer as boolean) ?? false,
     logoUrl: (d.logo_url as string | null) ?? null,
+    ...seatGroupFromRow(d),
   }));
 
   // GSL only — caucus list is never loaded into speakersList
@@ -520,10 +582,12 @@ async function loadCommitteeByCode(code: string, strict: boolean): Promise<Commi
 
   return {
     status: 'ok',
-    committee: {
+    // A Room Order Tour de Table's queue is derived from the caucus (its placeholders can
+    // never be stored in speakers_list), so a reload or a second device sees it too.
+    committee: withRoomOrderQueue({
       ...rowToCommittee(committeeRow, delegates, gslDeduped, caucusQueue, currentSpeaker, speakerTimeRemaining, pendingMotions, documents, messages, speakerStartedAt),
       speakerSeatedAt: currentSpeaker ? speakerSeatedAt : null,
-    },
+    }),
   };
 }
 
@@ -671,24 +735,38 @@ export async function setPhaseAndCaucus(
  *    - 'failed'  a transport error, or zero rows while the row still matches (RLS refused
  *                it). Retried, then reported to the "Not saved" toast (resolves false).
  *  The one fallback when the caller has no anchor is `setPhaseAndCaucus`, never both. */
+/** Seconds below which a PAUSED moderated-caucus total counts as used up (it shows 0:00). */
+export const CAUCUS_PAUSED_SPENT_BELOW = 1;
+
+/** `expectedTotalStartedAt` null = the total is PAUSED and spent (25 Oct 2026): a Pause pressed
+ *  as the last speaker hit zero, or the floor holder removed with the total at zero, stored the
+ *  total paused at 0:00, and nothing ever ended it. The write then matches only a row that is
+ *  still paused (no anchor) with less than CAUCUS_PAUSED_SPENT_BELOW seconds stored, so an
+ *  Extend or a new caucus from another device is never ended by it. */
 export async function endModeratedCaucusIfAnchorUnchanged(
-  committeeId: string, expectedTotalStartedAt: string, code: string, chairSuffix?: string,
+  committeeId: string, expectedTotalStartedAt: string | null, code: string, chairSuffix?: string,
 ): Promise<boolean> {
   const r = await runWrite([phaseKey(committeeId), caucusKey(committeeId)], async () => {
-    const { data, error } = await sessionClient(code, chairSuffix).from('committees')
+    let q = sessionClient(code, chairSuffix).from('committees')
       .update({ phase: 'speakers-list', caucus: null })
       .eq('id', committeeId)
-      .eq('phase', 'moderated-caucus')
-      .eq('caucus->>totalStartedAt', expectedTotalStartedAt)
-      .select('id');
+      .eq('phase', 'moderated-caucus');
+    q = expectedTotalStartedAt === null
+      ? q.is('caucus->>totalStartedAt', null).lt('caucus->remainingTime', CAUCUS_PAUSED_SPENT_BELOW)
+      : q.eq('caucus->>totalStartedAt', expectedTotalStartedAt);
+    const { data, error } = await q.select('id');
     if (error) { return failedFrom(error, 'Error ending caucus (conditional):'); }
     if (rowsOf(data) > 0) return 'ok';
     // Zero rows: moved on (skip) or refused (fail)? SELECT is public, so look.
     const { data: row, error: readErr } = await readDb().from('committees')
       .select('phase, caucus').eq('id', committeeId).maybeSingle();
     if (readErr) return failedFrom(readErr);
-    const stillMatches = row?.phase === 'moderated-caucus'
-      && (row.caucus as CaucusState | null)?.totalStartedAt === expectedTotalStartedAt;
+    const stored = (row?.caucus as CaucusState | null) ?? null;
+    const stillMatches = row?.phase === 'moderated-caucus' && !!stored && (
+      expectedTotalStartedAt === null
+        ? !stored.totalStartedAt && Number(stored.remainingTime) < CAUCUS_PAUSED_SPENT_BELOW
+        : stored.totalStartedAt === expectedTotalStartedAt
+    );
     return stillMatches ? 'failed' : 'skipped';
   }, { retry: true });
   return r === 'ok';
@@ -985,8 +1063,11 @@ export async function batchAddToCaucusList(
   code: string,
   chairSuffix?: string,
 ): Promise<void> {
-  if (delegates.length === 0) return;
-  const rows = delegates.map((d, i) => ({
+  // Room Order placeholders ("room-order-3") are not delegations and cannot be stored (uuid
+  // column): the batch used to fail whole on them. Their queue is derived from the caucus.
+  const stored = delegates.filter((d) => UUID_RE.test(d.delegateId));
+  if (stored.length === 0) return;
+  const rows = stored.map((d, i) => ({
     committee_id: committeeId,
     delegate_id: d.delegateId,
     country: d.country,
@@ -1464,15 +1545,28 @@ export async function getCurrentSpeakerRow(committeeId: string): Promise<{
 // list is a real answer ("nobody is on the GSL"); a network blip is not, and treating it as
 // one used to empty the roster on phones, show the waiting room, and stamp false GSL
 // denials. Callers skip applying a null and keep what they already have.
+/**
+ * A seat's party (custom committees): the group's colour and short name, flattened onto
+ * `delegates` when the room is seeded (scratch-press-and-parties.sql, section K1). Both
+ * columns are optional: before they exist, or on a seat with no group, nothing is set.
+ */
+export function seatGroupFromRow(d: DbRow): { groupColor?: string | null; groupShort?: string | null } {
+  const color = typeof d.group_color === 'string' && /^#[0-9a-f]{6}$/i.test(d.group_color.trim()) ? d.group_color.trim() : null;
+  const short = typeof d.group_short === 'string' && d.group_short.trim() ? d.group_short.trim().slice(0, 12) : null;
+  return color || short ? { groupColor: color, groupShort: short } : {};
+}
+
 export async function getDelegatesList(committeeId: string): Promise<Delegate[] | null> {
   const { data, error } = await readDb().from('delegates')
-    .select('id, country, status, is_observer, logo_url')
+    // '*': the optional group columns (group_color, group_short) arrive once they exist.
+    .select('*')
     .eq('committee_id', committeeId).order('country', { ascending: true });
   if (error) { console.error('Error fetching delegates:', error); return null; }
   return (data ?? []).map((d: DbRow) => ({
     id: d.id as string, country: d.country as string, status: d.status as DelegateStatus,
     isObserver: (d.is_observer as boolean) ?? false,
     logoUrl: (d.logo_url as string | null) ?? null,
+    ...seatGroupFromRow(d),
   }));
 }
 
@@ -1493,9 +1587,11 @@ export async function getSpeakersLists(committeeId: string): Promise<{ speakersL
 }
 
 export async function getMessagesList(committeeId: string): Promise<Committee['messages'] | null> {
-  const { data, error } = await supabase.from('messages')
+  // Paged like the room load: a single request stops at 1,000 rows.
+  const { data, error } = await fetchAllRows<DbRow>((from, to) => supabase.from('messages')
     .select('id, sender, content, created_at, is_private, recipient')
-    .eq('committee_id', committeeId).order('created_at', { ascending: true });
+    .eq('committee_id', committeeId).order('created_at', { ascending: true }).order('id', { ascending: true })
+    .range(from, to));
   if (error) { console.error('Error fetching messages:', error); return null; }
   return (data ?? []).map((m: DbRow) => ({
     id: m.id as string, sender: m.sender as string, content: m.content as string,
@@ -1565,7 +1661,7 @@ export async function getCommitteeRowById(committeeId: string): Promise<Committe
  */
 export async function getCommitteeRosterByCode(code: string): Promise<Committee | null | undefined> {
   const { data, error } = await supabase.from('committees')
-    .select('*, delegates(id, country, status, is_observer, logo_url)')
+    .select('*, delegates(*)')
     .eq('code', code.toUpperCase()).maybeSingle();
   if (error) { console.error('Error looking up committee:', error); return undefined; }
   if (!data) return null;
@@ -1575,6 +1671,7 @@ export async function getCommitteeRosterByCode(code: string): Promise<Committee 
       id: d.id as string, country: d.country as string, status: d.status as DelegateStatus,
       isObserver: (d.is_observer as boolean) ?? false,
       logoUrl: (d.logo_url as string | null) ?? null,
+      ...seatGroupFromRow(d),
     }))
     .sort((a, b) => (a.country < b.country ? -1 : a.country > b.country ? 1 : 0));
   return rowToCommittee(row, delegates);
@@ -1907,12 +2004,17 @@ async function answerJoinRequest(motionId: string, answer: 'approved' | 'denied'
   if (delErr) console.error('Error removing join request:', delErr);
 }
 
-/** A phone asks to be admitted to its seat. The id is chosen by the phone so it can follow
- *  its own request; a second press of the same request is a no-op (23505). */
+/** A phone asks to be admitted to its seat. Resolves the id of the request the phone must
+ *  FOLLOW, or null when it could not ask. The id is chosen by the phone, so on success it is
+ *  `requestId`. A 23505 has two causes: this very request already landed (a retried press),
+ *  or the unique index `motions_one_pending_request_per_delegation` (one PENDING join-request
+ *  per committee + country) refused a second request with a NEW id. In the second case the
+ *  phone follows the request already waiting; following its own id, which never landed, read
+ *  as 'gone' and let a Present phone in without the chair's Approve (AGENTS.md #17). */
 export async function requestSeatAdmission(
   committeeId: string, delegateId: string, country: string,
   desiredStatus: 'present' | 'present-voting', code: string, requestId: string,
-): Promise<boolean> {
+): Promise<string | null> {
   const { error } = await sessionClient(code).from('motions').insert({
     id: requestId,
     committee_id: committeeId,
@@ -1924,8 +2026,19 @@ export async function requestSeatAdmission(
     status: 'pending',
     disruptiveness: 99_000_000, // shown at very top
   });
-  if (error && error.code !== '23505') { console.error('Error requesting admission:', error); return false; }
-  return true;
+  if (!error) return requestId;
+  if (error.code !== '23505') { console.error('Error requesting admission:', error); return null; }
+  // Ours already (a retry of a press whose insert landed)?
+  const own = await sessionClient(code).from('motions').select('id').eq('id', requestId).maybeSingle();
+  if (own.error) { console.error('Error reading admission request:', own.error); return null; }
+  if (own.data) return requestId;
+  // Another request from this delegation is already waiting: follow that one.
+  const existing = await sessionClient(code).from('motions').select('id')
+    .eq('committee_id', committeeId).eq('type', 'join-request').eq('proposed_by', country).eq('status', 'pending')
+    .limit(1);   // the unique index allows only one
+  if (existing.error) { console.error('Error reading pending admission request:', existing.error); return null; }
+  const id = (existing.data?.[0] as { id?: string } | undefined)?.id;
+  return id ?? null;
 }
 
 /** Where a waiting-room request stands: 'gone' = deleted (an older chair bundle, or Roll
@@ -1967,12 +2080,26 @@ export async function denyJoinRequest(motionId: string, code: string, chairSuffi
 // ============================================================
 
 export async function requestGslSpot(committeeId: string, delegateId: string, country: string, code: string): Promise<void> {
-  // Idempotent — ignore if already pending
+  // Never a second request: one already pending is NUDGED instead (23 Oct 2026). The phone's
+  // "Request again" used to write nothing here, so a chair who had closed the card (its x does
+  // not decide) never saw it again and the delegation was stranded. Now the row is touched
+  // (a fresh `at` in its topic JSON: a motions UPDATE event, where the policy lets a phone
+  // write it; zero rows when it does not) and a Realtime nudge is sent either way
+  // (src/lib/gslRequestNudge.ts). The chair page re-raises a dismissed card on either.
+  // The cooldowns stay on the phone (60 s no answer, 15 min after a denial).
   const { data: existing } = await supabase
     .from('motions').select('id')
     .eq('committee_id', committeeId).eq('type', 'gsl-request')
     .eq('proposed_by', country).eq('status', 'pending').maybeSingle();
-  if (existing) return;
+  if (existing) {
+    const motionId = (existing as { id: string }).id;
+    const { error: touchErr } = await sessionClient(code).from('motions')
+      .update({ topic: JSON.stringify({ delegateId, at: serverNowIso() }) })
+      .eq('id', motionId).eq('status', 'pending').select('id');
+    if (touchErr) console.warn('Could not touch the pending GSL request (the nudge still goes):', touchErr.message);
+    await sendGslNudge(committeeId, motionId);
+    return;
+  }
   const { error } = await sessionClient(code).from('motions').insert({
     committee_id: committeeId,
     type: 'gsl-request',
@@ -2422,7 +2549,8 @@ export async function endDebate(committeeId: string, code: string, chairSuffix?:
 }
 
 /**
- * Reopen a committee that ended, up to REOPEN_WINDOW_HOURS (24 h) after the gavel.
+ * Reopen a committee that ended, up to REOPEN_WINDOW_HOURS (24 h) after the gavel, or, for a
+ * conference room, until its conference's last day is over (`conferenceEndsAtMs`).
  *
  * Owner, 7 Oct 2026: "when someone ends debate, going onto the same session within 24
  * hours, it still allows them back in to restart it. This happened in some committees
@@ -2463,11 +2591,17 @@ export async function reopenEndedSession(
   committeeId: string,
   code: string,
   chairSuffix?: string,
+  /** A CONFERENCE room's reopen limit (src/lib/conferenceRoomWindow.ts): when given and still
+   *  ahead on the database clock, the room may be reopened however long ago it ended (owner,
+   *  23 Oct 2026: restartable until the conference's last day). Omitted = the 24-hour window. */
+  conferenceEndsAtMs?: number | null,
 ): Promise<boolean> {
   let open = false;
+  const conferenceOpen = typeof conferenceEndsAtMs === 'number' && Number.isFinite(conferenceEndsAtMs)
+    && serverNow() < conferenceEndsAtMs;
   const cutoffIso = new Date(serverNow() - REOPEN_WINDOW_HOURS * 60 * 60 * 1000).toISOString();
   const r = await runWrite(lifecycleKey(committeeId), async () => {
-    const { data, error } = await sessionClient(code, chairSuffix).from('committees')
+    let q = sessionClient(code, chairSuffix).from('committees')
       .update({
         ended_at: null,
         expires_at: null,
@@ -2476,9 +2610,11 @@ export async function reopenEndedSession(
         phase: 'pre-session',
       })
       .eq('id', committeeId)
-      .not('ended_at', 'is', null)
-      .gte('ended_at', cutoffIso)
-      .select('id');
+      .not('ended_at', 'is', null);
+    // A conference room inside its conference's window has no lower bound on `ended_at`;
+    // every other room keeps the 24-hour filter.
+    if (!conferenceOpen) q = q.gte('ended_at', cutoffIso);
+    const { data, error } = await q.select('id');
     if (error) { return failedFrom(error, 'Error reopening the session:'); }
     if (rowsOf(data) === 0) {
       // Either the window has passed, or it is already open. Read the row back rather

@@ -33,6 +33,7 @@ import { SessionAttendance } from './SessionAttendance';
 import { useSessionCommittee } from './useSessionCommittee';
 import { SOFT, GREEN_INK, AMBER_INK, RED } from './tokens';
 import { committeeIdentity } from './identity';
+import { secretariatRoomHref } from '@/lib/secretariatView';
 
 type LucideIcon = React.ComponentType<{ size?: number; strokeWidth?: number; style?: React.CSSProperties }>;
 
@@ -110,11 +111,9 @@ export interface LiveCommittee {
     totalSlots: number;
     sessionId: string | null;
     sessionCode: string | null;
-    /** `conference_committees.released_to_chairs_at` — when the chairs' invite
-     *  went (or is scheduled to go) out. Read ONLY so a never-opened room can
-     *  say whether its dais has actually been told; nothing here writes it. The
-     *  committees page owns that write. */
-    releasedToChairsAt: string | null;
+    /** RETIRED (owner, 23 Oct 2026: no organiser release date any more). The live
+     *  wall no longer reads or shows it; optional so older loaders still type. */
+    releasedToChairsAt?: string | null;
     /** `conference_committees.delegation_size` — 1, or 2 for a DOUBLE
      *  DELEGATION committee (two people share one country seat).
      *
@@ -181,7 +180,11 @@ export interface LiveCommittee {
    *  (`chair/[code]/page.tsx:2620, 2627-2628`). */
   /** `logoUrl` is the seat's own crest (`delegates.logo_url`), flattened from
    *  the conference side at seed time. Null on a standalone session. */
-  delegates: { country: string; status: string; isObserver: boolean; logoUrl?: string | null }[];
+  delegates: {
+    country: string; status: string; isObserver: boolean; logoUrl?: string | null;
+    /** A custom committee seat's party (`delegates.group_color` / `group_short`). */
+    groupColor?: string | null; groupShort?: string | null;
+  }[];
   gslQueue: string[];
   caucusQueue: string[];
   // The `motions` table is DELIBERATELY not read by this page. The cards report
@@ -226,16 +229,16 @@ export interface LiveCommittee {
   feedback: FeedbackEntry[];
 }
 
-/** Delegates who count toward the voting body — observers excluded, matching
- *  the chair console exactly. */
+/** Delegates who count toward the final substantive vote: observers excluded,
+ *  as on the voting page (`/voting/[code]`). Only the voting views use it. */
 export function votingBody(lc: LiveCommittee): LiveCommittee['delegates'] {
   return lc.delegates.filter((d) => !d.isObserver);
 }
 
-/** `{ present, total }` over the voting body, the chair's own numbers. */
+/** `{ present, total }` over the whole room, observers INCLUDED: the chair's own
+ *  Present count and quorum numbers (AGENTS.md, QuorumRings). */
 export function presence(lc: LiveCommittee): { present: number; total: number } {
-  const body = votingBody(lc);
-  return { present: body.filter((d) => d.status !== 'absent').length, total: body.length };
+  return { present: lc.delegates.filter((d) => d.status !== 'absent').length, total: lc.delegates.length };
 }
 
 /** `not-started` = never opened. `roll-call` = opened, initial roll call underway.
@@ -854,8 +857,9 @@ export function RecapModal({
 
   function joinAsSecretariat() {
     if (!session) return;
-    // TODO(merge): route to dedicated secretariat/co-chair mode once merged with production branch
-    window.open(`/chair/${session.code}?chairName=Secretariat`, '_blank');
+    // The silent secretariat view (src/lib/secretariatView.ts): a read-only Commenter with
+    // no chair name. `?chairName=Secretariat` could take the gavel of an empty dais.
+    window.open(secretariatRoomHref(session.code), '_blank', 'noopener');
   }
 
   const rail = (side: boolean) => (
@@ -1031,7 +1035,7 @@ export function RecapModal({
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'; (e.currentTarget as HTMLElement).style.boxShadow = `0 6px 16px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 40%, transparent), ${NEU.outSmHover}`; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLElement).style.boxShadow = `0 4px 10px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 30%, transparent), ${NEU.outSm}`; }}
             >
-              Join as secretariat
+              Open chair room
               <ExternalLink size={14} />
             </button>
           )}

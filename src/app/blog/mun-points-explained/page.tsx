@@ -102,7 +102,7 @@ export default function Article() {
         <PhotoFigure id="un-hrc-session" caption="A full session of the Human Rights Council in Geneva." />
 
 
-        <ReferenceSheet id="points" caption="Every point at a glance, with the right of reply alongside." />
+        <ReferenceSheet variant="side" id="points" caption="Every point at a glance, with the right of reply alongside." />
         <H2>Point of Order</H2>
         <FactCard title="Point of Order">
           Raised when the rules of procedure are being broken, almost always by the dais. It is not a way to disagree with a decision the chair was entitled to make. The chair rules on it immediately and there is no debate.

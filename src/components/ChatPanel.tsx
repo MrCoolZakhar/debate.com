@@ -23,7 +23,7 @@ import {
 } from '@/lib/chatConversations';
 import {
   useOutbox, addOutbox, markOutboxFailed, markOutboxSending,
-  reconcileOutbox, newOutboxId, type OutboxMsg,
+  reconcileOutbox, newOutboxId, newOutboxRowId, outboxRowExists, settleOutboxDelivered, type OutboxMsg,
 } from '@/lib/chatOutbox';
 import { setViewingChatConversation, clearViewingChatConversation } from '@/lib/chatViewing';
 import { chatOpenKey, claimChatOpen, readChatOpen, releaseChatOpen, writeChatOpen } from '@/lib/chatOpenConversation';
@@ -315,11 +315,17 @@ export default function ChatPanel({
   const deliver = useCallback(async (entry: OutboxMsg) => {
     // RLS write-gate: this must keep going through sendMessage's sessionClient(code,
     // chairSuffix) routing with unchanged headers.
+    // The entry's own row id on every attempt, so a Retry of a send that DID land hits the
+    // primary key instead of posting the message twice.
     const ok = await sendMessageToDB(
       committee.id, entry.sender, entry.content, committee.code, chairSuffix,
-      entry.isPrivate, entry.recipient,
+      entry.isPrivate, entry.recipient, undefined, entry.rowId,
     );
-    if (!ok) markOutboxFailed(committee.id, entry.id);
+    if (ok) return;
+    // sendMessage reports a duplicate key like any other failure: ask whether the row is
+    // there. It is when an earlier attempt landed (23505 now) or the answer was lost.
+    if (await outboxRowExists(entry.rowId)) settleOutboxDelivered(committee.id, entry.id);
+    else markOutboxFailed(committee.id, entry.id);
   }, [committee.id, committee.code, chairSuffix]);
 
   /** Queue one message into the outbox and deliver it to the active conversation. */
@@ -332,6 +338,7 @@ export default function ChatPanel({
 
     const entry: OutboxMsg = {
       id: newOutboxId(),
+      rowId: newOutboxRowId(),
       convKey: activeKey,
       sender: senderName,
       content,
@@ -602,7 +609,8 @@ export default function ChatPanel({
             width: onePane ? '100%' : 'clamp(280px, 34%, 360px)',
             flexShrink: 0,
             backgroundColor: 'var(--gv-surface, #FAF8F3)',
-            boxShadow: onePane ? 'none' : `inset -1px 0 0 ${CHAT.hairline}`,
+            // The hairline sits on the list's inline-end edge: the left edge in Arabic.
+            boxShadow: onePane ? 'none' : `inset ${language === 'ar' ? '1px' : '-1px'} 0 0 ${CHAT.hairline}`,
           }}
         >
           <ChatConversationList

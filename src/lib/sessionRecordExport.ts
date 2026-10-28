@@ -7,7 +7,8 @@
 // chair can keep, from what the chair page already holds plus two reads:
 //   • the chair notes (`getFeedbackForCommittee`, the same read the scoreboard makes);
 //   • the roll-call timeline (`delegate_status_history`, chair-gated on the suffix header),
-//     falling back to the current statuses when it is refused or missing.
+//     falling back to the current statuses when it is refused or missing. It also gives
+//     the attendance point to every delegation present at any point (scoring.ts).
 //
 // Sheets: History, Scores, Per motion, Speeches, Attendance, Documents.
 //
@@ -28,8 +29,8 @@ import { describeMotion } from './motionLog';
 import { getCountryDisplayName } from './countries';
 import { docName } from './docNames';
 import { loadVoteStates, type VoteStateV1 } from './voteState';
-import { sessionClient } from './sessionClient';
-import type { LedgerRow } from './scoring';
+import { everPresentFromHistory, type LedgerRow } from './scoring';
+import { readSessionStatusHistory, type StatusHistoryRow } from './attendanceHistory';
 
 type Row = Record<string, string | number | null>;
 
@@ -85,18 +86,13 @@ function segmentName(seg: HistorySegment): string {
   return seg.topic && seg.kind !== 'speakers-list' ? `${label}: ${seg.topic}` : label;
 }
 
-async function statusHistory(committee: Committee): Promise<Row[]> {
-  try {
-    const { data, error } = await sessionClient(committee.code, committee.dbChairJoinSuffix ?? undefined)
-      .rpc('delegate_status_history', { p_committee: committee.id });
-    const d = data as { ok?: boolean; rows?: { country: string; status: string; is_observer: boolean; kind: string; at: string }[] } | null;
-    if (!error && d?.ok && Array.isArray(d.rows) && d.rows.length) {
-      return d.rows.map((r) => ({
-        Time: when(r.at), Delegation: name(r.country), Status: statusWord(r.status),
-        Observer: r.is_observer ? 'Yes' : '', Change: r.kind ?? '',
-      }));
-    }
-  } catch { /* fall back below */ }
+function attendanceRows(committee: Committee, hist: StatusHistoryRow[] | null): Row[] {
+  if (hist && hist.length) {
+    return hist.map((r) => ({
+      Time: when(r.at), Delegation: name(r.country), Status: statusWord(r.status),
+      Observer: r.is_observer ? 'Yes' : '', Change: r.kind ?? '',
+    }));
+  }
   return committee.delegates.map((dl) => ({
     Time: 'Now (no roll-call history)', Delegation: name(dl.country), Status: statusWord(dl.status),
     Observer: dl.isObserver ? 'Yes' : '', Change: '',
@@ -122,14 +118,16 @@ function voteSummary(v: VoteStateV1 | undefined): Row {
 
 /** Build the workbook and hand it to the browser as "<CODE> <committee> record.xlsx". */
 export async function downloadSessionRecord(committee: Committee, feedbackIn?: FeedbackEntry[]): Promise<void> {
-  const [XLSX, feedback, attendance, votes] = await Promise.all([
+  const [XLSX, feedback, hist, votes] = await Promise.all([
     import('xlsx'),
     feedbackIn ? Promise.resolve(feedbackIn) : getFeedbackForCommittee(committee.id, { code: committee.code, chairSuffix: committee.dbChairJoinSuffix ?? undefined }),
-    statusHistory(committee),
+    readSessionStatusHistory(committee),
     loadVoteStates(committee.id).then((v) => v ?? {}),
   ]);
+  const attendance = attendanceRows(committee, hist);
 
-  const rows = buildSessionScoreboardRows(committee, feedback, 'en');
+  // Attendance points from the whole roll-call history, like the chair's board.
+  const rows = buildSessionScoreboardRows(committee, feedback, 'en', { everPresent: everPresentFromHistory(hist) });
   const segments = [...buildSessionHistory(committee, feedback)].reverse(); // oldest first
 
   // Every ledger row of every delegation, found by what it is.

@@ -43,7 +43,8 @@
  * keyed per tour instance (`caucus.tourStartedAt`) + country.
  */
 import type { Committee } from '@/lib/types';
-import { speakerRemainingNow, readSpokenSeconds, insertLogRows } from '@/lib/committeeService';
+import { speakerRemainingNow, readSpokenSeconds, insertLogRows, caucusRemainingNow } from '@/lib/committeeService';
+import { roomOrderSize, roomOrderTurnsCalled } from '@/lib/roomOrderQueue';
 import { sessionClient } from '@/lib/sessionClient';
 import { serverNow } from '@/lib/serverClock';
 import { OFFLINE_RESILIENCE } from '@/lib/offlineResilience';
@@ -165,6 +166,89 @@ export async function logTimedSpeech(
 }
 
 /**
+ * When the Consultation of the Whole floor holder took the floor (epoch ms, database clock).
+ * `caucus.floorSince` (written with every flag tap) when present; otherwise `localStart` (the
+ * tapping device's own memory, chair page only); otherwise the newest speech of THIS
+ * consultation (a tap logs the previous holder at the instant the floor changed hands),
+ * bounded below by the newest consultation that passed; otherwise `fallback`. Pure.
+ */
+export function cowFloorStartOf(committee: Committee, localStart: number | null, fallback: number): number {
+  const caucus = committee.caucus;
+  const persisted = caucus?.floorSince ? new Date(caucus.floorSince).getTime() : NaN;
+  if (Number.isFinite(persisted)) return persisted;
+  if (localStart !== null) return localStart;
+  // Item 11: only speeches of THIS consultation. The topic alone matched an earlier
+  // consultation with the same (often empty) purpose, so the first holder after a reload
+  // could be timed from a speech logged an hour before.
+  let since = -Infinity;
+  let last = NaN;
+  for (const m of committee.messages ?? []) {
+    if (m.sender !== '__system__' || m.recipient !== '__log__') continue;
+    if (!m.content.includes('|cow:') && !m.content.includes('"motion-passed"')) continue;
+    try {
+      const e = JSON.parse(m.content.slice('__log__:'.length)) as { type?: string; context?: string; topic?: string; timestamp?: string; motionType?: string };
+      const at = e.timestamp ? new Date(e.timestamp).getTime() : NaN;
+      if (e.type === 'motion-passed') {
+        if (e.motionType === 'consultation' && Number.isFinite(at) && at > since) since = at;
+        continue;
+      }
+      if (e.type !== 'speech' || e.context !== 'unmoderated-caucus' || e.topic !== (caucus?.purpose ?? committee.topic)) continue;
+      if (Number.isFinite(at) && !(at <= last)) last = at;
+    } catch { /* not a log row */ }
+  }
+  return Number.isFinite(last) && last >= since ? last : fallback;
+}
+
+/**
+ * Item 11: the seconds a Consultation floor holder is credited with: the CAUCUS CLOCK time
+ * that ran since the tap (`floorRemaining`, the live total stamped with the tap, minus the
+ * live total now), never more than the wall time since `since`. A tap from a bundle that did
+ * not stamp it falls back to the caucus time elapsed overall. Pure.
+ */
+export function cowHolderSecondsOf(committee: Committee, since: number, now: number): number {
+  const caucus = committee.caucus;
+  if (!caucus) return 0;
+  const wall = Math.max(0, Math.round((now - since) / 1000));
+  const live = caucusRemainingNow(caucus, now);
+  const stamped = caucus.floorRemaining;
+  const ran = typeof stamped === 'number' && Number.isFinite(stamped)
+    ? stamped - live
+    : (caucus.totalTime ?? 0) - live;
+  return Math.max(0, Math.min(wall, Math.round(ran)));
+}
+
+/**
+ * The Consultation of the Whole floor holder's turn ended without a flag tap or End Caucus:
+ * Suspend Yes, End Yes, an organiser pause or end, or another caucus passed over the
+ * consultation (23 Oct 2026). Log their speech exactly as `handleCowTap` does (same seconds
+ * rule, same `cowTurnKey`), so the turn is written once whichever trigger runs first. Call
+ * BEFORE the caucus is replaced or frozen for the break (`freezeCaucusForBreak` nulls
+ * `floorSince` and the holder). No-op outside a Consultation or with nobody on its floor.
+ * Moderator's device only. Fire-and-forget safe.
+ */
+export async function logCowHolder(
+  committee: Committee | null | undefined,
+  /** `localStart`: the tapping device's own start (chair page). `at`: database-clock ms of the
+   *  chair's press when the caller awaited something since (Suspend / End Yes). */
+  opts: { localStart?: number | null; at?: number } = {},
+): Promise<boolean> {
+  const caucus = committee?.caucus;
+  if (!committee || committee.phase !== 'unmoderated-caucus' || !caucus || caucus.isConsultation !== true) return false;
+  const holder = caucus.currentSpeaker;
+  if (!holder) return false;
+  const now = opts.at ?? serverNow();
+  const since = cowFloorStartOf(committee, opts.localStart ?? null, NaN);
+  // No start known anywhere: the turn key cannot match the tap's, and wall time would be a
+  // guess, so nothing is credited rather than something wrong.
+  if (!Number.isFinite(since)) return false;
+  const seconds = cowHolderSecondsOf(committee, since, now);
+  return logTimedSpeech(committee, {
+    country: holder, seconds, context: 'unmoderated-caucus',
+    topic: caucus.purpose ?? committee.topic, turnKey: cowTurnKey(committee.id, holder, since),
+  });
+}
+
+/**
  * Write one `speech` log row for the current floor speaker. Fire-and-forget safe: resolves
  * to true when a row was written (or already existed), false when there was nothing to
  * log or the insert failed.
@@ -237,8 +321,11 @@ export function roomOrderTourTurnKey(committeeId: string, country: string, tourS
  * - Seconds: the tour's per-speaker time (`caucus.speakingTime`). Placeholders cannot be
  *   mapped to seats, so no per-delegation elapsed time exists; the owner asked for one
  *   speech each, not seconds precision.
- * - Only a tour that actually ran: someone was called, or time came off the total. Accepting
- *   one by mistake and ending it at once credits nobody.
+ * - Only a tour that ran to its END (23 Oct 2026): every numbered turn was called (the turns
+ *   called, spoken or on the floor, reached the roster size `caucus.roomOrderSize`). A tour
+ *   ended early, interrupted by another caucus or by End Debate part way, credits nobody: the
+ *   placeholders cannot say who spoke, and crediting the whole room with a full speech for a
+ *   tour that stopped after two turns over-credited everyone.
  * - Idempotent: `roomOrderTourTurnKey` per country, checked against this device's claims and
  *   the loaded log before the insert, and deduped exactly in `parseLogEvents`, so a second
  *   trigger, a reload or a second device can never double-credit.
@@ -251,9 +338,9 @@ export async function creditRoomOrderTour(committee: Committee | null | undefine
   const countries = Array.from(new Set((caucus.roomOrderCountries ?? []).filter((c) => typeof c === 'string' && c)));
   const startedMs = caucus.tourStartedAt ? new Date(caucus.tourStartedAt).getTime() : NaN;
   if (countries.length === 0 || !Number.isFinite(startedMs)) return false;
-  const ran = !!caucus.currentSpeaker || (caucus.spokenCountries?.length ?? 0) > 0
-    || !!caucus.totalStartedAt || caucus.remainingTime < caucus.totalTime;
-  if (!ran) return false;
+  const size = roomOrderSize(caucus);
+  const finished = size !== null && size > 0 && roomOrderTurnsCalled(caucus) >= size;
+  if (!finished) return false;
   const seconds = Math.max(1, Math.round(caucus.speakingTime || 0));
   const at = new Date(serverNow()).toISOString();
   const topic = caucus.purpose || committee.topic;

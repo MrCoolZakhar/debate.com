@@ -22,7 +22,7 @@
 //
 // Read-only side effect: it never writes the DB and never touches committee state.
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Portal from '@/components/Portal';
 import { useT } from '@/contexts/LanguageContext';
 import type { Committee } from '@/lib/types';
@@ -46,7 +46,9 @@ export function useSettingsSync(committee: Pick<Committee, 'id' | 'code' | 'dbSe
   const code = committee?.code ?? '';
   const committeeId = committee?.id ?? '';
   const blob = committee?.dbSettings ?? null;
-  const key = stableSettingsKey(stripNonHydratedSettings(blob));
+  // Serialised once per blob IDENTITY, not on every render: the chair page re-renders every
+  // second while a clock runs, and the blob only changes identity when the row is re-read.
+  const key = useMemo(() => stableSettingsKey(stripNonHydratedSettings(blob)), [blob]);
 
   useEffect(() => {
     if (!code || !blob) return;

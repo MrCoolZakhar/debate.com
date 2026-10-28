@@ -25,6 +25,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import type { PDFDocumentProxy, RenderTask, TextLayer } from 'pdfjs-dist';
 import { ChevronDown, ChevronUp, Download, ExternalLink, MoveHorizontal, Minus, Plus } from 'lucide-react';
 import { useT } from '@/contexts/LanguageContext';
+import Loader from '@/components/Loader';
 import { acquirePdf, isPdfJsUrl, loadPdfLib, outputScale, fitRootScale, PDF_TO_CSS } from './pdfLoader';
 
 export type PdfZoom = 'fit' | number;
@@ -425,8 +426,8 @@ export default function PdfViewer({
           }}
         >
           {!doc && (
-            <div className="flex flex-col items-center gap-3 pt-16" role="status">
-              <span className="w-6 h-6 rounded-full border-2 border-[#1B3828] border-t-transparent animate-spin" aria-hidden />
+            <div className="flex flex-col items-center gap-3 pt-16">
+              <Loader size={32} label={t('documents_pdf_loading')} />
               <span className="text-xs font-semibold" style={{ color: '#6A5A4A' }}>{t('documents_pdf_loading')}</span>
             </div>
           )}

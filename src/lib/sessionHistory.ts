@@ -411,6 +411,9 @@ export function buildSessionHistory(committee: Committee, feedback: FeedbackEntr
       const line = e.prevMotionId ? motionLines.get(e.prevMotionId) : undefined;
       if (line?.motion) {
         Object.assign(line.motion, motionOf(e, 'pending'));
+        // An edit may correct the proposer: the line names whoever the edit names, as the
+        // motionRaised point does (scoring.ts `raiseCredits`).
+        if (e.country) line.country = e.country;
         if (e.motionId) motionLines.set(e.motionId, line);
       } else {
         const fresh = motionLine(e, 'pending');

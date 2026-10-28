@@ -2,8 +2,13 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import ArticleLayout from '@/components/blog/ArticleLayout';
+import TutorialVideo, { TutorialVideoJsonLd } from '@/components/blog/TutorialVideo';
 import { PhotoFigure } from '@/components/blog/BlogPhoto';
 import { H2, Callout } from '@/components/blog/prose';
+
+// Tutorial videos appear on release (src/lib/tutorialVideos.ts); the hourly
+// revalidation brings the server HTML and the VideoObject JSON-LD up to date.
+export const revalidate = 3600;
 
 export const metadata: Metadata = pageMetadata({
   title: 'MUN Security Council Guide: Veto, P5, and How UNSC Works',
@@ -44,6 +49,7 @@ export default function Article() {
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
+      <TutorialVideoJsonLd ids={['LhT8mic1ffQ']} />
       <ArticleLayout
         slug="mun-security-council-guide"
         pitch="Gavelling supports veto mode for Security Council simulations: one P5 Against defeats the resolution automatically."
@@ -90,6 +96,10 @@ export default function Article() {
           <li><strong>Manage P5 personalities carefully.</strong> P5 delegates tend to dominate. Ensure non-permanent members have genuine speaking opportunities. Our guide to <Link href="/blog/mun-difficult-delegates">handling difficult delegates</Link> can help.</li>
           <li><strong>Know the veto maths.</strong> Before calling a vote, mentally count: do the sponsors have nine votes? Is any P5 threatening a veto? Calling a doomed vote wastes the committee&apos;s time.</li>
         </ul>
+
+        <TutorialVideo id="LhT8mic1ffQ">
+          On Gavelling&apos;s voting screen the chair takes the vote one delegation at a time, rights included, and a P5 Against is confirmed as a veto before the result goes up.
+        </TutorialVideo>
 
         <H2>Common Topics for UNSC Simulations</H2>
         <p>UNSC simulations typically address: ongoing armed conflicts (Syria, Sudan, Ukraine), nuclear non-proliferation, terrorism, sanctions regimes, and peacekeeping operations. The most interesting topics are those where the P5 have genuinely divergent interests. These create authentic diplomatic tension.</p>

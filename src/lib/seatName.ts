@@ -20,7 +20,8 @@
 // The short form is TAKEN FROM THE NAME, in this order (first hit wins):
 //   1. the canonical short name of a known country ("United Kingdom of Great Britain
 //      and Northern Ireland" -> "United Kingdom"), localized when a language is given;
-//   2. an acronym the name itself spells out ("Ministry of Magic (MOM)" -> "MOM");
+//   2. an acronym the name itself spells out ("Ministry of Magic (MOM)" -> "MOM"),
+//      never when the part before it is a person ("Dharmendra Pradhan (BJP)");
 //   3. the part before a comma, bracket, colon or dash ("Vyacheslav Molotov, Foreign
 //      Minister" -> "Vyacheslav Molotov");
 //   4. a person's name without the title, else the surname with its particles
@@ -173,11 +174,18 @@ function shortFor(name: string, max: number, language: string | undefined, depth
     if (abbrev && abbrev.length < name.length) return abbrev;
     return canon && canon.length < name.length ? canon : '';
   }
-  // 2. An acronym the name itself states.
-  const stated = acronymInName(name);
+  // The part before a comma, bracket, colon or dash (step 3).
+  const lead = name.split(/\s*(?:,|\(|\[|:|\s[–—-]\s)\s*/)[0]?.trim() ?? '';
+  // 2. An acronym the name itself states, unless what comes before it is a
+  //    PERSON (25 Oct 2026): "Dharmendra Pradhan (BJP)" is the minister, and
+  //    the bracket is his party, so a Lok Sabha room must not read "BJP, BJP,
+  //    BJP". The name is the main label (step 3) and the full text sits beneath.
+  //    A body keeps its acronym: "United Nations Security Council (UNSC)",
+  //    "Ministry of Magic (MOM)".
+  const personLead = lead.length >= 2 && lead.length < name.length && looksLikePerson(stripTitles(lead));
+  const stated = personLead ? null : acronymInName(name);
   if (stated && stated.length < name.length) return stated;
   // 3. The part before a comma, bracket, colon or dash.
-  const lead = name.split(/\s*(?:,|\(|\[|:|\s[–—-]\s)\s*/)[0]?.trim() ?? '';
   if (lead.length >= 2 && lead.length < name.length) {
     return lead.length <= max || depth > 0 ? lead : shortFor(lead, max, language, depth + 1);
   }
