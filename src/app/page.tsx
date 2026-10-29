@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { pageMetadata, JSONLD_LOGO } from '@/lib/seo';
 import StagefrontClient from './conferences/StagefrontClient';
-import { fetchFeaturedHomepage, fetchListedConferences, fetchPlatformStats } from '@/lib/listedConferences';
+import { fetchFeaturedHomepage, fetchHomepageConferenceTotal, fetchListedConferences, fetchPlatformStats } from '@/lib/listedConferences';
 import { articles } from './blog/posts';
 import type { HomeGuide } from './conferences/landing-lab/HomeSections';
 import { listGuides } from '@/lib/premiumGuides';
@@ -120,6 +120,9 @@ export default async function HomePage() {
     // The Job Board section: up to 6 cards in the owner's order ([] on failure).
     fetchJobHomepage(),
   ]);
+  // The homepage counts Gavelling listings too (owner, 29 Oct 2026).
+  const homeTotal = await fetchHomepageConferenceTotal(stats);
+  const homeStats = stats && homeTotal != null ? { ...stats, total_conferences: homeTotal } : stats;
   return (
     <>
       <script
@@ -130,7 +133,7 @@ export default async function HomePage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }}
       />
-      <StagefrontClient conferences={conferences} stats={stats} guides={homeGuides} featured={featured} jobs={jobs} />
+      <StagefrontClient conferences={conferences} stats={homeStats} guides={homeGuides} featured={featured} jobs={jobs} />
     </>
   );
 }
