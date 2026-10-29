@@ -81,3 +81,7 @@ At the end of the week, write next week's plan here the same way, dropping every
 ## Report
 
 End each run with a short report: each listing added or updated (name, city, dates, slug, live or private, why private if so), candidates skipped and why (already on Gavelling, no own website, past, mymun's own event), and anything that needs Peter.
+
+## Blocklist (29 Oct 2026, owner)
+
+Peter asked for the three hidden listings (CWMUN Paris, CWMUN Rome, IEUMUN) to be deleted completely and never added again. Deleting the row would have dropped the "archived" guard, so `gavelling_listing_blocklist` (RLS on, no policies) now holds each one's listing key without the year (`cwmunparis`, `cwmunrome`, `ieumun`), and `upsert_gavelling_listing` returns `{ok:false, reason:'blocked'}` for any edition of them. The job skips a `blocked` answer like `removed` and never tries to get round it under another name or acronym. To delete another listing for good: add its row to the blocklist first, then delete the conference.
