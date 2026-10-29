@@ -3,10 +3,15 @@
 // the outcome, the text AND everything the reply will change when it is sent (resources, units,
 // borders, characters, a newsflash). Nothing in it is written to the crisis until Send reply.
 import type { CharacterStatus, DirectiveOutcome } from '@/lib/crisis/types';
+import { emptySet, setSize, type EditSet } from '../map/mapEdits';
 
 /** A unit's staged change: a new place, a new amount, or both. */
 export interface UnitStage { lng?: number; lat?: number; strength?: number }
-export interface NewsStage { title: string; body: string; source: string; audience: string }
+export interface NewsStage {
+  title: string; body: string; source: string; audience: string;
+  /** The picture (banner) and the attached file, uploaded as they are picked; they only go out with the news when the reply is sent. */
+  bannerUrl?: string | null; fileUrl?: string | null; fileName?: string | null;
+}
 
 /** The kinds of card the side panel can hold. */
 export type EffectCardKind = 'resources' | 'unit' | 'border' | 'character' | 'news';
@@ -31,20 +36,26 @@ export interface EffectsDraft {
   /** Character id to the new status. */
   characters: Record<string, { status: CharacterStatus; note: string }>;
   news: NewsStage | null;
+  /**
+   * Changes to the map's territories made on the map editor: country outlines and holders, drawn areas. Edited
+   * outlines cannot ride in the answer itself (it carries holders only), so they are saved right after the reply
+   * is sent (useDirectiveReply).
+   */
+  map: EditSet | null;
 }
 
 export interface ReplyDraft { outcome: DirectiveOutcome | null; reply: string; effects: EffectsDraft }
 
 export const STAGEABLE_STATUSES: CharacterStatus[] = ['active', 'arrested', 'dead', 'missing'];
 
-export const emptyEffects = (): EffectsDraft => ({ cards: [], resources: {}, units: {}, regions: {}, characters: {}, news: null });
+export const emptyEffects = (): EffectsDraft => ({ cards: [], resources: {}, units: {}, regions: {}, characters: {}, news: null, map: null });
 
 export const newCardId = () => `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
 
 /** How many things the reply will change (a newsflash with no title is not one yet). */
 export function countChanges(e: EffectsDraft): number {
   return Object.keys(e.resources).length + Object.keys(e.units).length + Object.keys(e.regions).length
-    + Object.keys(e.characters).length + (e.news && e.news.title.trim() ? 1 : 0);
+    + Object.keys(e.characters).length + (e.news && e.news.title.trim() ? 1 : 0) + setSize(e.map);
 }
 
 const OUTCOMES = ['approved', 'partial', 'denied', 'clarify', 'later'] as const;
@@ -52,6 +63,24 @@ const keyOf = (crisisId: string, directiveId: string) => `gavelling-crisis-reply
 
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const num = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
+
+const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
+
+/** A stored map edit set, read leniently: anything that is not shaped like one is dropped. */
+function parseMap(raw: unknown): EditSet | null {
+  if (!isObj(raw)) return null;
+  const out = emptySet();
+  for (const r of arr(raw.regions)) {
+    if (isObj(r) && typeof r.key === 'string' && (r.owner_cabinet_id === null || typeof r.owner_cabinet_id === 'string') && (r.geometry === null || isObj(r.geometry))) {
+      out.regions.push({ key: r.key, owner_cabinet_id: r.owner_cabinet_id as string | null, geometry: r.geometry as EditSet['regions'][number]['geometry'] });
+    }
+  }
+  for (const r of arr(raw.shapes)) if (isObj(r) && typeof r.id === 'string' && isObj(r.geometry)) out.shapes.push({ id: r.id, geometry: r.geometry as EditSet['shapes'][number]['geometry'] });
+  for (const r of arr(raw.owners)) if (isObj(r) && typeof r.id === 'string' && (r.owner_cabinet_id === null || typeof r.owner_cabinet_id === 'string')) out.owners.push({ id: r.id, owner_cabinet_id: r.owner_cabinet_id as string | null });
+  for (const r of arr(raw.removeShapes)) if (typeof r === 'string') out.removeShapes.push(r);
+  for (const r of arr(raw.addShapes)) if (isObj(r) && typeof r.id === 'string' && isObj(r.geometry) && (r.kind === 'area' || r.kind === 'line')) out.addShapes.push(r as unknown as EditSet['addShapes'][number]);
+  return setSize(out) ? out : null;
+}
 
 function parseEffects(raw: unknown): EffectsDraft {
   const out = emptyEffects();
@@ -77,8 +106,12 @@ function parseEffects(raw: unknown): EffectsDraft {
     out.news = {
       title: typeof n.title === 'string' ? n.title : '', body: typeof n.body === 'string' ? n.body : '',
       source: typeof n.source === 'string' ? n.source : '', audience: typeof n.audience === 'string' ? n.audience : '',
+      bannerUrl: typeof n.bannerUrl === 'string' && n.bannerUrl ? n.bannerUrl : null,
+      fileUrl: typeof n.fileUrl === 'string' && n.fileUrl ? n.fileUrl : null,
+      fileName: typeof n.fileName === 'string' && n.fileName ? n.fileName : null,
     };
   }
+  out.map = parseMap(raw.map);
   const CARD_KINDS: EffectCardKind[] = ['resources', 'unit', 'border', 'character', 'news'];
   if (Array.isArray(raw.cards)) {
     for (const c of raw.cards) {
@@ -93,6 +126,7 @@ function parseEffects(raw: unknown): EffectsDraft {
     for (const k of Object.keys(out.regions)) out.cards.push({ id: newCardId(), kind: 'border', target: k });
     for (const k of Object.keys(out.characters)) out.cards.push({ id: newCardId(), kind: 'character', target: k });
     if (out.news) out.cards.push({ id: newCardId(), kind: 'news', target: '' });
+    if (out.map) out.cards.push({ id: newCardId(), kind: 'border', target: '' });
   }
   return out;
 }

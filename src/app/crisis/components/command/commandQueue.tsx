@@ -63,6 +63,28 @@ export function WaitingCard({ directives, base, now, onOpen }: {
 }
 
 /** A directive opened from Command: the same pop-up the backroom uses (main pop-up + changes panel). */
-export function DirectiveDrawer({ directive, onClose }: { directive: Directive; onClose: () => void }) {
-  return <DirectivePopup directive={directive} onClose={onClose} onChanged={(what) => { if (what === 'answered') onClose(); }} />;
+export function DirectiveDrawer({ directive, directives, onSelect, onClose }: {
+  directive: Directive; directives: Directive[] | null; onSelect: (id: string) => void; onClose: () => void;
+}) {
+  const { settings } = useCrisis();
+  // The reader moves through the same open queue Waiting for a Reply shows; answering moves on to the next one.
+  const queue = useMemo(() => {
+    const all = directives ?? [];
+    return sortDirectives(all.filter(isOpenStatus), settings.queueOrder, 'open', lastAnsweredByAuthor(all));
+  }, [directives, settings.queueOrder]);
+  const inQueue = queue.some((d) => d.id === directive.id) ? queue : [directive, ...queue];
+  return (
+    <DirectivePopup
+      directive={directive}
+      queue={inQueue}
+      onSelect={onSelect}
+      onClose={onClose}
+      onChanged={(what) => {
+        if (what !== 'answered') return;
+        const at = inQueue.findIndex((x) => x.id === directive.id);
+        const next = at < 0 ? null : (inQueue[at + 1] ?? inQueue[at - 1] ?? null);
+        if (next) onSelect(next.id); else onClose();
+      }}
+    />
+  );
 }

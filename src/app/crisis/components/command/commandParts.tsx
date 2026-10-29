@@ -109,8 +109,10 @@ function Popover({ anchor, onClose, width = 320, label, children }: { anchor: DO
   );
 }
 
-export function CommandHeader({ crisis, cref, acronym, logoUrl, members, now, onChanged }: {
+export function CommandHeader({ crisis, cref, acronym, logoUrl, members, now, onChanged, extra }: {
   crisis: Crisis; cref: CrisisRef; acronym: string; logoUrl: string | null; members: Member[]; now: number; onChanged: () => void;
+  /** Buttons after the status strip (Statistics). */
+  extra?: ReactNode;
 }) {
   const [pop, setPop] = useState<{ kind: 'date' | 'pause'; rect: DOMRect } | null>(null);
   const [draftAt, setDraftAt] = useState('');
@@ -198,6 +200,7 @@ export function CommandHeader({ crisis, cref, acronym, logoUrl, members, now, on
           <span style={{ fontSize: 14.5, fontWeight: 800, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{online} of {members.length}</span>
         </StripCell>
       </div>
+      {extra}
       <TryAsButton cref={cref} />
       <style>{'.cmd-strip .cmd-cell + .cmd-cell { border-left: 1px solid rgba(255,255,255,0.14); }'}</style>
 

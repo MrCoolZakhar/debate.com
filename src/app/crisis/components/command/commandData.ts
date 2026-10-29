@@ -3,47 +3,34 @@
 
 import { getCrisisClient } from '@/lib/crisis/client';
 import { amount } from '@/lib/crisis/format';
-import type { Cabinet, Directive, Member, Resource } from '@/lib/crisis/types';
+import type { Cabinet, Character, Directive, Member, Resource } from '@/lib/crisis/types';
 import type { CrisisRef } from '@/lib/crisis/api';
+import type { CaucusJson, LiveCommittee } from '@/app/manage/[slug]/live/LiveModals';
 import { isOpenStatus } from '../directives/directiveKit';
 
 // ─────────── Front rooms ───────────
 
-export type RoomTone = 'live' | 'quiet' | 'ended';
-
 export interface RoomState {
   cabinetId: string;
-  /** The live session's id (committees.id): the organiser Live Status model loads the room from it. */
+  /** The live session's id (committees.id): the full organiser Live Status model loads the room from it. */
   sessionId: string | null;
-  /** null = no conference committee, or its room was never started. */
+  /** null = no conference committee, or its room was never started. Used only by the room pop-up's join links. */
   code: string | null;
-  phaseLabel: string | null;
-  tone: RoomTone;
-  speaker: string | null;
-  /** The room's chair password (committees.settings.chairJoinSuffix; anon-readable, shown to directors to join as chair). */
+  /** The room's chair password (committees.settings.chairJoinSuffix; anon-readable, shown to directors to join as chair). Pop-up only. */
   chairPassword: string | null;
+  /** The room in the organiser Live Status shape, light version (no ledger, no feedback), enough for nowPlaying / presence. */
+  live: LiveCommittee | null;
 }
 
 interface CommitteeRow {
-  id: string; code: string; phase: string; caucus: { type?: string; isConsultation?: boolean } | null;
-  suspended_at: string | null; ended_at: string | null;
+  id: string; code: string; name: string | null; phase: string; caucus: CaucusJson | null; chair_names: string[] | null;
+  suspended_at: string | null; ended_at: string | null; updated_at: string | null; resuming_chair: string | null;
+  settings: { headChair?: unknown; chairJoinSuffix?: unknown; quorumThreshold?: string } | null;
 }
+type Row = Record<string, unknown>;
 
-export function phaseWords(r: CommitteeRow): { label: string; tone: RoomTone } {
-  if (r.ended_at) return { label: 'Ended', tone: 'ended' };
-  if (r.suspended_at) return { label: 'Suspended', tone: 'quiet' };
-  switch (r.phase) {
-    case 'pre-session': case 'roll-call': return { label: 'Roll call', tone: 'quiet' };
-    case 'speakers-list': return { label: 'Speakers list', tone: 'live' };
-    case 'moderated-caucus': return { label: 'Moderated caucus', tone: 'live' };
-    case 'unmoderated-caucus': return { label: r.caucus?.isConsultation ? 'Consultation of the whole' : 'Unmoderated caucus', tone: 'live' };
-    case 'voting': return { label: 'Voting', tone: 'live' };
-    case 'adjourned': return { label: 'Suspended', tone: 'quiet' };
-    default: return { label: 'In session', tone: 'live' };
-  }
-}
-
-/** Reads each cabinet's live room: conference_committees -> committees -> current_speaker. */
+/** Reads each cabinet's live room in four batched reads (all rooms at once): conference_committees -> committees,
+ *  current_speaker, delegates, speakers_list, and builds the organiser's LiveCommittee for each. */
 export async function loadRoomStates(ref: CrisisRef, cabinets: Cabinet[]): Promise<RoomState[]> {
   const client = await getCrisisClient(ref.conf, ref.crisis);
   const ccIds = cabinets.map((c) => c.conference_committee_id).filter((x): x is string => !!x);
@@ -55,24 +42,62 @@ export async function loadRoomStates(ref: CrisisRef, cabinets: Cabinet[]): Promi
   }
   const sessionIds = [...links.values()].map((l) => l.session_id).filter((x): x is string => !!x);
   const rooms = new Map<string, CommitteeRow>();
-  const speakers = new Map<string, string>();
+  const speakers = new Map<string, Row>();
+  const delegates = new Map<string, Row[]>();
+  const lists = new Map<string, Row[]>();
+  const docs = new Map<string, Row[]>();
+  const push = (m: Map<string, Row[]>, id: string, row: Row) => { const l = m.get(id); if (l) l.push(row); else m.set(id, [row]); };
   if (sessionIds.length) {
-    const [cm, sp] = await Promise.all([
-      client.from('committees').select('id, code, phase, caucus, suspended_at, ended_at, settings').in('id', sessionIds),
-      client.from('current_speaker').select('committee_id, country').in('committee_id', sessionIds),
+    const [cm, sp, dl, ql, dc] = await Promise.all([
+      client.from('committees').select('id, code, name, phase, caucus, chair_names, suspended_at, ended_at, updated_at, resuming_chair, settings').in('id', sessionIds),
+      client.from('current_speaker').select('committee_id, country, time_remaining, started_at').in('committee_id', sessionIds),
+      client.from('delegates').select('committee_id, country, status, is_observer, logo_url, group_color, group_short').in('committee_id', sessionIds),
+      client.from('speakers_list').select('committee_id, country, position, list_type').in('committee_id', sessionIds).order('position', { ascending: true }),
+      client.from('documents').select('committee_id, type, status').in('committee_id', sessionIds),
     ]);
     if (cm.error) throw cm.error;
-    for (const row of (cm.data ?? []) as CommitteeRow[]) rooms.set(row.id, row);
-    for (const row of (sp.data ?? []) as Array<{ committee_id: string; country: string | null }>) if (row.country) speakers.set(row.committee_id, row.country);
+    for (const row of (cm.data ?? []) as unknown as CommitteeRow[]) rooms.set(row.id, row);
+    for (const row of (sp.data ?? []) as Row[]) speakers.set(row.committee_id as string, row);
+    for (const row of (dl.data ?? []) as Row[]) push(delegates, row.committee_id as string, row);
+    for (const row of (ql.data ?? []) as Row[]) push(lists, row.committee_id as string, row);
+    for (const row of (dc.data ?? []) as Row[]) push(docs, row.committee_id as string, row);
   }
   return cabinets.map((c) => {
     const link = c.conference_committee_id ? links.get(c.conference_committee_id) : undefined;
     const room = link?.session_id ? rooms.get(link.session_id) : undefined;
-    if (!room) return { cabinetId: c.id, sessionId: null, code: null, phaseLabel: null, tone: 'quiet' as RoomTone, speaker: null, chairPassword: null };
-    const { label, tone } = phaseWords(room);
-    const floor = room.phase === 'speakers-list' || room.phase === 'moderated-caucus';
-    const pw = (room as CommitteeRow & { settings?: { chairJoinSuffix?: unknown } }).settings?.chairJoinSuffix;
-    return { cabinetId: c.id, sessionId: room.id, code: room.code ?? link?.session_code ?? null, phaseLabel: label, tone, speaker: floor && tone === 'live' ? speakers.get(room.id) ?? null : null, chairPassword: typeof pw === 'string' && pw ? pw : null };
+    if (!room) return { cabinetId: c.id, sessionId: null, code: null, chairPassword: null, live: null };
+    const sp = speakers.get(room.id) ?? null;
+    const dl = delegates.get(room.id) ?? [];
+    const ql = lists.get(room.id) ?? [];
+    const dc = docs.get(room.id) ?? [];
+    const chairNames = room.chair_names ?? [];
+    const pw = room.settings?.chairJoinSuffix;
+    const live: LiveCommittee = {
+      conf: {
+        id: c.conference_committee_id ?? room.id, name: c.name, abbreviation: c.short_name, logoUrl: c.logo_url, topics: null, totalSlots: dl.length,
+        sessionId: room.id, sessionCode: room.code ?? link?.session_code ?? null, delegationSize: 1, chairUserIds: [], chairs: [], pendingChairs: [],
+      },
+      session: {
+        id: room.id, code: room.code, name: room.name ?? c.name, phase: room.phase, caucus: room.caucus, chairNames,
+        headChair: (typeof room.settings?.headChair === 'string' && room.settings.headChair) || chairNames[0] || null,
+        suspendedAt: room.suspended_at, endedAt: room.ended_at, updatedAt: room.updated_at, resumingChair: room.resuming_chair,
+        quorumThreshold: room.settings?.quorumThreshold ?? 'none', scoringFactors: [], factorScaleMax: 10,
+      },
+      currentSpeaker: sp ? { country: (sp.country as string | null) ?? null, timeRemaining: Number(sp.time_remaining ?? 0), startedAt: (sp.started_at as string | null) ?? null } : null,
+      delegates: dl.map((d) => ({
+        country: d.country as string, status: d.status as string, isObserver: !!d.is_observer, logoUrl: (d.logo_url as string | null) ?? null,
+        groupColor: (d.group_color as string | null) ?? null, groupShort: (d.group_short as string | null) ?? null,
+      })),
+      gslQueue: ql.filter((q) => q.list_type === 'gsl').map((q) => q.country as string),
+      caucusQueue: ql.filter((q) => q.list_type === 'caucus').map((q) => q.country as string),
+      documents: dc.map((d) => ({ type: d.type as string, status: d.status as string, docCode: '', title: '', sponsors: [], fileUrl: null, fileName: null, content: null, createdAt: null })),
+      speechLogs: [], eventLogs: [], scores: [],
+      lastActivityAt: (sp?.started_at as string | null) ?? null,
+      lastMessageAt: null,
+      hasHistory: ql.length > 0 || !!sp?.country || !!room.suspended_at || dc.length > 0,
+      feedback: [],
+    };
+    return { cabinetId: c.id, sessionId: room.id, code: room.code ?? link?.session_code ?? null, chairPassword: typeof pw === 'string' && pw ? pw : null, live };
   });
 }
 
@@ -120,17 +145,67 @@ export function staffLoads(members: Member[], directives: Directive[]): StaffLoa
   }).sort((a, b) => b.open.length - a.open.length || a.member.display_name.localeCompare(b.member.display_name));
 }
 
-/** A rebalance suggestion: the busiest person gives their 2 oldest open directives to the least loaded. */
+/** A rebalance suggestion: the busiest person gives enough of their oldest open directives to even the two out
+ *  (half the gap, rounded down). null when the load is balanced (a gap under 3). */
 export function suggestRebalance(loads: StaffLoad[]): { from: StaffLoad; to: StaffLoad; move: Directive[] } | null {
   if (loads.length < 2) return null;
-  const from = loads[0];
-  const to = loads[loads.length - 1];
-  if (from.member.id === to.member.id || from.open.length - to.open.length < 2) return null;
+  const sorted = [...loads].sort((a, b) => b.open.length - a.open.length);
+  const from = sorted[0];
+  const to = sorted[sorted.length - 1];
+  const gap = from.open.length - to.open.length;
+  if (from.member.id === to.member.id || gap < 3) return null;
   const move = [...from.open]
     .filter((d) => d.status !== 'clarify')
     .sort((a, b) => new Date(a.waiting_since).getTime() - new Date(b.waiting_since).getTime())
-    .slice(0, 2);
-  return move.length === 2 ? { from, to, move } : null;
+    .slice(0, Math.floor(gap / 2));
+  return move.length > 0 ? { from, to, move } : null;
+}
+
+// ─────────── Statistics ───────────
+
+export interface BackroomStat {
+  member: Member;
+  open: number;
+  answered: number;
+  /** Average minutes from created to answered, over everything this person answered. null = none yet. */
+  avgReplyMin: number | null;
+  /** waiting_since of the oldest open directive, null when nothing waits. */
+  oldestWaiting: string | null;
+}
+
+export function backroomStats(members: Member[], directives: Directive[]): BackroomStat[] {
+  return members.filter(isStaffRow).map((member) => {
+    const open = directives.filter((d) => d.assigned_member_id === member.id && isLoadStatus(d));
+    const done = directives.filter((d) => d.answered_by === member.id && d.answered_at);
+    const avg = done.length
+      ? done.reduce((s, d) => s + (new Date(d.answered_at as string).getTime() - new Date(d.created_at).getTime()), 0) / done.length / 60000
+      : null;
+    const oldest = open.reduce<string | null>((o, d) => (o === null || new Date(d.waiting_since) < new Date(o) ? d.waiting_since : o), null);
+    return { member, open: open.length, answered: done.length, avgReplyMin: avg, oldestWaiting: oldest };
+  }).sort((a, b) => b.open - a.open || b.answered - a.answered || a.member.display_name.localeCompare(b.member.display_name));
+}
+
+export interface DelegateStat {
+  character: Character;
+  sent: number;
+  approved: number;
+  partial: number;
+  denied: number;
+  waiting: number;
+}
+
+export function delegateStats(characters: Character[], directives: Directive[]): DelegateStat[] {
+  return characters.filter((c) => c.status !== 'spare').map((character) => {
+    const mine = directives.filter((d) => d.author_character_id === character.id && d.status !== 'withdrawn');
+    return {
+      character,
+      sent: mine.length,
+      approved: mine.filter((d) => d.status === 'answered' && d.outcome === 'approved').length,
+      partial: mine.filter((d) => d.status === 'answered' && d.outcome === 'partial').length,
+      denied: mine.filter((d) => d.status === 'answered' && d.outcome === 'denied').length,
+      waiting: mine.filter((d) => d.status !== 'answered').length,
+    };
+  }).sort((a, b) => b.sent - a.sent || a.character.name.localeCompare(b.character.name));
 }
 
 export function minutesLabel(min: number | null): string {

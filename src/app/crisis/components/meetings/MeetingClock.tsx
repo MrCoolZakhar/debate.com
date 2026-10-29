@@ -5,10 +5,10 @@
 // second from started_at; nothing is written per second (the database stamps started_at / ended_at once each).
 
 import { useEffect, useState } from 'react';
-import { Play, RotateCcw, Square, Timer } from 'lucide-react';
+import { Pause, Play, RotateCcw, Square, Timer } from 'lucide-react';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { type CrisisRef } from '@/lib/crisis/api';
-import { clockText, meetingClock, meetingRunning, meetingSeconds, type MeetingClockAction } from '@/lib/crisis/meetings';
+import { clockText, meetingClock, meetingInProgress, meetingPaused, meetingRunning, meetingSeconds, type MeetingClockAction } from '@/lib/crisis/meetings';
 import type { Cabinet, Meeting } from '@/lib/crisis/types';
 import { Btn, CK } from '../../crisisKit';
 import { AvatarStack, NameList, type Person } from './meetingKit';
@@ -25,10 +25,12 @@ function useNow(active: boolean): number {
 
 /** The running clock, or how long a finished meeting lasted. Draws nothing for a meeting that never started. */
 export function MeetingClockReadout({ m }: { m: Meeting }) {
+  const inProgress = meetingInProgress(m);
   const running = meetingRunning(m);
+  const paused = inProgress && meetingPaused(m);
   const now = useNow(running);
   const secs = meetingSeconds(m, now);
-  if (secs === null || (!running && !m.ended_at)) return null;
+  if (secs === null || (!inProgress && !m.ended_at)) return null;
   const planned = m.duration_minutes * 60;
   const over = secs > planned;
   const warm = !over && secs >= planned * 0.85;
@@ -38,11 +40,12 @@ export function MeetingClockReadout({ m }: { m: Meeting }) {
     <div style={{ background: over ? 'rgba(163,65,47,0.08)' : warm ? 'rgba(182,135,31,0.1)' : 'rgba(61,122,82,0.08)', borderRadius: 14, padding: '10px 12px' }}>
       <div className="flex items-center flex-wrap" style={{ gap: '4px 10px', color }}>
         <Timer size={18} strokeWidth={1.6} aria-hidden />
-        {running ? (
+        {inProgress ? (
           <>
-            <b role="timer" aria-label={`Meeting running for ${clockText(secs)}`} style={{ fontSize: 22, fontWeight: 800, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{clockText(secs)}</b>
+            <b role="timer" aria-label={`Meeting ${paused ? 'paused at' : 'running for'} ${clockText(secs)}`} style={{ fontSize: 22, fontWeight: 800, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{clockText(secs)}</b>
             <span style={{ fontSize: 13, fontWeight: 700, color: CK.inkSoft }}>of {clockText(planned)}</span>
             {over && <span style={{ fontSize: 13, fontWeight: 800 }}>{clockText(secs - planned)} over</span>}
+            {paused && <span className="inline-flex items-center" style={{ gap: 4, fontSize: 13, fontWeight: 800, color: CK.warn }}><Pause size={13} strokeWidth={1.6} aria-hidden />Paused</span>}
           </>
         ) : (
           <>
@@ -73,10 +76,11 @@ export function InTheRoom({ m, people, cabinets }: { m: Meeting; people: Map<str
   );
 }
 
-/** Start / Stop (and a small reset) for staff and chairs, on an approved meeting. */
+/** Start / Pause / Resume / Stop (and a small reset) for staff and chairs, on an approved meeting. */
 export function MeetingClockControls({ m, refx, onChanged }: { m: Meeting; refx: CrisisRef; onChanged?: () => void }) {
   const [busy, setBusy] = useState(false);
-  const running = meetingRunning(m);
+  const inProgress = meetingInProgress(m);
+  const paused = meetingPaused(m);
   const act = async (action: MeetingClockAction, ok: string) => {
     setBusy(true);
     try { await meetingClock(refx, m.id, action); notifyOk(ok, 'crisis-meeting-clock'); onChanged?.(); } catch (e) {
@@ -85,9 +89,14 @@ export function MeetingClockControls({ m, refx, onChanged }: { m: Meeting; refx:
   };
   return (
     <div className="flex items-center flex-wrap" style={{ gap: 8 }}>
-      {running
-        ? <Btn tone="red" size="sm" disabled={busy} icon={<Square size={14} strokeWidth={1.6} aria-hidden />} onClick={() => act('stop', 'Meeting stopped')}>Stop meeting</Btn>
-        : <Btn tone="green" size="sm" disabled={busy} icon={<Play size={14} strokeWidth={1.6} aria-hidden />} onClick={() => act('start', 'Meeting started')}>Start meeting</Btn>}
+      {inProgress ? (
+        <>
+          {paused
+            ? <Btn tone="green" size="sm" disabled={busy} icon={<Play size={14} strokeWidth={1.6} aria-hidden />} onClick={() => act('resume', 'Meeting resumed')}>Resume</Btn>
+            : <Btn tone="ghost" size="sm" disabled={busy} icon={<Pause size={14} strokeWidth={1.6} aria-hidden />} onClick={() => act('pause', 'Meeting paused')}>Pause</Btn>}
+          <Btn tone="red" size="sm" disabled={busy} icon={<Square size={14} strokeWidth={1.6} aria-hidden />} onClick={() => act('stop', 'Meeting stopped')}>Stop meeting</Btn>
+        </>
+      ) : <Btn tone="green" size="sm" disabled={busy} icon={<Play size={14} strokeWidth={1.6} aria-hidden />} onClick={() => act('start', 'Meeting started')}>Start meeting</Btn>}
       {m.started_at && (
         <Btn tone="ghost" size="sm" disabled={busy} icon={<RotateCcw size={13} strokeWidth={1.6} aria-hidden />} onClick={() => act('reset', 'Clock reset')}>Reset</Btn>
       )}

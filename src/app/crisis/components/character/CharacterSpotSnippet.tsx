@@ -38,7 +38,7 @@ function landPath(): Promise<string> {
   return landCache;
 }
 
-export default function CharacterSpotSnippet({ lng, lat, width = 168 }: { lng: number; lat: number; width?: number }) {
+export default function CharacterSpotSnippet({ lng, lat, width = 168, picture }: { lng: number; lat: number; width?: number; picture?: string | null }) {
   const [land, setLand] = useState<string | null>(null);
   useEffect(() => {
     let alive = true;
@@ -59,10 +59,15 @@ export default function CharacterSpotSnippet({ lng, lat, width = 168 }: { lng: n
       <svg viewBox={`${vx} ${vy} ${VIEW_W} ${VIEW_H}`} width={width} height={height} style={{ display: 'block' }} aria-hidden>
         {land && <path d={land} fill="#F5F0E4" stroke="#CBBE9F" strokeWidth={0.5} vectorEffect="non-scaling-stroke" />}
       </svg>
-      <svg width="20" height="26" viewBox="0 0 30 38" aria-hidden style={{ position: 'absolute', left: px - 10, top: py - 26, filter: 'drop-shadow(0 2px 2px rgba(58,14,15,0.35))' }}>
-        <path d="M15 37C15 37 2 23.5 2 14.5a13 13 0 0 1 26 0C28 23.5 15 37 15 37Z" fill="#8E2424" stroke="#FFFFFF" strokeWidth="2" />
-        <circle cx="15" cy="14.5" r="5" fill="#FFF4E6" />
-      </svg>
+      {picture && /^(https?:\/\/|\/[^/])/.test(picture) ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={picture} alt="" draggable={false} style={{ position: 'absolute', left: px - 13, top: py - 13, width: 26, height: 26, borderRadius: '50%', objectFit: 'cover', border: '2px solid #fff', boxSizing: 'border-box', boxShadow: '0 2px 5px rgba(58,14,15,0.4)' }} />
+      ) : (
+        <svg width="20" height="26" viewBox="0 0 30 38" aria-hidden style={{ position: 'absolute', left: px - 10, top: py - 26, filter: 'drop-shadow(0 2px 2px rgba(58,14,15,0.35))' }}>
+          <path d="M15 37C15 37 2 23.5 2 14.5a13 13 0 0 1 26 0C28 23.5 15 37 15 37Z" fill="#8E2424" stroke="#FFFFFF" strokeWidth="2" />
+          <circle cx="15" cy="14.5" r="5" fill="#FFF4E6" />
+        </svg>
+      )}
     </span>
   );
 }

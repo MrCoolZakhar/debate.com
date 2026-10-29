@@ -138,6 +138,20 @@ export function makeMidpoint(): HTMLElement {
   return el;
 }
 
+/** The handle on a sight ring. It carries the km while it is dragged. */
+export function makeSightHandle(): { el: HTMLElement; tip: HTMLElement } {
+  const el = document.createElement('div');
+  el.className = 'wm-marker wm-sighth';
+  el.title = 'Drag to change how far it sees';
+  const dot = document.createElement('div');
+  dot.className = 'wm-sighth-dot';
+  const tip = document.createElement('div');
+  tip.className = 'wm-sighth-tip';
+  el.appendChild(dot);
+  el.appendChild(tip);
+  return { el, tip };
+}
+
 export function makeGhost(): HTMLElement {
   const el = document.createElement('div');
   el.className = 'wm-ghost';
@@ -154,7 +168,15 @@ export const MAP_CSS = `
 .wm-root[data-compact] .wm-body{min-height:0}
 .wm-root[data-compact] .wm-legend{left:8px;right:auto;bottom:8px}
 .wm-root[data-compact] .wm-legend>div{padding:4px 8px;font-size:11px;gap:4px 10px}
-.wm-tools{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;align-items:stretch}
+.wm-tools{display:flex;flex-wrap:wrap;gap:6px 18px;margin-bottom:8px;align-items:flex-end}
+.wm-group{display:flex;flex-direction:column;gap:3px;min-width:0}
+.wm-group-label{font-size:11px;font-weight:700;color:#6B6256;padding-left:2px}
+.wm-group-row{display:flex;flex-wrap:wrap;gap:4px;align-items:stretch}
+.wm-group-end{margin-left:auto}
+.wm-see{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}
+.wm-see>span{font-size:12.5px;font-weight:700;color:#4E463C}
+.wm-tool[aria-pressed="true"] .wm-check{opacity:1}
+.wm-check{opacity:.0;width:7px;height:7px;border-radius:50%;background:currentColor;display:inline-block;margin-right:2px}
 .wm-tool{display:inline-flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border:0;background:transparent;color:#4E463C;padding:4px 8px;border-radius:10px;font-size:11px;font-weight:600;line-height:1.2;font-family:inherit;min-width:58px;cursor:pointer}
 .wm-tool:hover:not(:disabled){background:rgba(142,36,36,0.055);color:#1C1410}
 .wm-tool[aria-pressed="true"]{background:#1B3828;color:#EED98A}
@@ -216,4 +238,24 @@ export const MAP_CSS = `
 .wm-mid:hover{opacity:1}
 .wm-ghost{width:30px;height:30px;border-radius:50%;border:2px dashed #8E2424;background:rgba(255,255,255,0.6);box-sizing:border-box;pointer-events:none}
 .wm-fog{position:absolute;left:0;top:0;pointer-events:none}
+.wm-city{pointer-events:none;white-space:nowrap;font:600 10.5px/1 var(--font-brand),Inter,sans-serif;color:#3A3328;text-shadow:0 0 3px #F5F0E4,0 0 3px #F5F0E4,0 0 4px #F5F0E4}
+.wm-city-cap{font-weight:800;color:#1C1410}
+.wm-dragtip{position:absolute;left:0;top:0;z-index:7;display:none;pointer-events:none;min-width:150px;max-width:240px;background:rgba(255,255,255,0.98);border-radius:12px;padding:8px 10px;box-shadow:inset 0 1px 0 rgba(255,255,255,0.75),0 0 0 1px rgba(27,56,40,0.07),5px 6px 16px rgba(27,56,40,0.22);font-size:12.5px;color:#4E463C;line-height:1.35}
+.wm-dragtip b{display:block;font-size:13.5px;color:#1C1410;overflow-wrap:anywhere}
+.wm-dragtip i{font-style:normal;font-weight:800;color:#8E2424;font-variant-numeric:tabular-nums}
+.wm-sighth{width:20px;height:20px;cursor:ew-resize}
+.wm-sighth-dot{width:16px;height:16px;margin:2px;border-radius:50%;background:#fff;border:2.5px solid #8E2424;box-sizing:border-box;box-shadow:0 1px 4px rgba(0,0,0,0.35)}
+.wm-sighth:hover .wm-sighth-dot{transform:scale(1.2)}
+.wm-sighth-tip{position:absolute;left:50%;bottom:calc(100% + 4px);transform:translateX(-50%);display:none;white-space:nowrap;background:#1C1410;color:#fff;font:700 12px/1 var(--font-brand),Inter,sans-serif;padding:5px 8px;border-radius:8px;pointer-events:none}
+.wm-sighth[data-drag] .wm-sighth-tip{display:block}
+.wm-draw-hint{cursor:crosshair}
+.wm-arrow{position:absolute;left:0;top:0;width:100%;height:100%;z-index:6;pointer-events:none;display:none;overflow:visible}
+.wm-root[data-stage]{height:auto;min-height:0}
+.wm-root[data-stage] .wm-body{flex:none;min-height:0}
+.wm-root[data-stage] .wm-stage{position:relative;inset:auto;height:var(--wm-stage-h,320px);min-height:0}
+.wm-root[data-stage] .wm-drawer,.wm-root[data-stage] .wm-legend{position:static;max-height:none;margin-top:10px;display:block}
+.wm-root[data-stage] .wm-legend>div{margin-bottom:8px}
+.wm-root[data-stage] .wm-panel{width:auto}
+.wm-root[data-stage] .wm-hint{max-width:calc(100% - 24px)}
+.wm-root[data-stage] .wm-tools{gap:6px 12px}
 `;

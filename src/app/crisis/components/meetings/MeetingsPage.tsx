@@ -13,7 +13,7 @@ import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import AskMeeting from './AskMeeting';
 import StaffMeetingCard from './StaffMeetingCard';
 import { InTheRoom, MeetingClockReadout } from './MeetingClock';
-import { meetingRunning } from '@/lib/crisis/meetings';
+import { meetingInProgress } from '@/lib/crisis/meetings';
 import { AvatarStack, Fact, NameList, StatusLine, usePeople, whenText, type Person } from './meetingKit';
 
 export default function MeetingsPage() {
@@ -85,7 +85,7 @@ export default function MeetingsPage() {
                 {m.started_at && (m.status === 'approved' || m.status === 'held') && (
                   <div className="flex flex-col" style={{ gap: 10, marginTop: 12 }}>
                     <MeetingClockReadout m={m} />
-                    {meetingRunning(m) && <InTheRoom m={m} people={people} cabinets={core.cabinets} />}
+                    {meetingInProgress(m) && <InTheRoom m={m} people={people} cabinets={core.cabinets} />}
                   </div>
                 )}
                 {m.staff_note && <p style={{ margin: '10px 0 0', fontSize: 13, color: CK.inkSoft }}><b>Note from the backroom: </b>{m.staff_note}</p>}

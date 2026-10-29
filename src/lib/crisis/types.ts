@@ -267,6 +267,8 @@ export interface MapUnit {
   note: string | null;
   revealed_to: string[];
   suspected_by: string[];
+  /** How far it sees, in km (0..5000); null = the default for its kind (docs/crisis/sql/019). */
+  sight_km?: number | null;
 }
 
 export interface MapShape {
@@ -312,6 +314,8 @@ export interface Meeting {
   outcome_note: string | null;
   started_at: string | null;   // the meeting clock (docs/crisis/sql/014): set by Start, cleared by Reset
   ended_at: string | null;
+  paused_at?: string | null;       // null = running; set while paused (docs/crisis/sql/019)
+  paused_seconds?: number | null;  // total seconds spent paused
   created_at: string;
   updated_at: string;
 }

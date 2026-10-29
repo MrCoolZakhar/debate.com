@@ -22,14 +22,16 @@ import { characterPoints, readPoints } from '@/lib/crisis/points';
 import {
   KIND_LABEL, OUTCOME_LABEL, ROLE_LABEL, type Character, type CharacterSecret, type CharacterStatus, type Directive, type Meeting,
 } from '@/lib/crisis/types';
-import { Avatar, BigCount, Btn, CK, FieldLabel, Skeleton, ThemeTag, cabinetTint, fieldStyle } from '../../crisisKit';
+import { Avatar, Btn, CK, FieldLabel, Skeleton, ThemeTag, cabinetTint, fieldStyle } from '../../crisisKit';
 import { dirNumber, timeAgo } from '@/lib/crisis/format';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { ConfirmInline, responsibleMembers } from '../command/setupKit';
 import { KIND_ICON, OUTCOME_STYLE } from '../directives/directiveKit';
-import { NumberBadge } from '../directives/directiveParts';
+import { NumberBadge, StaffPic } from '../directives/directiveParts';
 import CharacterMapPicker, { type PickedSpot } from './CharacterMapPicker';
+import CharacterPerformance from './CharacterPerformance';
 import CharacterSpotSnippet from './CharacterSpotSnippet';
+import { STATUS_WORDS, statusColor as dirStatusColor, statusIcon } from '../delegate/directiveUi';
 import { STATUS_ORDER, STATUS_WORD, StatusIcon, mayEditCharacters, statusColor } from './characterStatus';
 
 export interface CharacterModalProps { characterId: string; onClose: () => void; initialTab?: 'profile' | 'directives' | 'performance' }
@@ -141,7 +143,7 @@ function ModalBody({ char, onClose, initialTab }: { char: Character; onClose: ()
     if (!dirs) return null;
     return dirs
       .filter((x) => x.status !== 'withdrawn' && (x.author_character_id === char.id || co.has(x.id)))
-      .sort((a, b) => b.no - a.no);
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }, [dirs, char.id, co]);
 
   const points = useMemo(
@@ -252,7 +254,7 @@ function ModalBody({ char, onClose, initialTab }: { char: Character; onClose: ()
   const cabinetOptions: GSelectOption[] = [{ value: '', label: 'No cabinet' }, ...core.cabinets.map((c) => ({ value: c.id, label: c.name }))];
   const ownerOptions: GSelectOption[] = [
     { value: '', label: 'Not set' },
-    ...responsibleMembers(core.members).map((m) => ({ value: m.id, label: m.display_name, hint: ROLE_LABEL[m.role] })),
+    ...responsibleMembers(core.members).map((m) => ({ value: m.id, label: m.display_name, hint: ROLE_LABEL[m.role], icon: <StaffPic member={m} size={24} /> })),
   ];
 
   const openStep = step.kind === 'directive' ? mine?.find((x) => x.id === step.id) ?? null : null;
@@ -389,7 +391,7 @@ function ModalBody({ char, onClose, initialTab }: { char: Character; onClose: ()
             {/* Body */}
             <div key={step.kind === 'main' ? tab : `${step.kind}`} style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px 20px 22px' }}>
               {step.kind === 'guide' && <GuideStep char={char} canEdit={canEdit} uploading={uploading === 'guide'} onReplace={() => guideInput.current?.click()} />}
-              {step.kind === 'map' && <CharacterMapPicker lng={char.location_lng} lat={char.location_lat} label={d.location} busy={busy} onSave={(sp) => { void saveSpot(sp); }} onClear={() => { void clearSpot(); }} />}
+              {step.kind === 'map' && <CharacterMapPicker name={char.name} picture={char.picture_url} color={cab?.color ?? null} lng={char.location_lng} lat={char.location_lat} label={d.location} busy={busy} onSave={(sp) => { void saveSpot(sp); }} onClear={() => { void clearSpot(); }} />}
               {step.kind === 'directive' && !restricted && (openStep ? <DirectiveView d={openStep} /> : <p style={{ margin: 0, fontSize: 14, color: CK.inkSoft }}>That directive is no longer here.</p>)}
 
               {step.kind === 'main' && tab === 'profile' && (
@@ -425,7 +427,7 @@ function ModalBody({ char, onClose, initialTab }: { char: Character; onClose: ()
                     )}
                     {hasSpot && (
                       <div style={{ marginTop: 8 }}>
-                        <CharacterSpotSnippet lng={char.location_lng as number} lat={char.location_lat as number} />
+                        <CharacterSpotSnippet picture={char.picture_url} lng={char.location_lng as number} lat={char.location_lat as number} />
                       </div>
                     )}
                   </div>
@@ -529,7 +531,7 @@ function ModalBody({ char, onClose, initialTab }: { char: Character; onClose: ()
               )}
 
               {step.kind === 'main' && !restricted && tab === 'performance' && (
-                <Performance points={points} directives={mine} meetings={meetings} characterId={char.id} loading={dirs === null} />
+                <CharacterPerformance crisisRef={ref} char={char} cabinet={cab} points={points} directives={mine} meetings={meetings} loading={dirs === null} staff={v.staff} />
               )}
             </div>
 
@@ -619,8 +621,15 @@ function GuideStep({ char, canEdit, uploading, onReplace }: { char: Character; c
 }
 
 function OutcomeMark({ d }: { d: Directive }) {
-  const o = d.outcome ? OUTCOME_STYLE[d.outcome] : null;
-  if (!o || !d.outcome) return <span style={{ fontSize: 12.5, fontWeight: 700, color: CK.muted }}>{d.status === 'clarify' ? OUTCOME_LABEL.clarify : 'Waiting for a reply'}</span>;
+  const o = d.outcome && (d.status === 'answered' || d.status === 'clarify' || d.status === 'queued') ? OUTCOME_STYLE[d.outcome] : null;
+  if (!o || !d.outcome) {
+    const color = dirStatusColor(d.status);
+    return (
+      <span className="inline-flex items-center" style={{ gap: 5, fontSize: 12.5, fontWeight: 800, color }}>
+        {statusIcon(d.status, 15)}{STATUS_WORDS[d.status]}
+      </span>
+    );
+  }
   const I = o.Icon;
   return (
     <span className="inline-flex items-center" style={{ gap: 5, fontSize: 12.5, fontWeight: 800, color: o.color }}>
@@ -629,27 +638,38 @@ function OutcomeMark({ d }: { d: Directive }) {
   );
 }
 
+/** One past directive: the title first under the No. badge, then the outcome as an icon and a word, the date, and a short look at the reply. */
 function DirectiveRow({ d, wrote, onOpen }: { d: Directive; wrote: boolean; onOpen: () => void }) {
   const o = d.outcome ? OUTCOME_STYLE[d.outcome] : null;
   const tone = o?.color ?? CK.muted;
   const K = KIND_ICON[d.kind];
+  const reply = d.reply?.trim() ?? '';
   return (
     <button
       type="button"
       onClick={onOpen}
+      aria-label={`Open directive No. ${dirNumber(d)}: ${d.title}`}
       className="relative flex items-start gap-3 w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] active:scale-[0.995] transition-transform"
-      style={{ border: 0, cursor: 'pointer', margin: '9px 0 0', padding: '16px 14px 10px', borderRadius: 14, background: cabinetTint(tone, 0.08), boxShadow: `inset 4px 0 0 ${tone}`, fontFamily: CK.font, color: CK.ink }}
+      style={{ border: 0, cursor: 'pointer', margin: '12px 0 0', padding: '17px 14px 12px 16px', borderRadius: 16, background: CK.card, boxShadow: `inset 4px 0 0 ${tone}, ${CK.shadowSm}`, fontFamily: CK.font, color: CK.ink }}
     >
       <NumberBadge n={dirNumber(d)} color={tone === CK.muted ? CK.red : tone} style={{ position: 'absolute', top: -9, left: 18 }} />
       <span style={{ flex: 1, minWidth: 0 }}>
         <b style={{ display: 'block', fontSize: 17, lineHeight: 1.28, fontWeight: 800, overflowWrap: 'anywhere' }}>{d.title}</b>
-        <span className="flex items-center justify-end flex-wrap" style={{ gap: '2px 12px', marginTop: 6 }}>
-          {!wrote && <span style={{ fontSize: 12, color: CK.inkSoft }}>Co-written</span>}
+        <span className="flex items-center flex-wrap" style={{ gap: '3px 14px', marginTop: 6 }}>
           <OutcomeMark d={d} />
-          <K size={13} strokeWidth={1.5} aria-label={d.kind} style={{ color: CK.red }} />
-          <span title={dateTitle(d.created_at)} style={{ fontSize: 12, color: CK.muted }}>{dateLabel(d.created_at)}</span>
-          {d.answered_at && <span title={dateTitle(d.answered_at)} style={{ fontSize: 12, color: CK.muted }}>Reply {dateLabel(d.answered_at)}</span>}
+          <span title={dateTitle(d.created_at)} style={{ fontSize: 12, color: CK.muted }}>Sent {dateLabel(d.created_at)}</span>
+          {d.answered_at && <span title={dateTitle(d.answered_at)} style={{ fontSize: 12, color: CK.muted }}>Answered {dateLabel(d.answered_at)}</span>}
+          <span className="inline-flex items-center" style={{ gap: 5, fontSize: 12, color: CK.muted }}>
+            <K size={13} strokeWidth={1.5} aria-hidden style={{ color: CK.red }} />{KIND_LABEL[d.kind]}
+          </span>
+          {!wrote && <span style={{ fontSize: 12, color: CK.inkSoft }}>Co-written</span>}
         </span>
+        {reply && (
+          // A free-text preview: shortened with the full reply as its title.
+          <span title={reply} style={{ marginTop: 8, fontSize: 13.5, lineHeight: 1.5, color: CK.inkSoft, overflowWrap: 'anywhere', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+            {reply}
+          </span>
+        )}
       </span>
       <ChevronRight size={18} strokeWidth={1.5} aria-hidden style={{ color: CK.muted, flex: 'none', marginTop: 2 }} />
     </button>
@@ -692,36 +712,6 @@ function DirectiveView({ d }: { d: Directive }) {
         {d.answered_at && <p title={dateTitle(d.answered_at)} style={{ margin: '6px 0 0', fontSize: 12, color: CK.muted }}>Answered {dateLabel(d.answered_at)}</p>}
       </div>
     </article>
-  );
-}
-
-function Performance({ points, directives, meetings, characterId, loading }: {
-  points: ReturnType<typeof characterPoints>; directives: Directive[] | null; meetings: Meeting[]; characterId: string; loading: boolean;
-}) {
-  if (loading) return <div className="flex flex-col" style={{ gap: 8 }}><Skeleton h={48} w="40%" /><Skeleton h={30} /><Skeleton h={30} /><Skeleton h={30} /></div>;
-  const list = directives ?? [];
-  const approved = list.filter((x) => x.outcome === 'approved').length;
-  const held = meetings.filter((m) => m.status === 'held' && m.character_ids.includes(characterId)).length;
-  return (
-    <div className="flex flex-col" style={{ gap: 18 }}>
-      <div className="flex items-end flex-wrap" style={{ gap: '10px 28px' }}>
-        <BigCount n={points.total} word={points.total === 1 ? 'crisis point' : 'crisis points'} color={CK.red} />
-        <BigCount n={list.length} word={list.length === 1 ? 'directive' : 'directives'} />
-        <BigCount n={approved} word="approved" color={CK.ok} />
-        <BigCount n={held} word={held === 1 ? 'meeting held' : 'meetings held'} />
-      </div>
-      <div style={{ background: CK.card, borderRadius: 18, boxShadow: CK.shadowSm, padding: '6px 16px' }}>
-        {points.lines.map((l, i) => (
-          <div key={l.label} className="flex items-center justify-between gap-3" style={{ padding: '10px 0', borderTop: i === 0 ? 0 : `1px solid ${CK.hair}` }}>
-            <span style={{ fontSize: 14, fontWeight: 600, overflowWrap: 'anywhere', minWidth: 0 }}>{l.label}</span>
-            <span style={{ fontSize: 13, color: CK.inkSoft, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-              {l.count} × {l.each} = <b style={{ fontSize: 15, color: l.total < 0 ? CK.danger : CK.ink }}>{l.total}</b>
-            </span>
-          </div>
-        ))}
-      </div>
-      <p style={{ margin: 0, fontSize: 12.5, color: CK.inkSoft }}>The Crisis Director sets what each action is worth in Settings. Points help judge awards; they are not a score.</p>
-    </div>
   );
 }
 

@@ -33,7 +33,9 @@ export function effectsToAnswer(effects: EffectsDraft, powers: ReplyPowers): Ans
   if (chars.length) out.characters = chars;
   const n = effects.news;
   if (n && n.title.trim()) {
-    out.news = { title: n.title.trim(), body: n.body.trim() || undefined, source_label: n.source.trim() || undefined, audience_cabinet_id: n.audience || null, banner_url: null };
+    out.news = { title: n.title.trim(), body: n.body.trim() || undefined, source_label: n.source.trim() || undefined, audience_cabinet_id: n.audience || null,
+      banner_url: n.bannerUrl || null, attachment_url: n.fileUrl || null, attachment_name: n.fileUrl ? (n.fileName || null) : null,
+    };
   }
   return out;
 }

@@ -11,7 +11,7 @@ import { MapPin, Minus, Plus } from 'lucide-react';
 import { Btn, CK, Skeleton } from '../../crisisKit';
 import { clampLat, clampLng, loadWorldData } from '../map/mapData';
 import { BLANK_STYLE, L_LAND, SRC_COUNTRIES, mapLayers } from '../map/mapStyle';
-import { MAP_CSS, makeCountryLabel } from '../map/tokens';
+import { MAP_CSS, makeCountryLabel, paintCharacter, safeColor } from '../map/tokens';
 
 export interface PickedSpot { lng: number; lat: number; country: string | null }
 
@@ -42,9 +42,26 @@ function makePin(): HTMLElement {
   return el;
 }
 
-export default function CharacterMapPicker({ lng, lat, label, onSave, onClear, busy }: {
+/** The character's round portrait with their cabinet ring (the same as on the war map); its centre is the spot. */
+function makeAvatar(who: Who): HTMLElement {
+  const el = document.createElement('div');
+  paintCharacter(el, { name: who.name, title: null, picture: who.picture ?? null, color: safeColor(who.color), selected: true, size: 46, showLabel: false });
+  el.removeAttribute('role');
+  el.tabIndex = -1;
+  el.title = `${who.name}. Drag to move.`;
+  el.style.cursor = 'grab';
+  return el;
+}
+
+interface Who { name: string; picture?: string | null; color?: string | null }
+
+export default function CharacterMapPicker({ lng, lat, label, onSave, onClear, busy, name, picture, color }: {
   lng: number | null | undefined;
   lat: number | null | undefined;
+  /** Who is being placed: their portrait becomes the marker (a red pin when no name is given). */
+  name?: string;
+  picture?: string | null;
+  color?: string | null;
   /** The place label saved with the character, shown while no new pin is dropped. */
   label: string;
   onSave: (spot: PickedSpot) => void;
@@ -61,6 +78,8 @@ export default function CharacterMapPicker({ lng, lat, label, onSave, onClear, b
   const [spot, setSpot] = useState<PickedSpot | null>(hasSaved ? { lng: lng as number, lat: lat as number, country: null } : null);
   const [moved, setMoved] = useState(false);
   const start = useRef({ lng: lng as number | null | undefined, lat: lat as number | null | undefined });
+  const whoRef = useRef<Who | null>(name ? { name, picture, color } : null);
+  useEffect(() => { whoRef.current = name ? { name, picture, color } : null; }, [name, picture, color]);
 
   const countryAt = useCallback((m: MLMap, at: { lng: number; lat: number }): string | null => {
     const f = m.queryRenderedFeatures(m.project([at.lng, at.lat]), { layers: [L_LAND] })[0];
@@ -72,7 +91,8 @@ export default function CharacterMapPicker({ lng, lat, label, onSave, onClear, b
     if (!ml) return;
     const p = { lng: round5(clampLng(at.lng)), lat: round5(clampLat(at.lat)) };
     if (!pinRef.current) {
-      const marker = new ml.Marker({ element: makePin(), anchor: 'bottom', draggable: true }).setLngLat([p.lng, p.lat]).addTo(m);
+      const who = whoRef.current;
+      const marker = new ml.Marker({ element: who ? makeAvatar(who) : makePin(), anchor: who ? 'center' : 'bottom', draggable: true }).setLngLat([p.lng, p.lat]).addTo(m);
       marker.on('dragend', () => {
         const ll = marker.getLngLat();
         const q = { lng: round5(clampLng(ll.lng)), lat: round5(clampLat(ll.lat)) };
@@ -172,7 +192,7 @@ export default function CharacterMapPicker({ lng, lat, label, onSave, onClear, b
       <style>{MAP_CSS}</style>
       <p className="flex items-center gap-2" style={{ margin: 0, fontSize: 13.5, color: CK.inkSoft }}>
         <MapPin size={16} strokeWidth={1.5} aria-hidden style={{ color: CK.red, flex: 'none' }} />
-        <span>Click where they are. Drag the pin to adjust.</span>
+        <span>Click where they are. Drag {name ? 'their picture' : 'the pin'} to adjust.</span>
       </p>
       <div style={{ position: 'relative', borderRadius: 18, overflow: 'hidden', boxShadow: `inset 0 0 0 1px ${CK.hair}`, height: 380, background: '#DCE4DA' }}>
         <div ref={host} aria-label="Map: click to drop a pin" style={{ position: 'absolute', inset: 0 }} />
@@ -185,7 +205,7 @@ export default function CharacterMapPicker({ lng, lat, label, onSave, onClear, b
         )}
       </div>
       <p aria-live="polite" style={{ margin: 0, minHeight: 20, fontSize: 14, fontWeight: 700, color: CK.ink, overflowWrap: 'anywhere' }}>
-        {spot ? (spot.country ? `Under the pin: ${spot.country}` : moved ? 'Under the pin: open sea or no country' : label ? `Now: ${label}` : '') : 'No spot set yet.'}
+        {spot ? (spot.country ? `At this spot: ${spot.country}` : moved ? 'At this spot: open sea or no country' : label ? `Now: ${label}` : '') : 'No spot set yet.'}
       </p>
       <div className="flex flex-wrap" style={{ gap: 8 }}>
         <Btn tone="green" icon={<MapPin size={15} strokeWidth={1.5} />} disabled={!spot || !moved || busy} onClick={() => spot && onSave(spot)}>

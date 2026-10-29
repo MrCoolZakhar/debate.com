@@ -1,0 +1,6 @@
+-- Gavelling Crisis, part 19 (applied 29 Oct 2026 as crisis_part19_meeting_pause_unit_sight_hidden_spies).
+-- 1. crisis_meetings.paused_at / paused_seconds; crisis_meeting_clock takes 'pause' and 'resume' too
+--    (start and reset clear both; stop folds a running pause in). Elapsed = (coalesce(ended_at, paused_at, now()) - started_at) - paused_seconds.
+-- 2. crisis_units.sight_km (0..5000, null = the default for its kind); crisis_cabinets_spotting uses coalesce(sight_km, crisis_sight_km(kind)).
+-- 3. Spies are never spotted: units_read adds kind <> 'spy' to the spotting clause, and crisis_map_logger leaves spotting
+--    cabinets out of a spy's history row. A spy is seen by its own cabinet, staff, and cabinets in revealed_to only.

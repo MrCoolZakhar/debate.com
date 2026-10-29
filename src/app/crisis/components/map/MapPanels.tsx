@@ -23,6 +23,8 @@ export interface UnitDraft {
   owner: string | null;
   note: string;
   revealed: string[];
+  /** How far it sees, in km; null = the default for its kind. */
+  sight: number | null;
 }
 
 function Shell({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
@@ -205,6 +207,19 @@ export function UnitEditor({
             {amount}
           </div>
           {ownerField}
+          <Field label="Sight range (km)">
+            <input
+              type="number" min={0} max={5000} inputMode="numeric" style={{ ...fieldStyle, padding: '6px 10px' }}
+              placeholder={`${KIND_META[d.kind].sight} (usual for ${KIND_META[d.kind].label.toLowerCase()})`}
+              value={d.sight === null ? '' : d.sight}
+              onChange={(e) => setD({ ...d, sight: e.target.value === '' ? null : Math.max(0, Math.min(5000, Math.round(Number(e.target.value) || 0))) })}
+            />
+            <p style={{ margin: '4px 0 0', fontSize: 12, color: CK.inkSoft }}>
+              {d.kind === 'spy'
+                ? 'You can also drag the round handle on its sight ring on the map. Spies are never spotted: only their own side, the crisis team and the sides ticked below can see one, even on their land or inside their sight range.'
+                : 'You can also drag the round handle on its sight ring on the map. Other sides see this unit when it is inside one of their sight circles.'}
+            </p>
+          </Field>
           {others.length > 0 && (
             <Field label="Known to">
               {others.map((c) => (
@@ -342,7 +357,7 @@ export function NewTerritoryPanel({
     return (
       <Shell title="New Territory" onClose={onClose}>
         <p style={{ margin: '0 0 10px', fontSize: 13, color: CK.inkSoft }}>
-          Click the map to add points. Double-click, or click the first point, to close the shape.
+          Click the map to add points, or press and drag to draw the outline freehand. Double-click, or click the first point, to close the shape.
         </p>
         <p style={{ margin: '0 0 10px', fontSize: 13.5 }}>
           <b style={{ fontSize: 20, fontVariantNumeric: 'tabular-nums' }}>{pointCount}</b> <span style={{ color: CK.inkSoft }}>{pointCount === 1 ? 'point' : 'points'}</span>

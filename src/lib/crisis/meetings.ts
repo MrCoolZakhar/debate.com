@@ -6,9 +6,10 @@ import { UserFacingError } from '@/lib/friendlyError';
 import { crisisError, type CrisisRef } from './api';
 import { getCrisisClient } from './client';
 
-export type MeetingClockAction = 'start' | 'stop' | 'reset';
+export type MeetingClockAction = 'start' | 'stop' | 'reset' | 'pause' | 'resume';
 
-/** 'start' sets started_at (status approved), 'stop' sets ended_at (status held), 'reset' clears both. */
+/** 'start' sets started_at (status approved), 'stop' sets ended_at (status held), 'reset' clears both,
+ *  'pause' sets paused_at, 'resume' folds it into paused_seconds (docs/crisis/sql/019). */
 export async function meetingClock(ref: CrisisRef, meetingId: string, action: MeetingClockAction): Promise<void> {
   const client = await getCrisisClient(ref.conf, ref.crisis);
   const res = await client.rpc('crisis_meeting_clock', { p_meeting: meetingId, p_action: action });
@@ -25,14 +26,22 @@ export function clockText(totalSeconds: number): string {
   return h > 0 ? `${h}:${two(m)}:${two(sec)}` : `${two(m)}:${two(sec)}`;
 }
 
-/** Seconds a meeting has run: to now while running, to ended_at when stopped, null when never started. */
-export function meetingSeconds(m: { started_at: string | null; ended_at: string | null }, nowMs: number): number | null {
+type ClockFields = { started_at: string | null; ended_at: string | null; paused_at?: string | null; paused_seconds?: number | null };
+
+/** Seconds a meeting has run: (ended_at, else paused_at, else now) - started_at - paused_seconds; null when never started. */
+export function meetingSeconds(m: ClockFields, nowMs: number): number | null {
   if (!m.started_at) return null;
   const start = new Date(m.started_at).getTime();
-  const end = m.ended_at ? new Date(m.ended_at).getTime() : nowMs;
-  return Math.max(0, Math.round((end - start) / 1000));
+  const end = m.ended_at ? new Date(m.ended_at).getTime() : m.paused_at ? new Date(m.paused_at).getTime() : nowMs;
+  return Math.max(0, Math.round((end - start) / 1000 - Number(m.paused_seconds ?? 0)));
 }
 
-/** Running = started, not stopped, and still an approved meeting (a hand-marked "held" or a cancelled one is not running). */
-export const meetingRunning = (m: { started_at: string | null; ended_at: string | null; status?: string }) =>
+/** In progress = started, not stopped, and still an approved meeting (a hand-marked "held" or a cancelled one is not). Paused counts. */
+export const meetingInProgress = (m: { started_at: string | null; ended_at: string | null; status?: string }) =>
   !!m.started_at && !m.ended_at && (m.status === undefined || m.status === 'approved');
+
+export const meetingPaused = (m: { paused_at?: string | null }) => !!m.paused_at;
+
+/** Running = in progress and not paused: the clock is ticking. */
+export const meetingRunning = (m: { started_at: string | null; ended_at: string | null; status?: string; paused_at?: string | null }) =>
+  meetingInProgress(m) && !m.paused_at;

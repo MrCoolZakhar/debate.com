@@ -70,13 +70,15 @@ function Bubble({ item, accent }: { item: Item; accent: string }) {
   );
 }
 
-export default function DirectiveThread({ d, notes, names, who, character, accent }: {
+export default function DirectiveThread({ d, notes, names, who, character, accent, skipDirective = false }: {
   d: Directive;
   notes: DirectiveNote[] | null;
   names: Names;
   who: string;
   character?: Character;
   accent: string;
+  /** The directive itself is shown big above the thread, so its own bubble is left out. */
+  skipDirective?: boolean;
 }) {
   const endRef = useRef<HTMLDivElement>(null);
 
@@ -102,14 +104,21 @@ export default function DirectiveThread({ d, notes, names, who, character, accen
         body: d.reply, outcome: d.outcome ?? 'later', tag: d.status === 'answered' ? 'Answer' : 'Reply',
       });
     }
-    return out.sort((a, b) => a.sort - b.sort);
-  }, [d, notes, names, who, character?.picture_url, accent]);
+    return (skipDirective ? out.filter((x) => x.key !== 'directive') : out).sort((a, b) => a.sort - b.sort);
+  }, [d, notes, names, who, character?.picture_url, accent, skipDirective]);
 
   // A new message scrolls into view (not on the first paint of a thread that is only the directive).
   const count = items.length;
+  // Only a message that arrives while the thread is open scrolls; the directive stays at the top on opening.
+  const seen = useRef<number | null>(null);
+  const loaded = notes !== null;
   useEffect(() => {
-    if (count > 1) endRef.current?.scrollIntoView({ block: 'nearest' });
-  }, [count]);
+    if (!loaded) return;
+    const before = seen.current;
+    seen.current = count;
+    if (before !== null && count > before) endRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [count, loaded]);
+  if (skipDirective && count === 0 && notes !== null) return null;
 
   return (
     <section aria-label="Conversation" className="flex flex-col" style={{ gap: 10 }}>

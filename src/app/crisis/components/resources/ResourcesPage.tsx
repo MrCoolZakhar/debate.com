@@ -3,7 +3,7 @@
 // Staff and chairs see everything; delegates see what the database lets them (their cabinet and themselves).
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { History, Plus } from 'lucide-react';
+import { History, Plus, Ruler } from 'lucide-react';
 import { notifyErr } from '@/lib/appNotify';
 import { crisisError, loadResources } from '@/lib/crisis/api';
 import { getCrisisClient } from '@/lib/crisis/client';
@@ -12,6 +12,7 @@ import type { Resource, ResourceType } from '@/lib/crisis/types';
 import { Btn, Card, CardTitle, CK, Skeleton, waitLabel } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import AddResourceType from './AddResourceType';
+import EditResourceTypes from './EditResourceTypes';
 import ResourceTile, { signed, type LastChange } from './ResourceTile';
 
 interface LogRow { id: string; resource_id: string; delta: number; amount_after: number; reason: string | null; member_id: string | null; created_at: string }
@@ -21,7 +22,7 @@ export default function ResourcesPage() {
   const [data, setData] = useState<{ types: ResourceType[]; resources: Resource[] } | null>(null);
   const [log, setLog] = useState<LogRow[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [adding, setAdding] = useState(false);
+  const [mode, setMode] = useState<null | 'add' | 'edit'>(null);
   const [now, setNow] = useState(() => Date.now());
   const canEdit = director || (role === 'backroomer' && settings.backroomPowers.resources);
 
@@ -85,10 +86,16 @@ export default function ResourcesPage() {
           <h1 style={{ margin: 0, fontSize: 26, fontWeight: 800, color: CK.ink }}>Resources</h1>
           <p style={{ margin: '3px 0 0', fontSize: 13.5, color: CK.inkSoft }}>{staff ? 'Every change needs a reason, and the log keeps it.' : 'What your cabinet and you hold.'}</p>
         </div>
-        {canEdit && !adding && <Btn tone="green" icon={<Plus size={15} strokeWidth={1.5} aria-hidden />} onClick={() => setAdding(true)}>Add a resource type</Btn>}
+        {canEdit && !mode && (
+          <div className="flex items-center gap-2 flex-wrap">
+            {data.types.length > 0 && <Btn tone="ghost" icon={<Ruler size={15} strokeWidth={1.5} aria-hidden />} onClick={() => setMode('edit')}>Names and measures</Btn>}
+            <Btn tone="green" icon={<Plus size={15} strokeWidth={1.5} aria-hidden />} onClick={() => setMode('add')}>Add a resource type</Btn>
+          </div>
+        )}
       </div>
 
-      {adding && <AddResourceType refx={ref} onClose={() => setAdding(false)} />}
+      {mode === 'add' && <AddResourceType refx={ref} onClose={() => setMode(null)} />}
+      {mode === 'edit' && <EditResourceTypes refx={ref} types={data.types} onClose={() => setMode(null)} />}
 
       {!data.types.length && <Card><p style={{ margin: 0, fontSize: 13.5, color: CK.inkSoft }}>{canEdit ? 'No resources yet. Add the first type to start.' : 'No resources have been set up yet.'}</p></Card>}
 

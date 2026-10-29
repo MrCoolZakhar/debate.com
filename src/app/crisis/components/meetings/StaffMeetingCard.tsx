@@ -10,7 +10,7 @@ import type { Cabinet, Meeting, MeetingStatus, Member } from '@/lib/crisis/types
 import { Btn, CK, fieldStyle, waitLabel } from '../../crisisKit';
 import { AvatarStack, Fact, NameList, StatusLine, requesterName, whenText, type Person } from './meetingKit';
 import { InTheRoom, MeetingClockControls, MeetingClockReadout } from './MeetingClock';
-import { meetingRunning } from '@/lib/crisis/meetings';
+import { meetingInProgress } from '@/lib/crisis/meetings';
 
 export default function StaffMeetingCard({ m, refx, people, cabinets, members, canAct, canClock = false, onChanged, now }: {
   m: Meeting; refx: CrisisRef; people: Map<string, Person>; cabinets: Cabinet[]; members: Member[]; canAct: boolean; now: number;
@@ -52,7 +52,7 @@ export default function StaffMeetingCard({ m, refx, people, cabinets, members, c
       {m.started_at && (m.status === 'approved' || m.status === 'held') && (
         <div className="flex flex-col" style={{ gap: 10, marginTop: 12 }}>
           <MeetingClockReadout m={m} />
-          {meetingRunning(m) && <InTheRoom m={m} people={people} cabinets={cabinets} />}
+          {meetingInProgress(m) && <InTheRoom m={m} people={people} cabinets={cabinets} />}
         </div>
       )}
       {canClock && m.status === 'approved' && <div style={{ marginTop: 12 }}><MeetingClockControls m={m} refx={refx} onChanged={onChanged} /></div>}

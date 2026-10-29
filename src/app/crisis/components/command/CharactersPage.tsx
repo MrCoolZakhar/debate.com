@@ -4,9 +4,8 @@
 // the character pop-up (profile, directives, performance). Editing follows the pop-up's rule: directors,
 // and backroomers when "Edit characters" is on in Settings.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { BookOpen, Camera, Plus, RefreshCw, UserRound, UserRoundPlus, UsersRound } from 'lucide-react';
-import Portal from '@/components/Portal';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { UserFacingError } from '@/lib/friendlyError';
 import { crisisError, saveCabinet, saveCharacter, syncRoster, uploadCrisisFile } from '@/lib/crisis/api';
@@ -18,7 +17,11 @@ import CharacterModal from '../character/CharacterModal';
 import { STATUS_WORD, StatusIcon, mayEditCharacters, statusColor } from '../character/characterStatus';
 import { PageHeading } from './setupKit';
 
-const SWATCHES = ['#8E2424', '#C26A2A', '#B6871F', '#3D7A52', '#2F7F86', '#3E6A9A', '#6B4E9A', '#5C5348'];
+const SWATCHES = [
+  { hex: '#8E2424', name: 'Crimson' }, { hex: '#C26A2A', name: 'Orange' }, { hex: '#B6871F', name: 'Gold' }, { hex: '#7A8F2A', name: 'Olive' },
+  { hex: '#3D7A52', name: 'Green' }, { hex: '#2F7F86', name: 'Teal' }, { hex: '#3E6A9A', name: 'Blue' }, { hex: '#6B4E9A', name: 'Purple' },
+  { hex: '#B8467A', name: 'Rose' }, { hex: '#5C5348', name: 'Stone' },
+];
 
 const nul = (s: string): string | null => (s.trim() ? s.trim() : null);
 
@@ -54,75 +57,29 @@ function InlineText({ value, onCommit, label, placeholder, bold }: {
   );
 }
 
+/** Ten colours that read on the war map and sit well with the crisis red and ivory. The current one is ringed. */
 function SwatchPicker({ value, onPick }: { value: string; onPick: (hex: string) => void }) {
-  const btn = useRef<HTMLButtonElement>(null);
-  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
-  useEffect(() => {
-    if (!pos) return;
-    const close = (e: Event) => {
-      if (e instanceof KeyboardEvent && e.key !== 'Escape') return;
-      if (e instanceof MouseEvent && ((e.target as HTMLElement | null)?.closest('[data-swatch-panel]') || btn.current?.contains(e.target as Node))) return;
-      setPos(null);
-    };
-    document.addEventListener('mousedown', close);
-    document.addEventListener('keydown', close);
-    window.addEventListener('resize', close);
-    window.addEventListener('scroll', close, true);
-    return () => {
-      document.removeEventListener('mousedown', close);
-      document.removeEventListener('keydown', close);
-      window.removeEventListener('resize', close);
-      window.removeEventListener('scroll', close, true);
-    };
-  }, [pos]);
-  const open = () => {
-    const r = btn.current?.getBoundingClientRect();
-    if (!r) return;
-    const x = Math.min(Math.max(8, r.left), window.innerWidth - 200);
-    const y = r.bottom + 6 + 100 > window.innerHeight ? r.top - 6 - 92 : r.bottom + 6;
-    setPos({ x, y });
-  };
   return (
-    <>
-      <button
-        ref={btn}
-        type="button"
-        aria-label="Choose the cabinet colour"
-        aria-haspopup="true"
-        aria-expanded={!!pos}
-        onClick={() => (pos ? setPos(null) : open())}
-        className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] flex-shrink-0"
-        style={{ width: 26, height: 26, borderRadius: '50%', border: 0, padding: 0, cursor: 'pointer', background: value, boxShadow: `0 0 0 3px ${cabinetTint(value, 0.28)}, inset 0 1px 0 rgba(255,255,255,0.3)` }}
-      />
-      {pos && (
-        <Portal>
-          <div
-            data-swatch-panel
-            role="group"
-            aria-label="Cabinet colours"
+    <span role="group" aria-label="Cabinet colour" className="inline-flex flex-wrap items-center" style={{ gap: 6 }}>
+      {SWATCHES.map(({ hex, name }) => {
+        const on = hex.toLowerCase() === value.toLowerCase();
+        return (
+          <button
+            key={hex}
+            type="button"
+            title={name}
+            aria-label={`${name} colour`}
+            aria-pressed={on}
+            onClick={() => { if (!on) onPick(hex); }}
+            className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] flex-shrink-0 transition-transform active:scale-[0.92]"
             style={{
-              position: 'fixed', left: pos.x, top: pos.y, zIndex: 10060, display: 'grid', gridTemplateColumns: 'repeat(4, 32px)', gap: 8, padding: 12,
-              background: CK.card, borderRadius: 16, boxShadow: '0 18px 44px rgba(27,56,40,0.18), 0 0 0 1px rgba(27,56,40,0.08)',
+              width: 22, height: 22, borderRadius: '50%', border: 0, padding: 0, cursor: on ? 'default' : 'pointer', background: hex,
+              boxShadow: on ? `0 0 0 2px #fff, 0 0 0 4px ${CK.forest}` : 'inset 0 1px 0 rgba(255,255,255,0.3), 0 1px 2px rgba(27,56,40,0.25)',
             }}
-          >
-            {SWATCHES.map((hex) => (
-              <button
-                key={hex}
-                type="button"
-                aria-label={`Colour ${hex}`}
-                aria-pressed={hex.toLowerCase() === value.toLowerCase()}
-                onClick={() => { setPos(null); if (hex.toLowerCase() !== value.toLowerCase()) onPick(hex); }}
-                className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
-                style={{
-                  width: 32, height: 32, borderRadius: '50%', border: 0, cursor: 'pointer', background: hex,
-                  boxShadow: hex.toLowerCase() === value.toLowerCase() ? `0 0 0 2px #fff, 0 0 0 4px ${CK.forest}` : 'inset 0 1px 0 rgba(255,255,255,0.3)',
-                }}
-              />
-            ))}
-          </div>
-        </Portal>
-      )}
-    </>
+          />
+        );
+      })}
+    </span>
   );
 }
 

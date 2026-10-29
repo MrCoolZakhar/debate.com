@@ -4,20 +4,24 @@
 // newsflash) and has its own remove X. A card only remembers what it is about (EffectCard in the
 // draft); what it changes is staged in the draft's maps, and nothing is written until Send reply.
 
+import { loadCities, type City } from '../map/cities';
 import { useMemo, useState, type ReactNode } from 'react';
 import { CircleHelp, Coins, Lock, Map as MapIcon, Minus, Newspaper, Plus, Skull, Undo2, UserCheck, UsersRound, X, type LucideIcon } from 'lucide-react';
 import GSelect from '@/components/GSelect';
 import { amount as fmtAmount } from '@/lib/crisis/format';
-import type { Cabinet, Character, CharacterStatus, MapRegion, MapUnit, Resource, ResourceType } from '@/lib/crisis/types';
-import { Avatar, CK, FieldLabel, Skeleton, cabinetTint, fieldStyle, resourceIcon } from '../../crisisKit';
+import { kmBetween } from '@/lib/crisis/geo';
+import type { Cabinet, Character, CharacterStatus, MapRegion, MapShape, MapUnit, Resource, ResourceType } from '@/lib/crisis/types';
+import { Avatar, Btn, CK, FieldLabel, Skeleton, cabinetTint, fieldStyle, resourceIcon } from '../../crisisKit';
 import { KIND_META } from '../map/mapData';
+import { setSize, type EditSet, type StageOptions } from '../map/mapEdits';
+import WarMap from '../map/WarMap';
 import type { CountryOption } from './countryPick';
 import { CabinetLogo } from './directiveParts';
+import NewsMediaPicker from './NewsMediaPicker';
 import type { ReplyPowers } from './ReplyActions';
 import { STAGEABLE_STATUSES, type EffectCard, type EffectsDraft, type UnitStage } from './replyDraft';
-import StageMap from './StageMap';
 
-export interface StageData { types: ResourceType[]; resources: Resource[]; units: MapUnit[]; regions: MapRegion[]; countries: CountryOption[] }
+export interface StageData { types: ResourceType[]; resources: Resource[]; units: MapUnit[]; regions: MapRegion[]; shapes: MapShape[]; countries: CountryOption[] }
 
 /** Everything a card needs, built once by the panel. */
 export interface CardEnv {
@@ -34,10 +38,33 @@ export interface CardEnv {
   typeById: Map<string, { t: ResourceType; i: number }>;
   baseHolder: Map<string, string | null>;
   cabinetColors: Array<{ id: string; color: string }>;
+  /** Opens the map editor (inside the side panel) for the reply's border changes. */
+  openMap: () => void;
 }
 
 export const round2 = (n: number) => Math.round(n * 100) / 100;
-export const place = (lng: number, lat: number) => `${lat.toFixed(1)}, ${lng.toFixed(1)}`;
+// Places are named after the nearest city (the map's city list, loaded once); far from any city, the coordinates.
+let cityList: City[] | null = null;
+if (typeof window !== 'undefined') loadCities().then((c) => { cityList = c; }).catch(() => {});
+export const place = (lng: number, lat: number) => {
+  let best: City | null = null; let bestKm = Infinity;
+  for (const c of cityList ?? []) {
+    const k = crisisKm(lng, lat, c.lng, c.lat);
+    if (k < bestKm) { bestKm = k; best = c; }
+  }
+  if (best && bestKm <= 25) return best.name;
+  if (best && bestKm <= 400) {
+    const y = lat - best.lat; const x = (lng - best.lng) * Math.cos((best.lat * Math.PI) / 180);
+    const dir = ['E', 'NE', 'N', 'NW', 'W', 'SW', 'S', 'SE'][((Math.round(Math.atan2(y, x) / (Math.PI / 4)) % 8) + 8) % 8];
+    return `${Math.max(10, Math.round(bestKm / 10) * 10)} km ${dir} of ${best.name}`;
+  }
+  return `${lat.toFixed(1)}, ${lng.toFixed(1)}`;
+};
+function crisisKm(lng1: number, lat1: number, lng2: number, lat2: number): number {
+  const r = Math.PI / 180;
+  const a = Math.sin(((lat2 - lat1) * r) / 2) ** 2 + Math.cos(lat1 * r) * Math.cos(lat2 * r) * Math.sin(((lng2 - lng1) * r) / 2) ** 2;
+  return 12742 * Math.asin(Math.min(1, Math.sqrt(a)));
+}
 
 export const STATUS_META: Record<CharacterStatus, { label: string; Icon: LucideIcon; color: string }> = {
   active: { label: 'Active', Icon: UserCheck, color: CK.ok },
@@ -82,10 +109,34 @@ export function clearCard(e: EffectsDraft, card: EffectCard, env: CardEnv): Effe
       return { ...e, resources };
     }
     case 'unit': { const units = { ...e.units }; delete units[card.target]; return { ...e, units }; }
-    case 'border': { const regions = { ...e.regions }; delete regions[card.target]; return { ...e, regions }; }
+    case 'border': { const regions = { ...e.regions }; if (card.target) delete regions[card.target]; return { ...e, regions, map: null }; }
     case 'character': { const characters = { ...e.characters }; delete characters[card.target]; return { ...e, characters }; }
     case 'news': return { ...e, news: null };
   }
+}
+
+const sameJson = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+
+/** One plain line per territory a set of map changes touches. */
+export function describeMapEdits(set: EditSet | null, env: Pick<CardEnv, 'data' | 'cabById'>): string[] {
+  if (!set || !setSize(set)) return [];
+  const names = new Map((env.data?.countries ?? []).map((c) => [c.key, c.name]));
+  const who = (id: string | null) => (id ? env.cabById.get(id)?.name ?? 'a cabinet' : 'nobody');
+  const baseRegion = new Map((env.data?.regions ?? []).map((r) => [r.region_key, r]));
+  const baseShape = new Map((env.data?.shapes ?? []).map((x) => [x.id, x]));
+  const out: string[] = [];
+  for (const r of set.regions) {
+    const was = baseRegion.get(r.key);
+    const parts: string[] = [];
+    if ((was?.owner_cabinet_id ?? null) !== r.owner_cabinet_id) parts.push(`held by ${who(r.owner_cabinet_id)}`);
+    if (!sameJson(was?.geometry, r.geometry)) parts.push(r.geometry ? 'border changed' : 'real border put back');
+    out.push(`${names.get(r.key) ?? 'A country'}: ${parts.join(', ') || 'changed'}`);
+  }
+  for (const a of set.addShapes) out.push(`${a.label || 'New territory'}: new, held by ${who(a.owner_cabinet_id)}`);
+  for (const x of set.shapes) out.push(`${baseShape.get(x.id)?.label || 'A drawn territory'}: border changed`);
+  for (const x of set.owners) out.push(`${baseShape.get(x.id)?.label || 'A drawn territory'}: held by ${who(x.owner_cabinet_id)}`);
+  for (const id of set.removeShapes) out.push(`${baseShape.get(id)?.label || 'A drawn territory'}: removed`);
+  return out;
 }
 
 // ── small controls ──
@@ -219,6 +270,8 @@ export function ResourcesCard({ card, env, onTarget, onRemove }: CardProps) {
 }
 
 // ── Move a unit ──
+// The same map as the Map page: pick the unit, then drag it to its new place. A dashed trajectory stays on the
+// map for every move this reply plans; nothing is written until Send reply.
 export function UnitCard({ card, env, onTarget, onRemove }: CardProps) {
   const { data, effects, setEffects, cabById } = env;
   const unit = data?.units.find((u) => u.id === card.target);
@@ -242,6 +295,28 @@ export function UnitCard({ card, env, onTarget, onRemove }: CardProps) {
   const movedTo = staged && staged.lng !== undefined && staged.lat !== undefined ? staged : null;
   const amountNow = unit ? (staged?.strength ?? unit.strength) : 0;
 
+  // Every move this reply plans, for the trajectories.
+  const moves = useMemo(() => {
+    const m: Record<string, { lng: number; lat: number }> = {};
+    for (const [id, st] of Object.entries(effects.units)) if (st.lng !== undefined && st.lat !== undefined) m[id] = { lng: st.lng, lat: st.lat };
+    return m;
+  }, [effects.units]);
+  const unitsRef = data?.units;
+  const stage = useMemo<StageOptions | null>(() => (data ? {
+    kind: 'unit', data: { regions: data.regions, units: data.units, shapes: data.shapes }, canUnits: env.powers.units, canMap: false,
+    height: 300, unitId: card.target, moves,
+    onSelectUnit: (id) => { if (!taken.has(id) && id !== card.target) onTarget(id); },
+    onUnitMove: (id, lng, lat) => {
+      // Before a unit is picked any unit can be dragged straight away, like on the real map: the drag picks it.
+      if (!card.target) { if (taken.has(id)) return; onTarget(id); }
+      const u = unitsRef?.find((x) => x.id === id);
+      if (u) updateUnit(u, (s) => ({ ...s, lng, lat }));
+    },
+  } : null),
+  // The map reads its data once; only what changes how it behaves is a dependency.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  [data, env.powers.units, card.target, moves, taken]);
+
   return (
     <CardShell kind="unit" onRemove={onRemove}>
       {!env.powers.units ? <Muted>You cannot move units. The Crisis Director can allow it in Settings.</Muted>
@@ -257,7 +332,9 @@ export function UnitCard({ card, env, onTarget, onRemove }: CardProps) {
                   <b style={{ color: CK.ink }}>Now at</b> {place(unit.lng, unit.lat)}
                   {movedTo && (
                     <>
-                      {' '}<b style={{ color: CK.red }}>Goes to {place(movedTo.lng as number, movedTo.lat as number)}</b>{' '}
+                      {' '}<b style={{ color: CK.red }}>
+                        Goes to {place(movedTo.lng as number, movedTo.lat as number)}, {Math.round(kmBetween([unit.lng, unit.lat], [movedTo.lng as number, movedTo.lat as number])).toLocaleString('en-US')} km
+                      </b>{' '}
                       <button type="button" onClick={() => updateUnit(unit, (s) => ({ ...s, lng: undefined, lat: undefined }))}
                         className="inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
                         style={{ gap: 4, border: 0, background: 'transparent', padding: 0, cursor: 'pointer', fontFamily: CK.font, fontSize: 12.5, fontWeight: 700, color: CK.forest, textDecoration: 'underline' }}>
@@ -279,17 +356,8 @@ export function UnitCard({ card, env, onTarget, onRemove }: CardProps) {
                 </div>
               </div>
             )}
-            <Muted>{unit ? 'Click the map or drag the unit to where it goes.' : 'Pick a unit, or click one on the map.'}</Muted>
-            <StageMap
-              units={data.units} regions={data.regions} cabinets={env.cabinetColors}
-              stagedUnits={effects.units} stagedRegions={effects.regions}
-              mode="unit" selectedUnitId={card.target} selectedCountry=""
-              canUnits={env.powers.units} canMap={false}
-              onSelectUnit={(id) => { if (!taken.has(id) && id !== card.target) onTarget(id); }}
-              onPlaceUnit={(lng, lat) => { if (unit) updateUnit(unit, (s) => ({ ...s, lng, lat })); }}
-              onPickCountry={() => undefined}
-              height={230}
-            />
+            <Muted>{unit ? 'Drag the unit to where it goes, then press Move. Dashed lines show the moves this reply plans.' : 'Drag a unit on the map to where it goes, or pick one above.'}</Muted>
+            {stage && <WarMap stage={stage} />}
           </>
         )}
     </CardShell>
@@ -297,45 +365,31 @@ export function UnitCard({ card, env, onTarget, onRemove }: CardProps) {
 }
 
 // ── Change a border ──
-export function BorderCard({ card, env, onTarget, onRemove }: CardProps) {
-  const { data, effects, setEffects, cabById, baseHolder } = env;
-  const taken = usedBy(env, 'border', card.id);
-  const countryOptions = useMemo(() => (data?.countries ?? []).map((c) => {
-    const h = baseHolder.get(c.key);
-    return { value: c.key, label: c.name, disabled: taken.has(c.key), hint: taken.has(c.key) ? 'Already in another card' : h ? `Held by ${cabById.get(h)?.name ?? 'a cabinet'}` : undefined };
-  }), [data, baseHolder, cabById, taken]);
-  const holderOptions = useMemo(() => [{ value: '', label: 'Nobody' }, ...env.cabinets.map((c) => ({ value: c.id, label: c.name }))], [env.cabinets]);
-  const key = card.target;
-  const holderNow = key ? (key in effects.regions ? effects.regions[key] : (baseHolder.get(key) ?? null)) : null;
-  const setHolder = (owner: string | null) => setEffects((e) => {
-    const regions = { ...e.regions };
-    if (owner === (baseHolder.get(key) ?? null)) delete regions[key]; else regions[key] = owner;
-    return { ...e, regions };
-  });
-
+// The map editor opens in the side panel itself (EffectsPanel swaps its content, with a back button). The card
+// only says what the reply will change on the map and opens the editor.
+export function BorderCard({ env, onRemove }: Pick<CardProps, 'env' | 'onRemove'>) {
+  const { data, effects, setEffects } = env;
+  const lines = describeMapEdits(effects.map, env);
   return (
     <CardShell kind="border" onRemove={onRemove}>
       {!env.powers.map ? <Muted>You cannot change the map. The Crisis Director can allow it in Settings.</Muted>
-        : !data ? <Skeleton h={220} r={12} />
+        : !data ? <Skeleton h={80} r={12} />
         : (
           <>
-            <div><FieldLabel>Country</FieldLabel>
-              <GSelect value={key} options={countryOptions} onChange={onTarget} placeholder="Pick a country, or click it on the map" aria-label="Country" searchable />
-            </div>
-            {key && (
-              <div><FieldLabel>Held by</FieldLabel>
-                <GSelect value={holderNow ?? ''} options={holderOptions} onChange={(v) => setHolder(v || null)} aria-label="Held by" />
-              </div>
+            <Muted>Pick a country to change who holds it, drag a border, or draw new territory. The real countries stay visible underneath.</Muted>
+            {lines.length > 0 && (
+              <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {lines.map((t, i) => (
+                  <li key={i} className="flex items-center" style={{ gap: 7, fontSize: 13, fontWeight: 600, color: CK.ink, overflowWrap: 'anywhere' }}>
+                    <MapIcon size={14} strokeWidth={1.5} aria-hidden style={{ color: CK.red, flex: 'none' }} />{t}
+                  </li>
+                ))}
+              </ul>
             )}
-            <StageMap
-              units={data.units} regions={data.regions} cabinets={env.cabinetColors}
-              stagedUnits={effects.units} stagedRegions={effects.regions}
-              mode="border" selectedUnitId="" selectedCountry={key}
-              canUnits={false} canMap={env.powers.map}
-              onSelectUnit={() => undefined} onPlaceUnit={() => undefined}
-              onPickCountry={(k) => { if (!taken.has(k) && k !== key) onTarget(k); }}
-              height={230}
-            />
+            <div className="flex flex-wrap" style={{ gap: 8 }}>
+              <Btn tone="green" size="sm" icon={<MapIcon size={14} strokeWidth={1.5} />} onClick={env.openMap}>{lines.length ? 'Open the map again' : 'Open the map'}</Btn>
+              {lines.length > 0 && <Btn tone="ghost" size="sm" onClick={() => setEffects((e) => ({ ...e, map: null }))}>Clear these changes</Btn>}
+            </div>
           </>
         )}
     </CardShell>
@@ -411,7 +465,7 @@ export function NewsCard({ env, onRemove }: Pick<CardProps, 'env' | 'onRemove'>)
   }));
   return (
     <CardShell kind="news" onRemove={onRemove}>
-      <Muted>A newsflash from this directive, saved as a draft on the News page.</Muted>
+      <Muted>A newsflash from this directive. It goes out with the reply, with its picture and file.</Muted>
       <div><FieldLabel>Title</FieldLabel>
         <input value={news?.title ?? ''} onChange={(e) => patchNews({ title: e.target.value })} maxLength={160} aria-label="News title" placeholder="What happened" style={fieldStyle} />
       </div>
@@ -426,6 +480,10 @@ export function NewsCard({ env, onRemove }: Pick<CardProps, 'env' | 'onRemove'>)
           <GSelect size="sm" value={news?.audience ?? ''} options={audienceOptions} onChange={(v) => patchNews({ audience: v })} aria-label="News audience" />
         </div>
       </div>
+      <NewsMediaPicker
+        media={{ bannerUrl: news?.bannerUrl ?? null, fileUrl: news?.fileUrl ?? null, fileName: news?.fileName ?? null }}
+        onChange={(p) => patchNews(p)}
+      />
     </CardShell>
   );
 }

@@ -16,7 +16,9 @@ import { loadLastChanges } from './commandData';
 import { ApprovalCard, CommandHeader, LinkBtn } from './commandParts';
 import { ResourcesStrip } from './commandResources';
 import { DirectiveDrawer, WaitingCard } from './commandQueue';
-import { BackroomCard, FrontRoomsCard } from './commandRooms';
+import RebalanceLine from './commandRebalance';
+import { FrontRoomsCard } from './commandRooms';
+import StatsDialog, { StatsButton } from './commandStats';
 
 const WarMap = dynamic(() => import('../map/WarMap'), {
   ssr: false,
@@ -26,9 +28,11 @@ const WarMap = dynamic(() => import('../map/WarMap'), {
 // Layout (owner, 27 Oct 2026, asked twice: "it's not on one page anymore"). From 1100px wide the page is EXACTLY the
 // screen under the top bar and never scrolls: the page is a flex column (header strip, then the grid filling the rest).
 // Left: Waiting for a Reply (tall, its list scrolls inside) over Needs Your Approval. Middle: the Map card filling
-// the height, with Cabinet Resources as a small strip directly under it. Right: Front Rooms over the Backroom, both
-// scrolling inside themselves. Every card in a column shares the column's height exactly (flex, min-height 0), so
-// there are no empty bands and no gaps around the map. Below 1100px the cards stack and the page scrolls.
+// the height, with Cabinet Resources as a taller strip directly under it (about a third of the column). Right: the wide
+// Front Rooms column, whose tiles share its height so every room is always visible (no scrolling; short tiles drop
+// their small rows). Under the grid sits at most ONE plain line (the backroom rebalance suggestion), part of the flex
+// column, so the grid just gets that much shorter. Every card in a column shares the column's height exactly (flex,
+// min-height 0), so there are no empty bands and no gaps around the map. Below 1100px the cards stack and the page scrolls.
 // Height maths: 56px top bar + 4px main top padding + 18px main bottom padding = 78px, plus 2px of slack.
 const GRID_CSS = `
 .cmd-page { display: flex; flex-direction: column; padding-top: 8px; }
@@ -44,15 +48,15 @@ const GRID_CSS = `
 }
 @media (min-width: 1100px) {
   .cmd-page { height: calc(100dvh - 80px); min-height: 560px; }
-  .cmd-grid { flex: 1 1 0; min-height: 0; grid-template-columns: minmax(270px, 26%) minmax(0, 1fr) minmax(290px, 27%); grid-template-rows: minmax(0, 1fr); grid-template-areas: "needs map side"; }
+  .cmd-grid { flex: 1 1 0; min-height: 0; grid-template-columns: minmax(250px, 23%) minmax(0, 1fr) minmax(340px, 34%); grid-template-rows: minmax(0, 1fr); grid-template-areas: "needs map side"; }
   .cmd-col { min-height: 0; }
   .cmd-col > .cmd-card { min-height: 0; overflow: auto; }
   .cmd-wait { flex: 1 1 0; display: flex; flex-direction: column; overflow: hidden !important; }
   .cmd-scroll { flex: 1 1 0; min-height: 0; overflow-y: auto; padding: 12px 3px 4px; margin: -8px -3px 0; }
   .cmd-approval { flex: 0 1 auto; max-height: 42%; min-height: 96px; }
   .cmd-mapcard { flex: 1 1 0; min-height: 0; height: auto; overflow: hidden; }
-  .cmd-res { flex: none; max-height: 36%; }
-  .cmd-rooms, .cmd-back { flex: 1 1 auto; }
+  .cmd-res { flex: 0 0 clamp(168px, 33%, 320px); max-height: none; }
+  .cmd-rooms { flex: 1 1 0; overflow: hidden !important; }
 }
 `;
 
@@ -66,6 +70,7 @@ export default function CommandPage() {
   const [res, setRes] = useState<{ types: ResourceType[]; resources: Resource[] } | null>(null);
   const [changes, setChanges] = useState<Map<string, number>>(new Map());
   const [open, setOpen] = useState<string | null>(null);
+  const [stats, setStats] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const seq = useRef({ d: 0, n: 0, r: 0 });
   const failedOnce = useRef({ d: false, n: false, r: false });
@@ -128,6 +133,7 @@ export default function CommandPage() {
         members={core.members}
         now={now}
         onChanged={() => { void reloadCore(); }}
+        extra={<StatsButton onClick={() => setStats(true)} />}
       />
 
       <div className="cmd-grid">
@@ -150,12 +156,15 @@ export default function CommandPage() {
         </section>
 
         <section className="cmd-col cmd-side">
-          <FrontRoomsCard cref={ref} cabinets={core.cabinets} />
-          <BackroomCard cref={ref} members={core.members} directives={directives} base={base} onChanged={() => { void readDirectives(); }} />
+          <FrontRoomsCard cref={ref} cabinets={core.cabinets} conferenceId={v.conference.id} />
         </section>
       </div>
 
-      {openDirective && <DirectiveDrawer directive={openDirective} onClose={closeDrawer} />}
+      {/* One plain line, only when the backroom load is uneven. */}
+      <RebalanceLine cref={ref} members={core.members} directives={directives} onChanged={() => { void readDirectives(); }} />
+
+      {stats && <StatsDialog directives={directives} members={core.members} characters={core.characters} cabinets={core.cabinets} now={now} onClose={() => setStats(false)} />}
+      {openDirective && <DirectiveDrawer directive={openDirective} directives={directives} onSelect={setOpen} onClose={closeDrawer} />}
     </div>
   );
 }

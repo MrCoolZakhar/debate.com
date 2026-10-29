@@ -9,17 +9,17 @@
 // the viewing cabinet's units. Every change is saved through src/lib/crisis/api.ts and logged by the database.
 
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import type { GeoJSONSource, Map as MLMap, MapMouseEvent, Marker as MLMarker } from 'maplibre-gl';
 import type { Feature, FeatureCollection, Geometry } from 'geojson';
-import { Cloud, Flag, Maximize2, MousePointer2, Plus, Ship, UserRound } from 'lucide-react';
+import { Building2, Cloud, Eye, Flag, Maximize2, MousePointer2, Pencil, Plus, Ship, UserRound } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import GSelect from '@/components/GSelect';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { amount as fmtAmount } from '@/lib/crisis/format';
 import { readMapFocus, type MapFocus } from '@/lib/crisis/mapFocus';
 import {
-  crisisError, deleteShape, deleteUnit, loadMap, saveRegionGeometries, saveShape, saveUnit, setRegionOwner,
+  crisisError, deleteUnit, loadMap, saveCharacter, saveUnit, setRegionOwner,
 } from '@/lib/crisis/api';
 import {
   AREA_EPS, HANDLE_LIMIT, applyTent, areaOf, bboxOf, clean, cutOverlaps, differenceM, kmBetween, labelPoint, nearestEdge, pointIn,
@@ -27,26 +27,33 @@ import {
   type Bbox, type EdgeHit, type Multi, type Pt, type ScreenPt, type TerritoryShape,
 } from '@/lib/crisis/geo';
 import { useCrisisLive } from '@/lib/crisis/live';
-import type { MapRegion, MapShape, MapUnit, RegionGeometry, UnitKind } from '@/lib/crisis/types';
+import { applyLocal, emptySet, saveSet, type EditSet, type MapData, type StageOptions } from './mapEdits';
+import type { MapShape, MapUnit, UnitKind } from '@/lib/crisis/types';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { Btn, CK, Segmented, cabinetTint } from '../../crisisKit';
+import { mayEditCharacters } from '../character/characterStatus';
 import { drawFog, type FogHoles } from './fog';
+import { freehandCorners, type FreePt } from './freehand';
+import { SIGHT_MAX_KM, kmFromPointer, kmText, sightHandleAt, sightKmOf, sightRing } from './sight';
+import {
+  addCityLayers, createCityLabels, fillCities, loadCities, setCitiesVisible, type City,
+} from './cities';
 import {
   KIND_META, centroidOf, clampLat, clampLng, loadWorldData, shapePoints, type CountryLabel, type LngLat, type WorldData,
 } from './mapData';
 import {
-  BLANK_STYLE, DRAFT, L_LAND, L_SHAPE_FILL, NOBODY, SRC_COUNTRIES, SRC_DRAFT, SRC_EDIT, SRC_HOVER, SRC_SEL, SRC_SHAPES,
-  editLayers, mapLayers,
+  BLANK_STYLE, DRAFT, L_BASE_FILL, L_LAND, L_SHAPE_FILL, NOBODY, SRC_BASE, SRC_COUNTRIES, SRC_DRAFT, SRC_EDIT, SRC_HOVER, SRC_PLANS,
+  SRC_SEL, SRC_SHAPES, SRC_SIGHT, baseLayers, editLayers, mapLayers,
 } from './mapStyle';
 import {
   CharacterCard, KindPicker, NewTerritoryPanel, PlaceUnitPanel, TerritoryCard, UnitEditor, UnitViewer, type PanelCabinet, type UnitDraft,
 } from './MapPanels';
 import {
-  MAP_CSS, makeCorner, makeCountryLabel, makeGhost, makeMidpoint, makeShapeLabel, makeVertex, paintCharacter, paintToken, safeColor,
+  MAP_CSS, makeCorner, makeCountryLabel, makeGhost, makeMidpoint, makeShapeLabel, makeSightHandle, makeVertex,
+  paintCharacter, paintToken, safeColor,
 } from './tokens';
 
-type Tool = 'select' | 'borders' | 'unit';
-type MapData = { regions: MapRegion[]; units: MapUnit[]; shapes: MapShape[] };
+type Tool = 'select' | 'borders' | 'draw' | 'unit';
 type TerrRef = { kind: 'country'; key: string } | { kind: 'area'; id: string };
 
 /** A new territory being drawn with the Borders tool. */
@@ -72,16 +79,6 @@ interface OutlineDrag {
   moved: boolean;
 }
 
-/** Everything one save changes (and, the other way round, what its Undo puts back). */
-interface EditSet {
-  regions: Array<{ key: string; owner_cabinet_id: string | null; geometry: RegionGeometry | null }>;
-  shapes: Array<{ id: string; geometry: MapShape['geometry'] }>;
-  owners: Array<{ id: string; owner_cabinet_id: string | null }>;
-  removeShapes: string[];
-  addShapes: MapShape[];
-}
-const emptySet = (): EditSet => ({ regions: [], shapes: [], owners: [], removeShapes: [], addShapes: [] });
-
 interface UndoChip { sid: number; text: string; note: string | null; restore: () => void }
 
 type PressEvent = { point: { x: number; y: number }; lngLat: { lng: number; lat: number }; originalEvent: Event; preventDefault: () => void };
@@ -95,13 +92,35 @@ interface Live {
   onUnitClick: (id: string) => void;
   onCharClick: (id: string) => void;
   onUnitMoved: (id: string, lng: number, lat: number) => void;
+  onUnitDrag: (id: string, lng: number, lat: number) => void;
+  onCharMoved: (id: string, lng: number, lat: number) => void;
   redrawFog: () => void;
-  escape: () => void;
+  /** Backs out of whatever is open; answers whether it did anything. */
+  escape: () => boolean;
 }
 
 const MIN_POINTS = 3;
 const EDGE_PX = 12;
 const emptyFc: FeatureCollection = { type: 'FeatureCollection', features: [] };
+
+/**
+ * Runs a style call (feature state, layer settings) so it can never throw while the style is still loading.
+ * If the style is not ready it waits for the map to settle and tries once more; after that it gives up quietly
+ * (the next change of data runs it again).
+ */
+function whenStyleReady(map: MLMap, fn: () => void): void {
+  const attempt = (): boolean => {
+    try { fn(); return true; } catch { return false; }
+  };
+  if (attempt()) return;
+  let tries = 0;
+  const retry = () => {
+    tries += 1;
+    if (attempt() || tries >= 3) return;
+    map.once('idle', retry);
+  };
+  map.once('idle', retry);
+}
 
 function round5(n: number): number { return Math.round(n * 1e5) / 1e5; }
 
@@ -137,41 +156,6 @@ function storedOutline(d: MapData, key: string): Multi | undefined {
   return g ? toMulti(g) : undefined;
 }
 
-function applyLocal(d: MapData, s: EditSet, crisisId: string): MapData {
-  let regions = d.regions;
-  for (const r of s.regions) {
-    regions = regions.some((x) => x.region_key === r.key)
-      ? regions.map((x) => (x.region_key === r.key ? { ...x, owner_cabinet_id: r.owner_cabinet_id, geometry: r.geometry } : x))
-      : [...regions, { crisis_id: crisisId, region_key: r.key, owner_cabinet_id: r.owner_cabinet_id, geometry: r.geometry }];
-  }
-  const geo = new Map(s.shapes.map((x) => [x.id, x.geometry]));
-  const own = new Map(s.owners.map((x) => [x.id, x.owner_cabinet_id]));
-  const shapes = d.shapes
-    .filter((x) => !s.removeShapes.includes(x.id))
-    .map((x) => {
-      let y = x;
-      if (geo.has(x.id)) y = { ...y, geometry: geo.get(x.id) as MapShape['geometry'] };
-      if (own.has(x.id)) y = { ...y, owner_cabinet_id: own.get(x.id) ?? null };
-      return y;
-    });
-  return { ...d, regions, shapes: [...shapes, ...s.addShapes] };
-}
-
-/** Saves an edit set; answers the ids the database gave the added shapes, in order. */
-async function saveSet(ref: Parameters<typeof saveShape>[0], s: EditSet): Promise<string[]> {
-  await saveRegionGeometries(ref, s.regions);
-  for (const x of s.shapes) await saveShape(ref, { id: x.id, geometry: x.geometry });
-  for (const x of s.owners) await saveShape(ref, { id: x.id, owner_cabinet_id: x.owner_cabinet_id });
-  for (const id of s.removeShapes) await deleteShape(ref, id);
-  const ids: string[] = [];
-  for (const a of s.addShapes) {
-    ids.push(await saveShape(ref, {
-      kind: a.kind, owner_cabinet_id: a.owner_cabinet_id, label: a.label, color: a.color, geometry: a.geometry, public: a.public, revealed_to: a.revealed_to,
-    }));
-  }
-  return ids;
-}
-
 /** The Undo chip's small note when an edit swallowed a territory whole. */
 function goneNote(gone: string[]): string | null {
   return gone.length ? `${gone.join(', ')} ${gone.length === 1 ? 'was' : 'were'} fully taken` : null;
@@ -181,11 +165,16 @@ function areaGeometry(m: Multi): MapShape['geometry'] {
   return toGeometry(m) as MapShape['geometry'];
 }
 
-export default function WarMap({ compact = false, title, actions }: { compact?: boolean; title?: ReactNode; actions?: ReactNode }) {
+/**
+ * The war map. With `stage` it is the same map used inside a directive's reply: nothing is saved or read from the
+ * database, every change is handed back to the reply (stage.onData / stage.onUnitMove) and is only written when
+ * the reply is sent.
+ */
+export default function WarMap({ compact = false, title, actions, stage }: { compact?: boolean; title?: ReactNode; actions?: ReactNode; stage?: StageOptions }) {
   const v = useCrisis();
   const { ref, cabinetId, staff, director, settings, core } = v;
-  const canMap = staff && (director || settings.backroomPowers.map);
-  const canUnits = staff && (director || settings.backroomPowers.units);
+  const canMap = stage ? stage.canMap : staff && (director || settings.backroomPowers.map);
+  const canUnits = stage ? stage.canUnits : staff && (director || settings.backroomPowers.units);
 
   const cabinets = useMemo<PanelCabinet[]>(
     () => core.cabinets.map((c) => ({ id: c.id, name: c.name, short: c.short_name || c.name, color: safeColor(c.color) })),
@@ -194,8 +183,19 @@ export default function WarMap({ compact = false, title, actions }: { compact?: 
   const cabById = useMemo(() => new Map(cabinets.map((c) => [c.id, c])), [cabinets]);
 
   // ── data ──
-  const [data, setData] = useState<MapData | null>(null);
+  const isStage = !!stage;
+  const stageKind = stage?.kind ?? null;
+  const stageRef = useRef(stage);
+  useEffect(() => { stageRef.current = stage; });
+  const [rawData, setData] = useState<MapData | null>(() => stage?.data ?? null);
+  const rawRef = useRef<MapData | null>(null);
   const dataRef = useRef<MapData | null>(null);
+  // In a reply, units already moved by it show at their new place (the unit's real place stays in rawData).
+  const stageMoves = stage?.moves;
+  const data = useMemo<MapData | null>(() => {
+    if (!rawData || !stageMoves || !Object.keys(stageMoves).length) return rawData;
+    return { ...rawData, units: rawData.units.map((u) => (stageMoves[u.id] ? { ...u, lng: stageMoves[u.id].lng, lat: stageMoves[u.id].lat } : u)) };
+  }, [rawData, stageMoves]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const writes = useRef(0);
   const seq = useRef(0);
@@ -203,9 +203,10 @@ export default function WarMap({ compact = false, title, actions }: { compact?: 
   const [mapReady, setMapReady] = useState(false);
   const [last, setLast] = useState<{ at: number; text: string } | null>(null);
 
-  useEffect(() => { dataRef.current = data; }, [data]);
+  useEffect(() => { dataRef.current = data; rawRef.current = rawData; }, [data, rawData]);
 
   const reload = useCallback(async () => {
+    if (isStage) return;   // a reply's map is only what the reply stages
     const mine = ++seq.current;
     try {
       const d = await loadMap(ref);
@@ -215,11 +216,11 @@ export default function WarMap({ compact = false, title, actions }: { compact?: 
     } catch (e) {
       if (mine === seq.current) setLoadError(crisisError(e, 'Could not load the map.'));
     }
-  }, [ref]);
+  }, [ref, isStage]);
 
   useEffect(() => { void reload(); }, [reload]);
 
-  useCrisisLive(ref.id, ['crisis_map_regions', 'crisis_units', 'crisis_shapes', 'crisis_cabinets'], (changed, pings) => {
+  useCrisisLive(isStage ? null : ref.id, ['crisis_map_regions', 'crisis_units', 'crisis_shapes', 'crisis_cabinets'], (changed, pings) => {
     const p = pings[pings.length - 1];
     if (p) {
       let text = '';
@@ -272,18 +273,22 @@ export default function WarMap({ compact = false, title, actions }: { compact?: 
   const [viewAs, setViewAs] = useState<string>('all');
   const [fogOn, setFogOn] = useState(true);
   const [charsOn, setCharsOn] = useState(true);
+  const [rangesOn, setRangesOn] = useState(true);
+  const [citiesOn, setCitiesOn] = useState(true);
   const staffViewer = viewAs !== 'all' && cabById.has(viewAs) ? viewAs : null;
   const viewer: string | null = staff ? staffViewer : cabinetId;
   const fogActive = !!viewer && (staff && !compact ? fogOn : true);
 
   // What the viewer sees. A delegate gets only what the database lets their cabinet see (its own units, units
   // shown to it, and any unit inside one of its sight circles). Staff looking as a cabinet get the same rule here.
+  // A spy is never spotted: only its own cabinet and the cabinets it was shown to (revealed_to) see it, even on
+  // their land or inside their sight range (the database enforces the same in crisis_units RLS).
   const shownUnits = useMemo(() => {
     const all = data?.units ?? [];
     if (!staff || !viewer) return all;
     const own = all.filter((u) => u.owner_cabinet_id === viewer);
     return all.filter((u) => u.owner_cabinet_id === viewer || u.revealed_to.includes(viewer)
-      || own.some((o) => kmBetween([o.lng, o.lat], [u.lng, u.lat]) <= KIND_META[o.kind].sight));
+      || (u.kind !== 'spy' && own.some((o) => kmBetween([o.lng, o.lat], [u.lng, u.lat]) <= sightKmOf(o))));
   }, [data, viewer, staff]);
 
   const shownShapes = useMemo(
@@ -296,6 +301,8 @@ export default function WarMap({ compact = false, title, actions }: { compact?: 
   const [selUnit, setSelUnit] = useState<string | null>(null);
   const [selTerr, setSelTerr] = useState<TerrRef | null>(null);
   const [selChar, setSelChar] = useState<string | null>(null);
+  const stageUnitId = stage?.unitId ?? null;
+  useEffect(() => { if (stageKind === 'unit') setSelUnit(stageUnitId); }, [stageKind, stageUnitId]);
   const [addKind, setAddKind] = useState<UnitKind | null>(null);
   const [newUnit, setNewUnit] = useState<{ lng: number; lat: number } | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -305,9 +312,15 @@ export default function WarMap({ compact = false, title, actions }: { compact?: 
   const pendingMoveRef = useRef<PendingMove | null>(null);
   const dragRef = useRef<OutlineDrag | null>(null);
   const suppressClickUntil = useRef(0);
+  /** A path being dragged with the Draw tool, and the head of the move arrow. */
+  const freeRef = useRef<{ pts: FreePt[] } | null>(null);
+  const freeFrame = useRef<number | null>(null);
+  const arrowSvg = useRef<SVGSVGElement>(null);
+  const dragTip = useRef<HTMLDivElement>(null);
 
   // New units and territory go to the cabinet being viewed, else the first cabinet.
   const defaultOwner = viewer ?? cabinets[0]?.id ?? null;
+  const draftColor = draft && draft.owner ? cabById.get(draft.owner)?.color ?? null : null;
 
   const setPending = useCallback((p: PendingMove | null) => {
     pendingMoveRef.current = p;
@@ -336,8 +349,8 @@ export default function WarMap({ compact = false, title, actions }: { compact?: 
   const changeView = useCallback((val: string) => { setViewAs(val); }, []);
 
   // Staff can still add units and change borders while looking through a cabinet's eyes.
-  const editable = staff && !compact;
-  const canEditTerr = editable && canMap && tool !== 'unit' && !draft;
+  const editable = stage ? stage.kind === 'border' : staff && !compact;
+  const canEditTerr = editable && canMap && tool !== 'unit' && tool !== 'draw' && !draft;
 
   // The selected territory as it stands (a territory that no longer exists is no longer selected).
   const selShape = selTerr?.kind === 'area' ? shownShapes.find((s) => s.id === selTerr.id && s.kind === 'area') ?? null : null;
@@ -364,6 +377,8 @@ export default function WarMap({ compact = false, title, actions }: { compact?: 
   const liveRef = useRef<Live | null>(null);
   const labelsRef = useRef<CountryLabel[]>([]);
   const syncLabelsRef = useRef<(() => void) | null>(null);
+  const cityCtl = useRef<ReturnType<typeof createCityLabels> | null>(null);
+  const citiesRef = useRef<City[]>([]);
   const [mapError, setMapError] = useState<string | null>(null);
   const didFit = useRef(false);
 
@@ -377,7 +392,9 @@ export default function WarMap({ compact = false, title, actions }: { compact?: 
   }, []);
 
   const setSource = useCallback((id: string, fc: FeatureCollection) => {
-    (mapRef.current?.getSource(id) as GeoJSONSource | undefined)?.setData(fc);
+    const map = mapRef.current;
+    if (!map) return;
+    try { (map.getSource(id) as GeoJSONSource | undefined)?.setData(fc); } catch { /* the style is still loading: the next change sets it */ }
   }, []);
 
   // ── names ──
@@ -394,12 +411,70 @@ export default function WarMap({ compact = false, title, actions }: { compact?: 
     return () => window.clearTimeout(t);
   }, [undo]);
 
+  // ── the move arrow ──
+  // From where the unit is now to where the pointer is (while it is dragged) or where it was dropped (while
+  // the move waits for a yes). It is drawn as a small SVG laid over the map and moved in the same frame as the
+  // token, so the line always reaches the arrowhead. The tip beside it says what is being moved and how far;
+  // it only shows while the unit is being dragged (the confirm card says the same afterwards).
+  const showMove = useCallback((u: MapUnit | null, to: LngLat | null, withTip = true) => {
+    const map = mapRef.current;
+    const svg = arrowSvg.current;
+    const tip = dragTip.current;
+    if (!map) return;
+    const part = (name: string) => svg?.querySelector<SVGElement>(`[data-p="${name}"]`) ?? null;
+    if (!u || !to) {
+      if (svg) svg.style.display = 'none';
+      if (tip) tip.style.display = 'none';
+      return;
+    }
+    const from: LngLat = [u.lng, u.lat];
+    const a = map.project(from); const b = map.project(to);
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    if (svg) {
+      svg.style.display = 'block';
+      const ux = len ? (b.x - a.x) / len : 0; const uy = len ? (b.y - a.y) / len : 0;
+      // The head's tip sits just short of the unit's token; the line runs from the unit to the head's base.
+      const showHead = len >= 44;
+      const tipX = showHead ? b.x - ux * 20 : b.x; const tipY = showHead ? b.y - uy * 20 : b.y;
+      const baseX = showHead ? tipX - ux * 15 : b.x; const baseY = showHead ? tipY - uy * 15 : b.y;
+      for (const n of ['halo', 'line']) {
+        const l = part(n);
+        l?.setAttribute('x1', String(a.x)); l?.setAttribute('y1', String(a.y));
+        l?.setAttribute('x2', String(baseX + ux * 1.5)); l?.setAttribute('y2', String(baseY + uy * 1.5));
+      }
+      const head = part('head');
+      if (head) {
+        head.style.display = showHead ? 'block' : 'none';
+        const px = -uy * 9; const py = ux * 9;
+        head.setAttribute('points', `${tipX},${tipY} ${baseX + px},${baseY + py} ${baseX - px},${baseY - py}`);
+      }
+      const origin = part('from');
+      origin?.setAttribute('cx', String(a.x)); origin?.setAttribute('cy', String(a.y));
+    }
+    if (tip) {
+      if (!withTip) { tip.style.display = 'none'; return; }
+      const owner = u.owner_cabinet_id ? cabById.get(u.owner_cabinet_id)?.name ?? 'A cabinet' : 'Nobody';
+      const name = document.createElement('b'); name.textContent = u.name;
+      const what = document.createElement('div'); what.textContent = `${KIND_META[u.kind].label} · ${fmtAmount(u.strength)} · ${owner}`;
+      const dist = document.createElement('div');
+      dist.append('Distance so far: ');
+      const km = document.createElement('i'); km.textContent = kmText(kmBetween(from, to)); dist.append(km);
+      tip.replaceChildren(name, what, dist);
+      tip.style.display = 'block';
+      const w = map.getContainer().clientWidth;
+      const tw = tip.offsetWidth; const th = tip.offsetHeight;
+      const left = b.x + 28 + tw > w - 8 ? b.x - 28 - tw : b.x + 28;
+      tip.style.transform = `translate(${Math.max(8, left)}px, ${Math.max(8, b.y - th / 2)}px)`;
+    }
+  }, [cabById]);
+
   // ── actions ──
   const moveUnit = useCallback(async (id: string, lng: number, lat: number) => {
     const before = dataRef.current;
     const unit = before?.units.find((u) => u.id === id);
     if (!before || !unit) return;
     const nl = round5(clampLng(lng)); const nt = round5(clampLat(lat));
+    if (isStage) { stageRef.current?.onUnitMove?.(id, nl, nt); return; }   // a reply only plans the move
     setData({ ...before, units: before.units.map((u) => (u.id === id ? { ...u, lng: nl, lat: nt } : u)) });
     await run(async () => {
       try {
@@ -410,16 +485,19 @@ export default function WarMap({ compact = false, title, actions }: { compact?: 
         notifyErr(crisisError(e, 'Could not move the unit.'), 'crisis-map');
       }
     });
-  }, [ref, run]);
+  }, [ref, run, isStage]);
 
   /** Saves a set of border changes at once, shows them first, and offers Undo (which puts `undoOf` back). */
   const applyEdits = useCallback(async (set: EditSet, text: string, undoOf: ((ids: string[]) => EditSet) | null, note: string | null = null) => {
     const before = dataRef.current;
     if (!before) return;
-    setData(applyLocal(before, set, ref.id));
+    const shown = applyLocal(before, set, ref.id);
+    setData(shown);
+    stageRef.current?.onData?.(shown);
     await run(async () => {
       try {
-        const ids = await saveSet(ref, set);
+        // In a reply nothing is saved: the added territories keep their local ids, and the reply keeps the result.
+        const ids = isStage ? set.addShapes.map((a) => a.id) : await saveSet(ref, set);
         setLast({ at: new Date().getTime(), text });
         if (undoOf) {
           const back = undoOf(ids);
@@ -427,10 +505,11 @@ export default function WarMap({ compact = false, title, actions }: { compact?: 
         } else setUndo(null);
       } catch (e) {
         setData(before);
+        stageRef.current?.onData?.(before);
         notifyErr(crisisError(e, 'Could not change the border.'), 'crisis-map');
       }
     });
-  }, [ref, run]);
+  }, [ref, run, isStage]);
 
   /** Every territory but `t`, for cutting overlaps. */
   const othersFor = useCallback((t: TerrRef | null, d: MapData): TerritoryShape[] => {
@@ -516,6 +595,16 @@ export default function WarMap({ compact = false, title, actions }: { compact?: 
     if (!d) return;
     const name = nameOf(t, d);
     const who = owner ? cabById.get(owner)?.name ?? 'a cabinet' : 'nobody';
+    if (t.kind === 'country' && isStage) {
+      const row = d.regions.find((r) => r.region_key === t.key);
+      const current = row?.owner_cabinet_id ?? null;
+      if (current === owner) return;
+      const set = emptySet(); const back = emptySet();
+      set.regions.push({ key: t.key, owner_cabinet_id: owner, geometry: row?.geometry ?? null });
+      back.regions.push({ key: t.key, owner_cabinet_id: current, geometry: row?.geometry ?? null });
+      void applyEdits(set, `You gave ${name} to ${who}`, () => back);
+      return;
+    }
     if (t.kind === 'country') {
       const current = d.regions.find((r) => r.region_key === t.key)?.owner_cabinet_id ?? null;
       if (current === owner) return;
@@ -543,7 +632,7 @@ export default function WarMap({ compact = false, title, actions }: { compact?: 
     set.owners.push({ id: t.id, owner_cabinet_id: owner });
     back.owners.push({ id: t.id, owner_cabinet_id: shape.owner_cabinet_id });
     void applyEdits(set, `You gave ${name} to ${who}`, () => back);
-  }, [ref, run, cabById, nameOf, applyEdits]);
+  }, [ref, run, cabById, nameOf, applyEdits, isStage]);
 
   /** Saves a newly drawn territory; land it covers is taken from whoever held it. */
   const submitNewArea = useCallback((dr: Draft) => {
@@ -565,9 +654,9 @@ export default function WarMap({ compact = false, title, actions }: { compact?: 
       geometry: areaGeometry(multi), public: true, revealed_to: [],
     });
     setDraft(null);
-    notifyOk('Territory saved', 'crisis-map');
+    notifyOk(isStage ? 'Territory added to the reply' : 'Territory saved', 'crisis-map');
     void applyEdits(set, 'You drew new territory', (ids) => ({ ...back, removeShapes: [...back.removeShapes, ...ids] }), goneNote(gone));
-  }, [ref.id, addCuts, applyEdits]);
+  }, [ref.id, addCuts, applyEdits, isStage]);
 
   const removeArea = useCallback((id: string) => {
     const d = dataRef.current;
@@ -585,6 +674,7 @@ export default function WarMap({ compact = false, title, actions }: { compact?: 
     const patch = {
       name: dd.name.trim(), kind: dd.kind, strength: dd.strength, owner_cabinet_id: dd.owner,
       note: dd.note.trim() ? dd.note.trim() : null, revealed_to: dd.revealed,
+      ...(existing || dd.sight !== null ? { sight_km: dd.sight } : {}),
     };
     if (existing && before) setData({ ...before, units: before.units.map((u) => (u.id === existing.id ? { ...u, ...patch } : u)) });
     await run(async () => {
@@ -621,17 +711,59 @@ export default function WarMap({ compact = false, title, actions }: { compact?: 
     });
   }, [ref, run]);
 
+  /** A unit's sight ring was dragged: save the new radius (shown first, put back if the save fails). */
+  const saveSight = useCallback(async (id: string, km: number) => {
+    const before = dataRef.current;
+    const unit = before?.units.find((u) => u.id === id);
+    if (!before || !unit) return;
+    const val = Math.max(0, Math.min(SIGHT_MAX_KM, Math.round(km)));
+    if (val === sightKmOf(unit) && unit.sight_km === val) return;
+    setData({ ...before, units: before.units.map((u) => (u.id === id ? { ...u, sight_km: val } : u)) });
+    await run(async () => {
+      try {
+        await saveUnit(ref, { id, sight_km: val });
+        setLast({ at: new Date().getTime(), text: `${unit.name} now sees ${kmText(val)}` });
+      } catch (e) {
+        setData(before);
+        notifyErr(crisisError(e, 'Could not change how far it sees.'), 'crisis-map');
+      }
+    });
+  }, [ref, run]);
+
+  /** Staff dragged a character to a new spot: the marker is already there; save it, put it back if that fails. */
+  const charOverride = useRef(new Map<string, LngLat>());
+  const moveChar = useCallback(async (id: string, lng: number, lat: number) => {
+    const c = core.characters.find((x) => x.id === id);
+    if (!c) return;
+    const prev: LngLat | null = typeof c.location_lng === 'number' && typeof c.location_lat === 'number' ? [c.location_lng, c.location_lat] : null;
+    const nl = round5(clampLng(lng)); const nt = round5(clampLat(lat));
+    charOverride.current.set(id, [nl, nt]);
+    try {
+      await saveCharacter(ref, { id, location_lng: nl, location_lat: nt });
+      setLast({ at: new Date().getTime(), text: `You moved ${c.name}` });
+      await v.reloadCore();
+      charOverride.current.delete(id);
+    } catch (e) {
+      charOverride.current.delete(id);
+      const mk = charMarkers.current.get(id);
+      if (mk && prev) mk.marker.setLngLat(prev);
+      notifyErr(crisisError(e, 'Could not move the character.'), 'crisis-map');
+    }
+  }, [core.characters, ref, v]);
+
   /** The unit was dragged: ask in place before saving. */
   const askMove = useCallback((id: string, lng: number, lat: number) => {
     const map = mapRef.current;
     const u = dataRef.current?.units.find((x) => x.id === id);
-    if (!map || !u) return;
+    const base = rawRef.current?.units.find((x) => x.id === id);
+    if (!map || !u || !base) return;
     const was = pendingMoveRef.current;
     if (was && was.id !== id) cancelMove();
     const a = map.project([u.lng, u.lat]); const b = map.project([lng, lat]);
-    if (Math.hypot(a.x - b.x, a.y - b.y) < 4) { cancelMove(); return; }
+    if (Math.hypot(a.x - b.x, a.y - b.y) < 4) { cancelMove(); showMove(null, null); return; }
     setPending({ id, name: u.name, lng, lat });
-  }, [cancelMove, setPending]);
+    showMove(base, [lng, lat], false);
+  }, [cancelMove, setPending, showMove]);
 
   const confirmMove = useCallback(() => {
     const p = pendingMoveRef.current;
@@ -647,8 +779,8 @@ export default function WarMap({ compact = false, title, actions }: { compact?: 
     if (!pts.length) { map.fitBounds([[-168, -48], [178, 76]], { padding: 24, duration: 0 }); return; }
     let minX = 180; let minY = 90; let maxX = -180; let maxY = -90;
     for (const [x, y] of pts) { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y); }
-    map.fitBounds([[minX, minY], [maxX, maxY]], { padding: compact ? 50 : 110, maxZoom: 5.5, duration: 0 });
-  }, [shownUnits, compact]);
+    map.fitBounds([[minX, minY], [maxX, maxY]], { padding: compact || isStage ? 50 : 110, maxZoom: 5.5, duration: 0 });
+  }, [shownUnits, compact, isStage]);
 
   /** The outline point under the pointer, if it is within reach of the selected territory's outline. */
   const edgeAt = useCallback((map: MLMap, multi: Multi, point: { x: number; y: number }, ll: { lng: number; lat: number }): EdgeHit | null => {
@@ -683,6 +815,7 @@ export default function WarMap({ compact = false, title, actions }: { compact?: 
         if (performance.now() < suppressClickUntil.current) return;
         const target = e.originalEvent.target as HTMLElement | null;
         if (target?.closest('.wm-marker')) return;
+        if (stageKind === 'unit') return;
         if (compact) { setSelUnit(null); return; }
         if (tool === 'unit') {
           if (editable && canUnits && addKind) {
@@ -691,7 +824,7 @@ export default function WarMap({ compact = false, title, actions }: { compact?: 
           }
           return;
         }
-        if (tool === 'borders' && draft) {
+        if ((tool === 'borders' || tool === 'draw') && draft) {
           if (draft.phase !== 'draw') return;
           const pts = draft.points;
           const lastPt = pts[pts.length - 1];
@@ -706,6 +839,14 @@ export default function WarMap({ compact = false, title, actions }: { compact?: 
           setDraft({ ...draft, points: [...pts, [round5(clampLng(e.lngLat.lng)), round5(clampLat(e.lngLat.lat))]] });
           return;
         }
+        // Draw: a click starts a new outline, whatever is under it (land it covers is taken from its holder).
+        if (tool === 'draw') {
+          if (editable && canMap) {
+            setSelTerr(null); setSelUnit(null); setSelChar(null);
+            setDraft({ sid: new Date().getTime(), phase: 'draw', points: [[round5(clampLng(e.lngLat.lng)), round5(clampLat(e.lngLat.lat))]], owner: defaultOwner });
+          }
+          return;
+        }
         // Select and Borders: a click picks a territory (a drawn area sits on top of a country).
         const area = map.queryRenderedFeatures(e.point, { layers: [L_SHAPE_FILL] })[0];
         const sid = area?.properties?.id as string | undefined;
@@ -713,7 +854,9 @@ export default function WarMap({ compact = false, title, actions }: { compact?: 
           setSelUnit(null); setSelChar(null); setSelTerr({ kind: 'area', id: sid });
           return;
         }
-        const f = map.queryRenderedFeatures(e.point, { layers: [L_LAND] })[0];
+        // The real outline under a changed border counts as the country too (so a country that lost all its land
+        // can still be picked and put back).
+        const f = map.queryRenderedFeatures(e.point, { layers: [L_LAND] })[0] ?? map.queryRenderedFeatures(e.point, { layers: [L_BASE_FILL] })[0];
         const key = f?.properties?.key as string | undefined;
         if (key) {
           setSelUnit(null); setSelChar(null); setSelTerr({ kind: 'country', key });
@@ -733,6 +876,16 @@ export default function WarMap({ compact = false, title, actions }: { compact?: 
       },
       onPress: (e) => {
         const map = mapRef.current;
+        // Draw: press and drag draws an outline freehand (hold Shift to move the map instead).
+        if (map && editable && canMap && !dragRef.current && !freeRef.current
+          && (tool === 'draw' || (tool === 'borders' && draft?.phase === 'draw')) && (!draft || draft.phase === 'draw')) {
+          const oe = e.originalEvent as MouseEvent;
+          const tg = e.originalEvent.target as HTMLElement | null;
+          if (oe.shiftKey || oe.button > 0 || tg?.closest('.wm-marker')) return;
+          e.preventDefault();
+          freeRef.current = { pts: [{ x: e.point.x, y: e.point.y, ll: [e.lngLat.lng, e.lngLat.lat] }] };
+          return;
+        }
         if (!map || !canEditTerr || !selTerr || !selValid || dragRef.current) return;
         const target = e.originalEvent.target as HTMLElement | null;
         if (target?.closest('.wm-marker')) return;
@@ -753,6 +906,21 @@ export default function WarMap({ compact = false, title, actions }: { compact?: 
       onPointerMove: (e) => {
         const map = mapRef.current;
         if (!map) return;
+        const fh = freeRef.current;
+        if (fh) {
+          const last = fh.pts[fh.pts.length - 1];
+          if (Math.hypot(e.point.x - last.x, e.point.y - last.y) >= 3) {
+            fh.pts.push({ x: e.point.x, y: e.point.y, ll: [round5(clampLng(e.lngLat.lng)), round5(clampLat(e.lngLat.lat))] });
+            if (freeFrame.current === null) {
+              freeFrame.current = window.requestAnimationFrame(() => {
+                freeFrame.current = null;
+                const cur = freeRef.current;
+                if (cur) setSource(SRC_DRAFT, draftFc(cur.pts.map((p) => p.ll), draftColor));
+              });
+            }
+          }
+          return;
+        }
         const dr = dragRef.current;
         if (dr) {
           if (Math.hypot(e.point.x - dr.start.x, e.point.y - dr.start.y) > 3) dr.moved = true;
@@ -786,6 +954,21 @@ export default function WarMap({ compact = false, title, actions }: { compact?: 
             : tool === 'borders' ? 'pointer' : '';
       },
       onRelease: () => {
+        const fh = freeRef.current;
+        if (fh) {
+          freeRef.current = null;
+          if (freeFrame.current !== null) { window.cancelAnimationFrame(freeFrame.current); freeFrame.current = null; }
+          const corners = freehandCorners(fh.pts);
+          setSource(SRC_DRAFT, draft ? draftFc(draft.points, draftColor) : emptyFc);
+          if (fh.pts.length > 2) suppressClickUntil.current = performance.now() + 400;
+          if (!corners) {
+            if (fh.pts.length > 2) notifyErr('Draw a bigger shape, or click points one by one.', 'crisis-map');
+            return;
+          }
+          if (draft && draft.points.length >= 2) setDraft({ ...draft, phase: 'refine', points: [...draft.points, ...corners] });
+          else setDraft({ sid: draft?.sid ?? new Date().getTime(), phase: 'refine', points: corners, owner: draft?.owner ?? defaultOwner });
+          return;
+        }
         const dr = dragRef.current;
         if (!dr) return;
         dragRef.current = null;
@@ -812,6 +995,7 @@ export default function WarMap({ compact = false, title, actions }: { compact?: 
         commitOutline(dr.terr, next, false, growth);
       },
       onUnitClick: (id) => {
+        if (stageKind === 'unit') { stageRef.current?.onSelectUnit?.(id); return; }
         if (tool !== 'select') return;
         setNewUnit(null); setSelTerr(null); setSelChar(null);
         setSelUnit(id);
@@ -822,24 +1006,36 @@ export default function WarMap({ compact = false, title, actions }: { compact?: 
         setSelChar(id);
       },
       onUnitMoved: (id, lng, lat) => { askMove(id, lng, lat); },
+      onUnitDrag: (id, lng, lat) => {
+        const u = rawRef.current?.units.find((x) => x.id === id);
+        if (u) showMove(u, [lng, lat]);
+      },
+      onCharMoved: (id, lng, lat) => { void moveChar(id, lng, lat); },
       redrawFog,
       escape: () => {
+        if (freeRef.current) {
+          freeRef.current = null;
+          setSource(SRC_DRAFT, draft ? draftFc(draft.points, draftColor) : emptyFc);
+          return true;
+        }
         if (dragRef.current) {
           dragRef.current = null;
           setSource(SRC_EDIT, emptyFc);
           const map = mapRef.current;
           if (map) map.getCanvasContainer().style.cursor = '';
-          return;
+          return true;
         }
-        if (pendingMoveRef.current) { cancelMove(); return; }
-        if (draft) { setDraft(null); return; }
+        if (pendingMoveRef.current) { cancelMove(); return true; }
+        if (draft) { setDraft(null); return true; }
         if (tool === 'unit') {
           if (newUnit) setNewUnit(null);
           else if (addKind) setAddKind(null);
           else changeTool('select');
-          return;
+          return true;
         }
-        clearSelection();
+        const had = !!(selTerr || selUnit || selChar) && stageKind !== 'unit';
+        if (stageKind !== 'unit') clearSelection();
+        return had;
       },
     };
   });
@@ -906,14 +1102,27 @@ export default function WarMap({ compact = false, title, actions }: { compact?: 
 
         m.on('load', () => {
           if (cancelled) return;
+          m.addSource(SRC_BASE, { type: 'geojson', data: emptyFc });
           m.addSource(SRC_COUNTRIES, { type: 'geojson', data: w.collection, promoteId: 'key' });
           m.addSource(SRC_SHAPES, { type: 'geojson', data: emptyFc });
           m.addSource(SRC_DRAFT, { type: 'geojson', data: emptyFc });
           m.addSource(SRC_SEL, { type: 'geojson', data: emptyFc });
           m.addSource(SRC_EDIT, { type: 'geojson', data: emptyFc });
           m.addSource(SRC_HOVER, { type: 'geojson', data: emptyFc });
+          m.addSource(SRC_PLANS, { type: 'geojson', data: emptyFc });
+          m.addSource(SRC_SIGHT, { type: 'geojson', data: emptyFc });
+          for (const layer of baseLayers()) m.addLayer(layer);
           for (const layer of mapLayers()) m.addLayer(layer);
+          addCityLayers(m);
           for (const layer of editLayers()) m.addLayer(layer);
+          const labels = createCityLabels(m, ml);
+          cityCtl.current = labels;
+          void loadCities().then((list) => {
+            if (cancelled) return;
+            citiesRef.current = list;
+            fillCities(m, list);
+            labels.setCities(list);
+          }).catch(() => { /* no cities: the map still works */ });
 
           const cvs = document.createElement('canvas');
           cvs.classList.add('wm-fog');
@@ -924,7 +1133,7 @@ export default function WarMap({ compact = false, title, actions }: { compact?: 
           m.on('dblclick', (e) => liveRef.current?.onMapDblClick(e));
           m.on('mousedown', (e) => liveRef.current?.onPress(e));
           m.on('touchstart', (e) => { if (e.points.length === 1) liveRef.current?.onPress(e); });
-          m.on('touchmove', (e) => { if (dragRef.current && e.points.length === 1) liveRef.current?.onPointerMove(e); });
+          m.on('touchmove', (e) => { if ((dragRef.current || freeRef.current) && e.points.length === 1) liveRef.current?.onPointerMove(e); });
           let hover: string | null = null;
           let moveFrame: number | null = null;
           let lastMove: MapMouseEvent | null = null;
@@ -942,9 +1151,12 @@ export default function WarMap({ compact = false, title, actions }: { compact?: 
               const f = want ? m.queryRenderedFeatures(ev.point, { layers: [L_LAND] })[0] : undefined;
               const key = (f?.properties?.key as string | undefined) ?? null;
               if (key === hover) return;
-              if (hover) m.setFeatureState({ source: SRC_COUNTRIES, id: hover }, { hi: false });
+              const was = hover;
               hover = key;
-              if (key) m.setFeatureState({ source: SRC_COUNTRIES, id: key }, { hi: true });
+              whenStyleReady(m, () => {
+                if (was) m.setFeatureState({ source: SRC_COUNTRIES, id: was }, { hi: false });
+                if (key) m.setFeatureState({ source: SRC_COUNTRIES, id: key }, { hi: true });
+              });
             });
           });
           m.on('move', () => liveRef.current?.redrawFog());
@@ -973,6 +1185,7 @@ export default function WarMap({ compact = false, title, actions }: { compact?: 
       for (const l of labelMarkers.values()) l.mk.remove();
       labelMarkers.clear();
       syncLabelsRef.current = null;
+      cityCtl.current?.destroy(); cityCtl.current = null;
       if (fogFrame.current !== null) { window.cancelAnimationFrame(fogFrame.current); fogFrame.current = null; }
       fogCanvas.current = null;
       resizeObs.current?.disconnect(); resizeObs.current = null;
@@ -989,10 +1202,12 @@ export default function WarMap({ compact = false, title, actions }: { compact?: 
     const el = map.getCanvasContainer();
     el.dataset.tool = canMap && editable ? tool : '';
     if (draft) el.dataset.busy = '1'; else delete el.dataset.busy;
-    el.style.cursor = (tool === 'borders' && !!draft) || (tool === 'unit' && addKind) ? 'crosshair' : tool === 'borders' ? 'pointer' : '';
-    if (draft) map.doubleClickZoom.disable(); else map.doubleClickZoom.enable();
+    el.style.cursor = tool === 'draw' || (tool === 'borders' && !!draft) || (tool === 'unit' && addKind) ? 'crosshair' : tool === 'borders' ? 'pointer' : '';
+    if (draft || tool === 'draw') map.doubleClickZoom.disable(); else map.doubleClickZoom.enable();
     if (tool !== 'borders' || draft) {
-      for (const key of world.byKey.keys()) map.setFeatureState({ source: SRC_COUNTRIES, id: key }, { hi: false });
+      whenStyleReady(map, () => {
+        for (const key of world.byKey.keys()) map.setFeatureState({ source: SRC_COUNTRIES, id: key }, { hi: false });
+      });
     }
   }, [tool, world, addKind, draft, canMap, editable]);
 
@@ -1002,10 +1217,13 @@ export default function WarMap({ compact = false, title, actions }: { compact?: 
       if (ev.key !== 'Escape') return;
       const t = ev.target as HTMLElement | null;
       if (t && /^(INPUT|TEXTAREA)$/.test(t.tagName)) return;
-      liveRef.current?.escape();
+      const did = liveRef.current?.escape();
+      // Inside a directive pop-up, an Escape the map used must not also close the pop-up.
+      if (did && stageRef.current) { ev.preventDefault(); ev.stopPropagation(); }
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    // Capture phase: the map is asked before the pop-up that holds it.
+    document.addEventListener('keydown', onKey, true);
+    return () => document.removeEventListener('keydown', onKey, true);
   }, []);
 
   // ── countries: changed outlines, labels and owner colours ──
@@ -1037,7 +1255,7 @@ export default function WarMap({ compact = false, title, actions }: { compact?: 
   // Where to open: a link from a notification or a history row names a unit, a country or an area
   // (src/lib/crisis/mapFocus.ts). The small map on Command ignores it.
   const searchParams = useSearchParams();
-  const focusKey = compact ? '' : (searchParams?.toString() ?? '');
+  const focusKey = compact || isStage ? '' : (searchParams?.toString() ?? '');
   const appliedFocus = useRef<string | null>(null);
   const focusOn = useCallback((f: MapFocus): boolean => {
     const map = mapRef.current;
@@ -1081,17 +1299,19 @@ export default function WarMap({ compact = false, title, actions }: { compact?: 
       const c = cabById.get(cab);
       if (c && world.byKey.has(key)) next.set(key, c.color);
     }
-    for (const [key, color] of next) {
-      if (applied.current.get(key) === color) continue;
-      map.setFeatureState({ source: SRC_COUNTRIES, id: key }, { tint: cabinetTint(color, 0.27), edge: cabinetTint(color, 0.95) });
-      applied.current.set(key, color);
-    }
-    for (const key of [...applied.current.keys()]) {
-      if (next.has(key)) continue;
-      map.removeFeatureState({ source: SRC_COUNTRIES, id: key }, 'tint');
-      map.removeFeatureState({ source: SRC_COUNTRIES, id: key }, 'edge');
-      applied.current.delete(key);
-    }
+    whenStyleReady(map, () => {
+      for (const [key, color] of next) {
+        if (applied.current.get(key) === color) continue;
+        map.setFeatureState({ source: SRC_COUNTRIES, id: key }, { tint: cabinetTint(color, 0.27), edge: cabinetTint(color, 0.95) });
+        applied.current.set(key, color);
+      }
+      for (const key of [...applied.current.keys()]) {
+        if (next.has(key)) continue;
+        map.removeFeatureState({ source: SRC_COUNTRIES, id: key }, 'tint');
+        map.removeFeatureState({ source: SRC_COUNTRIES, id: key }, 'edge');
+        applied.current.delete(key);
+      }
+    });
   }, [world, ownerOf, cabById]);
 
   // ── shapes ──
@@ -1180,7 +1400,6 @@ export default function WarMap({ compact = false, title, actions }: { compact?: 
   }, [world, canEditTerr, selTerr, selMulti, selDetailed, selOwnerColor, commitOutline, setSource]);
 
   // New territory preview, in its owner's colours.
-  const draftColor = draft && draft.owner ? cabById.get(draft.owner)?.color ?? null : null;
   useEffect(() => {
     if (!world) return;
     setSource(SRC_DRAFT, draft ? draftFc(draft.points, draftColor) : emptyFc);
@@ -1271,7 +1490,7 @@ export default function WarMap({ compact = false, title, actions }: { compact?: 
   }, [world, pendingMove]);
 
   // ── unit tokens ──
-  const canDrag = editable && canUnits && tool === 'select';
+  const canDrag = stageKind === 'unit' ? canUnits : editable && canUnits && tool === 'select';
   useEffect(() => {
     const map = mapRef.current; const ml = mlRef.current;
     if (!world || !map || !ml) return;
@@ -1286,9 +1505,14 @@ export default function WarMap({ compact = false, title, actions }: { compact?: 
       let m = markers.get(u.id);
       if (!m) {
         const el = document.createElement('div');
-        const marker = new ml.Marker({ element: el, draggable: canDrag, anchor: 'center' }).setLngLat([u.lng, u.lat]).addTo(map);
+        const marker = new ml.Marker({ element: el, draggable: canDrag && (stageKind !== 'unit' || !stageUnitId || u.id === stageUnitId), anchor: 'center' }).setLngLat([u.lng, u.lat]).addTo(map);
         const id = u.id;
         marker.on('dragstart', () => { el.dataset.drag = '1'; });
+        // The arrow follows the pointer at once, not after the drop.
+        marker.on('drag', () => {
+          const at = marker.getLngLat();
+          liveRef.current?.onUnitDrag(id, at.lng, at.lat);
+        });
         marker.on('dragend', () => {
           delete el.dataset.drag;
           el.dataset.dragged = '1';
@@ -1309,7 +1533,7 @@ export default function WarMap({ compact = false, title, actions }: { compact?: 
       } else if (!m.el.dataset.drag && pendingMoveRef.current?.id !== u.id) {
         m.marker.setLngLat([u.lng, u.lat]);
       }
-      m.marker.setDraggable(canDrag);
+      m.marker.setDraggable(canDrag && (stageKind !== 'unit' || !stageUnitId || u.id === stageUnitId));
       const selected = u.id === selUnit;
       const sig = `${u.kind}|${u.strength}|${color}|${selected}|${size}|${u.name}`;
       if (m.sig !== sig) {
@@ -1317,14 +1541,47 @@ export default function WarMap({ compact = false, title, actions }: { compact?: 
         m.sig = sig;
       }
     }
-  }, [world, shownUnits, cabById, selUnit, canDrag, compact]);
+  }, [world, shownUnits, cabById, selUnit, canDrag, compact, stageKind, stageUnitId]);
+
+  // ── a reply's planned moves: a dashed trajectory from where each unit is now, and a ring where it was ──
+  const planGhosts = useRef(new Map<string, MLMarker>());
+  useEffect(() => {
+    const map = mapRef.current; const ml = mlRef.current;
+    if (!world || !map || !ml) return;
+    const moves = stageMoves ?? {};
+    const ghosts = planGhosts.current;
+    const lines: Feature[] = [];
+    for (const [id, to] of Object.entries(moves)) {
+      const u = rawData?.units.find((x) => x.id === id);
+      if (!u) continue;
+      lines.push({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [[u.lng, u.lat], [to.lng, to.lat]] } });
+      const g = ghosts.get(id);
+      if (g) g.setLngLat([u.lng, u.lat]);
+      else ghosts.set(id, new ml.Marker({ element: makeGhost(), anchor: 'center' }).setLngLat([u.lng, u.lat]).addTo(map));
+    }
+    for (const [id, g] of [...ghosts]) if (!(id in moves)) { g.remove(); ghosts.delete(id); }
+    setSource(SRC_PLANS, { type: 'FeatureCollection', features: lines });
+  }, [world, stageMoves, rawData, setSource]);
+  useEffect(() => {
+    const ghosts = planGhosts.current;
+    return () => { for (const g of ghosts.values()) g.remove(); ghosts.clear(); };
+  }, []);
+
+  // Choosing another unit in a reply brings it into view.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!world || !map || stageKind !== 'unit' || !stageUnitId) return;
+    const u = dataRef.current?.units.find((x) => x.id === stageUnitId);
+    if (u && !map.getBounds().contains([u.lng, u.lat])) map.easeTo({ center: [u.lng, u.lat], duration: 300 });
+  }, [world, stageKind, stageUnitId]);
 
   // ── characters (staff only; never in a preview of what a cabinet sees) ──
   const placedChars = useMemo(
     () => core.characters.filter((c) => typeof c.location_lng === 'number' && typeof c.location_lat === 'number'),
     [core.characters],
   );
-  const showChars = staff && (compact || charsOn) && !(staffViewer && fogActive);
+  const showChars = staff && !isStage && (compact || charsOn) && !(staffViewer && fogActive);
+  const canMoveChars = staff && !compact && tool === 'select' && mayEditCharacters(v.role, settings);
   useEffect(() => {
     const map = mapRef.current; const ml = mlRef.current;
     if (!world || !map || !ml) return;
@@ -1336,19 +1593,28 @@ export default function WarMap({ compact = false, title, actions }: { compact?: 
       if (!wanted.has(id)) { m.marker.remove(); markers.delete(id); }
     }
     for (const c of list) {
-      const at: LngLat = [c.location_lng as number, c.location_lat as number];
+      const at: LngLat = charOverride.current.get(c.id) ?? [c.location_lng as number, c.location_lat as number];
       let m = markers.get(c.id);
       if (!m) {
         const el = document.createElement('div');
-        const marker = new ml.Marker({ element: el, anchor: 'center' }).setLngLat(at).addTo(map);
+        const marker = new ml.Marker({ element: el, draggable: canMoveChars, anchor: 'center' }).setLngLat(at).addTo(map);
         const id = c.id;
-        const press = (ev: Event) => { ev.stopPropagation(); liveRef.current?.onCharClick(id); };
+        marker.on('dragstart', () => { el.dataset.drag = '1'; });
+        marker.on('dragend', () => {
+          delete el.dataset.drag;
+          el.dataset.dragged = '1';
+          window.setTimeout(() => { delete el.dataset.dragged; }, 80);
+          const ll = marker.getLngLat();
+          liveRef.current?.onCharMoved(id, ll.lng, ll.lat);
+        });
+        const press = (ev: Event) => { if (el.dataset.dragged) return; ev.stopPropagation(); liveRef.current?.onCharClick(id); };
         el.addEventListener('click', press);
         el.addEventListener('dblclick', (ev) => ev.stopPropagation());
         el.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); press(ev); } });
         m = { marker, el, sig: '' };
         markers.set(c.id, m);
-      } else m.marker.setLngLat(at);
+      } else if (!m.el.dataset.drag) m.marker.setLngLat(at);
+      m.marker.setDraggable(canMoveChars);
       const color = c.cabinet_id ? cabById.get(c.cabinet_id)?.color ?? NOBODY : NOBODY;
       const selected = c.id === selChar;
       const sig = `${c.name}|${c.title}|${c.picture_url}|${color}|${selected}|${size}`;
@@ -1357,7 +1623,7 @@ export default function WarMap({ compact = false, title, actions }: { compact?: 
         m.sig = sig;
       }
     }
-  }, [world, placedChars, showChars, cabById, selChar, compact]);
+  }, [world, placedChars, showChars, cabById, selChar, compact, canMoveChars]);
 
   useEffect(() => {
     const markers = unitMarkers.current;
@@ -1375,27 +1641,105 @@ export default function WarMap({ compact = false, title, actions }: { compact?: 
     };
   }, []);
 
-  // ── fog: what the viewing cabinet holds, and a small sight circle around each of its units ──
+  // ── fog: what the viewing cabinet holds, and a sight circle around each of its units ──
+  // Spies are never spotted (the database says so too), so a spy is never hidden from its own side and never
+  // found by anyone else's circle. The rings can be shown without the fog (staff looking as a cabinet).
+  const showRings = !!viewer && (compact || rangesOn);
   const fogHoles = useMemo<FogHoles | null>(() => {
-    if (!fogActive || !viewer || !world) return null;
+    if (!viewer || !world || (!fogActive && !showRings)) return null;
     const geometries: Geometry[] = [];
-    for (const [key, cab] of ownerOf) {
-      if (cab !== viewer) continue;
-      const m = countryMulti(key);
-      if (m.length) geometries.push(toGeometry(m) as unknown as Geometry);
-    }
-    for (const s of shownShapes) {
-      if (s.kind === 'area' && s.owner_cabinet_id === viewer) geometries.push(s.geometry as unknown as Geometry);
+    if (fogActive) {
+      for (const [key, cab] of ownerOf) {
+        if (cab !== viewer) continue;
+        const m = countryMulti(key);
+        if (m.length) geometries.push(toGeometry(m) as unknown as Geometry);
+      }
+      for (const s of shownShapes) {
+        if (s.kind === 'area' && s.owner_cabinet_id === viewer) geometries.push(s.geometry as unknown as Geometry);
+      }
     }
     const circles = shownUnits
       .filter((u) => u.owner_cabinet_id === viewer)
-      .map((u) => ({ lng: u.lng, lat: u.lat, km: KIND_META[u.kind].sight }));
-    return { geometries, circles, rings: [] };
-  }, [fogActive, viewer, world, ownerOf, countryMulti, shownUnits, shownShapes]);
+      .map((u) => ({ id: u.id, lng: u.lng, lat: u.lat, km: sightKmOf(u) }));
+    return { geometries, circles, rings: [], fog: fogActive, showRings };
+  }, [fogActive, showRings, viewer, world, ownerOf, countryMulti, shownUnits, shownShapes]);
   useEffect(() => {
     fogHolesRef.current = fogHoles;
     redrawFog();
   }, [fogHoles, redrawFog]);
+
+  // ── the real outline of every country whose border was changed stays under the changed shape ──
+  useEffect(() => {
+    if (!world) return;
+    const features = overrides.size ? world.collection.features.filter((f) => overrides.has(f.properties.key)) : [];
+    setSource(SRC_BASE, { type: 'FeatureCollection', features } as FeatureCollection);
+  }, [world, overrides, setSource]);
+
+  // ── cities ──
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!world || !map) return;
+    cityCtl.current?.setOn(citiesOn);
+    whenStyleReady(map, () => setCitiesVisible(map, citiesOn));
+  }, [world, citiesOn]);
+
+  // ── the move arrow stays while a move waits for a yes, and follows the map ──
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!world || !map) return;
+    const draw = () => {
+      const p = pendingMoveRef.current;
+      const u = p ? rawRef.current?.units.find((x) => x.id === p.id) ?? null : null;
+      if (p && u) { showMove(u, [p.lng, p.lat], false); return; }
+      // Nothing waits for a yes: clear the arrow, unless a unit is being dragged right now.
+      for (const m of unitMarkers.current.values()) if (m.el.dataset.drag) return;
+      showMove(null, null);
+    };
+    draw();
+    if (!pendingMove) return;
+    map.on('move', draw);
+    return () => { map.off('move', draw); };
+  }, [world, pendingMove, showMove]);
+
+  // ── the selected unit's sight ring, with a handle staff drag to change how far it sees ──
+  const sightUnit = !compact && editable && selUnit ? shownUnits.find((u) => u.id === selUnit) ?? null : null;
+  const sightId = sightUnit?.id ?? null;
+  const sightLng = sightUnit?.lng; const sightLat = sightUnit?.lat;
+  const sightKm = sightUnit ? sightKmOf(sightUnit) : 0;
+  const sightHandle = useRef<MLMarker | null>(null);
+  useEffect(() => {
+    const map = mapRef.current; const ml = mlRef.current;
+    sightHandle.current?.remove(); sightHandle.current = null;
+    if (!world || !map || !ml) return;
+    if (!sightId || sightLng === undefined || sightLat === undefined) { setSource(SRC_SIGHT, emptyFc); return; }
+    const lng = sightLng; const lat = sightLat; const id = sightId;
+    const ringFc = (km: number): FeatureCollection => ({
+      type: 'FeatureCollection', features: [{ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [sightRing(lng, lat, km)] } }],
+    });
+    setSource(SRC_SIGHT, ringFc(sightKm));
+    if (!canUnits) return () => { setSource(SRC_SIGHT, emptyFc); };
+    const { el, tip } = makeSightHandle();
+    const mk = new ml.Marker({ element: el, draggable: true, anchor: 'center' }).setLngLat(sightHandleAt(lng, lat, sightKm)).addTo(map);
+    let live = sightKm;
+    mk.on('dragstart', () => { el.dataset.drag = '1'; tip.textContent = kmText(live); });
+    mk.on('drag', () => {
+      const ll = mk.getLngLat();
+      live = kmFromPointer(lng, lat, [ll.lng, ll.lat]);
+      tip.textContent = kmText(live);
+      setSource(SRC_SIGHT, ringFc(live));
+      const c = fogHolesRef.current?.circles.find((x) => x.id === id);
+      if (c) { c.km = live; redrawFog(); }
+    });
+    mk.on('dragend', () => {
+      delete el.dataset.drag;
+      mk.setLngLat(sightHandleAt(lng, lat, live));
+      void saveSight(id, live);
+    });
+    el.addEventListener('click', (ev) => ev.stopPropagation());
+    el.addEventListener('dblclick', (ev) => ev.stopPropagation());
+    sightHandle.current = mk;
+    return () => { mk.remove(); sightHandle.current = null; setSource(SRC_SIGHT, emptyFc); };
+  }, [world, sightId, sightLng, sightLat, sightKm, canUnits, setSource, redrawFog, saveSight]);
 
   // ── panel ──
   const selUnitRow = selUnit ? shownUnits.find((u) => u.id === selUnit) ?? null : null;
@@ -1403,10 +1747,11 @@ export default function WarMap({ compact = false, title, actions }: { compact?: 
 
   const unitDraftOf = (u: MapUnit): UnitDraft => ({
     name: u.name, kind: u.kind, strength: u.strength, owner: u.owner_cabinet_id, note: u.note ?? '', revealed: u.revealed_to,
+    sight: typeof u.sight_km === 'number' ? u.sight_km : null,
   });
 
   let panel: ReactNode = null;
-  if (!compact) {
+  if (!compact && stageKind !== 'unit') {
     if (draft && editable) {
       panel = (
         <NewTerritoryPanel
@@ -1424,7 +1769,7 @@ export default function WarMap({ compact = false, title, actions }: { compact?: 
         panel = (
           <UnitEditor
             key="new-unit" isNew busy={busy} cabinets={cabinets}
-            initial={{ name: '', kind: addKind, strength: 1, owner: defaultOwner, note: '', revealed: [] }}
+            initial={{ name: '', kind: addKind, strength: 1, owner: defaultOwner, note: '', revealed: [], sight: null }}
             onSubmit={(d) => { void submitUnit(d, null); }} onClose={() => changeTool('select')}
           />
         );
@@ -1437,7 +1782,7 @@ export default function WarMap({ compact = false, title, actions }: { compact?: 
       const u = selUnitRow;
       panel = editable && canUnits ? (
         <UnitEditor
-          key={`${u.id}:${u.name}:${u.kind}:${u.strength}:${u.owner_cabinet_id}:${u.revealed_to.join()}:${u.note}`}
+          key={`${u.id}:${u.name}:${u.kind}:${u.strength}:${u.owner_cabinet_id}:${u.revealed_to.join()}:${u.note}:${u.sight_km ?? ''}`}
           isNew={false} busy={busy} cabinets={cabinets} initial={unitDraftOf(u)}
           onSubmit={(d) => { void submitUnit(d, u); }} onDelete={() => { void removeUnit(u); }} onClose={() => setSelUnit(null)}
         />
@@ -1477,28 +1822,37 @@ export default function WarMap({ compact = false, title, actions }: { compact?: 
   const hint = compact ? null
     : tool === 'unit' && addKind && !newUnit ? `Click the map to place the ${KIND_META[addKind].label.toLowerCase()}.`
       : draft ? null
+      : tool === 'draw' && editable && canMap ? 'Press and drag to draw an outline, or click points one by one. Hold Shift and drag to move the map.'
+      : sightUnit && canUnits && tool === 'select' ? 'Drag the round handle on the dashed ring to change how far it sees.'
         : canEditTerr && selTerr && selValid ? 'Press on the red outline and drag to move the border.'
           : tool === 'borders' && editable && canMap ? 'Click a country to select it, or click the sea to draw new territory.'
             : null;
 
+  const pendingUnit = pendingMove ? rawData?.units.find((u) => u.id === pendingMove.id) ?? null : null;
   const compactInfo = compact && selUnitRow
     ? `${selUnitRow.name} · ${KIND_META[selUnitRow.kind].label} · ${fmtAmount(selUnitRow.strength)}`
     : null;
 
-  const viewControl = staff ? (
-    cabinets.length <= (compact ? 3 : 4) ? (
-      <Segmented value={staffViewer ?? 'all'} options={viewOptions} onChange={changeView} ariaLabel="See the map as" />
-    ) : (
-      <div style={{ minWidth: compact ? 160 : 200 }}>
-        <GSelect size="sm" value={staffViewer ?? 'all'} options={viewOptions} onChange={changeView} aria-label="See the map as" />
-      </div>
-    )
+  const viewControl = staff && !isStage ? (
+    <span className="wm-see">
+      <span>See the map as</span>
+      {cabinets.length <= (compact ? 3 : 4) ? (
+        <Segmented value={staffViewer ?? 'all'} options={viewOptions} onChange={changeView} ariaLabel="See the map as" />
+      ) : (
+        <div style={{ minWidth: compact ? 160 : 200 }}>
+          <GSelect size="sm" value={staffViewer ?? 'all'} options={viewOptions} onChange={changeView} aria-label="See the map as" />
+        </div>
+      )}
+    </span>
   ) : viewerCabinet ? (
     <span style={{ fontSize: 12.5, fontWeight: 700, color: CK.inkSoft }}>Viewing as {viewerCabinet.name}</span>
   ) : null;
 
   return (
-    <div className="wm-root" data-compact={compact ? '1' : undefined}>
+    <div
+      className="wm-root" data-compact={compact ? '1' : undefined} data-stage={isStage ? '1' : undefined}
+      style={stage ? ({ '--wm-stage-h': `${stage.height}px` } as CSSProperties) : undefined}
+    >
       <style>{MAP_CSS}</style>
 
       {compact ? (
@@ -1507,42 +1861,75 @@ export default function WarMap({ compact = false, title, actions }: { compact?: 
           {viewControl}
           {actions && <div className="wm-top-actions">{actions}</div>}
         </div>
-      ) : (
+      ) : stageKind === 'unit' ? null : (
         <>
-          <div className="wm-top">
-            <div className="wm-top-title">{title}</div>
-            {viewControl}
-          </div>
+          {!isStage && (
+            <div className="wm-top">
+              <div className="wm-top-title">{title}</div>
+              {viewControl}
+            </div>
+          )}
           <div className="wm-tools" role="toolbar" aria-label="Map tools">
-            <button type="button" className="wm-tool" aria-pressed={tool === 'select'} onClick={() => changeTool('select')} title="Select a unit, a country or a territory">
-              <MousePointer2 size={17} strokeWidth={1.5} /><span>Select</span>
-            </button>
-            {editable && canMap && (
-              <button type="button" className="wm-tool" aria-pressed={tool === 'borders'} onClick={() => changeTool('borders')} title="Change who holds land and where borders run">
-                <Flag size={17} strokeWidth={1.5} /><span>Borders</span>
-              </button>
-            )}
-            <span className="wm-tool-sep" aria-hidden />
-            {staff && (
-              <button
-                type="button" className="wm-tool" aria-pressed={fogOn && !!staffViewer} disabled={!staffViewer}
-                onClick={() => setFogOn((f) => !f)}
-                title={staffViewer ? 'Hide or show what this side cannot see' : 'Pick a side above to see its fog of war'}
-              >
-                <Cloud size={17} strokeWidth={1.5} /><span>Fog of war</span>
-              </button>
-            )}
-            {staff && (
-              <button
-                type="button" className="wm-tool" aria-pressed={charsOn} onClick={() => setCharsOn((c) => !c)}
-                title={placedChars.length ? 'Show or hide where the characters are' : 'No character has a place on the map yet'}
-              >
-                <UserRound size={17} strokeWidth={1.5} /><span>Characters</span>
-              </button>
-            )}
-            <button type="button" className="wm-tool" aria-pressed={false} onClick={fitView} title="Fit the units in view">
-              <Maximize2 size={17} strokeWidth={1.5} /><span>Fit view</span>
-            </button>
+            <div className="wm-group">
+              <span className="wm-group-label">Tools</span>
+              <div className="wm-group-row">
+                <button type="button" className="wm-tool" aria-pressed={tool === 'select'} onClick={() => changeTool('select')} title="Select a unit, a country or a territory">
+                  <MousePointer2 size={17} strokeWidth={1.5} /><span>Select</span>
+                </button>
+                {editable && canMap && (
+                  <button type="button" className="wm-tool" aria-pressed={tool === 'borders'} onClick={() => changeTool('borders')} title="Change who holds land and where borders run">
+                    <Flag size={17} strokeWidth={1.5} /><span>Borders</span>
+                  </button>
+                )}
+                {editable && canMap && (
+                  <button type="button" className="wm-tool" aria-pressed={tool === 'draw'} onClick={() => changeTool(tool === 'draw' ? 'select' : 'draw')} title="Draw a new territory by dragging, or by clicking points">
+                    <Pencil size={17} strokeWidth={1.5} /><span>Draw area</span>
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className="wm-group wm-group-end">
+              <span className="wm-group-label">Show on the map</span>
+              <div className="wm-group-row">
+                {staff && !isStage && (
+                  <button
+                    type="button" className="wm-tool" aria-pressed={fogOn && !!staffViewer} disabled={!staffViewer}
+                    onClick={() => setFogOn((f) => !f)}
+                    title={staffViewer
+                      ? 'Hatched ground is what this side cannot see. It sees its own land and a circle around each of its units. Spies are never spotted.'
+                      : 'Pick a side next to "See the map as" to see its fog of war'}
+                  >
+                    <Cloud size={17} strokeWidth={1.5} /><span>Fog of war</span>
+                  </button>
+                )}
+                {(staff || !!viewer) && !isStage && (
+                  <button
+                    type="button" className="wm-tool" aria-pressed={rangesOn && !!viewer} disabled={!viewer}
+                    onClick={() => setRangesOn((r) => !r)}
+                    title={viewer
+                      ? 'The dashed circle around each unit shows how far it sees. Select a unit to drag its circle bigger or smaller. Spies are never spotted.'
+                      : 'Pick a side next to "See the map as" to see how far its units see'}
+                  >
+                    <Eye size={17} strokeWidth={1.5} /><span>Sight ranges</span>
+                  </button>
+                )}
+                {staff && !isStage && (
+                  <button
+                    type="button" className="wm-tool" aria-pressed={charsOn} onClick={() => setCharsOn((c) => !c)}
+                    title={placedChars.length ? 'Show or hide where the characters are. Crisis team can drag them to a new spot.' : 'No character has a place on the map yet'}
+                  >
+                    <UserRound size={17} strokeWidth={1.5} /><span>Characters</span>
+                  </button>
+                )}
+                <button type="button" className="wm-tool" aria-pressed={citiesOn} onClick={() => setCitiesOn((c) => !c)} title="Show or hide capitals and big cities">
+                  <Building2 size={17} strokeWidth={1.5} /><span>Cities</span>
+                </button>
+                <span className="wm-tool-sep" aria-hidden />
+                <button type="button" className="wm-tool" aria-pressed={false} onClick={fitView} title="Zoom to fit all the units on screen">
+                  <Maximize2 size={17} strokeWidth={1.5} /><span>Fit view</span>
+                </button>
+              </div>
+            </div>
           </div>
         </>
       )}
@@ -1578,6 +1965,13 @@ export default function WarMap({ compact = false, title, actions }: { compact?: 
               <Btn size="sm" tone="ghost" disabled={busy} onClick={undo.restore}>Undo</Btn>
             </div>
           )}
+          <svg ref={arrowSvg} className="wm-arrow" aria-hidden>
+            <line data-p="halo" stroke="#FFFFFF" strokeWidth={7} strokeLinecap="round" opacity={0.9} />
+            <line data-p="line" stroke={DRAFT} strokeWidth={3.2} strokeLinecap="round" />
+            <polygon data-p="head" fill={DRAFT} stroke="#FFFFFF" strokeWidth={2} strokeLinejoin="round" />
+            <circle data-p="from" r={5} fill="#FFFFFF" stroke={DRAFT} strokeWidth={2.5} />
+          </svg>
+          <div ref={dragTip} className="wm-dragtip" aria-hidden />
           {hint && <div className="wm-hint">{hint}</div>}
           {showAdd && (
             <button
@@ -1590,7 +1984,13 @@ export default function WarMap({ compact = false, title, actions }: { compact?: 
           )}
           {pendingMove && (
             <div ref={moveCard} className="wm-move" role="group" aria-label="Confirm the move" style={{ fontFamily: CK.font }}>
-              <p style={{ margin: '0 0 9px', fontSize: 13.5, fontWeight: 700, color: CK.ink, overflowWrap: 'anywhere' }}>Move {pendingMove.name} here?</p>
+              <p style={{ margin: '0 0 4px', fontSize: 13.5, fontWeight: 700, color: CK.ink, overflowWrap: 'anywhere' }}>Move {pendingMove.name} here?</p>
+              {pendingUnit && (
+                <p style={{ margin: '0 0 9px', fontSize: 12.5, color: CK.inkSoft, overflowWrap: 'anywhere' }}>
+                  {KIND_META[pendingUnit.kind].label} · {fmtAmount(pendingUnit.strength)} · {pendingUnit.owner_cabinet_id ? cabById.get(pendingUnit.owner_cabinet_id)?.name ?? 'A cabinet' : 'Nobody'}
+                  {' · '}{kmText(kmBetween([pendingUnit.lng, pendingUnit.lat], [pendingMove.lng, pendingMove.lat]))}
+                </p>
+              )}
               <div className="flex" style={{ gap: 8 }}>
                 <Btn size="sm" disabled={busy} onClick={confirmMove}>Move</Btn>
                 <Btn size="sm" tone="ghost" onClick={cancelMove}>Cancel</Btn>
@@ -1604,10 +2004,10 @@ export default function WarMap({ compact = false, title, actions }: { compact?: 
         <div className="wm-legend">
           <div>
             {cabinets.map((c) => <span key={c.id}><i style={{ background: c.color }} />{c.name}</span>)}
-            {fogActive && !compact && <span><i style={{ border: `1.5px dashed ${CK.red}`, background: 'transparent' }} />Sight range</span>}
+            {showRings && !compact && <span title="Spies are never spotted, even inside a sight range."><i style={{ border: `1.5px dashed ${CK.red}`, background: 'transparent' }} />Sight range (spies stay hidden)</span>}
             {compactInfo && <b style={{ color: CK.ink }}>{compactInfo}</b>}
           </div>
-          {!compact && <div>{last ? `Last change ${clock(last.at)} · ${last.text}` : staff ? 'No changes yet this visit' : 'Updates live'}</div>}
+          {!compact && !isStage && <div>{last ? `Last change ${clock(last.at)} · ${last.text}` : staff ? 'No changes yet this visit' : 'Updates live'}</div>}
         </div>
       </div>
     </div>

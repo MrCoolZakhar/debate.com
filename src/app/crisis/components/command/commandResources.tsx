@@ -31,10 +31,10 @@ function Chip({ name, unit, value, change, color, onOpen }: {
       className="inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] transition-transform hover:-translate-y-px active:scale-[0.97]"
       style={{ border: 0, cursor: 'pointer', background: CK.well, borderRadius: 999, padding: '2px 9px 2px 2px', gap: 6, fontFamily: CK.font, color: CK.ink }}
     >
-      <span aria-hidden style={{ width: 26, height: 26, borderRadius: '50%', flex: 'none', display: 'grid', placeItems: 'center', color, background: cabinetTint(color, 0.16) }}>
-        {resourceIcon(name, 15)}
+      <span aria-hidden style={{ width: 30, height: 30, borderRadius: '50%', flex: 'none', display: 'grid', placeItems: 'center', color, background: cabinetTint(color, 0.16) }}>
+        {resourceIcon(name, 17)}
       </span>
-      <b style={{ fontSize: 13, fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{fmtAmount(value)}</b>
+      <b style={{ fontSize: 14, fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{fmtAmount(value)}</b>
       {change ? (
         <span className="inline-flex items-center" style={{ gap: 1, fontSize: 11, fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: up ? CK.ok : CK.danger }}>
           {up ? <ArrowUp size={10} strokeWidth={2} aria-hidden /> : <ArrowDown size={10} strokeWidth={2} aria-hidden />}
@@ -59,7 +59,7 @@ export function ResourcesStrip({ cabinets, types, resources, changes, loaded }: 
   const oneCab = one ? cabinets.find((c) => c.id === one.cabinet_id) : undefined;
 
   return (
-    <Card className="cmd-card cmd-res" style={{ padding: '10px 14px 10px' }}>
+    <Card className="cmd-card cmd-res" style={{ padding: '10px 14px 10px', display: 'flex', flexDirection: 'column' }}>
       <div style={{ marginBottom: -4 }}>
         <CardTitle
           icon={<Landmark size={16} strokeWidth={1.5} />}
@@ -71,12 +71,12 @@ export function ResourcesStrip({ cabinets, types, resources, changes, loaded }: 
       {!loaded ? <Skeleton h={34} r={12} />
         : withRes.length === 0 ? <EmptyLine>No cabinet resources yet.</EmptyLine>
         : (
-          <div className="flex flex-col" style={{ gap: 6 }}>
+          <div className="flex flex-col" style={{ gap: 6, flex: '1 1 0', minHeight: 0, overflowY: 'auto' }}>
             {withRes.map((cab) => {
               const rows = cabinetRows(cab.id);
               const shown = rows.slice(0, PER_CABINET);
               return (
-                <div key={cab.id} className="flex items-center" style={{ gap: 10, minWidth: 0 }}>
+                <div key={cab.id} className="flex items-center" style={{ gap: 10, minWidth: 0, flex: '1 1 auto' }}>
                   <span className="flex items-center" style={{ gap: 6, flex: 'none', width: 104, minWidth: 0 }}>
                     <CabinetLogo cabinet={cab} size={22} />
                     <b style={{ fontSize: 12.5, color: cab.color, overflowWrap: 'anywhere', lineHeight: 1.2 }}>{cab.short_name || cab.name}</b>

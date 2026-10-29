@@ -6,6 +6,7 @@ import { Plus } from 'lucide-react';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { addResourceType, crisisError, type CrisisRef } from '@/lib/crisis/api';
 import { Btn, Card, CardTitle, FieldLabel, Segmented, fieldStyle } from '../../crisisKit';
+import { UnitChips } from './UnitChips';
 
 export default function AddResourceType({ refx, onClose }: { refx: CrisisRef; onClose: () => void }) {
   const [name, setName] = useState('');
@@ -31,7 +32,7 @@ export default function AddResourceType({ refx, onClose }: { refx: CrisisRef; on
       <CardTitle icon={<Plus size={17} strokeWidth={1.5} aria-hidden />}>Add a resource type</CardTitle>
       <div className="grid" style={{ gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
         <div><FieldLabel htmlFor="rt-name">Name</FieldLabel><input id="rt-name" value={name} onChange={(e) => { setName(e.target.value); setHint(null); }} maxLength={60} style={fieldStyle} placeholder="For example: Submarines" /></div>
-        <div><FieldLabel htmlFor="rt-unit" hint="optional">Unit</FieldLabel><input id="rt-unit" value={unit} onChange={(e) => setUnit(e.target.value)} maxLength={20} style={fieldStyle} placeholder="For example: ships" /></div>
+        <div><FieldLabel htmlFor="rt-unit" hint="what it is counted in">Measure</FieldLabel><input id="rt-unit" value={unit} onChange={(e) => setUnit(e.target.value)} maxLength={20} style={fieldStyle} placeholder="For example: ships, tonnes, $bn" /><UnitChips value={unit} onPick={setUnit} /></div>
         <div><FieldLabel>Who holds it</FieldLabel><Segmented ariaLabel="Scope" value={scope} onChange={setScope} options={[{ value: 'cabinet', label: 'Each cabinet' }, { value: 'character', label: 'Each character' }]} /></div>
       </div>
       <div className="flex items-center gap-2 flex-wrap" style={{ marginTop: 14 }}>

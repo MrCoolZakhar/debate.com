@@ -135,7 +135,12 @@ export default function BackroomInbox() {
   }, [linkedId, all, lane, memberId]);
 
   const afterChange = (what: 'claimed' | 'assigned' | 'answered') => {
-    if (what === 'answered') setOpenId(null);
+    // Answering moves the reader on to the next directive of the lane; the last one closes it.
+    if (what === 'answered') {
+      const at = queue.findIndex((x) => x.id === openId);
+      const next = at < 0 ? null : (queue[at + 1] ?? queue[at - 1] ?? null);
+      setOpenId(next ? next.id : null);
+    }
     void load();
   };
 
@@ -223,7 +228,7 @@ export default function BackroomInbox() {
       </Card>
 
       {selected && (
-        <DirectivePopup key={selected.id} directive={selected} notesVersion={notesVersion} onChanged={afterChange} onClose={() => setOpenId(null)} />
+        <DirectivePopup directive={selected} queue={queue} onSelect={setOpenId} notesVersion={notesVersion} onChanged={afterChange} onClose={() => setOpenId(null)} />
       )}
     </div>
   );

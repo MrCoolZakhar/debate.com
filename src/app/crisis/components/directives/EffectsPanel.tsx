@@ -7,12 +7,14 @@
 // nothing is written until Send reply, which applies them all in one call (answerDirective).
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Coins, Map as MapIcon, Newspaper, Plus, X, Zap, type LucideIcon } from 'lucide-react';
+import { ArrowLeft, Coins, Map as MapIcon, Newspaper, Plus, X, Zap, type LucideIcon } from 'lucide-react';
 import { notifyErr } from '@/lib/appNotify';
 import { crisisError, loadMap, loadResources, type CrisisRef } from '@/lib/crisis/api';
 import { amount as fmtAmount } from '@/lib/crisis/format';
-import { CK, cabinetTint } from '../../crisisKit';
+import { Btn, CK, cabinetTint } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
+import { applyLocal, diffData, emptySet, setSize, type MapData, type StageOptions } from '../map/mapEdits';
+import WarMap from '../map/WarMap';
 import { loadCountries, type CountryOption } from './countryPick';
 import {
   BorderCard, CARD_META, CharacterCard, NewsCard, ResourcesCard, STATUS_META, UnitCard, clearCard, place, round2,
@@ -34,16 +36,18 @@ export default function EffectsPanel({ crisisRef, authorCharacterId, cabinetId, 
   const { core } = useCrisis();
   const [data, setData] = useState<StageData | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  /** The map editor, shown in place of the cards: the map as it is now with this reply's changes laid over it. */
+  const [editor, setEditor] = useState<MapData | null>(null);
   const justAdded = useRef<string | null>(null);
   const root = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let cancelled = false;
     Promise.all([loadResources(crisisRef), loadMap(crisisRef), loadCountries().catch(() => [] as CountryOption[])])
-      .then(([r, m, countries]) => { if (!cancelled) setData({ types: r.types, resources: r.resources, units: m.units, regions: m.regions, countries }); })
+      .then(([r, m, countries]) => { if (!cancelled) setData({ types: r.types, resources: r.resources, units: m.units, regions: m.regions, shapes: m.shapes, countries }); })
       .catch((e) => {
         if (cancelled) return;
-        setData({ types: [], resources: [], units: [], regions: [], countries: [] });
+        setData({ types: [], resources: [], units: [], regions: [], shapes: [], countries: [] });
         notifyErr(crisisError(e, 'Could not load the resources and the map.'), 'crisis-effects');
       });
     return () => { cancelled = true; };
@@ -56,9 +60,11 @@ export default function EffectsPanel({ crisisRef, authorCharacterId, cabinetId, 
   const countryName = useMemo(() => new Map((data?.countries ?? []).map((c) => [c.key, c.name])), [data]);
   const baseHolder = useMemo(() => new Map((data?.regions ?? []).map((r) => [r.region_key, r.owner_cabinet_id])), [data]);
 
+  const baseMap = useMemo<MapData | null>(() => (data ? { regions: data.regions, units: data.units, shapes: data.shapes } : null), [data]);
+  const openMap = () => { if (baseMap) setEditor(applyLocal(baseMap, effects.map ?? emptySet(), crisisRef.id)); };
   const env: CardEnv = {
     data, powers, effects, setEffects, authorCharacterId, cabinetId, cabinets: core.cabinets, cabById, charById,
-    characters: core.characters, typeById, baseHolder, cabinetColors,
+    characters: core.characters, typeById, baseHolder, cabinetColors, openMap,
   };
 
   // A card that was just added scrolls into view.
@@ -82,10 +88,11 @@ export default function EffectsPanel({ crisisRef, authorCharacterId, cabinetId, 
   const retarget = (card: EffectCard, target: string) => setEffects((e) => ({ ...clearCard(e, card, env), cards: e.cards.map((c) => (c.id === card.id ? { ...c, target } : c)) }));
 
   const hasNews = effects.cards.some((c) => c.kind === 'news');
+  const hasBorder = effects.cards.some((c) => c.kind === 'border');
   const menu: MenuItem[] = [
     { kind: 'resources', label: 'Resources', Icon: CARD_META.resources.Icon, blocked: powers.resources ? null : 'Not allowed' },
     { kind: 'unit', label: 'Move a unit', Icon: CARD_META.unit.Icon, blocked: powers.units ? null : 'Not allowed' },
-    { kind: 'border', label: 'Change a border', Icon: CARD_META.border.Icon, blocked: powers.map ? null : 'Not allowed' },
+    { kind: 'border', label: 'Change a border', Icon: CARD_META.border.Icon, blocked: !powers.map ? 'Not allowed' : hasBorder ? 'One per reply' : null },
     { kind: 'character', label: 'A character', Icon: CARD_META.character.Icon, blocked: null },
     { kind: 'news', label: 'Newsflash', Icon: CARD_META.news.Icon, blocked: hasNews ? 'One per reply' : null },
   ];
@@ -113,6 +120,13 @@ export default function EffectsPanel({ crisisRef, authorCharacterId, cabinetId, 
       changes.push({
         id: `u-${id}`, icon: MapIcon, text: `${u.name}: ${parts.join(', ')}`,
         remove: () => setEffects((e) => { const units = { ...e.units }; delete units[id]; return { ...e, units }; }),
+      });
+    }
+    if (setSize(effects.map)) {
+      const n = setSize(effects.map);
+      changes.push({
+        id: 'map', icon: MapIcon, text: `Map: ${n} ${n === 1 ? 'territory' : 'territories'} changed`,
+        remove: () => setEffects((e) => ({ ...e, map: null })),
       });
     }
     for (const [key, owner] of Object.entries(effects.regions)) {
@@ -161,6 +175,29 @@ export default function EffectsPanel({ crisisRef, authorCharacterId, cabinetId, 
       )}
     </div>
   );
+
+  if (editor && baseMap) {
+    const stage: StageOptions = {
+      kind: 'border', data: editor, canUnits: false, canMap: powers.map, height: 400,
+      onData: (d) => setEffects((e) => {
+        const set = diffData(baseMap, d);
+        return { ...e, map: setSize(set) ? set : null };
+      }),
+    };
+    const n = setSize(effects.map);
+    return (
+      <div className="flex flex-col" style={{ gap: 10, fontFamily: CK.font }}>
+        <div className="flex items-center" style={{ gap: 10 }}>
+          <Btn tone="ghost" size="sm" icon={<ArrowLeft size={15} strokeWidth={1.5} />} onClick={() => setEditor(null)}>Back</Btn>
+          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: CK.ink }}>Change a Border</h3>
+        </div>
+        <p style={{ margin: 0, fontSize: 13, color: CK.muted, lineHeight: 1.45 }}>
+          {n ? `${n} ${n === 1 ? 'territory' : 'territories'} will change when you send the reply.` : 'Nothing changes yet.'} The real borders stay visible underneath.
+        </p>
+        <WarMap stage={stage} />
+      </div>
+    );
+  }
 
   return (
     <div ref={root} className="flex flex-col" style={{ gap: 12, fontFamily: CK.font }}>

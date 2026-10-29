@@ -270,7 +270,7 @@ export async function assignDirective(ref: CrisisRef, directiveId: string, membe
 /** Everything a reply can also do in the same press (docs/crisis/sql/010). */
 export interface AnswerEffects {
   resources?: Array<{ id: string; delta: number }>;
-  news?: { title: string; body?: string; source_label?: string; audience_cabinet_id?: string | null; banner_url?: string | null };
+  news?: { title: string; body?: string; source_label?: string; audience_cabinet_id?: string | null; banner_url?: string | null; attachment_url?: string | null; attachment_name?: string | null };
   /** Change any character's status (kill, arrest, missing, back to active). Any staff. */
   characters?: Array<{ id: string; status: CharacterStatus; status_note?: string | null }>;
   /** Move a unit or change its amount (units power). */
@@ -327,6 +327,13 @@ export async function addResourceType(ref: CrisisRef, t: { name: string; unit?: 
   const res = await client.from('crisis_resource_types').insert({ ...t, crisis_id: ref.id }).select('id');
   if (res.error || !res.data?.length) throw new UserFacingError(crisisError(res.error, 'Could not add the resource.'));
   return (res.data[0] as { id: string }).id;
+}
+
+/** Rename a resource type or change its measure (unit); the new unit shows on every tile of that type. */
+export async function saveResourceType(ref: CrisisRef, id: string, patch: { name?: string; unit?: string | null }): Promise<void> {
+  const client = await c(ref);
+  const res = await client.from('crisis_resource_types').update(patch).eq('id', id).eq('crisis_id', ref.id).select('id');
+  if (res.error || !res.data?.length) throw new UserFacingError(crisisError(res.error, 'Could not save the resource.'));
 }
 
 export async function createResource(ref: CrisisRef, r: { type_id: string; character_id?: string | null; cabinet_id?: string | null; amount: number }): Promise<string> {
