@@ -26,22 +26,26 @@ import CrisisRecap, { type CrisisRecapTab } from './commandRecap';
 import { cabinetDirectivesOf } from './cabinetFeeds';
 import type { RoomState } from './commandData';
 import { LinkBtn } from './commandParts';
+import { useStaffChat } from './staffChat';
 import { RoomStagePanel } from './commandRoomLive';
 
 const REFRESH_MS = 15_000;
 
-export default function CommandRoomDialog({ cab, room, conferenceId, onClose }: {
-  cab: Cabinet; room: RoomState; conferenceId: string; onClose: () => void;
+export default function CommandRoomDialog({ cab, room, conferenceId, initialTab = 'overview', onClose }: {
+  cab: Cabinet; room: RoomState; conferenceId: string; initialTab?: CrisisRecapTab; onClose: () => void;
 }) {
   const sessionId = room.sessionId;
   const [full, setFull] = useState<AdminRoom | null>(null);
   const [failed, setFailed] = useState(false);
   const [mode, setMode] = useState<'recap' | 'scoreboard'>('recap');
-  const [tab, setTab] = useState<CrisisRecapTab>('overview');
+  const [tab, setTab] = useState<CrisisRecapTab>(initialTab);
   // A directive or a story opened from the lists: it replaces the recap until closed.
   const [openDirective, setOpenDirective] = useState<string | null>(null);
   const [openNews, setOpenNews] = useState<string | null>(null);
   const inFlight = useRef(false);
+  // The staff's chat in this room: read from the start (the Chat tab shows the unread count), joined only once the tab is opened,
+  // released with the pop-up.
+  const chat = useStaffChat(room.code, tab === 'chat');
 
   const { ref } = useCrisis();
   const { items: news } = useCrisisNews(ref);
@@ -128,6 +132,7 @@ export default function CommandRoomDialog({ cab, room, conferenceId, onClose }: 
       onTab={setTab}
       directives={directives}
       news={news}
+      chat={chat}
       onClose={onClose}
       onOpenDirective={(d) => setOpenDirective(d.id)}
       onOpenNews={(n) => setOpenNews(n.id)}

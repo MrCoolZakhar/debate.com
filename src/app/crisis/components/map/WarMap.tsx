@@ -40,6 +40,7 @@ import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { Btn, CK, Segmented, cabinetTint } from '../../crisisKit';
 import { mayEditCharacters } from '../character/characterStatus';
 import { drawFog, type FogHoles } from './fog';
+import { createMapAnimator, diffMapData, prefersReducedMotion, type GrowItem, type PendingAnim } from './mapAnimate';
 import { freehandCorners, type FreePt } from './freehand';
 import { SIGHT_MAX_KM, kmFromPointer, kmText, sightHandleAt, sightKmOf, sightRing } from './sight';
 import {
@@ -303,6 +304,15 @@ export default function WarMap({ compact = false, title, actions, stage }: { com
 
   useEffect(() => { dataRef.current = data; rawRef.current = rawData; }, [data, rawData]);
 
+  // Changes that arrive from the server (a send, a reply's map effects, a live change) are animated; the team's own
+  // optimistic edits and the first load are not. The diff waits here for the marker and layer effects to run.
+  const pendingAnim = useRef<PendingAnim | null>(null);
+  const queueAnim = useCallback((prev: MapData | null, next: MapData) => {
+    if (!prev || isStage || prefersReducedMotion() || (typeof document !== 'undefined' && document.hidden)) return;
+    const diff = diffMapData(prev, next);
+    if (diff) pendingAnim.current = { diff, ghosts: [], drawn: new Map() };
+  }, [isStage]);
+
   const reload = useCallback(async () => {
     if (isStage) return;   // a reply's map is only what the reply stages
     const mine = ++seq.current;
@@ -315,6 +325,7 @@ export default function WarMap({ compact = false, title, actions, stage }: { com
       // Never show a read that is older than what is on screen: a newer read is on its way, we are writing, or the
       // read began before our last write finished (it may not include it).
       if (mine !== seq.current || writes.current > 0 || startedAt < lastWriteEnd.current) return;
+      queueAnim(rawRef.current, d);
       setData((prev) => shareData(prev, d));
       if (dr !== undefined) {
         const next = parseSet(dr);
@@ -324,7 +335,7 @@ export default function WarMap({ compact = false, title, actions, stage }: { com
     } catch (e) {
       if (mine === seq.current) setLoadError(crisisError(e, 'Could not load the map.'));
     }
-  }, [ref, isStage, staff]);
+  }, [ref, isStage, staff, queueAnim]);
 
   useEffect(() => { void reload(); }, [reload]);
 
@@ -1224,6 +1235,7 @@ export default function WarMap({ compact = false, title, actions, stage }: { com
         (fresh.unitAdds ?? []).forEach((a, i) => { if (res.addedUnits[i]) unitIds.set(a.id, res.addedUnits[i]); });
         if (sentRaw) {
           const next = renameLocalIds(applyLocal(sentRaw, fresh, ref.id), shapeIds, unitIds);
+          queueAnim(sentRaw, next);
           rawRef.current = next;
           setData(next);
         }
@@ -1242,7 +1254,7 @@ export default function WarMap({ compact = false, title, actions, stage }: { com
       }
     });
     setSending(false);
-  }, [ref, run, sending, canMap, canUnits, canChars, clearHistory, persistDraft, v]);
+  }, [ref, run, sending, canMap, canUnits, canChars, clearHistory, persistDraft, v, queueAnim]);
 
   /** Throws the unsent changes away. Go back brings them back (with the steps Go back had before). */
   const discardDraft = useCallback(async () => {
@@ -2253,7 +2265,14 @@ export default function WarMap({ compact = false, title, actions, stage }: { com
     const size = compact ? 26 : 32;
     const wanted = new Set(shownUnits.map((u) => u.id));
     for (const [id, m] of [...markers]) {
-      if (!wanted.has(id)) { m.marker.remove(); markers.delete(id); }
+      if (!wanted.has(id)) {
+        const pa = pendingAnim.current;
+        if (pa && pa.diff.removed.includes(id) && !m.el.dataset.drag) {
+          const at = m.marker.getLngLat();
+          pa.ghosts.push({ el: m.el.cloneNode(true) as HTMLElement, at: [at.lng, at.lat] });
+        }
+        m.marker.remove(); markers.delete(id);
+      }
     }
     for (const u of shownUnits) {
       const color = u.owner_cabinet_id ? cabById.get(u.owner_cabinet_id)?.color ?? NOBODY : NOBODY;
@@ -2286,6 +2305,8 @@ export default function WarMap({ compact = false, title, actions, stage }: { com
         m = { marker, el, sig: '' };
         markers.set(u.id, m);
       } else if (!m.el.dataset.drag && pendingMoveRef.current?.id !== u.id) {
+        const pa = pendingAnim.current;
+        if (pa && !pa.drawn.has(u.id)) { const cur = m.marker.getLngLat(); pa.drawn.set(u.id, [cur.lng, cur.lat]); }
         m.marker.setLngLat([u.lng, u.lat]);
       }
       m.marker.setDraggable(canDrag && (stageKind !== 'unit' || !stageUnitId || u.id === stageUnitId));
@@ -2297,6 +2318,77 @@ export default function WarMap({ compact = false, title, actions, stage }: { com
       }
     }
   }, [world, shownUnits, cabById, selUnit, canDrag, compact, stageKind, stageUnitId]);
+
+  // ── animation of map changes that arrived from the server (see queueAnim) ──
+  const animator = useMemo(() => createMapAnimator(() => mapRef.current), []);
+  useEffect(() => () => animator.cancelAll(), [animator]);
+  useEffect(() => {
+    const pa = pendingAnim.current;
+    if (!pa) return;
+    pendingAnim.current = null;
+    const map = mapRef.current;
+    if (!world || !map || !data || prefersReducedMotion()) return;
+    const { diff } = pa;
+    animator.cancelAll();
+    const unitNow = (id: string) => dataRef.current?.units.find((x) => x.id === id);
+    // Decide per unit from what THIS screen was drawing: already at the new spot (the sender, or anyone looking at the
+    // same draft) keeps its place and only plays the trail; a screen still showing the old spot glides.
+    const moves = diff.moved.map((m) => {
+      const d = pa.drawn.get(m.id);
+      const still = !!d && Math.abs(d[0] - m.to[0]) < 1e-6 && Math.abs(d[1] - m.to[1]) < 1e-6;
+      return { ...m, from: still || !d ? m.from : d, still };
+    });
+    animator.moveUnits(
+      moves,
+      (id) => unitMarkers.current.get(id),
+      (id) => { const u = unitNow(id); return u ? [u.lng, u.lat] : undefined; },
+      (id) => { const o = unitNow(id)?.owner_cabinet_id; return safeColor(o ? cabById.get(o)?.color ?? NOBODY : NOBODY); },
+    );
+    animator.popUnits(diff.added.map((id) => unitMarkers.current.get(id)?.el), pa.ghosts);
+
+    const grow: GrowItem[] = [];
+    // Countries that changed hands: the tint grows in (or fades out when the land was lost).
+    const tinted = diff.regions.filter((r) => r.ownerFrom !== r.ownerTo && world.byKey.has(r.key));
+    const colorOfCab = (id: string | null) => (id ? cabById.get(id)?.color : undefined);
+    if (tinted.length) {
+      const setState = (key: string, color: string | undefined, k: number) => {
+        try {
+          if (color && k > 0) map.setFeatureState({ source: SRC_COUNTRIES, id: key }, { tint: cabinetTint(color, 0.27 * k), edge: cabinetTint(color, 0.95 * k) });
+          else { map.removeFeatureState({ source: SRC_COUNTRIES, id: key }, 'tint'); map.removeFeatureState({ source: SRC_COUNTRIES, id: key }, 'edge'); }
+        } catch { /* the style is still loading */ }
+      };
+      animator.tween(1500, (e) => {
+        for (const r of tinted) {
+          const to = colorOfCab(r.ownerTo);
+          if (to) setState(r.key, to, e); else setState(r.key, colorOfCab(r.ownerFrom), 1 - e);
+        }
+      }, () => {
+        // Always end on the real colours (the owner effect keeps them in `applied`).
+        for (const r of tinted) setState(r.key, applied.current.get(r.key), 1);
+      });
+    }
+    for (const r of diff.regions) {
+      if (!world.byKey.has(r.key)) continue;
+      const base = baseShapes.get(r.key)?.multi ?? [];
+      const from = r.geomFrom ? toMulti(r.geomFrom as { type: string; coordinates: unknown }) : base;
+      const toM = r.geomTo ? toMulti(r.geomTo as { type: string; coordinates: unknown }) : base;
+      const color = colorOfCab(r.ownerTo) ?? colorOfCab(r.ownerFrom) ?? DRAFT;
+      grow.push({ from: r.geomChanged ? from : toM, to: toM.length ? (r.geomChanged ? toM : toM) : null, color: safeColor(color) });
+      if (!toM.length) grow[grow.length - 1].from = from;
+    }
+    for (const s of diff.shapes) {
+      if (s.kind === 'zone' && !zonesOn) continue;
+      const gone = !s.geomTo;
+      if (gone && viewer) continue;
+      if (!gone && viewer && !shownShapes.some((x) => x.id === s.id)) continue;
+      const owner = colorOfCab(s.ownerTo) ?? colorOfCab(s.ownerFrom);
+      const color = s.kind === 'zone' ? s.colorTo ?? s.colorFrom ?? DRAFT : owner ?? s.colorTo ?? s.colorFrom ?? DRAFT;
+      const from = s.geomFrom ? toMulti(s.geomFrom as { type: string; coordinates: unknown }) : null;
+      const toM = s.geomTo ? toMulti(s.geomTo as { type: string; coordinates: unknown }) : null;
+      grow.push({ from, to: toM, color: safeColor(color) });
+    }
+    animator.growAreas(grow.slice(0, 60));
+  }, [data, world, animator, cabById, baseShapes, viewer, shownShapes, zonesOn]);
 
   // ── planned moves: a dashed trajectory from where each unit is now (a reply's moves, or the team's unsent moves),
   // and a ring where it is until the move is sent ──

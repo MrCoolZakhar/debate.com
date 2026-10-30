@@ -21,7 +21,7 @@ import { CharacterLink, CharacterName } from '../character/CharacterProfileHost'
 import { CabinetLogo, NameStack, NumberBadge } from './directiveParts';
 import { KIND_ICON, authorName, buildNames, listDirectiveCoauthors } from './directiveKit';
 import DirectiveComposer from './DirectiveComposer';
-import DirectiveFacts from './DirectiveFacts';
+import DirectiveFacts, { SecretGoalsChip, SecretGoalsPanel, useSecretGoals } from './DirectiveFacts';
 import DirectiveThread from './DirectiveThread';
 import { DirectiveBody } from './attachedImage';
 import type { DirectiveReply } from './useDirectiveReply';
@@ -61,6 +61,8 @@ export default function DirectiveMain({ directive: d, reply, notesVersion = 0, o
 
   const [notes, setNotes] = useState<DirectiveNote[] | null>(null);
   const [coIds, setCoIds] = useState<string[]>([]);
+  const goals = useSecretGoals(d);
+  const [goalsOpen, setGoalsOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -112,7 +114,10 @@ export default function DirectiveMain({ directive: d, reply, notesVersion = 0, o
               </CharacterLink>
             </span>
             <div className="flex flex-col" style={{ paddingTop: 8, minWidth: 0, flex: 1, gap: 4 }}>
-              <NameStack name={who} align="left" big={19} small={12.5} width={170} characterId={character?.id} />
+              <span className="flex items-start flex-wrap" style={{ gap: '4px 10px' }}>
+                <NameStack name={who} align="left" big={19} small={12.5} width={170} characterId={character?.id} />
+                {goals && <SecretGoalsChip open={goalsOpen} onToggle={() => setGoalsOpen((x) => !x)} />}
+              </span>
               {character?.title && <p style={{ margin: 0, fontSize: 13, fontWeight: 600, lineHeight: 1.3, color: CK.inkSoft, overflowWrap: 'anywhere' }}>{character.title}</p>}
               <p className="flex items-center" style={{ margin: 0, gap: 7 }}>
                 <CabinetLogo cabinet={cabinet} size={24} />
@@ -121,6 +126,7 @@ export default function DirectiveMain({ directive: d, reply, notesVersion = 0, o
             </div>
           </div>
           <DirectiveFacts d={d} names={names} editing={reply.editing} onChanged={onChanged} />
+          {goals && goalsOpen && <div style={{ flex: '1 1 100%' }}><SecretGoalsPanel goals={goals} /></div>}
         </div>
       </div>
 

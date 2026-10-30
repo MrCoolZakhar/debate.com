@@ -11,6 +11,7 @@ import { Card, CardTitle } from '../../crisisKit';
 import { loadRoomStates, type RoomState } from './commandData';
 import { EmptyLine } from './commandParts';
 import CommandRoomDialog from './commandRoomDialog';
+import type { CrisisRecapTab } from './commandRecap';
 import CrisisRoomCard, { ROOM_CARD_CSS, ROOM_OVERHANG } from './commandRoomCard';
 
 export function useRoomStates(cref: CrisisRef, cabinets: Cabinet[]): { rooms: RoomState[] | null; failed: boolean } {
@@ -51,6 +52,7 @@ export function FrontRoomsCard({ cabinets, conferenceId, rooms, failed }: {
   const byCab = useMemo(() => new Map((rooms ?? []).map((r) => [r.cabinetId, r])), [rooms]);
   // The pop-up is found by cabinet id, so it follows the live state and a retired room code.
   const [openId, setOpenId] = useState<string | null>(null);
+  const [openTab, setOpenTab] = useState<CrisisRecapTab>('overview');
   const openCab = openId ? cabinets.find((c) => c.id === openId) ?? null : null;
   const openRoom = openId ? byCab.get(openId) ?? null : null;
 
@@ -69,14 +71,15 @@ export function FrontRoomsCard({ cabinets, conferenceId, rooms, failed }: {
                   cab={cab}
                   live={r?.live ?? null}
                   placeholder={rooms === null ? (failed ? 'Could not read this committee room' : 'Reading the committee room') : 'No committee room linked'}
-                  onOpen={linked ? () => setOpenId(cab.id) : undefined}
+                  onOpen={linked ? () => { setOpenTab('overview'); setOpenId(cab.id); } : undefined}
+                  onChat={linked ? () => { setOpenTab('chat'); setOpenId(cab.id); } : undefined}
                 />
               </div>
             );
           })}
         </div>
       )}
-      {openCab && openRoom?.live && <CommandRoomDialog cab={openCab} room={openRoom} conferenceId={conferenceId} onClose={() => setOpenId(null)} />}
+      {openCab && openRoom?.live && <CommandRoomDialog key={`${openCab.id}:${openTab}`} cab={openCab} room={openRoom} conferenceId={conferenceId} initialTab={openTab} onClose={() => setOpenId(null)} />}
     </Card>
   );
 }

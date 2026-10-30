@@ -7,7 +7,7 @@
 // the slot), so every room always fits without scrolling. Nothing here writes.
 
 import { useMemo, type CSSProperties } from 'react';
-import { FileText, ScrollText, UserRound, Users } from 'lucide-react';
+import { FileText, MessageCircle, ScrollText, UserRound, Users } from 'lucide-react';
 import { LogoDisc } from '@/components/LogoDisc';
 import { SeatCircleFlag } from '@/components/CircleFlag';
 import { SeatArtProvider } from '@/components/SeatFlag';
@@ -36,6 +36,8 @@ export const ROOM_CARD_CSS = `
 .rm-card { transition: box-shadow 260ms cubic-bezier(0.23, 1, 0.32, 1), transform 260ms cubic-bezier(0.23, 1, 0.32, 1); }
 .rm-card[data-open]:hover { box-shadow: ${CARD_SHADOW_HOVER} !important; transform: translateY(-2px); }
 .rm-card:focus-visible { outline: 2px solid #1B3828; outline-offset: 2px; }
+.rm-chat:hover { background: rgba(27,56,40,0.13) !important; }
+.rm-chat:focus-visible { outline: 2px solid #1B3828; outline-offset: 1px; }
 `;
 
 const toneInk = (t: NowPlaying['tone']) => (t === 'live' ? GREEN_INK : t === 'warn' ? AMBER_INK : SOFT);
@@ -56,7 +58,7 @@ function Mark({ country, size }: { country: string; size: number }) {
 
 const FLAGS_SHOWN = 8;
 
-function CardInner({ cab, live, placeholder, onOpen }: { cab: Cabinet; live: LiveCommittee | null; placeholder: string; onOpen?: () => void }) {
+function CardInner({ cab, live, placeholder, onOpen, onChat }: { cab: Cabinet; live: LiveCommittee | null; placeholder: string; onOpen?: () => void; onChat?: () => void }) {
   const np = useRoomNow(live);
   const status = live ? roomStatus(live, serverNow()) : null;
   const meta = status ? STATUS_META[status] : null;
@@ -97,12 +99,27 @@ function CardInner({ cab, live, placeholder, onOpen }: { cab: Cabinet; live: Liv
 
         <div className="flex items-start justify-between" style={{ gap: 8, padding: '7px 12px 0 16px', marginInlineStart: ROOM_LOGO + 6, flex: 'none' }}>
           <b title={cab.name} style={{ fontSize: 17, lineHeight: 1.15, letterSpacing: '-0.015em', color: NEU.ink, overflowWrap: 'anywhere', minWidth: 0 }}>{title}</b>
-          {meta && (
-            <span className="inline-flex items-center" style={{ gap: 6, flex: 'none', paddingTop: 2 }} title="Whether this room has shown a sign of life recently">
-              <span className={meta.pulse ? 'animate-pulse' : undefined} style={{ width: 8, height: 8, borderRadius: '50%', background: meta.color, boxShadow: status === 'not-started' ? `inset 0 0 0 1px ${meta.color}` : undefined }} />
-              <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.09em', textTransform: 'uppercase', color: meta.ink }}>{meta.label}</span>
-            </span>
-          )}
+          <span className="inline-flex items-center" style={{ gap: 8, flex: 'none' }}>
+            {meta && (
+              <span className="inline-flex items-center" style={{ gap: 6, paddingTop: 2 }} title="Whether this room has shown a sign of life recently">
+                <span className={meta.pulse ? 'animate-pulse' : undefined} style={{ width: 8, height: 8, borderRadius: '50%', background: meta.color, boxShadow: status === 'not-started' ? `inset 0 0 0 1px ${meta.color}` : undefined }} />
+                <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.09em', textTransform: 'uppercase', color: meta.ink }}>{meta.label}</span>
+              </span>
+            )}
+            {onChat && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onChat(); }}
+                onKeyDown={(e) => e.stopPropagation()}
+                aria-label={`Open the ${cab.name} room chat`}
+                title="Chat in this room as the Crisis Team"
+                className="rm-chat inline-flex items-center focus:outline-none"
+                style={{ border: 0, cursor: 'pointer', borderRadius: 9, padding: '3px 6px', background: 'rgba(27,56,40,0.07)', color: NEU.forest, lineHeight: 0 }}
+              >
+                <MessageCircle size={15} strokeWidth={1.5} aria-hidden />
+              </button>
+            )}
+          </span>
         </div>
 
         {/* The Now Playing panel: the one band that carries the room. */}
@@ -180,13 +197,13 @@ function CardInner({ cab, live, placeholder, onOpen }: { cab: Cabinet; live: Liv
 }
 
 /** The card for one cabinet's room. `live` is null while the room is still being read, or when no room is linked. */
-export default function CrisisRoomCard({ cab, live, placeholder = 'No room linked', onOpen }: {
-  cab: Cabinet; live: LiveCommittee | null; placeholder?: string; onOpen?: () => void;
+export default function CrisisRoomCard({ cab, live, placeholder = 'No room linked', onOpen, onChat }: {
+  cab: Cabinet; live: LiveCommittee | null; placeholder?: string; onOpen?: () => void; onChat?: () => void;
 }) {
   const seats = useMemo(() => live?.delegates ?? [], [live]);
   return (
     <SeatArtProvider delegates={seats}>
-      <CardInner cab={cab} live={live} placeholder={placeholder} onOpen={onOpen} />
+      <CardInner cab={cab} live={live} placeholder={placeholder} onOpen={onOpen} onChat={onChat} />
     </SeatArtProvider>
   );
 }

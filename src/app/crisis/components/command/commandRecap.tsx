@@ -7,7 +7,7 @@
 // Nothing here writes.
 
 import { useMemo, type ReactNode } from 'react';
-import { History as HistoryIcon, Newspaper, Radio, ScrollText, Trophy, Users } from 'lucide-react';
+import { History as HistoryIcon, MessageCircle, Newspaper, Radio, ScrollText, Trophy, Users } from 'lucide-react';
 import { CircleFlag } from '@/components/CircleFlag';
 import { LogoDisc } from '@/components/LogoDisc';
 import { NEU, OUTFIT } from '@/components/neu';
@@ -19,8 +19,9 @@ import { SOFT } from '@/app/manage/[slug]/live/tokens';
 import type { Directive, News } from '@/lib/crisis/types';
 import { CK } from '../../crisisKit';
 import { CabinetDirectivesList, CrisisNewsList, cabinetDirectivesOf, cabinetNewsOf } from './cabinetFeeds';
+import StaffRoomChat, { type StaffChat } from './staffChat';
 
-export type CrisisRecapTab = 'overview' | 'directives' | 'news' | 'scoreboard' | 'history' | 'attendance';
+export type CrisisRecapTab = 'overview' | 'directives' | 'news' | 'chat' | 'scoreboard' | 'history' | 'attendance';
 
 /** A big number with the word beside it. */
 function Stat({ n, word }: { n: string | number; word: string }) {
@@ -32,13 +33,15 @@ function Stat({ n, word }: { n: string | number; word: string }) {
   );
 }
 
-export default function CrisisRecap({ data, cabinetId, tab, onTab, directives, news, floorDetail, onOpenDirective, onOpenNews, onOpenScoreboard, onClose }: {
+export default function CrisisRecap({ data, cabinetId, tab, onTab, directives, news, chat, floorDetail, onOpenDirective, onOpenNews, onOpenScoreboard, onClose }: {
   data: LiveCommittee;
   cabinetId: string;
   tab: CrisisRecapTab;
   onTab: (t: CrisisRecapTab) => void;
   directives: Directive[] | null;
   news: News[] | null;
+  /** The staff's chat in this room (staffChat.tsx), opened on the Chat tab. */
+  chat: StaffChat;
   floorDetail: ReactNode;
   onOpenDirective: (d: Directive) => void;
   onOpenNews: (n: News) => void;
@@ -69,6 +72,7 @@ export default function CrisisRecap({ data, cabinetId, tab, onTab, directives, n
       <RailTab side={side} icon={Radio} label="Overview" active={tab === 'overview'} onClick={() => onTab('overview')} title="What this room is doing now and what it has done" />
       <RailTab side={side} icon={ScrollText} label="Cabinet Directives" count={directiveCount} active={tab === 'directives'} onClick={() => onTab('directives')} title="The directives sent in this cabinet's name, with where each one stands" />
       <RailTab side={side} icon={Newspaper} label="Crisis News" count={newsCount} active={tab === 'news'} onClick={() => onTab('news')} title="The news this cabinet has received, its own and everyone's" />
+      <RailTab side={side} icon={MessageCircle} label="Chat" count={chat.unread > 0 ? chat.unread : undefined} active={tab === 'chat'} onClick={() => onTab('chat')} title="Read and write in this committee room's chat as the Crisis Team" />
       <RailTab side={side} icon={Trophy} label="Scoreboard" active={tab === 'scoreboard'} onClick={() => onTab('scoreboard')} title="The full delegate performance table, the same one the chairs score from" />
       <RailTab side={side} icon={HistoryIcon} label="History" active={tab === 'history'} onClick={() => onTab('history')} title="The session in the order it happened" />
       <RailTab side={side} icon={Users} label="Attendance" count={votingTotal} active={tab === 'attendance'} onClick={() => onTab('attendance')} title="The roll: present, present and voting, absent" />
@@ -126,6 +130,13 @@ export default function CrisisRecap({ data, cabinetId, tab, onTab, directives, n
         <div style={{ fontFamily: CK.font }}>
           {heading('Crisis News')}
           <CrisisNewsList news={news} cabinetId={cabinetId} onOpen={onOpenNews} />
+        </div>
+      )}
+
+      {tab === 'chat' && (
+        <div style={{ fontFamily: CK.font }}>
+          {heading('Chat')}
+          <StaffRoomChat chat={chat} />
         </div>
       )}
 

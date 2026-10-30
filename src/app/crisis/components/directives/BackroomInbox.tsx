@@ -19,6 +19,7 @@ import MeetingRequestsStrip from '../meetings/MeetingRequestsStrip';
 import { useNow } from './useNow';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import DirectivePopup from './DirectivePopup';
+import RoomChatButton from '../command/RoomChatDialog';
 import DirectiveDeepLink from '../notifications/DirectiveDeepLink';
 import {
   CREATABLE_KINDS, NO_FILTERS, buildNames, inLane, lastAnsweredByAuthor, matchesFilters, sortDirectives,
@@ -192,8 +193,11 @@ export default function BackroomInbox() {
       <DirectiveDeepLink onId={setLinkedId} />
       <div className="flex items-center justify-between flex-wrap" style={{ gap: 10 }}>
         <h1 className="flex items-center" style={{ margin: 0, gap: 8, fontSize: 22, fontWeight: 800, color: CK.ink }}><ListChecks size={22} strokeWidth={1.5} aria-hidden style={{ color: CK.red }} />Directives</h1>
-        <div style={{ maxWidth: '100%', overflowX: 'auto' }}>
-          <LaneTabs value={lane} options={laneOptions} onChange={setLane} />
+        <div className="flex items-center flex-wrap" style={{ gap: 8, maxWidth: '100%' }}>
+          <RoomChatButton />
+          <div style={{ maxWidth: '100%', overflowX: 'auto' }}>
+            <LaneTabs value={lane} options={laneOptions} onChange={setLane} />
+          </div>
         </div>
       </div>
 

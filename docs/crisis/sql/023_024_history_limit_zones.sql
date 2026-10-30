@@ -5,3 +5,7 @@
 -- 24b crisis_part24b_map_set_zone_info: crisis_apply_map_set takes shapeInfo:[{id, label?, color?, description?, zone_type?,
 --    public?, revealed_to?}] (only keys present change) and addShapes rows may carry description and zone_type;
 --    crisis_apply_map_set_v2 forwards shapeInfo.
+-- 26 crisis_part26_shape_kind_zone: crisis_shapes.kind may be 'zone' (the check allowed only line and area, so saving
+--    a zone failed with "One of the values isn't allowed"); crisis_apply_map_set's default kind is 'area'.
+-- 25 crisis_part25_members_ping_skip_heartbeat: a crisis_members update that only changes last_seen_at / updated_at no
+--    longer pings every client (it reloaded the whole crisis for everyone each second).

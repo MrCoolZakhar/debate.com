@@ -3,6 +3,7 @@
 
 import { getCrisisClient } from '@/lib/crisis/client';
 import { amount, isChairSendBack } from '@/lib/crisis/format';
+import { isCrisisTeamName } from '@/lib/crisis/staffChatName';
 import type { Cabinet, Character, Directive, Member, Resource } from '@/lib/crisis/types';
 import type { CrisisRef } from '@/lib/crisis/api';
 import type { CaucusJson, LiveCommittee } from '@/app/manage/[slug]/live/LiveModals';
@@ -70,7 +71,8 @@ export async function loadRoomStates(ref: CrisisRef, cabinets: Cabinet[]): Promi
     const dl = delegates.get(room.id) ?? [];
     const ql = lists.get(room.id) ?? [];
     const dc = docs.get(room.id) ?? [];
-    const chairNames = room.chair_names ?? [];
+    // The crisis staff's chat name is not a presiding chair.
+    const chairNames = (room.chair_names ?? []).filter((n) => !isCrisisTeamName(n));
     const pw = room.settings?.chairJoinSuffix;
     const live: LiveCommittee = {
       conf: {

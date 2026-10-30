@@ -76,7 +76,7 @@ function useRoomCode() {
 }
 
 /** The live room, kept current by the delegate page's own sync (messages and broadcasts included). */
-function useRoom(code: string | null) {
+export function useRoom(code: string | null) {
   const [state, setState] = useState<{ code: string; committee: Committee | null; failed: boolean } | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [broadcastVersion, setBroadcastVersion] = useState(0);

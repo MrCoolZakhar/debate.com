@@ -6,6 +6,7 @@
 
 import ChatPanel from '@/components/ChatPanel';
 import ChatDisabledNotice from '@/components/ChatDisabledNotice';
+import { SeatArtProvider } from '@/components/SeatFlag';
 import CrisisDialog from './CrisisDialog';
 import type { CrisisRoom } from './useCrisisRoom';
 
@@ -14,6 +15,9 @@ export default function ChatDialog({ room, onClose }: { room: CrisisRoom; onClos
   const ended = !!committee?.endedAt;
   return (
     <CrisisDialog title="Committee Room" onClose={onClose} width={860} flush>
+      {/* The seats' pictures (the characters' portraits, copied onto the seats) come from the roster, as on the
+          live-room pages; without it the chat drew monograms only. */}
+      <SeatArtProvider delegates={committee?.delegates}>
       <div className="flex overflow-hidden" style={{ height: 'min(680px, calc(100dvh - 130px))', minHeight: 260 }}>
         {!committee || !seat ? (
           <p style={{ margin: 0, padding: 20, fontSize: 14 }}>{room.reason ?? 'Your committee room opens on the conference days'}</p>
@@ -47,6 +51,7 @@ export default function ChatDialog({ room, onClose }: { room: CrisisRoom; onClos
           />
         )}
       </div>
+      </SeatArtProvider>
     </CrisisDialog>
   );
 }
