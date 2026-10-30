@@ -109,6 +109,21 @@ export function isPressBroadcast(info: ChatBroadcastInfo | null | undefined): bo
   return info?.source === 'press';
 }
 
+/** Sent by Gavelling's own admins from /admin (source 'admin'), to any room. */
+export function isAdminBroadcast(info: { source?: string } | null | undefined): boolean {
+  return info?.source === 'admin';
+}
+
+/** The card title on the chair laptop and the delegate phone. */
+export function broadcastCardTitle(
+  info: { source?: string; authorLabel?: string | null } | null | undefined,
+  t: (key: TranslationKey, vars?: Record<string, string | number>) => string,
+): string {
+  if (info?.source === 'press') return t('bc_press_from', { name: info.authorLabel || t('bc_press') });
+  if (info?.source === 'admin') return t('bc_admins_title');
+  return t('notif_broadcast_title');
+}
+
 /** Who a broadcast message is from, as the chat shows it: "Secretariat", or
  *  "Press · BBC" for a press release. */
 export function broadcastAuthor(
@@ -116,12 +131,13 @@ export function broadcastAuthor(
   t: (key: TranslationKey, vars?: Record<string, string | number>) => string,
 ): string {
   if (isPressBroadcast(info)) return t('bc_press_from', { name: info?.authorLabel || t('bc_press') });
+  if (isAdminBroadcast(info)) return t('bc_admins');
   return t('bc_secretariat');
 }
 
 /** The run key: consecutive broadcasts group only while they come from the same author. */
 export function broadcastAuthorKey(info: ChatBroadcastInfo | null | undefined): string {
-  return isPressBroadcast(info) ? `press:${info?.authorLabel ?? ''}` : 'secretariat';
+  return isPressBroadcast(info) ? `press:${info?.authorLabel ?? ''}` : isAdminBroadcast(info) ? 'admin' : 'secretariat';
 }
 
 /** Unread Secretariat messages while chat is off (the chair's chat icon count). */

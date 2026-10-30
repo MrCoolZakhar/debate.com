@@ -14,9 +14,15 @@
 // srp_press_note (23 Oct 2026): the "Your room is live" line for a reporter, whose entry opens
 // the Press Desk (src/lib/liveRooms.ts isPressSeat).
 //
+// bc_admins* (30 Oct 2026): messages Gavelling's admins send from /admin to any room,
+// signed "Gavelling Admins" (session_broadcasts.source = 'admin').
+//
 // Copy rules (CLAUDE.md §8): no em dashes, no full stop on a title or a one-line caption.
 export const broadcastsTranslations = {
   en: {
+    bc_admins: 'Gavelling Admins',
+    bc_admins_title: 'Message from Gavelling Admins',
+    bc_admins_image: 'Image from Gavelling Admins',
     bc_secretariat: 'Secretariat',
     bc_pause: 'Asks the dais to suspend debate',
     bc_end: 'Asks the dais to end debate',
@@ -31,6 +37,9 @@ export const broadcastsTranslations = {
     srp_press_note: 'Your Press Desk is open: follow every room and send press releases',
   },
   es: {
+    bc_admins: 'Administradores de Gavelling',
+    bc_admins_title: 'Mensaje de los administradores de Gavelling',
+    bc_admins_image: 'Imagen de los administradores de Gavelling',
     bc_secretariat: 'Secretaría',
     bc_pause: 'Pide a la mesa suspender el debate',
     bc_end: 'Pide a la mesa terminar el debate',
@@ -45,6 +54,9 @@ export const broadcastsTranslations = {
     srp_press_note: 'Tu mesa de prensa está abierta: sigue todas las salas y envía comunicados de prensa',
   },
   fr: {
+    bc_admins: 'Administrateurs de Gavelling',
+    bc_admins_title: 'Message des administrateurs de Gavelling',
+    bc_admins_image: 'Image des administrateurs de Gavelling',
     bc_secretariat: 'Secrétariat',
     bc_pause: 'Demande au bureau de suspendre le débat',
     bc_end: 'Demande au bureau de clore le débat',
@@ -59,6 +71,9 @@ export const broadcastsTranslations = {
     srp_press_note: 'Votre bureau de presse est ouvert : suivez toutes les salles et envoyez des communiqués',
   },
   ar: {
+    bc_admins: 'مشرفو Gavelling',
+    bc_admins_title: 'رسالة من مشرفي Gavelling',
+    bc_admins_image: 'صورة من مشرفي Gavelling',
     bc_secretariat: 'الأمانة العامة',
     bc_pause: 'تطلب من المنصة تعليق النقاش',
     bc_end: 'تطلب من المنصة إنهاء النقاش',
@@ -73,6 +88,9 @@ export const broadcastsTranslations = {
     srp_press_note: 'مكتب الصحافة مفتوح: تابع كل القاعات وأرسل بيانات صحفية',
   },
   pt: {
+    bc_admins: 'Administradores da Gavelling',
+    bc_admins_title: 'Mensagem dos administradores da Gavelling',
+    bc_admins_image: 'Imagem dos administradores da Gavelling',
     bc_secretariat: 'Secretariado',
     bc_pause: 'Pede à mesa que suspenda o debate',
     bc_end: 'Pede à mesa que encerre o debate',

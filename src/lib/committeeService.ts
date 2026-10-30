@@ -2825,7 +2825,7 @@ export interface SessionBroadcast {
   expiresAt: string | null;
   /** 'organiser' (the Secretariat) or 'press' (a press release, scratch-press.sql). A row
    *  from before the column existed reads as 'organiser'. */
-  source: 'organiser' | 'press';
+  source: 'organiser' | 'press' | 'admin';
   /** A press release's outlet / seat name ("BBC"); null for the organisers'. */
   authorLabel: string | null;
 }
@@ -2842,7 +2842,7 @@ function rowToBroadcast(r: Record<string, unknown>): SessionBroadcast {
     actionAt: (r.action_at as string) ?? null,
     createdAt: r.created_at as string,
     expiresAt: (r.expires_at as string) ?? null,
-    source: r.source === 'press' ? 'press' : 'organiser',
+    source: r.source === 'press' ? 'press' : r.source === 'admin' ? 'admin' : 'organiser',
     authorLabel: typeof r.author_label === 'string' && r.author_label.trim() ? r.author_label.trim() : null,
   };
 }

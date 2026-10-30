@@ -59,7 +59,7 @@ import { chatUnreadTotal, mergeMessagesById, chatConvKeyForMessage, buildChatCon
 import { isViewingChatConversation } from '@/lib/chatViewing';
 import { loadChatReadCounts, saveChatReadCounts } from '@/lib/chatReadKey';
 import { loadSeenBroadcasts, markBroadcastSeen, useBroadcastHistory } from '@/lib/broadcastHistory';
-import { withBroadcastMessages, secretariatUnread, BROADCAST_MESSAGE_PREFIX, SECRETARIAT_READ_KEY } from '@/lib/broadcastMessages';
+import { withBroadcastMessages, secretariatUnread, broadcastCardTitle, BROADCAST_MESSAGE_PREFIX, SECRETARIAT_READ_KEY } from '@/lib/broadcastMessages';
 import ChairSidebarShell from '@/components/ChairSidebarShell';
 import SidebarFlagRail from '@/components/SidebarFlagRail';
 import FloorBarExtent from '@/components/FloorBarExtent';
@@ -4377,7 +4377,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         key,
         kind: 'broadcast',
         urgent: true,
-        title: t('notif_broadcast_title'),
+        title: broadcastCardTitle(b, t),
         body: b.message,
         ttlMs: null,
         actions: [{

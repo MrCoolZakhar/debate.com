@@ -262,6 +262,8 @@ export function buildBroadcastRows(input: {
   /** Null only for a standalone room broadcast from the staff board. */
   conferenceId: string | null;
   createdBy: string | null;
+  /** 'admin' only from the staff board (/admin): signed "Gavelling Admins". */
+  source?: 'organiser' | 'admin';
   kind: BroadcastKind;
   message: string;
   imageUrl: string | null;
@@ -283,6 +285,7 @@ export function buildBroadcastRows(input: {
     action: actionable ? input.action : null,
     action_at: actionable ? new Date(actionAtMs).toISOString() : null,
     created_by: input.createdBy,
+    source: input.source ?? 'organiser',
     expires_at: new Date((actionable ? actionAtMs : now) + BROADCAST_TTL_MS).toISOString(),
   }));
 }
@@ -468,6 +471,7 @@ export function BroadcastComposer({
   conferenceId,
   conferenceLabel,
   createdBy,
+  source = 'organiser',
   targets,
   onClose,
   onSent,
@@ -478,6 +482,8 @@ export function BroadcastComposer({
   conferenceId: string | null;
   conferenceLabel: string;
   createdBy: string | null;
+  /** 'admin' from the staff board: any room, signed "Gavelling Admins". */
+  source?: 'organiser' | 'admin';
   targets: BroadcastTarget[];
   onClose: () => void;
   onSent: () => void;
@@ -560,6 +566,7 @@ export function BroadcastComposer({
       targets: selectedTargets,
       conferenceId,
       createdBy,
+      source,
       kind,
       message: trimmed,
       imageUrl,
