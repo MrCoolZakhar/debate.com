@@ -31,6 +31,8 @@ export interface CrisisSettings {
   chairReadsPersonal: boolean;
   /** A cabinet directive waits for its cabinet's chair before the backroom sees it (docs/crisis/sql/017). */
   chairApprovesCabinetDirectives: boolean;
+  /** New cabinet directives are assigned to the Crisis Director first (docs/crisis/sql/027); off = the backroomer who owns the writer's character. Default on. */
+  cabinetDirectivesToDirector: boolean;
   queueOrder: 'fair' | 'oldest' | 'newest';
   /** Staff map edits wait in a shared draft until someone presses Send to delegates (docs/crisis/sql/020). */
   mapChangesWait: boolean;
@@ -50,6 +52,7 @@ export const DEFAULT_SETTINGS: CrisisSettings = {
   meetingsNeedApproval: true,
   chairReadsPersonal: false,
   chairApprovesCabinetDirectives: true,
+  cabinetDirectivesToDirector: true,
   queueOrder: 'fair',
   mapChangesWait: true,
   delegatesSeeOtherCharacters: false,

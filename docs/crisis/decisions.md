@@ -148,3 +148,8 @@ Design rule (standing): **no random white space.** Every card fills its slot, co
 - Delegate directive form: Themes beside Kind on one row, a bigger text box, an optional image through a pin inside the box, shown inline in the chat. News images open full size. My Character shows the character on the map.
 - Performance is ONE blended total (in-room session points plus directive points) with one breakdown; Statistics compares delegates on that blend.
 - Cabinet settings open as a pop-up; meeting clocks run only from the database anchors.
+
+## Round 9 (Peter, 30 Oct 2026)
+
+- Cabinet directives are assigned to the Crisis Director first (the database does it, SQL part 27; after the chair's approval when the chair must approve). Personal and joint directives still go to the character's backroomer. Setting: Settings > Directives > "Cabinet directives go to the Crisis Director first" (`cabinetDirectivesToDirector`, default on).
+- The Director gets a prompt on any staff page when one is waiting (`CabinetDirectivePrompt`, mounted in the crisis layout): Review opens it like a notification link, Allocate to someone else replaces the card with the staff list, X closes it. Handled ones are remembered per device; on page load only the last 30 minutes pop up; it waits while another dialog is open.

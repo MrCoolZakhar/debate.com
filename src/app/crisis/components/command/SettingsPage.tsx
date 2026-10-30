@@ -89,6 +89,7 @@ function SettingsBody() {
             <GSelect value={String(s.wordLimit)} onChange={(x) => save('wordLimit', Number(x))} options={WORD_LIMITS} aria-label="Word limit" style={{ minWidth: 170 }} />
           </ChoiceRow>
           <ToggleRow title="Cabinet directives go to the chair first" checked={s.chairApprovesCabinetDirectives} onChange={(on) => save('chairApprovesCabinetDirectives', on)} hint="The chair of the cabinet approves them before the backroom sees them." />
+          <ToggleRow title="Cabinet directives go to the Crisis Director first" checked={s.cabinetDirectivesToDirector !== false} onChange={(on) => save('cabinetDirectivesToDirector', on)} hint="New cabinet directives land with you. You review them or hand them to a backroomer. Off: they go to the backroomer who owns the writer's character." />
           <ChoiceRow title="Queue order" hint="Fair: the longest wait first, then whoever heard back least recently. Oldest and newest go by when the directive was sent.">
             <Segmented
               ariaLabel="Queue order"

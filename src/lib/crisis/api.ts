@@ -232,6 +232,15 @@ export async function listDirectives(ref: CrisisRef): Promise<Directive[]> {
   return must(res, 'Could not load the directives.') as Directive[];
 }
 
+/** The cabinet directives waiting in the backroom that are assigned to this member (the Crisis Director's prompt reads these). */
+export async function listQueuedCabinetDirectivesFor(ref: CrisisRef, memberId: string): Promise<Directive[]> {
+  const client = await c(ref);
+  const res = await client.from('crisis_directives').select('*')
+    .eq('crisis_id', ref.id).eq('kind', 'committee').eq('status', 'queued').eq('assigned_member_id', memberId)
+    .order('updated_at', { ascending: true }).limit(100);
+  return must(res, 'Could not load the directives.') as Directive[];
+}
+
 export async function listNotes(ref: CrisisRef, directiveId: string): Promise<DirectiveNote[]> {
   const client = await c(ref);
   const res = await client.from('crisis_directive_notes').select('*').eq('directive_id', directiveId).order('created_at');

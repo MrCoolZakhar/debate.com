@@ -19,6 +19,7 @@ import { ROLE_LABEL, type CrisisRole } from '@/lib/crisis/types';
 import { CK, Btn } from '../../crisisKit';
 import { CrisisProvider, crisisBase, useCrisisGate, type CrisisContextValue } from './CrisisContext';
 import NewsPopup from '../../components/news/NewsPopup';
+import CabinetDirectivePrompt from '../../components/directives/CabinetDirectivePrompt';
 import NotificationBell from '../../components/notifications/NotificationBell';
 import { CharacterProfileProvider } from '../../components/character/CharacterProfileHost';
 
@@ -292,6 +293,7 @@ export default function CrisisLayout({ children }: { children: React.ReactNode }
           {children}
         </main>
         <NewsPopup />
+        <CabinetDirectivePrompt />
       </div>
       </CharacterProfileProvider>
     </CrisisProvider>

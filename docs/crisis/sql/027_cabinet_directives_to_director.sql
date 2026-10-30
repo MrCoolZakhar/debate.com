@@ -1,0 +1,7 @@
+-- 027 (applied 30 Oct 2026, migration crisis_cabinet_directives_to_director)
+-- Cabinet directives (kind 'committee') go to the Crisis Director by default instead of the
+-- backroomer who owns the author's character. Setting crises.settings.cabinetDirectivesToDirector
+-- (default true) turns it off. With chair approval on, the director is assigned when the chair approves.
+-- New helper: crisis_cabinet_directive_assignee(crisis, character) -> the earliest director, else the owner.
+-- Changed: crisis_submit_directive, crisis_chair_review_directive (only the assignee line for kind 'committee').
+-- Personal and joint directives still go to the character's owner. Existing directives were not reassigned.
