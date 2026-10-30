@@ -1,0 +1,3 @@
+-- Gavelling Crisis, part 21 (applied 30 Oct 2026 as crisis_part21_chairs_decide_meetings).
+-- crisis_decide_meeting: a chair may approve or decline a PENDING request when the requesting character or one of the
+-- characters asked for is in the chair's own cabinet; staff decide everything as before.
