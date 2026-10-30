@@ -39,7 +39,9 @@ const NOINDEX_ROUTES = [
 // past it, so it gets slower, never stops; it was 3 GB until 30 Oct 2026, when
 // dev servers still reached 3.2 to 3.9 GB) and `next build` uses 2 workers
 // instead of one per core. Vercel and CI set VERCEL / CI, so production builds
-// are unchanged.
+// are unchanged. Measured 30 Oct 2026: the Turbopack target barely holds in
+// dev (1 GB and 2 GB ended at the same 2.6 GB); the cap that does hold is the
+// dev worker's self-restart in src/lib/devMemoryRestart.ts.
 const LOCAL_MACHINE = !process.env.VERCEL && !process.env.CI;
 
 const nextConfig: NextConfig = {
