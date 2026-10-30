@@ -19,7 +19,7 @@ export const SRC_DRAFT = 'draft';
 export const SRC_SEL = 'sel';
 export const SRC_EDIT = 'edit';
 export const SRC_HOVER = 'hover-pt';
-/** The real outline of every country this crisis changed: it stays on the map under the changed shape. */
+/** The real outline of every country this crisis changed: it stays visible over the changed shape. */
 export const SRC_BASE = 'base-outline';
 /** Moves a directive reply plans (dashed trajectories), and the sight ring of the selected unit. */
 export const SRC_PLANS = 'planned-moves';
@@ -41,22 +41,20 @@ export const BLANK_STYLE = {
 };
 
 /**
- * The real outline of a country whose border was changed, drawn first so it sits under everything: a faint fill
- * (it is still the country's land) and a dashed line. The changed shape is drawn over it by mapLayers().
+ * Kept for the callers that add it before mapLayers(): the real outline of a country whose border was changed
+ * is part of mapLayers() now, because it has to sit ABOVE the land and the drawn territory (a fill that hides
+ * under the changed shape hides the country it came from).
  */
 export function baseLayers(): AddLayerObject[] {
-  return [
-    { id: L_BASE_FILL, type: 'fill', source: SRC_BASE, paint: { 'fill-color': '#E7DFCB' } },
-    {
-      id: 'c-base-line', type: 'line', source: SRC_BASE, layout: { 'line-join': 'round' },
-      paint: { 'line-color': '#8C7F66', 'line-width': ['interpolate', ['linear'], ['zoom'], 0, 0.8, 6, 1.6], 'line-dasharray': [3, 2] },
-    },
-  ];
+  return [];
 }
 
 export function mapLayers(): AddLayerObject[] {
   return [
     { id: L_LAND, type: 'fill', source: SRC_COUNTRIES, paint: { 'fill-color': LAND } },
+    // The original country of every changed border: its full outline gets a light fill over the land (and over the
+    // sea where its land was taken), under the cabinet tints and the drawn territory, so it never disappears.
+    { id: L_BASE_FILL, type: 'fill', source: SRC_BASE, paint: { 'fill-color': '#CFC19F', 'fill-opacity': 0.5 } },
     { id: 'c-own', type: 'fill', source: SRC_COUNTRIES, paint: { 'fill-color': ['coalesce', ['feature-state', 'tint'], CLEAR] } },
     {
       id: 'c-line', type: 'line', source: SRC_COUNTRIES, layout: { 'line-join': 'round' },
@@ -77,6 +75,11 @@ export function mapLayers(): AddLayerObject[] {
     {
       id: 'shape-line', type: 'line', source: SRC_SHAPES, filter: ['==', ['get', 'kind'], 'line'], layout: { 'line-join': 'round', 'line-cap': 'butt' },
       paint: { 'line-color': ['get', 'color'], 'line-width': 3, 'line-dasharray': [2, 1.5] },
+    },
+    // The original outline again, dashed, over everything drawn, so it can be followed under any territory.
+    {
+      id: 'c-base-line', type: 'line', source: SRC_BASE, layout: { 'line-join': 'round' },
+      paint: { 'line-color': '#5E5340', 'line-width': ['interpolate', ['linear'], ['zoom'], 0, 0.9, 6, 1.8], 'line-dasharray': [3, 2], 'line-opacity': 0.9 },
     },
     { id: L_SHAPE_HIT, type: 'line', source: SRC_SHAPES, paint: { 'line-color': '#000000', 'line-width': 16, 'line-opacity': 0 } },
     { id: 'draft-fill', type: 'fill', source: SRC_DRAFT, filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': ['coalesce', ['get', 'tint'], DRAFT], 'fill-opacity': ['case', ['has', 'tint'], 1, 0.16] } },

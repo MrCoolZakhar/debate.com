@@ -1,21 +1,23 @@
 'use client';
 // Gavelling Crisis: the main panel of an opened directive (the left side of DirectivePopup).
 // Top, fixed: a red band with the kind and the TITLE (the biggest text, wraps, never cut)
-// under the "No. 13" badge that overlaps the pop-up's top edge, then the character: a portrait
-// overhanging the band, the name in two rows, their title and cabinet; then the FACTS (DirectiveFacts: wait,
-// last heard back, words, goals, themes, and who is responsible with a picker to hand it over). Middle,
-// scrolls: the directive text, BIG, then the conversation (DirectiveThread: notes, internal notes marked
-// "Only staff", the answer). Bottom, fixed: the composer (answer status, the text box, Add internal note,
-// Send reply). Nothing but internal notes and the hand-over is written before Send reply.
+// under the "No. 13" badge that overlaps the pop-up's top edge, then ONE white band: on the left the character
+// (a portrait overhanging the red band, the name in two rows, their title and cabinet), on the right, in the
+// space beside them, the FACTS in a tidy grid (DirectiveFacts: wait, last heard back, words, to, themes, goals,
+// and who is responsible with a picker to hand it over). Middle, scrolls: the directive text at a normal reading
+// size, then the conversation (DirectiveThread: notes, internal notes marked "Only staff", the answer). Bottom,
+// fixed: the composer (answer status, the text box, Send reply). Internal notes are added from the side panel.
+// Nothing but internal notes, the hand-over and the "being written" mark is written before Send reply.
 // Staff only: it shows the author's secret goals.
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Clock, Package, SlidersHorizontal, Target, X, Zap } from 'lucide-react';
 import { listNotes } from '@/lib/crisis/api';
 import { dirNumber } from '@/lib/crisis/format';
 import { KIND_LABEL, type Directive, type DirectiveNote } from '@/lib/crisis/types';
 import { Avatar, Btn, CK } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
+import { CharacterLink, CharacterName } from '../character/CharacterProfileHost';
 import { CabinetLogo, NameStack, NumberBadge } from './directiveParts';
 import { KIND_ICON, authorName, buildNames, listDirectiveCoauthors } from './directiveKit';
 import DirectiveComposer from './DirectiveComposer';
@@ -59,9 +61,6 @@ export default function DirectiveMain({ directive: d, reply, notesVersion = 0, o
   const [notes, setNotes] = useState<DirectiveNote[] | null>(null);
   const [coIds, setCoIds] = useState<string[]>([]);
 
-  const loadNotes = useCallback(async () => {
-    try { setNotes(await listNotes(ref, d.id)); } catch { setNotes((prev) => prev ?? []); }
-  }, [ref, d.id]);
   useEffect(() => {
     let cancelled = false;
     listNotes(ref, d.id).then((rows) => { if (!cancelled) setNotes(rows); }).catch(() => { if (!cancelled) setNotes((prev) => prev ?? []); });
@@ -103,26 +102,33 @@ export default function DirectiveMain({ directive: d, reply, notesVersion = 0, o
           </div>
           <h2 style={{ margin: '6px 0 0', fontSize: 26, lineHeight: 1.18, fontWeight: 800, overflowWrap: 'anywhere' }}>{d.title}</h2>
         </div>
-        <div className="flex" style={{ gap: 14, padding: '0 22px 12px', background: CK.card, boxShadow: `0 1px 0 ${CK.hair}` }}>
-          <span style={{ flex: 'none', marginTop: -OVERHANG, lineHeight: 0 }}>
-            <Avatar name={who} src={character?.picture_url} size={PORTRAIT} color={accent} style={{ boxShadow: '0 4px 12px rgba(27,56,40,0.25)' }} />
-          </span>
-          <div className="flex flex-col" style={{ paddingTop: 8, minWidth: 0, flex: 1, gap: 4 }}>
-            <NameStack name={who} align="left" big={19} small={12.5} width={220} />
-            {character?.title && <p style={{ margin: 0, fontSize: 13, fontWeight: 600, lineHeight: 1.3, color: CK.inkSoft, overflowWrap: 'anywhere' }}>{character.title}</p>}
-            <p className="flex items-center" style={{ margin: 0, gap: 7 }}>
-              <CabinetLogo cabinet={cabinet} size={24} />
-              <span style={{ fontSize: 13.5, fontWeight: 800, color: accent, overflowWrap: 'anywhere', minWidth: 0 }}>{cabinet?.name ?? 'No cabinet'}</span>
-            </p>
+        {/* One white band: the character on the left, the facts and who is responsible in the space beside them */}
+        <div className="flex flex-wrap" style={{ gap: '10px 26px', padding: '0 22px 14px', background: CK.card, boxShadow: `0 1px 0 ${CK.hair}` }}>
+          <div className="flex" style={{ gap: 14, flex: '0 1 320px', minWidth: 0 }}>
+            <span style={{ flex: 'none', marginTop: -OVERHANG, lineHeight: 0 }}>
+              <CharacterLink id={character?.id} style={{ borderRadius: '50%', lineHeight: 0 }}>
+                <Avatar name={who} src={character?.picture_url} size={PORTRAIT} color={accent} style={{ boxShadow: '0 4px 12px rgba(27,56,40,0.25)' }} />
+              </CharacterLink>
+            </span>
+            <div className="flex flex-col" style={{ paddingTop: 8, minWidth: 0, flex: 1, gap: 4 }}>
+              <NameStack name={who} align="left" big={19} small={12.5} width={190} characterId={character?.id} />
+              {character?.title && <p style={{ margin: 0, fontSize: 13, fontWeight: 600, lineHeight: 1.3, color: CK.inkSoft, overflowWrap: 'anywhere' }}>{character.title}</p>}
+              <p className="flex items-center" style={{ margin: 0, gap: 7 }}>
+                <CabinetLogo cabinet={cabinet} size={24} />
+                <span style={{ fontSize: 13.5, fontWeight: 800, color: accent, overflowWrap: 'anywhere', minWidth: 0 }}>{cabinet?.name ?? 'No cabinet'}</span>
+              </p>
+            </div>
+          </div>
+          <div style={{ flex: '1 1 340px', minWidth: 0, paddingTop: 12 }}>
+            <DirectiveFacts d={d} names={names} editing={reply.editing} onChanged={onChanged} />
           </div>
         </div>
-        <DirectiveFacts d={d} names={names} editing={reply.editing} onChanged={onChanged} />
       </div>
 
       {/* Middle, scrolls: the directive itself, big, then the conversation */}
       <div className="flex flex-col dp-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px 22px 18px', gap: 14 }}>
-        <article aria-label="The directive" style={{ background: CK.card, borderRadius: 20, padding: '18px 22px 20px', boxShadow: `inset 5px 0 0 ${accent}, ${CK.shadowSm}` }}>
-          <p style={{ margin: 0, fontSize: 21, lineHeight: 1.6, fontWeight: 500, color: CK.ink, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{d.body}</p>
+        <article aria-label="The directive" style={{ background: CK.card, borderRadius: 20, padding: '16px 20px 18px', boxShadow: `inset 5px 0 0 ${accent}, ${CK.shadowSm}` }}>
+          <p style={{ margin: 0, fontSize: 15, lineHeight: 1.6, fontWeight: 500, color: CK.ink, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{d.body}</p>
           {d.kind === 'joint' && coChars.length > 0 && (
             <div className="flex items-center flex-wrap" style={{ gap: '6px 12px', marginTop: 14 }}>
               <span style={{ fontSize: 12, fontWeight: 700, color: CK.inkSoft }}>With</span>
@@ -130,8 +136,8 @@ export default function DirectiveMain({ directive: d, reply, notesVersion = 0, o
                 const cc = c.cabinet_id ? names.cabinets.get(c.cabinet_id) : undefined;
                 return (
                   <span key={c.id} className="inline-flex items-center" style={{ gap: 6, fontSize: 12.5, fontWeight: 700, color: CK.ink }}>
-                    <Avatar name={c.name} src={c.picture_url} size={28} color={cc?.color ?? CK.red} />
-                    <span style={{ overflowWrap: 'break-word' }}>{c.name}</span>
+                    <CharacterLink id={c.id} style={{ borderRadius: '50%', lineHeight: 0 }}><Avatar name={c.name} src={c.picture_url} size={28} color={cc?.color ?? CK.red} /></CharacterLink>
+                    <span style={{ overflowWrap: 'break-word' }}><CharacterName id={c.id}>{c.name}</CharacterName></span>
                   </span>
                 );
               })}
@@ -151,19 +157,16 @@ export default function DirectiveMain({ directive: d, reply, notesVersion = 0, o
       </div>
 
       {/* Bottom, fixed: the composer */}
-      <DirectiveComposer
-        crisisRef={ref} d={d} reply={reply} who={who}
-        onNoteAdded={loadNotes} effectsButton={effectsButton}
-      />
+      <DirectiveComposer d={d} reply={reply} who={who} effectsButton={effectsButton} />
     </>
   );
 }
 
-/** The button that opens the changes panel on a narrow screen. */
-export function EffectsStepButton({ count, onClick }: { count: number; onClick: () => void }) {
+/** The button that opens the side panel on a narrow screen. */
+export function EffectsStepButton({ count, onClick, label }: { count: number; onClick: () => void; label?: string }) {
   return (
     <Btn tone="ghost" icon={<SlidersHorizontal size={15} strokeWidth={1.5} />} onClick={onClick}>
-      {count > 0 ? `Changes (${count})` : 'Changes'}
+      {label ?? (count > 0 ? `Changes (${count})` : 'Changes')}
     </Btn>
   );
 }

@@ -3,7 +3,7 @@
 // mark meetings held; chairs only see (to know who leaves the room). Meetings happen in person.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Ban, CalendarCheck, CircleCheck, Hourglass, X } from 'lucide-react';
+import { CalendarCheck, Hourglass, X, type LucideIcon } from 'lucide-react';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { cancelMeeting, crisisError, listMeetings, loadWorld } from '@/lib/crisis/api';
 import { useCrisisLive } from '@/lib/crisis/live';
@@ -11,10 +11,13 @@ import type { Meeting } from '@/lib/crisis/types';
 import { Btn, Card, CK, Skeleton } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import AskMeeting from './AskMeeting';
+import MeetingHistory from './MeetingHistory';
 import StaffMeetingCard from './StaffMeetingCard';
 import { InTheRoom, MeetingClockReadout } from './MeetingClock';
 import { meetingInProgress } from '@/lib/crisis/meetings';
 import { AvatarStack, Fact, NameList, StatusLine, usePeople, whenText, type Person } from './meetingKit';
+
+const isActive = (m: Meeting) => m.status === 'pending' || m.status === 'approved';
 
 export default function MeetingsPage() {
   const { ref, role, staff, memberId, characterId, core } = useCrisis();
@@ -44,6 +47,7 @@ export default function MeetingsPage() {
 
   const people = usePeople(core.characters, world);
   const mine = useMemo(() => (meetings ?? []), [meetings]);
+  const active = useMemo(() => mine.filter(isActive), [mine]);
 
   const cancel = async (m: Meeting) => {
     try { await cancelMeeting(ref, m.id); notifyOk('Meeting cancelled', 'crisis-meeting'); void load(); } catch (e) { notifyErr(crisisError(e, 'Could not cancel the meeting.'), 'crisis-meeting'); }
@@ -72,7 +76,7 @@ export default function MeetingsPage() {
           <div>
             <h2 style={{ margin: '0 0 4px', fontSize: 16, fontWeight: 800, color: CK.ink }}>Your meetings</h2>
             {!mine.length && <Card><p style={{ margin: 0, fontSize: 13.5, color: CK.inkSoft }}>You have not asked for a meeting yet.</p></Card>}
-            {mine.map((m) => (
+            {active.map((m) => (
               <div key={m.id} style={{ position: 'relative', overflow: 'visible', marginTop: 28, background: CK.card, borderRadius: 22, border: '1px solid rgba(27,56,40,0.14)', boxShadow: CK.shadow, padding: '34px 16px 14px' }}>
                 <span style={{ position: 'absolute', zIndex: 2, top: -22, left: 14, lineHeight: 0 }}><AvatarStack ids={m.character_ids.slice(0, 5)} people={people} cabinets={core.cabinets} size={52} /></span>
                 <div className="flex items-start justify-between gap-2 flex-wrap" style={{ marginBottom: 6 }}><StatusLine status={m.status} /></div>
@@ -94,37 +98,43 @@ export default function MeetingsPage() {
                 )}
               </div>
             ))}
+            <MeetingHistory meetings={mine.filter((m) => !isActive(m))} people={people} now={now} />
           </div>
         </div>
       </div>
     );
   }
 
-  const lanes: Array<{ key: string; label: string; Icon: typeof Hourglass; color: string; list: Meeting[] }> = [
-    { key: 'pending', label: 'Waiting for approval', Icon: Hourglass, color: CK.warn, list: mine.filter((m) => m.status === 'pending') },
-    { key: 'approved', label: 'Approved', Icon: CalendarCheck, color: CK.ok, list: mine.filter((m) => m.status === 'approved') },
-    { key: 'held', label: 'Held', Icon: CircleCheck, color: CK.forest, list: mine.filter((m) => m.status === 'held') },
-    { key: 'closed', label: 'Declined or cancelled', Icon: Ban, color: CK.muted, list: mine.filter((m) => m.status === 'declined' || m.status === 'cancelled') },
+  // Staff and chairs: the focus is what needs a yes or no, and what is approved or running (with its clock). Held, declined and
+  // cancelled meetings are only a collapsed one-line history underneath.
+  const waiting = mine.filter((m) => m.status === 'pending').sort((x, y) => new Date(x.created_at).getTime() - new Date(y.created_at).getTime());
+  const approved = mine.filter((m) => m.status === 'approved').sort((x, y) => Number(meetingInProgress(y)) - Number(meetingInProgress(x)) || new Date(y.decided_at ?? y.created_at).getTime() - new Date(x.decided_at ?? x.created_at).getTime());
+  const running = approved.filter(meetingInProgress).length;
+  const lanes: Array<{ key: string; label: string; Icon: LucideIcon; color: string; list: Meeting[]; empty: string; extra?: string }> = [
+    { key: 'pending', label: 'Waiting for a Decision', Icon: Hourglass, color: CK.warn, list: waiting, empty: 'No requests are waiting.' },
+    { key: 'approved', label: 'Approved and Running', Icon: CalendarCheck, color: CK.ok, list: approved, empty: 'No meetings are approved yet.', extra: running > 0 ? `${running} running now` : undefined },
   ];
 
   return (
     <div style={{ paddingBottom: 40, width: '100%', minWidth: 0 }}>
       {heading}
-      <div className="grid items-start" style={{ gap: 18, gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))' }}>
+      <div className="grid items-start" style={{ gap: 20, gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 420px), 1fr))' }}>
         {lanes.map((l) => (
           <section key={l.key} aria-label={l.label} style={{ minWidth: 0 }}>
-            <div className="flex items-baseline gap-2" style={{ color: l.color }}>
-              <l.Icon size={17} strokeWidth={1.5} aria-hidden style={{ alignSelf: 'center' }} />
-              <h2 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: CK.ink }}>{l.label}</h2>
-              <b style={{ fontSize: 18, fontVariantNumeric: 'tabular-nums', color: l.color }}>{l.list.length}</b>
+            <div className="flex items-baseline gap-2 flex-wrap" style={{ color: l.color }}>
+              <l.Icon size={19} strokeWidth={1.5} aria-hidden style={{ alignSelf: 'center' }} />
+              <h2 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: CK.ink }}>{l.label}</h2>
+              <b style={{ fontSize: 24, lineHeight: 1, fontVariantNumeric: 'tabular-nums', color: l.color }}>{l.list.length}</b>
+              {l.extra && <span style={{ fontSize: 13, fontWeight: 700, color: CK.inkSoft }}>{l.extra}</span>}
             </div>
-            {!l.list.length && <p style={{ margin: '14px 0 0', fontSize: 13, color: CK.muted }}>Nothing here.</p>}
+            {!l.list.length && <p style={{ margin: '14px 0 0', fontSize: 13.5, color: CK.inkSoft }}>{l.empty}</p>}
             {l.list.map((m) => (
               <StaffMeetingCard key={m.id} m={m} refx={ref} people={people} cabinets={core.cabinets} members={core.members} canAct={staff} canClock={staff || role === 'chair'} onChanged={() => void load()} now={now} />
             ))}
           </section>
         ))}
       </div>
+      <MeetingHistory meetings={mine.filter((m) => !isActive(m))} people={people} now={now} />
     </div>
   );
 }

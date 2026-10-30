@@ -3,6 +3,7 @@
 // (per backroomer: open, answered, average reply time, oldest waiting) and how the delegates are doing (per character:
 // directives sent, approved, partly works, denied, waiting). Counts are a big number with the word beside it, never pills.
 
+import { CharacterName } from '../character/CharacterProfileHost';
 import { useMemo, useState } from 'react';
 import { ChartNoAxesColumn } from 'lucide-react';
 import type { Cabinet, Character, Directive, Member } from '@/lib/crisis/types';
@@ -23,13 +24,13 @@ function Stat({ n, word, color, width = 104 }: { n: number | string; word: strin
   );
 }
 
-function Row({ name, sub, src, color, children }: { name: string; sub?: string; src: string | null; color: string; children: React.ReactNode }) {
+function Row({ name, charId, sub, src, color, children }: { name: string; charId?: string; sub?: string; src: string | null; color: string; children: React.ReactNode }) {
   return (
     <li className="flex items-center flex-wrap" style={{ gap: '8px 14px', padding: '10px 0', borderTop: `1px solid ${CK.hair}` }}>
       <span className="flex items-center" style={{ gap: 10, flex: '1 1 190px', minWidth: 0 }}>
         <Avatar name={name} src={src} size={38} color={color} />
         <span style={{ minWidth: 0 }}>
-          <b style={{ display: 'block', fontSize: 14, color: CK.ink, overflowWrap: 'anywhere' }}>{name}</b>
+          <b style={{ display: 'block', fontSize: 14, color: CK.ink, overflowWrap: 'anywhere' }}>{charId ? <CharacterName id={charId} name={name} /> : name}</b>
           {sub && <span style={{ display: 'block', fontSize: 12, color: CK.inkSoft, overflowWrap: 'anywhere' }}>{sub}</span>}
         </span>
       </span>
@@ -46,7 +47,7 @@ export default function StatsDialog({ directives, members, characters, cabinets,
   directives: Directive[] | null; members: Member[]; characters: Character[]; cabinets: Cabinet[]; now: number; onClose: () => void;
 }) {
   const [view, setView] = useState<View>('backroom');
-  const back = useMemo(() => (directives ? backroomStats(members, directives) : null), [members, directives]);
+  const back = useMemo(() => (directives ? backroomStats(members, directives, now) : null), [members, directives, now]);
   const del = useMemo(() => (directives ? delegateStats(characters, directives) : null), [characters, directives]);
   const cabById = useMemo(() => new Map(cabinets.map((c) => [c.id, c])), [cabinets]);
 
@@ -63,6 +64,7 @@ export default function StatsDialog({ directives, members, characters, cabinets,
             {back.map((s) => (
               <Row key={s.member.id} name={s.member.display_name} sub={ROLE_LABEL[s.member.role]} src={s.member.picture_url} color={CK.forest2}>
                 <Stat n={s.open} word="open" color={s.open >= 4 ? CK.red : CK.ink} />
+                <Stat n={s.writing} word="being written" color={s.writing ? CK.forest2 : undefined} width={134} />
                 <Stat n={s.answered} word="answered" />
                 <span className="inline-flex items-baseline" style={{ gap: 5, minWidth: 150 }}>
                   <b style={{ fontSize: 22, fontWeight: 800, lineHeight: 1, fontVariantNumeric: 'tabular-nums', color: CK.ink, whiteSpace: 'nowrap' }}>
@@ -88,7 +90,7 @@ export default function StatsDialog({ directives, members, characters, cabinets,
             {del.map((s) => {
               const cab = s.character.cabinet_id ? cabById.get(s.character.cabinet_id) : undefined;
               return (
-                <Row key={s.character.id} name={s.character.name} sub={cab?.name} src={s.character.picture_url} color={cab?.color ?? CK.red}>
+                <Row key={s.character.id} charId={s.character.id} name={s.character.name} sub={cab?.name} src={s.character.picture_url} color={cab?.color ?? CK.red}>
                   <Stat n={s.sent} word="sent" />
                   <Stat n={s.approved} word="approved" color={s.approved ? CK.ok : undefined} width={96} />
                   <Stat n={s.partial} word="partly works" width={118} />

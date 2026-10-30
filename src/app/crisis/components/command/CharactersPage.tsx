@@ -5,15 +5,16 @@
 // and backroomers when "Edit characters" is on in Settings.
 
 import { useMemo, useRef, useState } from 'react';
-import { BookOpen, Camera, Plus, RefreshCw, UserRound, UserRoundPlus, UsersRound } from 'lucide-react';
+import { BookOpen, Camera, Check, Plus, RefreshCw, Settings, UserRound, UserRoundPlus, UsersRound } from 'lucide-react';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { UserFacingError } from '@/lib/friendlyError';
-import { crisisError, saveCabinet, saveCharacter, syncRoster, uploadCrisisFile } from '@/lib/crisis/api';
+import { crisisError, saveCabinet, syncRoster, uploadCrisisFile } from '@/lib/crisis/api';
 import { getCrisisClient } from '@/lib/crisis/client';
 import type { Cabinet, Character, Member } from '@/lib/crisis/types';
 import { Avatar, Btn, Card, CK, OverhangCard, cabinetTint } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import CharacterModal from '../character/CharacterModal';
+import NewCharacterDialog from '../character/NewCharacterDialog';
 import { STATUS_WORD, StatusIcon, mayEditCharacters, statusColor } from '../character/characterStatus';
 import { PageHeading } from './setupKit';
 
@@ -91,7 +92,8 @@ export default function CharactersPage() {
   const canEdit = mayEditCharacters(v.role, v.settings);
   const [openId, setOpenId] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
-  const [adding, setAdding] = useState(false);
+  // The id of the cabinet a new character is being added to ('' = no cabinet); null = the pop-up is closed.
+  const [adding, setAdding] = useState<string | null>(null);
 
   const byCabinet = useMemo(() => {
     const m = new Map<string | null, Character[]>();
@@ -111,19 +113,6 @@ export default function CharactersPage() {
       await reloadCore();
     } catch (e) { notifyErr(crisisError(e, 'Could not bring in the seats and delegates.'), 'crisis-characters'); }
     finally { setSyncing(false); }
-  };
-
-  // A new character is made first and then opened in the pop-up, where everything about it is edited.
-  const add = async (cabinetId: string | null) => {
-    if (adding) return;
-    setAdding(true);
-    try {
-      const siblings = core.characters.filter((c) => c.cabinet_id === cabinetId);
-      const id = await saveCharacter(ref, { name: 'New Character', cabinet_id: cabinetId, status: 'active', sort: siblings.reduce((m, c) => Math.max(m, c.sort), 0) + 1 });
-      await reloadCore();
-      setOpenId(id);
-    } catch (e) { notifyErr(crisisError(e, 'Could not add the character.'), 'crisis-characters'); }
-    finally { setAdding(false); }
   };
 
   const unassigned = byCabinet.get(null) ?? [];
@@ -156,16 +145,17 @@ export default function CharactersPage() {
             canEditCabinet={v.director}
             canAdd={canEdit}
             onOpen={setOpenId}
-            onAdd={() => { void add(cab.id); }}
+            onAdd={() => setAdding(cab.id)}
           />
         ))}
         {unassigned.length > 0 && (
-          <CabinetSection cab={null} characters={unassigned} members={core.members} canEditCabinet={false} canAdd={canEdit} onOpen={setOpenId} onAdd={() => { void add(null); }} />
+          <CabinetSection cab={null} characters={unassigned} members={core.members} canEditCabinet={false} canAdd={canEdit} onOpen={setOpenId} onAdd={() => setAdding('')} />
         )}
         {core.cabinets.length === 0 && <Card><p style={{ margin: 0, fontSize: 14, color: CK.inkSoft }}>No cabinets yet.</p></Card>}
       </div>
 
       {openId && <CharacterModal key={openId} characterId={openId} onClose={() => setOpenId(null)} />}
+      {adding !== null && <NewCharacterDialog cabinetId={adding || null} onClose={() => setAdding(null)} />}
     </div>
   );
 }
@@ -222,6 +212,7 @@ function CabinetSection({ cab, characters, members, canEditCabinet, canAdd, onOp
 }) {
   const { ref, reloadCore } = useCrisis();
   const color = cab?.color ?? CK.muted;
+  const [editing, setEditing] = useState(false);
 
   const save = async (patch: Partial<Pick<Cabinet, 'name' | 'short_name' | 'color'>>) => {
     if (!cab) return;
@@ -240,15 +231,25 @@ function CabinetSection({ cab, characters, members, canEditCabinet, canAdd, onOp
       >
         {cab ? (
           <>
-            <CabinetLogo cab={cab} editable={canEditCabinet} />
-            {canEditCabinet ? (
-              <>
-                <SwatchPicker value={cab.color} onPick={(hex) => save({ color: hex })} />
-                <InlineText value={cab.name} label="Cabinet name" placeholder="Cabinet name" bold onCommit={(name) => { if (name) void save({ name }); }} />
-                <InlineText value={cab.short_name ?? ''} label="Short name" placeholder="Short name" onCommit={(s) => save({ short_name: nul(s) })} />
-              </>
-            ) : (
-              <h2 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{cab.name}</h2>
+            <Avatar name={cab.short_name || cab.name} src={cab.logo_url} size={44} color={cab.color} />
+            <div className="min-w-0">
+              <h2 style={{ margin: 0, fontSize: 17, lineHeight: 1.2, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{cab.name}</h2>
+              <span style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: CK.inkSoft }}>
+                {cab.short_name ? `${cab.short_name} · ` : ''}{characters.length} {characters.length === 1 ? 'character' : 'characters'}
+              </span>
+            </div>
+            {canEditCabinet && (
+              <button
+                type="button"
+                onClick={() => setEditing((e) => !e)}
+                aria-label={editing ? 'Close the cabinet settings' : 'Cabinet settings'}
+                aria-expanded={editing}
+                title="Cabinet settings"
+                className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] active:scale-[0.95] transition-transform"
+                style={{ border: 0, cursor: 'pointer', width: 34, height: 34, borderRadius: 10, display: 'grid', placeItems: 'center', background: editing ? CK.card : 'transparent', color: CK.forest, boxShadow: editing ? CK.shadowSm : 'none' }}
+              >
+                <Settings size={18} strokeWidth={1.5} />
+              </button>
             )}
           </>
         ) : (
@@ -257,9 +258,31 @@ function CabinetSection({ cab, characters, members, canEditCabinet, canAdd, onOp
         <span className="flex-1" />
         {canAdd && <Btn tone="ghost" size="sm" icon={<Plus size={14} strokeWidth={1.5} />} onClick={onAdd}>Add character</Btn>}
       </div>
+      {cab && canEditCabinet && editing && (
+        <div className="flex items-end flex-wrap" style={{ gap: '12px 22px', padding: '14px 16px', background: CK.well, borderBottom: `1px solid ${CK.hair}` }}>
+          <div>
+            <p style={{ margin: '0 0 5px', fontSize: 12, fontWeight: 700, color: CK.inkSoft }}>Crest</p>
+            <CabinetLogo cab={cab} editable />
+          </div>
+          <div>
+            <p style={{ margin: '0 0 5px', fontSize: 12, fontWeight: 700, color: CK.inkSoft }}>Name</p>
+            <InlineText value={cab.name} label="Cabinet name" placeholder="Cabinet name" bold onCommit={(name) => { if (name) void save({ name }); }} />
+          </div>
+          <div>
+            <p style={{ margin: '0 0 5px', fontSize: 12, fontWeight: 700, color: CK.inkSoft }}>Short name</p>
+            <InlineText value={cab.short_name ?? ''} label="Short name" placeholder="Short name" onCommit={(sn) => save({ short_name: nul(sn) })} />
+          </div>
+          <div>
+            <p style={{ margin: '0 0 5px', fontSize: 12, fontWeight: 700, color: CK.inkSoft }}>Colour</p>
+            <SwatchPicker value={cab.color} onPick={(hex) => save({ color: hex })} />
+          </div>
+          <span className="flex-1" />
+          <Btn size="sm" icon={<Check size={14} strokeWidth={1.6} />} onClick={() => setEditing(false)}>Done</Btn>
+        </div>
+      )}
       <div style={{ padding: 14 }}>
         {characters.length === 0 ? (
-          <p style={{ margin: 0, fontSize: 13.5, color: CK.inkSoft }}>No characters yet.{canAdd ? ' Add one, or bring in the seats and delegates.' : ''}</p>
+          <EmptyCast color={color} canAdd={canAdd} onAdd={onAdd} />
         ) : (
           <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', columnGap: 12 }}>
             {characters.map((c) => <CharacterCard key={c.id} c={c} color={color} members={members} onOpen={() => onOpen(c.id)} />)}
@@ -310,5 +333,28 @@ function CharacterCard({ c, color, members, onOpen }: { c: Character; color: str
         )}
       </span>
     </OverhangCard>
+  );
+}
+
+/** A small illustrated empty state: a ring of empty portraits around a plus. */
+function EmptyCast({ color, canAdd, onAdd }: { color: string; canAdd: boolean; onAdd: () => void }) {
+  const ghost = (size: number, o: number) => (
+    <span aria-hidden style={{ width: size, height: size, borderRadius: '50%', border: `2px dashed ${color}`, background: cabinetTint(color, 0.08), opacity: o, display: 'grid', placeItems: 'center', color, flex: 'none' }}>
+      <UserRound size={Math.round(size * 0.5)} strokeWidth={1.4} />
+    </span>
+  );
+  return (
+    <div className="flex flex-col items-center" style={{ gap: 10, padding: '14px 8px 6px', textAlign: 'center' }}>
+      <div className="flex items-center" style={{ gap: 0 }}>
+        <span style={{ marginRight: -14 }}>{ghost(44, 0.55)}</span>
+        <span style={{ zIndex: 1 }}>{ghost(64, 1)}</span>
+        <span style={{ marginLeft: -14 }}>{ghost(44, 0.55)}</span>
+      </div>
+      <b style={{ fontSize: 15, color: CK.ink }}>Nobody sits here yet</b>
+      <p style={{ margin: 0, fontSize: 13.5, color: CK.inkSoft, maxWidth: 420 }}>
+        {canAdd ? 'Add the first character, or bring in the seats and delegates from the committee room.' : 'The Crisis Director has not added characters here.'}
+      </p>
+      {canAdd && <Btn icon={<Plus size={15} strokeWidth={1.5} />} onClick={onAdd}>Add the first character</Btn>}
+    </div>
   );
 }

@@ -7,6 +7,7 @@ import { useMemo } from 'react';
 import { Mic } from 'lucide-react';
 import type { Committee } from '@/lib/types';
 import { Avatar, CK, Skeleton } from '../../crisisKit';
+import { CharacterName } from '../character/CharacterProfileHost';
 import { sameSeat, type CrisisRoom } from './useCrisisRoom';
 
 const NEXT_SHOWN = 3;
@@ -41,7 +42,7 @@ function Person({ name, picture, size, mine, strong }: { name: string; picture: 
     >
       <Avatar name={name} src={picture} size={size} color={mine ? CK.goldMid : CK.red} />
       <span className="min-w-0" style={{ fontSize: strong ? 14.5 : 13, fontWeight: strong || mine ? 800 : 600, color: CK.ink, overflowWrap: 'anywhere' }}>
-        {name}
+        <CharacterName name={name} />
         {mine && <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 800, color: CK.goldDeep }}>You</span>}
       </span>
     </div>

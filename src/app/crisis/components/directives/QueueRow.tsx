@@ -6,15 +6,15 @@
 // right, small: theme, kind, cabinet logo, wait time, backroomer. Clicking the portrait opens the character.
 // Used by the backroom inbox and the "Waiting for a Reply" card on Command.
 
-import { useState } from 'react';
-import { Clock, MessageCircle } from 'lucide-react';
+import { Clock, MessageCircle, Pencil } from 'lucide-react';
 import type { Directive } from '@/lib/crisis/types';
 import { dirNumber } from '@/lib/crisis/format';
 import { Avatar, CK, ThemeTag } from '../../crisisKit';
-import CharacterModal from '../character/CharacterModal';
+import { CharacterLink, CharacterName } from '../character/CharacterProfileHost';
 import { seatFitFontPx } from '@/lib/seatName';
 import { CabinetLogo, NumberBadge, shortName, StaffPic } from './directiveParts';
-import { KIND_ICON, authorName, type Names } from './directiveKit';
+import { KIND_ICON, authorName, writerOf, type Names } from './directiveKit';
+import { useNow } from './useNow';
 
 export const WAIT_COLOR = { ok: CK.ink, late: CK.goldDeep, very: CK.danger } as const;
 
@@ -32,7 +32,8 @@ export default function QueueRow({ d, names, whenLabel, sev, selected, delegateN
   /** Command's one-screen card: smaller portrait and title, no backroomer name. */
   compact?: boolean;
 }) {
-  const [characterOpen, setCharacterOpen] = useState(false);
+  const now = useNow(60_000);
+  const writer = writerOf(d, names, now);
   const cab = d.cabinet_id ? names.cabinets.get(d.cabinet_id) : undefined;
   const ch = d.author_character_id ? names.characters.get(d.author_character_id) : undefined;
   const who = authorName(d, names);
@@ -79,21 +80,12 @@ export default function QueueRow({ d, names, whenLabel, sev, selected, delegateN
           <span className="flex items-center" style={{ gap: 8, flex: '1 1 130px', minWidth: 0 }}>
             {/* The portrait: its own button above the card's open button. */}
             <span style={{ flex: 'none', lineHeight: 0, position: 'relative', zIndex: 2, pointerEvents: 'auto' }}>
-              {ch ? (
-                <button
-                  type="button"
-                  onClick={() => setCharacterOpen(true)}
-                  aria-label={`Open ${who}`}
-                  title={`Open ${who}`}
-                  className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] transition-transform hover:scale-105"
-                  style={{ border: 0, padding: 0, borderRadius: '50%', background: 'transparent', cursor: 'pointer', lineHeight: 0 }}
-                >
-                  {portrait}
-                </button>
-              ) : portrait}
+              <CharacterLink id={ch?.id} style={{ borderRadius: '50%', lineHeight: 0 }}>{portrait}</CharacterLink>
             </span>
             <span style={{ display: 'block', minWidth: 0, flex: 1 }}>
-              <span style={{ display: 'block', fontSize: bigPx, fontWeight: 800, lineHeight: 1.2, color: CK.ink, overflowWrap: 'normal', wordBreak: 'normal' }}>{short}</span>
+              <span style={{ display: 'block', fontSize: bigPx, fontWeight: 800, lineHeight: 1.2, color: CK.ink, overflowWrap: 'normal', wordBreak: 'normal' }}>
+                {ch ? <span style={{ position: 'relative', zIndex: 2, pointerEvents: 'auto' }}><CharacterName id={ch.id}>{short}</CharacterName></span> : short}
+              </span>
               {under && <span style={{ display: 'block', marginTop: 1, fontSize: compact ? 11 : 11.5, fontWeight: 600, lineHeight: 1.25, color: CK.muted, overflowWrap: 'anywhere' }}>{under}</span>}
             </span>
           </span>
@@ -113,9 +105,15 @@ export default function QueueRow({ d, names, whenLabel, sev, selected, delegateN
             <StaffPic member={backroomer} size={compact ? 20 : 24} />
           </span>
         </span>
+        {writer && (
+          <span className="flex items-center" style={{ gap: 6, marginTop: compact ? 7 : 9, fontSize: compact ? 11.5 : 12, fontWeight: 800, color: CK.goldDeep, lineHeight: 1.25 }}>
+            <StaffPic member={writer} size={compact ? 16 : 18} />
+            <Pencil size={12} strokeWidth={1.6} aria-hidden style={{ flex: 'none' }} />
+            <span style={{ overflowWrap: 'anywhere' }}>Being written by {writer.display_name}</span>
+          </span>
+        )}
       </div>
 
-      {characterOpen && ch && <CharacterModal characterId={ch.id} initialTab="directives" onClose={() => setCharacterOpen(false)} />}
     </div>
   );
 }

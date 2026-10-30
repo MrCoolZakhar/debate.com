@@ -1,7 +1,10 @@
 'use client';
-// Gavelling Crisis: the backroom inbox. The queue is the page, full width; opening a directive (a
-// click, or a notification's ?d=<id>) shows it as a pop-up with the "What happens when you send"
-// panel docked beside it (DirectivePopup). Used at /directives and as the backroomer's home.
+// Gavelling Crisis: the backroom inbox. The page is a ONE-BY-ONE reader (DirectiveReader): one directive large in
+// front, the next ones of the chosen lane stepping off to the right, each smaller; clicking one brings it forward and
+// pressing the front one (or Respond) opens it as a pop-up with the "What happens when you send" panel docked beside
+// it (DirectivePopup). The lanes (Mine, Unclaimed, All open, Waiting for delegate, Answered) and the filters stay as
+// a compact bar above. A notification's ?d=<id> brings that directive forward and opens it. Used at /directives and
+// as the backroomer's home.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CircleCheck, Hourglass, Inbox, Landmark, ListChecks, Palette, Search, Tag, UserRound, UsersRound, type LucideIcon } from 'lucide-react';
@@ -10,8 +13,10 @@ import { notifyErr } from '@/lib/appNotify';
 import { crisisError, listDirectives } from '@/lib/crisis/api';
 import { useCrisisLive } from '@/lib/crisis/live';
 import { KIND_LABEL, THEMES, type Directive, type DirectiveKind } from '@/lib/crisis/types';
-import { Btn, Card, CK, Segmented, Skeleton, fieldStyle, waitLabel, waitSeverity } from '../../crisisKit';
-import QueueRow from './QueueRow';
+import { Btn, Card, CK, Segmented, fieldStyle } from '../../crisisKit';
+import DirectiveReader from './DirectiveReader';
+import MeetingRequestsStrip from '../meetings/MeetingRequestsStrip';
+import { useNow } from './useNow';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import DirectivePopup from './DirectivePopup';
 import DirectiveDeepLink from '../notifications/DirectiveDeepLink';
@@ -19,9 +24,6 @@ import {
   NO_FILTERS, buildNames, inLane, lastAnsweredByAuthor, matchesFilters, sortDirectives,
   type Filters, type Lane, type QueueOrder,
 } from './directiveKit';
-
-/** The queue fills the page: as many rows across as fit. */
-const LIST_COLUMNS = 'repeat(auto-fill, minmax(min(100%, 400px), 1fr))';
 
 const LANE_ICON: Record<Lane, LucideIcon> = { mine: UserRound, unclaimed: Inbox, open: ListChecks, waiting: Hourglass, answered: CircleCheck };
 
@@ -47,6 +49,11 @@ function LaneTabs({ value, options, onChange }: { value: Lane; options: Array<{ 
   );
 }
 
+/** A grey loading block that fills its slot. */
+function Ghost({ r }: { r: number }) {
+  return <span className="animate-pulse" style={{ display: 'block', height: '100%', width: '100%', borderRadius: r, background: 'rgba(110,30,30,0.08)' }} />;
+}
+
 /** A filter dropdown with its icon in front. */
 function FilterBox({ icon, width, children }: { icon: LucideIcon; width: number; children: React.ReactNode }) {
   const I = icon;
@@ -67,12 +74,12 @@ export default function BackroomInbox() {
   const [lane, setLane] = useState<Lane>(director ? 'open' : 'mine');
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
   const [order, setOrder] = useState<QueueOrder>(settings.queueOrder);
-  const [openId, setOpenId] = useState<string | null>(null);
-  const [now, setNow] = useState(() => Date.now());
+  /** The directive in front of the reader, and whether its pop-up is open. */
+  const [focusId, setFocusId] = useState<string | null>(null);
+  const [popupOpen, setPopupOpen] = useState(false);
+  const now = useNow();
   const [notesVersion, setNotesVersion] = useState(0);
   const loadedOnce = useRef(false);
-
-  useEffect(() => { const t = window.setInterval(() => setNow(Date.now()), 30_000); return () => window.clearInterval(t); }, []);
 
   const load = useCallback(async () => {
     try {
@@ -116,7 +123,12 @@ export default function BackroomInbox() {
     [all, lane, memberId, filters, names, order, lastAnswered],
   );
 
-  const selected = useMemo(() => all.find((d) => d.id === openId) ?? null, [all, openId]);
+  // The directive in front: the one picked, else the first of the lane.
+  const front = useMemo(() => queue.find((d) => d.id === focusId) ?? queue[0] ?? null, [queue, focusId]);
+  // The pop-up shows the directive it was opened on even when a re-read moves it out of the lane.
+  const [popupId, setPopupId] = useState<string | null>(null);
+  const selected = useMemo(() => (popupOpen ? all.find((d) => d.id === popupId) ?? null : null), [all, popupOpen, popupId]);
+  const openPopup = (d: Directive) => { setFocusId(d.id); setPopupId(d.id); setPopupOpen(true); };
 
   // A notification link (?d=<id>): select that directive and switch to a lane that holds it.
   const [linkedId, setLinkedId] = useState<string | null>(null);
@@ -129,7 +141,9 @@ export default function BackroomInbox() {
     /* eslint-disable react-hooks/set-state-in-effect */
     if (target && target !== lane) setLane(target);
     setFilters(NO_FILTERS);
-    setOpenId(d.id);
+    setFocusId(d.id);
+    setPopupId(d.id);
+    setPopupOpen(true);
     setLinkedId(null);
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [linkedId, all, lane, memberId]);
@@ -137,9 +151,11 @@ export default function BackroomInbox() {
   const afterChange = (what: 'claimed' | 'assigned' | 'answered') => {
     // Answering moves the reader on to the next directive of the lane; the last one closes it.
     if (what === 'answered') {
-      const at = queue.findIndex((x) => x.id === openId);
+      const at = queue.findIndex((x) => x.id === popupId);
       const next = at < 0 ? null : (queue[at + 1] ?? queue[at - 1] ?? null);
-      setOpenId(next ? next.id : null);
+      setFocusId(next ? next.id : null);
+      setPopupId(next ? next.id : null);
+      if (!next) setPopupOpen(false);
     }
     void load();
   };
@@ -181,6 +197,9 @@ export default function BackroomInbox() {
         </div>
       </div>
 
+      {/* Meeting requests first: a quick yes or no, ahead of directives. Renders nothing when none wait. */}
+      <MeetingRequestsStrip compact />
+
       <div className="flex items-center flex-wrap" style={{ gap: 8 }}>
         <FilterBox icon={Landmark} width={185}><GSelect size="sm" aria-label="Cabinet" value={filters.cabinet} options={cabinetOptions} onChange={(v) => setF({ cabinet: v })} /></FilterBox>
         <FilterBox icon={UsersRound} width={195}><GSelect size="sm" aria-label="Backroomer" value={filters.backroomer} options={backroomerOptions} onChange={(v) => setF({ backroomer: v })} /></FilterBox>
@@ -196,39 +215,37 @@ export default function BackroomInbox() {
           options={[{ value: 'fair', label: 'Fair' }, { value: 'oldest', label: 'Oldest' }, { value: 'newest', label: 'Newest' }]} />
       </div>
 
-      <Card style={{ padding: 8 }}>
-        {directives === null && !loadError && (
-          <div className="grid" style={{ gap: 8, padding: 4, gridTemplateColumns: LIST_COLUMNS }} aria-busy="true">
-            {[0, 1, 2, 3, 4, 5].map((i) => <Skeleton key={i} h={120} r={16} />)}
+      {directives === null && !loadError && (
+        <div className="relative" style={{ height: 'clamp(470px, calc(100dvh - 232px), 800px)' }} aria-busy="true">
+          <div style={{ position: 'absolute', left: 0, top: 14, bottom: 6, width: 'clamp(480px, 60%, 820px)', maxWidth: '100%' }}><Ghost r={24} /></div>
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="hidden min-[900px]:block" style={{ position: 'absolute', top: '50%', height: 150, width: 'clamp(200px, 20%, 290px)', transform: `translateY(-50%) scale(${1 - i * 0.08})`, transformOrigin: 'left center', left: `calc(clamp(480px, 60%, 820px) + 18px + ${i * 175}px)` }}><Ghost r={18} /></div>
+          ))}
+        </div>
+      )}
+      {loadError && (
+        <Card style={{ padding: 16 }}>
+          <p style={{ margin: '0 0 8px', fontSize: 14, color: CK.inkSoft }}>{loadError}</p>
+          <Btn onClick={() => { setLoadError(null); void load(); }}>Try again</Btn>
+        </Card>
+      )}
+      {directives !== null && queue.length === 0 && (
+        <Card style={{ height: 'clamp(470px, calc(100dvh - 232px), 800px)', display: 'grid', placeItems: 'center', textAlign: 'center' }}>
+          <div>
+            <ListChecks size={34} strokeWidth={1.5} aria-hidden style={{ color: CK.red, margin: '0 auto 10px' }} />
+            <p style={{ margin: 0, fontSize: 18, fontWeight: 800, color: CK.ink }}>{emptyText[lane]}</p>
           </div>
-        )}
-        {loadError && (
-          <div style={{ padding: 12 }}>
-            <p style={{ margin: '0 0 8px', fontSize: 14, color: CK.inkSoft }}>{loadError}</p>
-            <Btn onClick={() => { setLoadError(null); void load(); }}>Try again</Btn>
-          </div>
-        )}
-        {directives !== null && queue.length === 0 && (
-          <p style={{ margin: 0, padding: 16, fontSize: 14, color: CK.muted }}>{emptyText[lane]}</p>
-        )}
-        <ul style={{ listStyle: 'none', margin: 0, padding: '0 0 6px', display: 'grid', gap: 2, gridTemplateColumns: LIST_COLUMNS }}>
-          {queue.map((d) => {
-            const waiting = lane !== 'answered' && lane !== 'waiting';
-            const sev = waiting ? waitSeverity(d.waiting_since, now) : null;
-            const when = lane === 'answered' ? `Answered ${waitLabel(d.answered_at, now)} ago`
-              : lane === 'waiting' ? `Asked ${waitLabel(d.answered_at, now)} ago` : waitLabel(d.waiting_since, now);
-            return (
-              <li key={d.id} style={{ margin: '0 4px', minWidth: 0 }}>
-                <QueueRow d={d} names={names} whenLabel={when} sev={sev} selected={d.id === openId}
-                  delegateNote={d.status === 'queued' && d.outcome === 'clarify'} onOpen={() => setOpenId(d.id)} />
-              </li>
-            );
-          })}
-        </ul>
-      </Card>
+        </Card>
+      )}
+      {directives !== null && queue.length > 0 && (
+        <DirectiveReader
+          queue={queue} focusId={front?.id ?? null} onFocus={setFocusId} onOpen={openPopup} active={!popupOpen}
+          names={names} lane={lane} now={now} all={all} onChanged={() => { void load(); }}
+        />
+      )}
 
       {selected && (
-        <DirectivePopup directive={selected} queue={queue} onSelect={setOpenId} notesVersion={notesVersion} onChanged={afterChange} onClose={() => setOpenId(null)} />
+        <DirectivePopup directive={selected} queue={queue} onSelect={(id) => { setFocusId(id); setPopupId(id); }} notesVersion={notesVersion} onChanged={afterChange} onClose={() => setPopupOpen(false)} />
       )}
     </div>
   );

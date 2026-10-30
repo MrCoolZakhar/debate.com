@@ -4,25 +4,32 @@
 // phone it fills the screen. A dialog never opens another on top of itself: a second step swaps
 // the content and shows a back button (onBack).
 
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ArrowLeft, X } from 'lucide-react';
 import Portal from '@/components/Portal';
-import { CK } from '../../crisisKit';
+import { CK, useScrollLock } from '../../crisisKit';
+import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
+import CharacterModal from '../character/CharacterModal';
+import { InPlaceCharacterScope, useOpenCharacter } from '../character/CharacterProfileHost';
 
-function Panel({ title, eyebrow, onClose, onBack, children, width, flush, step }: {
+function Panel({ title, eyebrow, onClose, onBack, children, width, flush, step, quiet }: {
   title: string; eyebrow?: string; onClose: () => void; onBack?: () => void; children: ReactNode; width: number; flush?: boolean; step?: string;
+  /** A character profile is showing in place of this dialog: Escape belongs to the profile. */
+  quiet?: boolean;
 }) {
   const panel = useRef<HTMLDivElement>(null);
   const closeRef = useRef(onClose);
   useEffect(() => { closeRef.current = onClose; });
+  const quietRef = useRef(!!quiet);
+  useEffect(() => { quietRef.current = !!quiet; });
+  useScrollLock();
 
   useEffect(() => {
     const el = panel.current;
     const before = document.activeElement as HTMLElement | null;
     el?.focus();
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
     const onKey = (e: KeyboardEvent) => {
+      if (quietRef.current) return;
       if (e.key === 'Escape') {
         // A dropdown inside the page closes first.
         if (document.querySelector('[data-crisis-popover]') || e.defaultPrevented) return;
@@ -41,7 +48,6 @@ function Panel({ title, eyebrow, onClose, onBack, children, width, flush, step }
     document.addEventListener('keydown', onKey);
     return () => {
       document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = prevOverflow;
       before?.focus?.();
     };
   }, []);
@@ -95,11 +101,24 @@ export default function CrisisDialog(props: {
   /** Change it when the content is swapped for another step, so the body scrolls back to the top. */
   step?: string;
 }) {
+  // A character name inside this dialog swaps the dialog for that character's profile (a pop-up never opens another on
+  // top of itself). The dialog stays mounted, only hidden, so what was typed in it is still there when the profile closes.
+  const { core } = useCrisis();
+  const openGlobal = useOpenCharacter();
+  const [profile, setProfile] = useState<string | null>(null);
+  const onOpen = (id: string) => { if (core.characters.some((c) => c.id === id)) setProfile(id); else openGlobal(id); };
   return (
-    <Portal>
-      <Panel title={props.title} eyebrow={props.eyebrow} onClose={props.onClose} onBack={props.onBack} width={props.width ?? 720} flush={props.flush} step={props.step}>
-        {props.children}
-      </Panel>
-    </Portal>
+    <>
+      <Portal>
+        <InPlaceCharacterScope onOpen={onOpen}>
+          <div style={profile ? { display: 'none' } : undefined}>
+            <Panel title={props.title} eyebrow={props.eyebrow} onClose={props.onClose} onBack={props.onBack} width={props.width ?? 720} flush={props.flush} step={props.step} quiet={!!profile}>
+              {props.children}
+            </Panel>
+          </div>
+        </InPlaceCharacterScope>
+      </Portal>
+      {profile && <CharacterModal key={profile} characterId={profile} onClose={() => setProfile(null)} />}
+    </>
   );
 }

@@ -87,7 +87,8 @@ export function KindGlyph({ kind, size = 22 }: { kind: UnitKind; size?: number }
 
 /** One row of choices that wraps: the cabinets, and optionally "Nobody". */
 export function OwnerPicker({ value, cabinets, withNobody, disabled, ariaLabel, onChange }: {
-  value: string | null; cabinets: PanelCabinet[]; withNobody?: boolean; disabled?: boolean; ariaLabel: string; onChange: (id: string | null) => void;
+  /** undefined: nobody has been chosen yet (not even "Nobody"). */
+  value: string | null | undefined; cabinets: PanelCabinet[]; withNobody?: boolean; disabled?: boolean; ariaLabel: string; onChange: (id: string | null) => void;
 }) {
   const options: Array<{ id: string | null; label: string; title: string; color: string; dashed?: boolean }> = [
     ...cabinets.map((c) => ({ id: c.id as string | null, label: c.short, title: c.name, color: c.color })),
@@ -314,8 +315,8 @@ export function TerritoryCard({
       {editable && (
         <p style={{ margin: '0 0 10px', fontSize: 12.5, color: CK.inkSoft }}>
           {detailed
-            ? 'To move the border, press on the outline and drag. It bends out or in from that point. Do it again elsewhere to change it another way.'
-            : 'Drag a white corner to move it, or press anywhere on the outline and drag to add a corner there. Double-click a corner to remove it.'}
+            ? 'To move the border, press on the outline and drag. It bends out or in from that point, and pulling it outward cuts the new ground out of everyone else\'s. Do it again elsewhere to change it another way.'
+            : 'Drag a white corner to move it, or press anywhere on the outline and drag to add a corner there. Double-click a corner to remove it. Pulling it outward extends this holder\'s land and cuts the new ground out of everyone else\'s.'}
         </p>
       )}
       {editable && (onReset || onDelete) && !confirm && (
@@ -343,9 +344,9 @@ export function TerritoryCard({
 
 /** Borders tool: a new territory being drawn on the map, then who holds it. */
 export function NewTerritoryPanel({
-  phase, owner, pointCount, minPoints, cabinets, busy, onOwner, onUndo, onFinish, onSave, onClose,
+  phase, owner, ownerHint, canSave, pointCount, minPoints, cabinets, busy, onOwner, onUndo, onFinish, onSave, onClose,
 }: {
-  phase: 'draw' | 'refine'; owner: string | null; pointCount: number; minPoints: number; cabinets: PanelCabinet[]; busy: boolean;
+  phase: 'draw' | 'refine'; owner: string | null | undefined; ownerHint?: string; canSave: boolean; pointCount: number; minPoints: number; cabinets: PanelCabinet[]; busy: boolean;
   onOwner: (id: string | null) => void; onUndo: () => void; onFinish: () => void; onSave: () => void; onClose: () => void;
 }) {
   const ownerPick = (
@@ -373,11 +374,12 @@ export function NewTerritoryPanel({
   return (
     <Shell title="New Territory" onClose={onClose}>
       {ownerPick}
+      {ownerHint && <p style={{ margin: '0 0 8px', fontSize: 12.5, fontWeight: 600, color: CK.ink }}>{ownerHint}</p>}
       <p style={{ margin: '0 0 10px', fontSize: 12.5, color: CK.inkSoft }}>
         You can still drag the corners. Land it covers is taken from whoever holds it now.
       </p>
       <div className="flex flex-wrap items-center" style={{ gap: 8 }}>
-        <Btn size="sm" disabled={busy} icon={<Check size={14} strokeWidth={1.5} />} onClick={onSave}>Save territory</Btn>
+        <Btn size="sm" disabled={busy || !canSave} icon={<Check size={14} strokeWidth={1.5} />} onClick={onSave}>Save territory</Btn>
         <Btn size="sm" tone="ghost" onClick={onClose}>Cancel</Btn>
       </div>
     </Shell>

@@ -7,6 +7,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import { UserRound } from 'lucide-react';
 import type { Cabinet, Member } from '@/lib/crisis/types';
 import { Avatar, CK, initialsOf } from '../../crisisKit';
+import { CharacterName } from '../character/CharacterProfileHost';
 
 /** A cabinet's logo in a round near-white disc; with no logo, a disc in the cabinet colour with the short name's initials. */
 export function CabinetLogo({ cabinet, size = 20, style }: { cabinet?: Pick<Cabinet, 'name' | 'short_name' | 'color' | 'logo_url'> | null; size?: number; style?: CSSProperties }) {
@@ -76,13 +77,13 @@ export function shortName(name: string): string {
 }
 
 /** A name in two rows: the short form big, the full name smaller beneath (wraps, never cut). One word shows once. */
-export function NameStack({ name, align = 'center', big = 12, small = 10.5, width = 76 }: { name: string; align?: 'center' | 'left'; big?: number; small?: number; /** The column's width in px: a long surname steps its font down to fit instead of breaking mid-word. */ width?: number }) {
+export function NameStack({ name, align = 'center', big = 12, small = 10.5, width = 76, characterId }: { name: string; /** When given, the short name opens that character's profile. */ characterId?: string | null; align?: 'center' | 'left'; big?: number; small?: number; /** The column's width in px: a long surname steps its font down to fit instead of breaking mid-word. */ width?: number }) {
   const short = shortName(name);
   const bigPx = seatFitFontPx(short, width, big, { lines: 1, minPx: Math.max(9, big * 0.7) });
   const same = short === name.trim();
   return (
     <span style={{ display: 'block', textAlign: align, minWidth: 0, fontFamily: CK.font }}>
-      <span style={{ display: 'block', fontSize: bigPx, fontWeight: 800, lineHeight: 1.2, color: CK.ink, overflowWrap: 'normal', wordBreak: 'normal' }}>{short}</span>
+      <span style={{ display: 'block', fontSize: bigPx, fontWeight: 800, lineHeight: 1.2, color: CK.ink, overflowWrap: 'normal', wordBreak: 'normal' }}>{characterId ? <CharacterName id={characterId}>{short}</CharacterName> : short}</span>
       {!same && <span style={{ display: 'block', marginTop: 1, fontSize: small, fontWeight: 600, lineHeight: 1.25, color: CK.muted, overflowWrap: 'anywhere' }}>{name}</span>}
     </span>
   );

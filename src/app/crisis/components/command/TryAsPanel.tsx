@@ -12,7 +12,7 @@ import { notifyErr } from '@/lib/appNotify';
 import { clearCrisisToken, getCrisisClient } from '@/lib/crisis/client';
 import { crisisError, viewAs, type CrisisRef } from '@/lib/crisis/api';
 import { MEMBER_COLUMNS, ROLE_LABEL, type Cabinet, type Character, type Member } from '@/lib/crisis/types';
-import { Avatar, Btn, CK, Card, CardTitle, Skeleton } from '../../crisisKit';
+import { Avatar, Btn, CK, Card, CardTitle, Skeleton, useScrollLock } from '../../crisisKit';
 
 interface Loaded {
   members: Member[];
@@ -195,6 +195,7 @@ export default function TryAsPanel({ cref, compact }: { cref: CrisisRef; compact
 /** The compact header button: "Try it as" opens the panel in a scrollable pop-up (loaded only when opened). */
 export function TryAsButton({ cref }: { cref: CrisisRef }) {
   const [open, setOpen] = useState(false);
+  useScrollLock(open);
   const closeRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (!open) return;

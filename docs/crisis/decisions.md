@@ -127,3 +127,15 @@ Chair
 
 Test committee
 - Each character's picture is its seat's picture in the live room (kept in sync by the database).
+
+## Round 7 (Peter, 30 Oct 2026)
+
+Design rule (standing): **no random white space.** Every card fills its slot, columns end level, no half-empty tiles, no odd alignment. If a column has room left, it gets a useful bento card (Needs Attention), never a white gap. Check every screen at 1440x900 for this before reporting.
+
+- Directives tab = the one-by-one reader (one directive in focus, the rest stepping off to the right, smaller; click to bring forward, open to respond). The opened directive pop-up has no side rail of other directives and the normal text size. Facts and the responsible backroomer sit in the white field beside the character. Internal notes live in What Happens When You Send; its recap sits at the bottom, compact. Map actions open the map large in place of the pop-up's content (Back returns).
+- "Being written": a reply typed in the last 5 minutes (crisis_directives.drafting_at) means someone is on it: it leaves Waiting for a Reply and is never moved by a rebalance.
+- Command: Front Rooms look like the organiser live-wall room cards; a Needs Attention card fills the space under them; reassign from Waiting for a Reply; tighter resources.
+- Meetings: requests and upcoming meetings first, held and declined as a one-line history; requests also show (above directives) on the backroom's Directives page and for chairs.
+- Map: changes wait in a shared draft until "Send to delegates" (setting, default on), planned moves keep their line until sent, an undo button, territory of one cabinet merges when extended and never overlaps another's, the original country always shows underneath, characters on one spot fan out, other cabinets' characters hidden from delegates (setting, default off).
+- Answering a directive is one transaction: news with its file is published by the database when allowed, and map edits ride in effects.map (part 20).
+- Characters: a delegate name anywhere opens their profile; performance = speaking time and directives (incl. co-authored, breakdown on hover), with the same stats page as regular sessions.

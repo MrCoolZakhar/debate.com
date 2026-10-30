@@ -15,6 +15,8 @@ import { BigCount, Card, CardTitle, CK, scenarioLabel, Skeleton } from '../../cr
 import { StatusLine, whenLabel } from '../delegate/directiveUi';
 import { NewsHistory } from '../news/NewsList';
 import ChairApproval from './ChairApproval';
+import { CharacterName } from '../character/CharacterProfileHost';
+import MeetingRequestsStrip from '../meetings/MeetingRequestsStrip';
 import { useCrisisNews } from '../news/useCrisisNews';
 
 interface Room { cabinetId: string; name: string; code: string | null }
@@ -89,6 +91,8 @@ export default function ChairHome() {
         </span>
         {error && <p role="status" style={{ margin: '6px 0 0', fontSize: 13, color: CK.danger }}>{error}</p>}
       </header>
+
+      <MeetingRequestsStrip bottomGap={16} />
 
       <div style={{ marginBottom: 16 }}>
         <ChairApproval
@@ -168,7 +172,7 @@ export default function ChairHome() {
                 <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: CK.muted }}>Directive {dirNumber(d)} · {KIND_LABEL[d.kind]} · {whenLabel(d.created_at)}</p>
                 <h3 style={{ margin: '2px 0 4px', fontSize: 15, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{d.title}</h3>
                 <StatusLine s={d.status} />
-                {charName(d.author_character_id) && <p style={{ margin: '4px 0 0', fontSize: 12.5, color: CK.inkSoft, overflowWrap: 'anywhere' }}>From {charName(d.author_character_id)}</p>}
+                {charName(d.author_character_id) && <p style={{ margin: '4px 0 0', fontSize: 12.5, color: CK.inkSoft, overflowWrap: 'anywhere' }}>From <CharacterName id={d.author_character_id} name={charName(d.author_character_id)} /></p>}
                 <p style={{ margin: '6px 0 0', fontSize: 13.5, lineHeight: 1.5, color: CK.inkSoft, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{d.body}</p>
               </Card>
             ))}

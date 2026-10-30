@@ -20,6 +20,7 @@ import { CK, Btn } from '../../crisisKit';
 import { CrisisProvider, crisisBase, useCrisisGate, type CrisisContextValue } from './CrisisContext';
 import NewsPopup from '../../components/news/NewsPopup';
 import NotificationBell from '../../components/notifications/NotificationBell';
+import { CharacterProfileProvider } from '../../components/character/CharacterProfileHost';
 
 interface NavItem { href: string; label: string; icon: React.ReactNode; section?: string }
 
@@ -240,6 +241,7 @@ export default function CrisisLayout({ children }: { children: React.ReactNode }
   const v = gate.value;
   return (
     <CrisisProvider value={v}>
+      <CharacterProfileProvider>
       <div className="min-h-screen" style={{ background: CK.pageBg, backgroundAttachment: 'fixed', color: CK.ink, fontFamily: CK.font }}>
         <TopBar v={v} items={items} />
         <Rail v={v} items={items} />
@@ -249,6 +251,7 @@ export default function CrisisLayout({ children }: { children: React.ReactNode }
         </main>
         <NewsPopup />
       </div>
+      </CharacterProfileProvider>
     </CrisisProvider>
   );
 }

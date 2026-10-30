@@ -32,7 +32,20 @@ export default function CharacterDialog({ me, color, goals, goalsLoaded, onClose
     <CrisisDialog title="My Character" onClose={onClose} width={720}>
       <div className="grid gap-3.5">
         <OverhangCard name={me.name} src={me.picture_url} color={color} size={84} warm>
-          <div className="min-w-0">
+          <style>{'.crisis-guide-chip { position: absolute; top: 10px; right: 12px; } .crisis-guide-pad { padding-right: 150px; } @media (max-width: 600px) { .crisis-guide-chip { position: static; margin-bottom: 6px; } .crisis-guide-pad { padding-right: 0; } }'}</style>
+          {guide && (
+            <a
+              href={guide}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={me.guide_name ? `Open ${me.guide_name}` : 'Open my character guide'}
+              className="crisis-guide-chip inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] active:scale-[0.97] transition-transform"
+              style={{ gap: 6, textDecoration: 'none', background: CK.greenBtn, color: '#FFFFFF', borderRadius: 99, boxShadow: CK.shadowSm, padding: '5px 11px', fontSize: 12.5, fontWeight: 700, fontFamily: CK.font }}
+            >
+              <BookOpenText size={14} strokeWidth={1.5} aria-hidden style={{ flexShrink: 0 }} />Character guide<ExternalLink size={12} strokeWidth={1.5} aria-hidden style={{ flexShrink: 0, opacity: 0.8 }} />
+            </a>
+          )}
+          <div className={`min-w-0 ${guide ? 'crisis-guide-pad' : ''}`}>
             <b style={{ display: 'block', fontSize: 22, lineHeight: 1.2, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{me.name}</b>
             <span style={{ display: 'block', marginTop: 2, fontSize: 14.5, fontWeight: 600, color: CK.inkSoft, overflowWrap: 'anywhere' }}>{me.title || 'No title yet'}</span>
             <span style={{ display: 'block', marginTop: 6, fontSize: 14, fontWeight: 800, color: me.status === 'active' ? CK.ok : CK.danger }}>
@@ -40,25 +53,6 @@ export default function CharacterDialog({ me, color, goals, goalsLoaded, onClose
             </span>
           </div>
         </OverhangCard>
-
-        {guide ? (
-          <a
-            href={guide}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] active:scale-[0.99] transition-transform"
-            style={{ gap: 12, textDecoration: 'none', background: CK.greenBtn, color: '#FFFFFF', borderRadius: 18, boxShadow: CK.shadowSm, padding: '14px 18px', fontFamily: CK.font }}
-          >
-            <BookOpenText size={24} strokeWidth={1.5} aria-hidden style={{ flexShrink: 0 }} />
-            <span className="min-w-0" style={{ flex: 1 }}>
-              <b style={{ display: 'block', fontSize: 16, fontWeight: 800 }}>Open my character guide</b>
-              {me.guide_name && <span style={{ display: 'block', fontSize: 12.5, opacity: 0.85, overflowWrap: 'anywhere' }}>{me.guide_name}</span>}
-            </span>
-            <ExternalLink size={18} strokeWidth={1.5} aria-hidden style={{ flexShrink: 0 }} />
-          </a>
-        ) : (
-          <p style={{ margin: 0, fontSize: 14, color: CK.inkSoft }}>Your Crisis Director has not added a character guide for you yet.</p>
-        )}
 
         <div className="grid gap-3.5 sm:grid-cols-2">
           <Fact icon={<MapPin size={16} strokeWidth={1.5} aria-hidden />} label="Location">{me.location || none('Not set')}</Fact>

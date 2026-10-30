@@ -123,3 +123,19 @@ export function sortDirectives(list: Directive[], order: QueueOrder, lane: Lane,
     return a.no - b.no;
   });
 }
+
+/** A reply typed in the last 5 minutes means someone is on it (crisis_mark_drafting, docs/crisis/sql/020). */
+export const WRITING_WINDOW_MS = 5 * 60 * 1000;
+
+/** True when a staff member has said, within the last 5 minutes, that they are writing the reply to this directive. */
+export function isBeingWritten(d: Pick<Directive, 'drafting_member' | 'drafting_at'>, nowMs: number): boolean {
+  if (!d.drafting_member || !d.drafting_at) return false;
+  const t = new Date(d.drafting_at).getTime();
+  return Number.isFinite(t) && nowMs - t < WRITING_WINDOW_MS;
+}
+
+/** The staff member who is writing this directive's reply right now, or null. */
+export function writerOf(d: Directive, n: Names, nowMs: number): Member | null {
+  if (!isBeingWritten(d, nowMs) || !d.drafting_member) return null;
+  return n.members.get(d.drafting_member) ?? null;
+}

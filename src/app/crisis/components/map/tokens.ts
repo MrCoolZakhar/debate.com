@@ -202,7 +202,14 @@ export const MAP_CSS = `
 .wm-legend{position:absolute;left:12px;right:12px;bottom:12px;z-index:4;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;pointer-events:none}
 .wm-legend>div{pointer-events:auto;background:rgba(255,255,255,0.93);border-radius:12px;padding:7px 11px;font-size:12px;color:#4E463C;box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 1px 2px rgba(27,56,40,0.1),0 3px 7px -2px rgba(27,56,40,0.15);display:flex;gap:6px 14px;flex-wrap:wrap;align-items:center}
 .wm-legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:-1px}
-.wm-hint{position:absolute;left:12px;top:12px;z-index:4;max-width:min(360px,calc(100% - 340px));background:rgba(255,255,255,0.93);border-radius:12px;padding:7px 11px;font-size:12.5px;color:#4E463C;box-shadow:0 1px 2px rgba(27,56,40,0.1),0 3px 7px -2px rgba(27,56,40,0.15)}
+.wm-topleft{position:absolute;left:12px;top:12px;z-index:4;display:flex;flex-direction:column;align-items:flex-start;gap:8px;max-width:min(380px,calc(100% - 340px));pointer-events:none}
+.wm-topleft>*{pointer-events:auto}
+.wm-draftbar{width:100%;box-sizing:border-box;background:rgba(255,255,255,0.98);border-radius:14px;padding:9px 12px;box-shadow:inset 0 1px 0 rgba(255,255,255,0.75),0 0 0 1px rgba(142,36,36,0.18),5px 6px 16px rgba(27,56,40,0.2);display:flex;flex-direction:column;gap:8px;font-size:13px;color:#1C1410}
+.wm-draftbar b{font-weight:800}
+.wm-draftbar-row{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center}
+.wm-toolhint{flex-basis:100%;margin:0;font-size:12px;color:#4E463C;line-height:1.35}
+.wm-clabel-orig{font-size:9.5px;letter-spacing:0.04em;text-transform:none;font-style:italic;font-weight:600;color:#5E5340}
+.wm-hint{max-width:100%;background:rgba(255,255,255,0.93);border-radius:12px;padding:7px 11px;font-size:12.5px;color:#4E463C;box-shadow:0 1px 2px rgba(27,56,40,0.1),0 3px 7px -2px rgba(27,56,40,0.15)}
 @media (max-width:767px){
   .wm-root:not([data-compact]){height:auto!important}
   .wm-root:not([data-compact]) .wm-body{flex:none}
@@ -210,7 +217,7 @@ export const MAP_CSS = `
   .wm-root:not([data-compact]) .wm-drawer,.wm-root:not([data-compact]) .wm-legend{position:static;max-height:none;margin-top:10px;display:block}
   .wm-panel{width:auto}
   .wm-root:not([data-compact]) .wm-legend>div{margin-bottom:8px}
-  .wm-hint{max-width:calc(100% - 112px)}
+  .wm-topleft{max-width:calc(100% - 112px)}
   .wm-drawer[data-add]{top:auto;max-height:none}
   .wm-root[data-compact] .wm-body{min-height:260px}
   .wm-root[data-compact] .wm-top{flex-wrap:wrap}
@@ -256,6 +263,6 @@ export const MAP_CSS = `
 .wm-root[data-stage] .wm-drawer,.wm-root[data-stage] .wm-legend{position:static;max-height:none;margin-top:10px;display:block}
 .wm-root[data-stage] .wm-legend>div{margin-bottom:8px}
 .wm-root[data-stage] .wm-panel{width:auto}
-.wm-root[data-stage] .wm-hint{max-width:calc(100% - 24px)}
+.wm-root[data-stage] .wm-topleft{max-width:calc(100% - 24px)}
 .wm-root[data-stage] .wm-tools{gap:6px 12px}
 `;

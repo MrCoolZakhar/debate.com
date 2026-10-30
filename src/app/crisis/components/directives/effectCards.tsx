@@ -5,7 +5,7 @@
 // draft); what it changes is staged in the draft's maps, and nothing is written until Send reply.
 
 import { loadCities, type City } from '../map/cities';
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState, type Dispatch, type ReactNode } from 'react';
 import { CircleHelp, Coins, Lock, Map as MapIcon, Minus, Newspaper, Plus, Skull, Undo2, UserCheck, UsersRound, X, type LucideIcon } from 'lucide-react';
 import GSelect from '@/components/GSelect';
 import { amount as fmtAmount } from '@/lib/crisis/format';
@@ -13,8 +13,7 @@ import { kmBetween } from '@/lib/crisis/geo';
 import type { Cabinet, Character, CharacterStatus, MapRegion, MapShape, MapUnit, Resource, ResourceType } from '@/lib/crisis/types';
 import { Avatar, Btn, CK, FieldLabel, Skeleton, cabinetTint, fieldStyle, resourceIcon } from '../../crisisKit';
 import { KIND_META } from '../map/mapData';
-import { setSize, type EditSet, type StageOptions } from '../map/mapEdits';
-import WarMap from '../map/WarMap';
+import { setSize, type EditSet } from '../map/mapEdits';
 import type { CountryOption } from './countryPick';
 import { CabinetLogo } from './directiveParts';
 import NewsMediaPicker from './NewsMediaPicker';
@@ -23,7 +22,10 @@ import { STAGEABLE_STATUSES, type EffectCard, type EffectsDraft, type UnitStage 
 
 export interface StageData { types: ResourceType[]; resources: Resource[]; units: MapUnit[]; regions: MapRegion[]; shapes: MapShape[]; countries: CountryOption[] }
 
-/** Everything a card needs, built once by the panel. */
+/** What a card asks the pop-up to show full size in place of the directive: the map editor for a unit move or a border. */
+export type MapRequest = { kind: 'border' } | { kind: 'unit'; cardId: string };
+
+/** Everything a card needs, built once by the pop-up (useEffectsEnv). */
 export interface CardEnv {
   data: StageData | null;
   powers: ReplyPowers;
@@ -38,8 +40,10 @@ export interface CardEnv {
   typeById: Map<string, { t: ResourceType; i: number }>;
   baseHolder: Map<string, string | null>;
   cabinetColors: Array<{ id: string; color: string }>;
-  /** Opens the map editor (inside the side panel) for the reply's border changes. */
-  openMap: () => void;
+  /** Replaces the whole directive pop-up with the big map (MapFullView), with a Back button. */
+  openMap: (req: MapRequest) => void;
+  /** Points a card at something else (clears what it had staged). */
+  retarget: (card: EffectCard, target: string) => void;
 }
 
 export const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -193,7 +197,7 @@ function CardShell({ kind, onRemove, children }: { kind: EffectCard['kind']; onR
 interface CardProps { card: EffectCard; env: CardEnv; onTarget: (target: string) => void; onRemove: () => void }
 
 /** What other cards of the same kind already hold, so two cards never fight over one thing. */
-const usedBy = (env: CardEnv, kind: EffectCard['kind'], except: string) => new Set(env.effects.cards.filter((c) => c.kind === kind && c.id !== except && c.target).map((c) => c.target));
+export const usedBy = (env: CardEnv, kind: EffectCard['kind'], except: string) => new Set(env.effects.cards.filter((c) => c.kind === kind && c.id !== except && c.target).map((c) => c.target));
 
 // ── Resources ──
 export function ResourcesCard({ card, env, onTarget, onRemove }: CardProps) {
@@ -270,8 +274,31 @@ export function ResourcesCard({ card, env, onTarget, onRemove }: CardProps) {
 }
 
 // ── Move a unit ──
-// The same map as the Map page: pick the unit, then drag it to its new place. A dashed trajectory stays on the
-// map for every move this reply plans; nothing is written until Send reply.
+// The card says what moves and where to, in a line of words. The map itself opens full size in place of the
+// directive (MapFullView): pick the unit, drag it to its new place. Nothing is written until Send reply.
+
+/** Stages a change to one unit (a new place, a new amount, or both); a change back to what it is now clears it. */
+export function stageUnitChange(setEffects: Dispatch<(prev: EffectsDraft) => EffectsDraft>, u: MapUnit, fn: (s: UnitStage) => UnitStage) {
+  setEffects((e) => {
+    const next = fn({ ...(e.units[u.id] ?? {}) });
+    const clean: UnitStage = {};
+    if (next.lng !== undefined && next.lat !== undefined && (next.lng !== u.lng || next.lat !== u.lat)) { clean.lng = next.lng; clean.lat = next.lat; }
+    if (next.strength !== undefined && next.strength !== u.strength) clean.strength = next.strength;
+    const units = { ...e.units };
+    if (clean.lng === undefined && clean.strength === undefined) delete units[u.id]; else units[u.id] = clean;
+    return { ...e, units };
+  });
+}
+
+/** "Boat big: 400 km E of Nassau to 50 km NW of Charlotte Amalie, 640 km". */
+export function describeUnitMove(u: MapUnit, s: UnitStage | undefined): string {
+  if (s && s.lng !== undefined && s.lat !== undefined) {
+    const km = Math.round(kmBetween([u.lng, u.lat], [s.lng, s.lat])).toLocaleString('en-US');
+    return `${u.name}: ${place(u.lng, u.lat)} to ${place(s.lng, s.lat)}, ${km} km`;
+  }
+  return `${u.name}: ${place(u.lng, u.lat)}`;
+}
+
 export function UnitCard({ card, env, onTarget, onRemove }: CardProps) {
   const { data, effects, setEffects, cabById } = env;
   const unit = data?.units.find((u) => u.id === card.target);
@@ -281,73 +308,37 @@ export function UnitCard({ card, env, onTarget, onRemove }: CardProps) {
     hint: taken.has(u.id) ? 'Already in another card' : [KIND_META[u.kind]?.label, cabById.get(u.owner_cabinet_id ?? '')?.name, `amount ${fmtAmount(u.strength)}`].filter(Boolean).join(', '),
   })), [data, cabById, taken]);
 
-  const updateUnit = (u: MapUnit, fn: (s: UnitStage) => UnitStage) => setEffects((e) => {
-    const next = fn({ ...(e.units[u.id] ?? {}) });
-    const clean: UnitStage = {};
-    if (next.lng !== undefined && next.lat !== undefined && (next.lng !== u.lng || next.lat !== u.lat)) { clean.lng = next.lng; clean.lat = next.lat; }
-    if (next.strength !== undefined && next.strength !== u.strength) clean.strength = next.strength;
-    const units = { ...e.units };
-    if (clean.lng === undefined && clean.strength === undefined) delete units[u.id]; else units[u.id] = clean;
-    return { ...e, units };
-  });
-
   const staged = unit ? effects.units[unit.id] : undefined;
   const movedTo = staged && staged.lng !== undefined && staged.lat !== undefined ? staged : null;
   const amountNow = unit ? (staged?.strength ?? unit.strength) : 0;
 
-  // Every move this reply plans, for the trajectories.
-  const moves = useMemo(() => {
-    const m: Record<string, { lng: number; lat: number }> = {};
-    for (const [id, st] of Object.entries(effects.units)) if (st.lng !== undefined && st.lat !== undefined) m[id] = { lng: st.lng, lat: st.lat };
-    return m;
-  }, [effects.units]);
-  const unitsRef = data?.units;
-  const stage = useMemo<StageOptions | null>(() => (data ? {
-    kind: 'unit', data: { regions: data.regions, units: data.units, shapes: data.shapes }, canUnits: env.powers.units, canMap: false,
-    height: 300, unitId: card.target, moves,
-    onSelectUnit: (id) => { if (!taken.has(id) && id !== card.target) onTarget(id); },
-    onUnitMove: (id, lng, lat) => {
-      // Before a unit is picked any unit can be dragged straight away, like on the real map: the drag picks it.
-      if (!card.target) { if (taken.has(id)) return; onTarget(id); }
-      const u = unitsRef?.find((x) => x.id === id);
-      if (u) updateUnit(u, (s) => ({ ...s, lng, lat }));
-    },
-  } : null),
-  // The map reads its data once; only what changes how it behaves is a dependency.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  [data, env.powers.units, card.target, moves, taken]);
-
   return (
     <CardShell kind="unit" onRemove={onRemove}>
       {!env.powers.units ? <Muted>You cannot move units. The Crisis Director can allow it in Settings.</Muted>
-        : !data ? <Skeleton h={220} r={12} />
+        : !data ? <Skeleton h={90} r={12} />
         : (
           <>
             <div><FieldLabel>Unit</FieldLabel>
-              <GSelect value={card.target} options={options} onChange={onTarget} placeholder={options.length ? 'Pick a unit, or click one on the map' : 'No units on the map yet'} aria-label="Unit" searchable />
+              <GSelect value={card.target} options={options} onChange={onTarget} placeholder={options.length ? 'Pick a unit, or pick one on the map' : 'No units on the map yet'} aria-label="Unit" searchable />
             </div>
             {unit && (
               <div className="flex flex-col" style={{ gap: 6 }}>
-                <p style={{ margin: 0, fontSize: 13, color: CK.inkSoft }}>
-                  <b style={{ color: CK.ink }}>Now at</b> {place(unit.lng, unit.lat)}
-                  {movedTo && (
-                    <>
-                      {' '}<b style={{ color: CK.red }}>
-                        Goes to {place(movedTo.lng as number, movedTo.lat as number)}, {Math.round(kmBetween([unit.lng, unit.lat], [movedTo.lng as number, movedTo.lat as number])).toLocaleString('en-US')} km
-                      </b>{' '}
-                      <button type="button" onClick={() => updateUnit(unit, (s) => ({ ...s, lng: undefined, lat: undefined }))}
-                        className="inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
-                        style={{ gap: 4, border: 0, background: 'transparent', padding: 0, cursor: 'pointer', fontFamily: CK.font, fontSize: 12.5, fontWeight: 700, color: CK.forest, textDecoration: 'underline' }}>
-                        <Undo2 size={12} strokeWidth={1.8} aria-hidden />Keep it where it is
-                      </button>
-                    </>
-                  )}
+                <p className="flex items-start" style={{ margin: 0, gap: 7, fontSize: 13.5, fontWeight: 600, lineHeight: 1.4, color: movedTo ? CK.ink : CK.inkSoft, overflowWrap: 'anywhere' }}>
+                  <MapIcon size={15} strokeWidth={1.5} aria-hidden style={{ color: CK.red, flex: 'none', marginTop: 2 }} />
+                  <span>{describeUnitMove(unit, staged)}</span>
                 </p>
+                {movedTo && (
+                  <button type="button" onClick={() => stageUnitChange(setEffects, unit, (s) => ({ ...s, lng: undefined, lat: undefined }))}
+                    className="inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+                    style={{ alignSelf: 'flex-start', gap: 4, border: 0, background: 'transparent', padding: 0, cursor: 'pointer', fontFamily: CK.font, fontSize: 12.5, fontWeight: 700, color: CK.forest, textDecoration: 'underline' }}>
+                    <Undo2 size={12} strokeWidth={1.8} aria-hidden />Keep it where it is
+                  </button>
+                )}
                 <div className="flex items-center flex-wrap" style={{ gap: 8 }}>
                   <b style={{ fontSize: 13, color: CK.ink }}>Amount</b>
                   <StepNumber value={amountNow} min={0} step={stepFor(unit.strength)} label={`${unit.name} amount`}
                     color={amountNow > unit.strength ? CK.ok : amountNow < unit.strength ? CK.danger : undefined}
-                    onChange={(n) => updateUnit(unit, (s) => ({ ...s, strength: Math.round(n) }))} />
+                    onChange={(n) => stageUnitChange(setEffects, unit, (s) => ({ ...s, strength: Math.round(n) }))} />
                   {amountNow !== unit.strength && (
                     <span style={{ fontSize: 12.5, fontWeight: 700, color: amountNow > unit.strength ? CK.ok : CK.danger, fontVariantNumeric: 'tabular-nums' }}>
                       {fmtAmount(unit.strength)} to {fmtAmount(amountNow)}
@@ -356,8 +347,11 @@ export function UnitCard({ card, env, onTarget, onRemove }: CardProps) {
                 </div>
               </div>
             )}
-            <Muted>{unit ? 'Drag the unit to where it goes, then press Move. Dashed lines show the moves this reply plans.' : 'Drag a unit on the map to where it goes, or pick one above.'}</Muted>
-            {stage && <WarMap stage={stage} />}
+            <div className="flex flex-wrap" style={{ gap: 8 }}>
+              <Btn tone="green" size="sm" icon={<MapIcon size={14} strokeWidth={1.5} />} onClick={() => env.openMap({ kind: 'unit', cardId: card.id })}>
+                {movedTo ? 'Open the map again' : 'Open the map'}
+              </Btn>
+            </div>
           </>
         )}
     </CardShell>
@@ -365,8 +359,8 @@ export function UnitCard({ card, env, onTarget, onRemove }: CardProps) {
 }
 
 // ── Change a border ──
-// The map editor opens in the side panel itself (EffectsPanel swaps its content, with a back button). The card
-// only says what the reply will change on the map and opens the editor.
+// The map editor opens full size in place of the directive (MapFullView). The card only says what the reply will
+// change on the map and opens the editor.
 export function BorderCard({ env, onRemove }: Pick<CardProps, 'env' | 'onRemove'>) {
   const { data, effects, setEffects } = env;
   const lines = describeMapEdits(effects.map, env);
@@ -380,14 +374,14 @@ export function BorderCard({ env, onRemove }: Pick<CardProps, 'env' | 'onRemove'
             {lines.length > 0 && (
               <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {lines.map((t, i) => (
-                  <li key={i} className="flex items-center" style={{ gap: 7, fontSize: 13, fontWeight: 600, color: CK.ink, overflowWrap: 'anywhere' }}>
-                    <MapIcon size={14} strokeWidth={1.5} aria-hidden style={{ color: CK.red, flex: 'none' }} />{t}
+                  <li key={i} className="flex items-start" style={{ gap: 7, fontSize: 13, fontWeight: 600, color: CK.ink, overflowWrap: 'anywhere' }}>
+                    <MapIcon size={14} strokeWidth={1.5} aria-hidden style={{ color: CK.red, flex: 'none', marginTop: 2 }} />{t}
                   </li>
                 ))}
               </ul>
             )}
             <div className="flex flex-wrap" style={{ gap: 8 }}>
-              <Btn tone="green" size="sm" icon={<MapIcon size={14} strokeWidth={1.5} />} onClick={env.openMap}>{lines.length ? 'Open the map again' : 'Open the map'}</Btn>
+              <Btn tone="green" size="sm" icon={<MapIcon size={14} strokeWidth={1.5} />} onClick={() => env.openMap({ kind: 'border' })}>{lines.length ? 'Open the map again' : 'Open the map'}</Btn>
               {lines.length > 0 && <Btn tone="ghost" size="sm" onClick={() => setEffects((e) => ({ ...e, map: null }))}>Clear these changes</Btn>}
             </div>
           </>

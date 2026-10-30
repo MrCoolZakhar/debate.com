@@ -6,7 +6,7 @@ import { amount } from '@/lib/crisis/format';
 import type { Cabinet, Character, Directive, Member, Resource } from '@/lib/crisis/types';
 import type { CrisisRef } from '@/lib/crisis/api';
 import type { CaucusJson, LiveCommittee } from '@/app/manage/[slug]/live/LiveModals';
-import { isOpenStatus } from '../directives/directiveKit';
+import { isBeingWritten, isOpenStatus } from '../directives/directiveKit';
 
 // ─────────── Front rooms ───────────
 
@@ -129,14 +129,19 @@ export interface StaffLoad {
   avgReplyMin: number | null;
 }
 
-const isStaffRow = (m: Member) => m.role === 'backroomer' || m.role === 'director' || m.role === 'assistant_director';
+export const isStaffRow = (m: Member) => m.role === 'backroomer' || m.role === 'director' || m.role === 'assistant_director';
 const isLoadStatus = (d: Directive) => isOpenStatus(d) || d.status === 'clarify';
 
-export function staffLoads(members: Member[], directives: Directive[]): StaffLoad[] {
-  const startOfDay = new Date(); startOfDay.setHours(0, 0, 0, 0);
+/** A reply is being typed (isBeingWritten, directives/directiveKit.ts: drafting_at within 5 minutes) on a still-open directive.
+ *  Such a directive is being dealt with, so it is not waiting and not load. */
+export const beingWritten = (d: Directive, nowMs: number): boolean => isOpenStatus(d) && isBeingWritten(d, nowMs);
+
+export function staffLoads(members: Member[], directives: Directive[], nowMs: number): StaffLoad[] {
+  const startOfDay = new Date(nowMs); startOfDay.setHours(0, 0, 0, 0);
   const since = startOfDay.getTime();
   return members.filter(isStaffRow).map((member) => {
-    const open = directives.filter((d) => d.assigned_member_id === member.id && isLoadStatus(d));
+    // A directive being written is being dealt with: it is not open load.
+    const open = directives.filter((d) => d.assigned_member_id === member.id && isLoadStatus(d) && !beingWritten(d, nowMs));
     const done = directives.filter((d) => d.answered_by === member.id && d.answered_at && new Date(d.answered_at).getTime() >= since);
     const avg = done.length
       ? done.reduce((s, d) => s + (new Date(d.answered_at as string).getTime() - new Date(d.created_at).getTime()), 0) / done.length / 60000
@@ -169,19 +174,23 @@ export interface BackroomStat {
   answered: number;
   /** Average minutes from created to answered, over everything this person answered. null = none yet. */
   avgReplyMin: number | null;
+  /** Directives this person is writing a reply to right now (counted apart from open). */
+  writing: number;
   /** waiting_since of the oldest open directive, null when nothing waits. */
   oldestWaiting: string | null;
 }
 
-export function backroomStats(members: Member[], directives: Directive[]): BackroomStat[] {
+export function backroomStats(members: Member[], directives: Directive[], nowMs: number): BackroomStat[] {
   return members.filter(isStaffRow).map((member) => {
-    const open = directives.filter((d) => d.assigned_member_id === member.id && isLoadStatus(d));
+    const mine = directives.filter((d) => d.assigned_member_id === member.id && isLoadStatus(d));
+    const writing = mine.filter((d) => beingWritten(d, nowMs)).length;
+    const open = mine.filter((d) => !beingWritten(d, nowMs));
     const done = directives.filter((d) => d.answered_by === member.id && d.answered_at);
     const avg = done.length
       ? done.reduce((s, d) => s + (new Date(d.answered_at as string).getTime() - new Date(d.created_at).getTime()), 0) / done.length / 60000
       : null;
     const oldest = open.reduce<string | null>((o, d) => (o === null || new Date(d.waiting_since) < new Date(o) ? d.waiting_since : o), null);
-    return { member, open: open.length, answered: done.length, avgReplyMin: avg, oldestWaiting: oldest };
+    return { member, open: open.length, answered: done.length, avgReplyMin: avg, writing, oldestWaiting: oldest };
   }).sort((a, b) => b.open - a.open || b.answered - a.answered || a.member.display_name.localeCompare(b.member.display_name));
 }
 

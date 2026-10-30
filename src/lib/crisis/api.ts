@@ -277,12 +277,20 @@ export interface AnswerEffects {
   units?: Array<{ id: string; lng?: number; lat?: number; strength?: number }>;
   /** Hand a country to a cabinet or to nobody (map power). */
   regions?: Array<{ key: string; owner_cabinet_id: string | null }>;
+  /** A whole map edit set (the map editor's EditSet), applied in the same transaction (map power). */
+  map?: object;
 }
 
-export async function answerDirective(ref: CrisisRef, directiveId: string, outcome: DirectiveOutcome, reply: string, effects: AnswerEffects = {}): Promise<{ news_id: string | null }> {
+export async function answerDirective(ref: CrisisRef, directiveId: string, outcome: DirectiveOutcome, reply: string, effects: AnswerEffects = {}): Promise<{ news_id: string | null; news_published?: boolean }> {
   const client = await c(ref);
   const res = await client.rpc('crisis_answer_directive', { p_directive: directiveId, p_outcome: outcome, p_reply: reply, p_effects: effects });
-  return must(res, 'Could not send the reply. It is kept, try again.') as { news_id: string | null };
+  return must(res, 'Could not send the reply. It is kept, try again.') as { news_id: string | null; news_published?: boolean };
+}
+
+/** Tells the crisis team a reply to this directive is being typed (on) or no longer is (off). Presence only, never an error to the person. */
+export async function markDrafting(ref: CrisisRef, directiveId: string, on = true): Promise<void> {
+  const client = await c(ref);
+  await client.rpc('crisis_mark_drafting', { p_directive: directiveId, p_on: on });
 }
 
 export async function addNote(ref: CrisisRef, directiveId: string, body: string, internal = false): Promise<void> {
@@ -416,6 +424,37 @@ export async function deleteShape(ref: CrisisRef, id: string): Promise<void> {
   const client = await c(ref);
   const res = await client.from('crisis_shapes').delete().eq('id', id).select('id');
   if (res.error || !res.data?.length) throw new UserFacingError(crisisError(res.error, 'Could not remove the shape.'));
+}
+
+/** Applies a whole map edit set in one transaction (docs/crisis/sql/020); answers the ids of the added shapes, in order. */
+export async function applyMapSet(ref: CrisisRef, set: Record<string, unknown>): Promise<string[]> {
+  const client = await c(ref);
+  const res = await client.rpc('crisis_apply_map_set', { p_crisis: ref.id, p_set: set });
+  const out = must(res, 'Could not save the map changes.') as { ok?: boolean; added?: string[] };
+  if (!out.ok) throw new UserFacingError('Could not save the map changes.');
+  return Array.isArray(out.added) ? out.added : [];
+}
+
+/** The crisis team's shared unsent map draft (staff only); null when there is none. */
+export async function loadMapDraft(ref: CrisisRef): Promise<unknown | null> {
+  const client = await c(ref);
+  const res = await client.from('crisis_map_drafts').select('payload').eq('crisis_id', ref.id).maybeSingle();
+  if (res.error) throw new UserFacingError(crisisError(res.error, 'Could not load the unsent map changes.'));
+  return (res.data as { payload?: unknown } | null)?.payload ?? null;
+}
+
+/** Writes the shared draft; a null payload throws it away. */
+export async function saveMapDraft(ref: CrisisRef, payload: Record<string, unknown> | null): Promise<void> {
+  const client = await c(ref);
+  if (payload === null) {
+    const del = await client.from('crisis_map_drafts').delete().eq('crisis_id', ref.id);
+    if (del.error) throw new UserFacingError(crisisError(del.error, 'Could not clear the unsent map changes.'));
+    return;
+  }
+  const res = await client.from('crisis_map_drafts')
+    .upsert({ crisis_id: ref.id, payload, updated_at: new Date().toISOString() })
+    .select('crisis_id');
+  if (res.error || !res.data?.length) throw new UserFacingError(crisisError(res.error, 'Could not save the unsent map changes.'));
 }
 
 // ─────────── Media (bucket crisis-media, public; see docs/crisis/sql/006) ───────────

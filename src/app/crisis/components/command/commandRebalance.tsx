@@ -1,23 +1,25 @@
 'use client';
-// Gavelling Crisis: the one plain line at the very bottom of Crisis Command that suggests a rebalance, for example
-// "Marco has 11 open. Move the 2 oldest to Peter Zakhar?". It shows only when the load is uneven, and its button does the move
-// through crisis_assign_directive. It takes one line of the page, so the dashboard stays on one screen.
+// Gavelling Crisis: the backroom rebalance suggestion, for example "Marco has 10 open. Move the 5 oldest to Peter Zakhar?".
+// It is one row of the Needs Attention card on Crisis Command and appears only when the load is uneven. Its button does
+// the move through crisis_assign_directive. Directives someone is writing a reply to are not load and are never moved.
 
 import { useMemo, useState } from 'react';
-import { Lightbulb } from 'lucide-react';
+import { Scale } from 'lucide-react';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { assignDirective, crisisError, type CrisisRef } from '@/lib/crisis/api';
 import type { Directive, Member } from '@/lib/crisis/types';
-import { Btn, CK } from '../../crisisKit';
+import { Avatar, Btn, CK } from '../../crisisKit';
 import { staffLoads, suggestRebalance } from './commandData';
 
-export default function RebalanceLine({ cref, members, directives, onChanged }: {
-  cref: CrisisRef; members: Member[]; directives: Directive[] | null; onChanged: () => void;
-}) {
-  const [busy, setBusy] = useState(false);
-  const tip = useMemo(() => (directives ? suggestRebalance(staffLoads(members, directives)) : null), [members, directives]);
-  if (!tip) return null;
+export type RebalanceTip = NonNullable<ReturnType<typeof suggestRebalance>>;
 
+/** The current suggestion, or null when the backroom is balanced (or directives are still loading). */
+export function useRebalanceTip(members: Member[], directives: Directive[] | null, now: number): RebalanceTip | null {
+  return useMemo(() => (directives ? suggestRebalance(staffLoads(members, directives, now)) : null), [members, directives, now]);
+}
+
+export function RebalanceRow({ cref, tip, onChanged }: { cref: CrisisRef; tip: RebalanceTip; onChanged: () => void }) {
+  const [busy, setBusy] = useState(false);
   const n = tip.move.length;
   const from = tip.from.member.display_name;
   const to = tip.to.member.display_name;
@@ -38,12 +40,21 @@ export default function RebalanceLine({ cref, members, directives, onChanged }: 
   };
 
   return (
-    <div className="cmd-rebalance flex items-center flex-wrap" style={{ gap: '4px 10px', flex: 'none', marginTop: 8, fontSize: 13, color: CK.ink }}>
-      <Lightbulb size={15} strokeWidth={1.5} aria-hidden style={{ flex: 'none', color: CK.goldDeep }} />
-      <span style={{ overflowWrap: 'anywhere', minWidth: 0 }}>
-        {from} has {tip.from.open.length} open. Move the {n === 1 ? 'oldest' : `${n} oldest`} to {to}?
+    <div className="flex items-center" style={{ gap: 10, padding: '8px 0' }}>
+      <span aria-hidden style={{ width: 30, height: 30, flex: 'none', display: 'grid', placeItems: 'center', color: CK.goldDeep, background: 'rgba(182,135,31,0.14)', borderRadius: 10 }}>
+        <Scale size={17} strokeWidth={1.5} />
       </span>
-      <Btn size="sm" tone="green" onClick={move} disabled={busy}>{busy ? 'Moving' : `Move ${n === 1 ? 'it' : n} to ${to}`}</Btn>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={{ margin: 0, fontSize: 13, color: CK.ink, lineHeight: 1.35, overflowWrap: 'anywhere' }}>
+          <b>{from}</b> has {tip.from.open.length} open. Move the {n === 1 ? 'oldest' : `${n} oldest`} to <b>{to}</b>?
+        </p>
+        <div className="flex items-center" style={{ gap: 8, marginTop: 6 }}>
+          <Avatar name={from} src={tip.from.member.picture_url} size={22} color={CK.forest2} />
+          <span aria-hidden style={{ color: CK.inkSoft, fontSize: 12 }}>to</span>
+          <Avatar name={to} src={tip.to.member.picture_url} size={22} color={CK.forest2} />
+          <Btn size="sm" tone="green" onClick={move} disabled={busy} style={{ marginLeft: 'auto' }}>{busy ? 'Moving' : `Move ${n === 1 ? 'it' : n} to ${to}`}</Btn>
+        </div>
+      </div>
     </div>
   );
 }

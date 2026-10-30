@@ -22,7 +22,7 @@ import { characterPoints, readPoints } from '@/lib/crisis/points';
 import {
   KIND_LABEL, OUTCOME_LABEL, ROLE_LABEL, type Character, type CharacterSecret, type CharacterStatus, type Directive, type Meeting,
 } from '@/lib/crisis/types';
-import { Avatar, Btn, CK, FieldLabel, Skeleton, ThemeTag, cabinetTint, fieldStyle } from '../../crisisKit';
+import { Avatar, Btn, CK, FieldLabel, Skeleton, ThemeTag, cabinetTint, fieldStyle, useScrollLock } from '../../crisisKit';
 import { dirNumber, timeAgo } from '@/lib/crisis/format';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { ConfirmInline, responsibleMembers } from '../command/setupKit';
@@ -34,7 +34,13 @@ import CharacterSpotSnippet from './CharacterSpotSnippet';
 import { STATUS_WORDS, statusColor as dirStatusColor, statusIcon } from '../delegate/directiveUi';
 import { STATUS_ORDER, STATUS_WORD, StatusIcon, mayEditCharacters, statusColor } from './characterStatus';
 
-export interface CharacterModalProps { characterId: string; onClose: () => void; initialTab?: 'profile' | 'directives' | 'performance' }
+export interface CharacterModalProps {
+  characterId: string;
+  onClose: () => void;
+  initialTab?: 'profile' | 'directives' | 'performance';
+  /** A character the viewer's core list does not carry (another cabinet), read from the world list. */
+  fallback?: Character;
+}
 
 type Tab = 'profile' | 'directives' | 'performance';
 type Step = { kind: 'main' } | { kind: 'guide' } | { kind: 'map' } | { kind: 'directive'; id: string };
@@ -49,9 +55,9 @@ const isPdf = (url: string, name: string | null) => /\.pdf(\?|$)/i.test(url) || 
 const dateLabel = (iso: string) => timeAgo(iso);
 const dateTitle = (iso: string) => new Date(iso).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
-export default function CharacterModal({ characterId, onClose, initialTab }: CharacterModalProps) {
+export default function CharacterModal({ characterId, onClose, initialTab, fallback }: CharacterModalProps) {
   const v = useCrisis();
-  const char = v.core.characters.find((c) => c.id === characterId) ?? null;
+  const char = v.core.characters.find((c) => c.id === characterId) ?? fallback ?? null;
   if (!char) return null;
   return <ModalBody char={char} onClose={onClose} initialTab={initialTab} />;
 }
@@ -65,7 +71,12 @@ function ModalBody({ char, onClose, initialTab }: { char: Character; onClose: ()
   const gone = char.status === 'dead' || char.status === 'arrested';
 
   // A delegate sees only the profile of any character who is not their own: never their directives or performance.
-  const restricted = v.role === 'delegate' && v.characterId !== char.id;
+  const restricted = (v.role === 'delegate' || v.role === 'press') && v.characterId !== char.id;
+  // What a delegate may read of someone else: the Crisis Director's choice for other cabinets (names or profiles);
+  // never powers, the guide or a status note. Their own cabinet shows the profile as the Cabinet page does.
+  const sameCabinet = !!v.cabinetId && char.cabinet_id === v.cabinetId;
+  const profileVisible = !restricted || sameCabinet || v.settings.otherCabinets === 'profiles';
+  const canSeeNotes = v.staff || v.role === 'chair';
   const [tab, setTab] = useState<Tab>(restricted ? 'profile' : (initialTab ?? 'profile'));
   const [step, setStep] = useState<Step>({ kind: 'main' });
   const [busy, setBusy] = useState(false);
@@ -122,13 +133,12 @@ function ModalBody({ char, onClose, initialTab }: { char: Character; onClose: ()
   // Escape goes back a step, then closes. A dropdown inside closes first.
   const stepRef = useRef(step);
   const closeRef = useRef(onClose);
+  useScrollLock();
   useEffect(() => { stepRef.current = step; closeRef.current = onClose; });
   useEffect(() => {
     const el = panel.current;
     const before = document.activeElement as HTMLElement | null;
     el?.focus();
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       if (document.querySelector('[data-gsel-popover]') || e.defaultPrevented) return;
@@ -136,7 +146,7 @@ function ModalBody({ char, onClose, initialTab }: { char: Character; onClose: ()
       else closeRef.current();
     };
     document.addEventListener('keydown', onKey);
-    return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = prev; before?.focus?.(); };
+    return () => { document.removeEventListener('keydown', onKey); before?.focus?.(); };
   }, []);
 
   const mine = useMemo(() => {
@@ -324,7 +334,7 @@ function ModalBody({ char, onClose, initialTab }: { char: Character; onClose: ()
                 <div className="flex items-baseline flex-wrap" style={{ gap: '2px 10px' }}>
                   <h2 style={{ margin: 0, fontSize: 20, lineHeight: 1.2, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{char.name}</h2>
                   {char.title && <span style={{ fontSize: 14, fontWeight: 600, color: CK.inkSoft, overflowWrap: 'anywhere' }}>{char.title}</span>}
-                  {char.location && (
+                  {char.location && profileVisible && (
                     <span className="inline-flex items-center" style={{ gap: 4, fontSize: 13, color: CK.inkSoft, overflowWrap: 'anywhere' }}>
                       <MapPin size={14} strokeWidth={1.5} aria-hidden style={{ color: CK.red, flex: 'none' }} />{char.location}
                     </span>
@@ -344,7 +354,7 @@ function ModalBody({ char, onClose, initialTab }: { char: Character; onClose: ()
                     <span style={{ minWidth: 150 }}>
                       <GSelect size="sm" value={char.status} onChange={(s) => { void patch({ status: s as CharacterStatus }, 'Status changed'); }} options={statusOptions} aria-label="Status" />
                     </span>
-                  ) : (
+                  ) : restricted && !sameCabinet ? null : (
                     <span className="inline-flex items-center" style={{ gap: 5, fontSize: 13, fontWeight: 700, color: statusColor(char.status) }}>
                       <StatusIcon status={char.status} size={15} />{STATUS_WORD[char.status]}
                       {char.status_note && <span style={{ fontWeight: 500, color: CK.inkSoft, overflowWrap: 'anywhere' }}>{`· ${char.status_note}`}</span>}
@@ -409,10 +419,10 @@ function ModalBody({ char, onClose, initialTab }: { char: Character; onClose: ()
                     </div>
                   ) : null}
 
-                  <TextBlock label="Bio" editable={canEdit} value={d.bio} onChange={(x) => set('bio', x)} rows={5} empty="No bio yet." />
-                  <TextBlock label="Powers" editable={canEdit} value={d.powers} onChange={(x) => set('powers', x)} rows={3} empty="No special powers." />
+                  {profileVisible && <TextBlock label="Bio" editable={canEdit} value={d.bio} onChange={(x) => set('bio', x)} rows={5} empty="No bio yet." />}
+                  {!restricted && <TextBlock label="Powers" editable={canEdit} value={d.powers} onChange={(x) => set('powers', x)} rows={3} empty="No special powers." />}
 
-                  <div>
+                  {profileVisible && <div>
                     <FieldLabel htmlFor="cm-location">Location</FieldLabel>
                     {canEdit ? (
                       <div className="flex items-center gap-2 flex-wrap">
@@ -430,10 +440,10 @@ function ModalBody({ char, onClose, initialTab }: { char: Character; onClose: ()
                         <CharacterSpotSnippet picture={char.picture_url} lng={char.location_lng as number} lat={char.location_lat as number} />
                       </div>
                     )}
-                  </div>
+                  </div>}
 
                   {/* The character guide: one clickable tile. */}
-                  {char.guide_url ? (
+                  {restricted ? null : char.guide_url ? (
                     <div>
                       <button
                         type="button"
@@ -531,7 +541,7 @@ function ModalBody({ char, onClose, initialTab }: { char: Character; onClose: ()
               )}
 
               {step.kind === 'main' && !restricted && tab === 'performance' && (
-                <CharacterPerformance crisisRef={ref} char={char} cabinet={cab} points={points} directives={mine} meetings={meetings} loading={dirs === null} staff={v.staff} />
+                <CharacterPerformance crisisRef={ref} char={char} cabinet={cab} cabinets={core.cabinets} canSeeNotes={canSeeNotes} points={points} directives={mine} meetings={meetings} loading={dirs === null} staff={v.staff} />
               )}
             </div>
 

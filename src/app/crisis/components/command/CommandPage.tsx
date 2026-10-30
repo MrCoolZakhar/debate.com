@@ -16,8 +16,8 @@ import { loadLastChanges } from './commandData';
 import { ApprovalCard, CommandHeader, LinkBtn } from './commandParts';
 import { ResourcesStrip } from './commandResources';
 import { DirectiveDrawer, WaitingCard } from './commandQueue';
-import RebalanceLine from './commandRebalance';
-import { FrontRoomsCard } from './commandRooms';
+import { NeedsAttentionCard } from './commandAttention';
+import { FrontRoomsCard, useRoomStates } from './commandRooms';
 import StatsDialog, { StatsButton } from './commandStats';
 
 const WarMap = dynamic(() => import('../map/WarMap'), {
@@ -25,15 +25,14 @@ const WarMap = dynamic(() => import('../map/WarMap'), {
   loading: () => <Skeleton h={300} r={16} />,
 });
 
-// Layout (owner, 27 Oct 2026, asked twice: "it's not on one page anymore"). From 1100px wide the page is EXACTLY the
+// Layout (owner, 27 Oct 2026, asked three times: "it's not on one page anymore"). From 1100px wide the page is EXACTLY the
 // screen under the top bar and never scrolls: the page is a flex column (header strip, then the grid filling the rest).
-// Left: Waiting for a Reply (tall, its list scrolls inside) over Needs Your Approval. Middle: the Map card filling
-// the height, with Cabinet Resources as a taller strip directly under it (about a third of the column). Right: the wide
-// Front Rooms column, whose tiles share its height so every room is always visible (no scrolling; short tiles drop
-// their small rows). Under the grid sits at most ONE plain line (the backroom rebalance suggestion), part of the flex
-// column, so the grid just gets that much shorter. Every card in a column shares the column's height exactly (flex,
-// min-height 0), so there are no empty bands and no gaps around the map. Below 1100px the cards stack and the page scrolls.
-// Height maths: 56px top bar + 4px main top padding + 18px main bottom padding = 78px, plus 2px of slack.
+// Left: Waiting for a Reply (tall, its list scrolls inside) over Needs Your Approval. Middle: the Map card filling the
+// height, with Cabinet Resources directly under it, as tall as its tinted cabinet bands and no taller. Right: Front Rooms
+// (the organiser's Live Status cards, smaller; they share the card's height and drop their small rows when short) over
+// Needs Attention, which takes whatever is left (meeting requests, the rebalance suggestion, the oldest late directive,
+// a room with no chair). Every card is flex with min-height 0, so there are no empty bands. Below 1100px the cards stack
+// and the page scrolls. Height maths: 56px top bar + 4px main top padding + 18px main bottom padding = 78px, plus 2px of slack.
 const GRID_CSS = `
 .cmd-page { display: flex; flex-direction: column; padding-top: 8px; }
 .cmd-grid { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); grid-template-areas: "map" "needs" "side"; }
@@ -55,9 +54,14 @@ const GRID_CSS = `
   .cmd-scroll { flex: 1 1 0; min-height: 0; overflow-y: auto; padding: 12px 3px 4px; margin: -8px -3px 0; }
   .cmd-approval { flex: 0 1 auto; max-height: 42%; min-height: 96px; }
   .cmd-mapcard { flex: 1 1 0; min-height: 0; height: auto; overflow: hidden; }
-  .cmd-res { flex: 0 0 clamp(168px, 33%, 320px); max-height: none; }
-  .cmd-rooms { flex: 1 1 0; overflow: hidden !important; }
+  .cmd-col > .cmd-res { flex: 0 1 auto; max-height: 44%; }
+  .cmd-col > .cmd-rooms { flex: 0 1 auto; overflow: hidden !important; }
+  .cmd-col > .cmd-attn { flex: 1 0 auto; min-height: 92px; max-height: 46%; }
 }
+/* The map's header: no "See the map as" label (the switch says it), and the title row sits a little higher. */
+.cmd-mapbox .wm-see > span:first-child { display: none; }
+.cmd-mapcard { padding-top: 7px; }
+.cmd-mapbox .wm-root[data-compact] .wm-top { margin-top: -2px; margin-bottom: 5px; }
 `;
 
 export default function CommandPage() {
@@ -72,6 +76,7 @@ export default function CommandPage() {
   const [open, setOpen] = useState<string | null>(null);
   const [stats, setStats] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  const { rooms, failed: roomsFailed } = useRoomStates(ref, core.cabinets);
   const seq = useRef({ d: 0, n: 0, r: 0 });
   const failedOnce = useRef({ d: false, n: false, r: false });
 
@@ -138,7 +143,7 @@ export default function CommandPage() {
 
       <div className="cmd-grid">
         <section className="cmd-col cmd-needs">
-          <WaitingCard directives={directives} base={base} now={now} onOpen={(d) => setOpen(d.id)} />
+          <WaitingCard directives={directives} base={base} now={now} onOpen={(d) => setOpen(d.id)} onChanged={() => { void readDirectives(); }} />
           <ApprovalCard news={news} cabinets={core.cabinets} members={core.members} cref={ref} now={now} onChanged={() => { void readNews(); }} />
         </section>
 
@@ -156,12 +161,19 @@ export default function CommandPage() {
         </section>
 
         <section className="cmd-col cmd-side">
-          <FrontRoomsCard cref={ref} cabinets={core.cabinets} conferenceId={v.conference.id} />
+          <FrontRoomsCard cabinets={core.cabinets} conferenceId={v.conference.id} rooms={rooms} failed={roomsFailed} />
+          <NeedsAttentionCard
+            cref={ref}
+            cabinets={core.cabinets}
+            members={core.members}
+            directives={directives}
+            rooms={rooms}
+            now={now}
+            onOpenDirective={(d) => setOpen(d.id)}
+            onChanged={() => { void readDirectives(); }}
+          />
         </section>
       </div>
-
-      {/* One plain line, only when the backroom load is uneven. */}
-      <RebalanceLine cref={ref} members={core.members} directives={directives} onChanged={() => { void readDirectives(); }} />
 
       {stats && <StatsDialog directives={directives} members={core.members} characters={core.characters} cabinets={core.cabinets} now={now} onClose={() => setStats(false)} />}
       {openDirective && <DirectiveDrawer directive={openDirective} directives={directives} onSelect={setOpen} onClose={closeDrawer} />}

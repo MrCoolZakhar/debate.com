@@ -9,6 +9,7 @@ import { useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { Lock } from 'lucide-react';
 import { OUTCOME_LABEL, type Character, type Directive, type DirectiveNote } from '@/lib/crisis/types';
 import { Avatar, CK, cabinetTint } from '../../crisisKit';
+import { CharacterLink, CharacterName } from '../character/CharacterProfileHost';
 import { whenLabel, whenTitle } from '../delegate/directiveUi';
 import { StaffPic } from './directiveParts';
 import { OUTCOME_STYLE, memberName, type Names } from './directiveKit';
@@ -30,6 +31,8 @@ interface Item {
   tag?: string;
   /** What staff see after the bubble (who answered). */
   foot?: string;
+  /** The character who wrote it (their name opens their profile). */
+  charId?: string;
 }
 
 function Bubble({ item, accent }: { item: Item; accent: string }) {
@@ -48,7 +51,7 @@ function Bubble({ item, accent }: { item: Item; accent: string }) {
         ...(!staff && item.key === 'directive' ? { boxShadow: `inset 4px 0 0 ${accent}, ${CK.shadowSm}` } : null),
       }}>
         <p className="flex items-center flex-wrap" style={{ margin: 0, gap: '1px 7px', fontSize: 11.5, fontWeight: 700, color: staff ? CK.forest : CK.red }}>
-          <span style={{ overflowWrap: 'anywhere' }}>{item.who}</span>
+          <span style={{ overflowWrap: 'anywhere' }}>{item.charId ? <CharacterName id={item.charId}>{item.who}</CharacterName> : item.who}</span>
           {item.internal && (
             <span className="inline-flex items-center" style={{ gap: 3, color: CK.goldDeep }}><Lock size={11} strokeWidth={1.8} aria-hidden />Only staff</span>
           )}
@@ -83,16 +86,17 @@ export default function DirectiveThread({ d, notes, names, who, character, accen
   const endRef = useRef<HTMLDivElement>(null);
 
   const items = useMemo<Item[]>(() => {
-    const authorPic = <Avatar name={who} src={character?.picture_url} size={30} color={accent} />;
+    const authorAvatar = <Avatar name={who} src={character?.picture_url} size={30} color={accent} />;
+    const authorPic = character ? <CharacterLink id={character.id} style={{ borderRadius: '50%', lineHeight: 0 }}>{authorAvatar}</CharacterLink> : authorAvatar;
     const t0 = new Date(d.created_at).getTime();
-    const out: Item[] = [{ key: 'directive', side: 'delegate', at: d.created_at, sort: t0, who, pic: authorPic, body: d.body, tag: 'Directive' }];
+    const out: Item[] = [{ key: 'directive', side: 'delegate', at: d.created_at, sort: t0, who, pic: authorPic, body: d.body, tag: 'Directive', charId: character?.id }];
     for (const n of notes ?? []) {
       const fromAuthor = !n.internal && !!n.member_id && n.member_id === d.author_member_id;
       const member = n.member_id ? names.members.get(n.member_id) : undefined;
       out.push({
         key: n.id, side: fromAuthor ? 'delegate' : 'staff', at: n.created_at, sort: new Date(n.created_at).getTime(),
         who: fromAuthor ? who : memberName(n.member_id, names, 'Staff'),
-        pic: fromAuthor ? authorPic : <StaffPic member={member} size={30} />,
+        pic: fromAuthor ? authorPic : <StaffPic member={member} size={30} />, charId: fromAuthor ? character?.id : undefined,
         body: n.body, internal: n.internal, tag: !fromAuthor && !n.internal ? 'Seen by the delegate' : undefined,
       });
     }
@@ -105,7 +109,7 @@ export default function DirectiveThread({ d, notes, names, who, character, accen
       });
     }
     return (skipDirective ? out.filter((x) => x.key !== 'directive') : out).sort((a, b) => a.sort - b.sort);
-  }, [d, notes, names, who, character?.picture_url, accent, skipDirective]);
+  }, [d, notes, names, who, character, accent, skipDirective]);
 
   // A new message scrolls into view (not on the first paint of a thread that is only the directive).
   const count = items.length;

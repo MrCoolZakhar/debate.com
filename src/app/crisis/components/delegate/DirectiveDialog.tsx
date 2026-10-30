@@ -12,6 +12,7 @@ import { addNote, crisisError, type CrisisRef } from '@/lib/crisis/api';
 import { dirNumber } from '@/lib/crisis/format';
 import { OUTCOME_LABEL, type Directive, type DirectiveNote } from '@/lib/crisis/types';
 import { Btn, cabinetTint, CK, fieldStyle, ThemeTag } from '../../crisisKit';
+import { CharacterName } from '../character/CharacterProfileHost';
 import CrisisDialog from './CrisisDialog';
 import type { PersonRef } from './MyDirectives';
 import { KIND_WORD, kindIcon, outcomeColor, outcomeIcon, statusColor, statusIcon, STATUS_WORDS, whenLabel, whenTitle } from './directiveUi';
@@ -117,8 +118,8 @@ export default function DirectiveDialog({
       <div style={{ padding: '12px 22px 0' }}>
         <p className="flex flex-wrap items-center gap-x-4 gap-y-1" style={{ margin: 0, fontSize: 13.5, color: CK.inkSoft }}>
           {d.receiver && <span><b style={{ color: CK.ink }}>To:</b> {d.receiver}</span>}
-          <span><b style={{ color: CK.ink }}>From:</b> {author.name}</span>
-          {withNames.length > 0 && <span><b style={{ color: CK.ink }}>Signed with:</b> {withNames.join(', ')}</span>}
+          <span><b style={{ color: CK.ink }}>From:</b> <CharacterName name={author.name} /></span>
+          {withNames.length > 0 && <span><b style={{ color: CK.ink }}>Signed with:</b> {withNames.map((n, i) => <span key={`${n}-${i}`}>{i > 0 ? ', ' : ''}<CharacterName name={n} /></span>)}</span>}
         </p>
         {d.themes.length > 0 && (
           <span className="flex flex-wrap gap-1.5" style={{ marginTop: 8 }}>{d.themes.map((t) => <ThemeTag key={t} theme={t} size="md" />)}</span>

@@ -6,7 +6,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { Info, Lock, X } from 'lucide-react';
 import Portal from '@/components/Portal';
-import { Btn, Card, CK, Eyebrow } from '../../crisisKit';
+import { Btn, Card, CK, Eyebrow, useScrollLock } from '../../crisisKit';
 import type { Member } from '@/lib/crisis/types';
 
 // ─────────── Who may change things ───────────
@@ -151,6 +151,7 @@ export function Drawer({ title, sub, onClose, children, footer }: {
   title: string; sub?: string; onClose: () => void; children: ReactNode; footer?: ReactNode;
 }) {
   const panel = useRef<HTMLDivElement>(null);
+  useScrollLock();
   useEffect(() => {
     panel.current?.focus();
     const onKey = (e: KeyboardEvent) => {

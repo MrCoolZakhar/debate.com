@@ -4,6 +4,7 @@
 // section in EffectsPanel.
 
 import type { AnswerEffects } from '@/lib/crisis/api';
+import { isEmptySet } from '../map/mapEdits';
 import type { EffectsDraft } from './replyDraft';
 
 /** What the signed-in staffer may change from a reply (the director may change everything). */
@@ -29,6 +30,8 @@ export function effectsToAnswer(effects: EffectsDraft, powers: ReplyPowers): Ans
     const rows = Object.entries(effects.regions).map(([key, owner]) => ({ key, owner_cabinet_id: owner }));
     if (rows.length) out.regions = rows;
   }
+  // Border changes and drawn territory ride in the answer as one edit set, applied in the same transaction.
+  if (powers.map && !isEmptySet(effects.map)) out.map = effects.map as object;
   const chars = Object.entries(effects.characters).map(([id, c]) => ({ id, status: c.status, status_note: c.note.trim() || null }));
   if (chars.length) out.characters = chars;
   const n = effects.news;

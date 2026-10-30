@@ -5,6 +5,7 @@ import { useMemo, type ReactNode } from 'react';
 import { Ban, CalendarCheck, CircleCheck, Hourglass, XCircle, type LucideIcon } from 'lucide-react';
 import type { Cabinet, Character, Meeting, MeetingStatus, Member } from '@/lib/crisis/types';
 import { Avatar, CK } from '../../crisisKit';
+import { CharacterName } from '../character/CharacterProfileHost';
 
 export interface Person { id: string; name: string; picture_url: string | null; cabinet_id: string | null }
 
@@ -82,5 +83,11 @@ export function Fact({ label, children }: { label: string; children: ReactNode }
 }
 
 export function NameList({ ids, people }: { ids: string[]; people: Map<string, Person> }) {
-  return <>{ids.map((id) => people.get(id)?.name ?? 'Unknown').join(', ')}</>;
+  return (
+    <>
+      {ids.map((id, i) => (
+        <span key={id}>{i > 0 ? ', ' : ''}<CharacterName id={id} name={people.get(id)?.name ?? 'Unknown'} /></span>
+      ))}
+    </>
+  );
 }

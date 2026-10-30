@@ -1,0 +1,15 @@
+-- Gavelling Crisis, part 20 (applied 30 Oct 2026 as crisis_part20_map_set_drafts_drafting_answer_news).
+-- 1. crisis_apply_map_set(p_crisis, p_set jsonb): one transaction for a whole map edit set
+--    {regions:[{key,owner_cabinet_id,geometry}], shapes:[{id,geometry}], owners:[{id,owner_cabinet_id}], removeShapes:[id],
+--     addShapes:[{kind,owner_cabinet_id,label,color,geometry,public,revealed_to}], units:[{id,lng,lat,strength,sight_km}]}
+--    -> {ok, added:[new shape ids]}. Map parts need crisis_can 'map', unit parts 'units'.
+-- 2. crisis_map_drafts (crisis_id pk, payload jsonb, updated_by, updated_at): the crisis team's shared, unsent map draft.
+--    Staff read; map or units power writes; pinged like the other crisis tables.
+-- 3. crisis_directives.drafting_member / drafting_at + crisis_mark_drafting(p_directive, p_on default true):
+--    a reply typed in the last 5 minutes = someone is on it. Answering clears it.
+-- 4. crisis_answer_directive: news keeps attachment_url / attachment_name and is published at once when the person may
+--    publish (director, or news power without approval) -> news_published; effects.map (an edit set as in 1) is applied
+--    in the same transaction -> map.
+-- Test data (30 Oct 2026): the Presidium got its own conference committee "Soviet Presidium" (its 5 slots moved from the
+-- Joint Crisis committee, which now holds ExComm's 7) and room 3CB468; ExComm's room is on the GSL with Kennedy on the
+-- floor and four waiting, the Presidium's room is in a 60-minute unmoderated caucus.

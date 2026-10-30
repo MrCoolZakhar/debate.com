@@ -37,9 +37,8 @@ export interface EffectsDraft {
   characters: Record<string, { status: CharacterStatus; note: string }>;
   news: NewsStage | null;
   /**
-   * Changes to the map's territories made on the map editor: country outlines and holders, drawn areas. Edited
-   * outlines cannot ride in the answer itself (it carries holders only), so they are saved right after the reply
-   * is sent (useDirectiveReply).
+   * Changes to the map's territories made on the big map: country outlines and holders, drawn areas. They go out
+   * inside the answer itself (effects.map), applied by the database in the same transaction.
    */
   map: EditSet | null;
 }

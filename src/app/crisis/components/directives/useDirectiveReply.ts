@@ -5,10 +5,9 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
-import { answerDirective, crisisError, publishNews, saveNews, type CrisisRef } from '@/lib/crisis/api';
+import { answerDirective, crisisError, markDrafting, type CrisisRef } from '@/lib/crisis/api';
 import type { Directive, DirectiveOutcome } from '@/lib/crisis/types';
 import { effectsToAnswer, type ReplyPowers } from './ReplyActions';
-import { isEmptySet, saveSet } from '../map/mapEdits';
 import { emptyEffects, readReplyDraft, writeReplyDraft, type EffectsDraft } from './replyDraft';
 
 export interface DirectiveReply {
@@ -30,10 +29,12 @@ export interface DirectiveReply {
 /**
  * The reply being written. NOTHING reaches the crisis until send(): not the outcome, not the text, not a
  * single staged change (resources, units, borders, characters, a newsflash). The only things written
- * earlier are internal notes and who the directive is with, both from the composer and the facts bar.
- * canPublishNews: the signed-in staffer may publish a story at once (the director, or backroom news without approval).
+ * earlier are internal notes, who the directive is with, and the "being written" mark (crisis_mark_drafting: once on
+ * the first keystroke, then at most once a minute while typing, switched off when the draft is emptied or the pop-up
+ * is closed with nothing written). The answer carries the border changes and the newsflash with its file in the same
+ * call, and the database publishes the story itself when this person may.
  */
-export function useDirectiveReply(ref: CrisisRef, d: Directive, who: string, powers: ReplyPowers, onSent: () => void, canPublishNews = false): DirectiveReply {
+export function useDirectiveReply(ref: CrisisRef, d: Directive, who: string, powers: ReplyPowers, onSent: () => void): DirectiveReply {
   const [stored] = useState(() => readReplyDraft(ref.id, d.id));
   const [outcome, setOutcome] = useState<DirectiveOutcome | null>(stored?.outcome ?? null);
   const [reply, setReplyText] = useState(stored?.reply ?? '');
@@ -46,6 +47,15 @@ export function useDirectiveReply(ref: CrisisRef, d: Directive, who: string, pow
   const touched = useRef(false);
   const latest = useRef({ outcome, reply, effects, d });
   useEffect(() => { latest.current = { outcome, reply, effects, d }; });
+  /** When the "being written" mark was last sent (0 = not marked). */
+  const markedAt = useRef(0);
+
+  // Closing the pop-up (or moving to another directive) with nothing written takes the mark off.
+  useEffect(() => () => {
+    if (!markedAt.current || sent.current || latest.current.reply.trim()) return;
+    markedAt.current = 0;
+    markDrafting(ref, latest.current.d.id, false).catch(() => { /* presence only */ });
+  }, [ref]);
 
   // Switching to another directive in the reader unmounts this one: the draft is kept on this device first.
   useEffect(() => () => {
@@ -68,7 +78,20 @@ export function useDirectiveReply(ref: CrisisRef, d: Directive, who: string, pow
   }, [outcome, reply, effects, ref.id, d.id, d.status, d.reply, d.outcome]);
 
   const toggleOutcome = (o: DirectiveOutcome) => { touched.current = true; setOutcome((cur) => (cur === o ? null : o)); setSaved(false); };
-  const setReply = (v: string) => { touched.current = true; setReplyText(v); setSaved(false); };
+  const setReply = (v: string) => {
+    touched.current = true; setReplyText(v); setSaved(false);
+    // Say that a reply is being written: on the first keystroke, then at most once a minute.
+    if (v.trim()) {
+      const t = Date.now();
+      if (!markedAt.current || t - markedAt.current >= 60_000) {
+        markedAt.current = t;
+        markDrafting(ref, d.id, true).catch(() => { /* presence only */ });
+      }
+    } else if (markedAt.current) {
+      markedAt.current = 0;
+      markDrafting(ref, d.id, false).catch(() => { /* presence only */ });
+    }
+  };
   const setEffects = (next: EffectsDraft | ((prev: EffectsDraft) => EffectsDraft)) => { touched.current = true; setEffectsState(next); setSaved(false); };
   const startEditing = () => { touched.current = true; setOutcome(d.outcome); setReplyText(d.reply ?? ''); setSaved(false); setEditing(true); };
 
@@ -81,33 +104,10 @@ export function useDirectiveReply(ref: CrisisRef, d: Directive, who: string, pow
       const staged = effectsToAnswer(effects, powers);
       const res = await answerDirective(ref, d.id, outcome, reply.trim(), staged);
       sent.current = true;
+      markedAt.current = 0;
       writeReplyDraft(ref.id, d.id, null);
-      // The answer saves a newsflash as a draft with its picture. The attached file, and publishing, follow here.
-      const n = staged.news;
-      let newsNote: string | null = null;
-      if (n && res?.news_id) {
-        try {
-          if (n.attachment_url) {
-            await saveNews(ref, res.news_id, {
-              title: n.title, body: n.body || n.title, source_label: n.source_label ?? null, audience_cabinet_id: n.audience_cabinet_id ?? null,
-              banner_url: n.banner_url ?? null, attachment_url: n.attachment_url, attachment_name: n.attachment_name ?? null,
-            });
-          }
-          if (canPublishNews) await publishNews(ref, res.news_id);
-          else newsNote = 'The newsflash waits on the News page for the Crisis Director to publish.';
-        } catch (e) {
-          newsNote = crisisError(e, 'The reply was sent, but the newsflash could not be finished. Open it on the News page.');
-        }
-      }
-      // Edited outlines and drawn territory cannot ride in the answer (it carries holders only), so they are saved
-      // now, through the same save the map page uses, and only because the reply was sent.
-      let mapNote: string | null = null;
-      if (powers.map && effects.map && !isEmptySet(effects.map)) {
-        try { await saveSet(ref, effects.map); } catch (e) {
-          mapNote = crisisError(e, 'The reply was sent, but the border changes could not be saved. Make them again on the Map page.');
-        }
-      }
-      const notes = [newsNote, mapNote].filter(Boolean).join(' ');
+      // The database published the story itself when this person may; otherwise it waits for the director.
+      const notes = staged.news && res?.news_published === false ? 'The story waits for the director on the News page.' : '';
       notifyOk(notes ? `Reply sent to ${who}. ${notes}` : `Reply sent to ${who}`, 'crisis-directive');
       setEditing(false);
       setSaved(false);

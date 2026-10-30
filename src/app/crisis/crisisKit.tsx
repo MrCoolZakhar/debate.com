@@ -4,7 +4,7 @@
 // bigger surfaces and some buttons, keep the green accents). Design reference:
 // docs/crisis/design/crisis-dashboard.src.html. Use these pieces on every /crisis page.
 
-import type { CSSProperties, ReactNode, ButtonHTMLAttributes } from 'react';
+import { useEffect, type CSSProperties, type ReactNode, type ButtonHTMLAttributes } from 'react';
 import {
   Swords, Eye, Handshake, Coins, Newspaper, User, Landmark, VenetianMask, CircleDot,
   Ship, Plane, Rocket, Shield, Fuel, ThumbsUp, Users, Package, Banknote, Radio, Wheat, Factory, Flame,
@@ -40,6 +40,46 @@ export const CK = {
   font: 'var(--font-brand), Inter, system-ui, sans-serif',
   pageBg: 'radial-gradient(1100px 620px at 100% -10%, rgba(142,36,36,0.13), transparent 62%), radial-gradient(900px 520px at -10% 110%, rgba(142,36,36,0.08), transparent 60%), #EFE3DA',
 } as const;
+
+// ─────────── Scroll lock for pop-ups ───────────
+// The page behind a pop-up must not scroll (owner, 30 Oct 2026). Every pop-up shell calls useScrollLock().
+// html and body get overflow hidden; the scrollbar's width is added back as padding so nothing jumps; it is
+// ref-counted, so a pop-up opened over another keeps the lock until the last one closes.
+
+let scrollLocks = 0;
+let scrollSaved: { html: string; body: string; pad: string } | null = null;
+
+function lockScroll() {
+  if (typeof document === 'undefined') return;
+  if (scrollLocks++ > 0) return;
+  const html = document.documentElement;
+  const body = document.body;
+  const gap = Math.max(0, window.innerWidth - html.clientWidth);
+  scrollSaved = { html: html.style.overflow, body: body.style.overflow, pad: body.style.paddingRight };
+  if (gap > 0) body.style.paddingRight = `${(parseFloat(getComputedStyle(body).paddingRight) || 0) + gap}px`;
+  html.style.overflow = 'hidden';
+  body.style.overflow = 'hidden';
+}
+
+function unlockScroll() {
+  if (typeof document === 'undefined' || scrollLocks === 0) return;
+  if (--scrollLocks > 0) return;
+  const saved = scrollSaved;
+  scrollSaved = null;
+  if (!saved) return;
+  document.documentElement.style.overflow = saved.html;
+  document.body.style.overflow = saved.body;
+  document.body.style.paddingRight = saved.pad;
+}
+
+/** Locks the page behind a pop-up while it is mounted (or while `active` is true). Safe to nest. */
+export function useScrollLock(active = true): void {
+  useEffect(() => {
+    if (!active) return undefined;
+    lockScroll();
+    return unlockScroll;
+  }, [active]);
+}
 
 /** Colour of a cabinet, with a readable tint for fills. */
 export function cabinetTint(hex: string, alpha = 0.22): string {

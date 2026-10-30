@@ -4,6 +4,7 @@
 // turns it back. "Send back" asks for an optional note in place, inside the card (no pop-up on a pop-up).
 // Below the waiting ones: the cabinet's directives already sent on, with their status.
 
+import { CharacterName } from '../character/CharacterProfileHost';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronUp, Gavel, Send, Undo2 } from 'lucide-react';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
@@ -71,7 +72,7 @@ function Waiting({ d, author, cref, cabinetName, focused, onDone }: {
           <NumberBadge n={dirNumber(d)} style={{ marginTop: 4 }} />
         </div>
         <p style={{ margin: '3px 0 0', fontSize: 12.5, fontWeight: 700, color: CK.inkSoft, overflowWrap: 'anywhere' }}>
-          <span title={author.name}>From {surname(author.name)}</span>
+          <span title={author.name}>From <CharacterName name={author.name}>{surname(author.name)}</CharacterName></span>
           {cabinetName ? ` · ${cabinetName}` : ''}
           <span title={whenTitle(d.created_at)}>{` · ${whenLabel(d.created_at)}`}</span>
         </p>
@@ -132,7 +133,7 @@ function SentRow({ d, author }: { d: Directive; author: Author }) {
           <NumberBadge n={dirNumber(d)} style={{ marginTop: 2 }} />
         </div>
         <p style={{ margin: '2px 0 0', fontSize: 12, fontWeight: 700, color: CK.muted }}>
-          <span title={author.name}>{surname(author.name)}</span>
+          <span title={author.name}><CharacterName name={author.name}>{surname(author.name)}</CharacterName></span>
           <span title={whenTitle(d.created_at)}>{` · ${whenLabel(d.created_at)}`}</span>
         </p>
         <div className="flex items-center flex-wrap" style={{ gap: '2px 12px', marginTop: 3 }}>

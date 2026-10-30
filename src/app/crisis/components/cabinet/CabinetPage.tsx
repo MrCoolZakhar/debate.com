@@ -4,13 +4,13 @@
 // cabinets is the Crisis Director's choice (Settings, otherCabinets): nothing, names and pictures, or
 // full profiles. A delegate never sees another character's directives or performance, only a profile.
 
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { MapPin, ScrollText } from 'lucide-react';
 import type { Cabinet, Character } from '@/lib/crisis/types';
 import { Avatar, Card, CK, OverhangCard } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { STATUS_WORD, StatusIcon, statusColor } from '../character/characterStatus';
-import CrisisDialog from '../delegate/CrisisDialog';
+import { useOpenCharacter } from '../character/CharacterProfileHost';
 
 type Detail = 'names' | 'profiles';
 
@@ -72,48 +72,10 @@ function CharacterCard({ c, color, detail, isYou, showStatus, onOpen }: {
   );
 }
 
-/** One character's profile. Never directives, performance, goals or powers. */
-function ProfileDialog({ c, color, detail, status, onClose }: { c: Character; color: string; detail: Detail; status: boolean; onClose: () => void }) {
-  return (
-    <CrisisDialog title="Profile" onClose={onClose} width={640}>
-      <div className="grid gap-3.5">
-        <OverhangCard name={c.name} src={c.picture_url} color={color} size={84} warm>
-          <div className="min-w-0">
-            <b style={{ display: 'block', fontSize: 22, lineHeight: 1.2, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{c.name}</b>
-            {c.title && <span style={{ display: 'block', marginTop: 2, fontSize: 14.5, fontWeight: 600, color: CK.inkSoft, overflowWrap: 'anywhere' }}>{c.title}</span>}
-            {status && (
-              <span style={{ display: 'block', marginTop: 6, fontSize: 14, fontWeight: 800, color: statusColor(c.status) }}>
-                {STATUS_WORD[c.status]}{c.status_note ? `. ${c.status_note}` : ''}
-              </span>
-            )}
-          </div>
-        </OverhangCard>
-        {detail === 'profiles' && c.location && (
-          <Fact icon={<MapPin size={16} strokeWidth={1.5} aria-hidden />} label="Location">{c.location}</Fact>
-        )}
-        {detail === 'profiles' && c.bio && (
-          <Fact icon={<ScrollText size={16} strokeWidth={1.5} aria-hidden />} label="Bio">{c.bio}</Fact>
-        )}
-      </div>
-    </CrisisDialog>
-  );
-}
-
-function Fact({ icon, label, children }: { icon: React.ReactNode; label: string; children: React.ReactNode }) {
-  return (
-    <section style={{ background: CK.card, borderRadius: 18, boxShadow: CK.shadowSm, padding: '12px 14px' }}>
-      <h3 className="flex items-center gap-2" style={{ margin: 0, fontSize: 13, fontWeight: 800, color: CK.red }}>
-        <span style={{ lineHeight: 0 }}>{icon}</span>{label}
-      </h3>
-      <div style={{ margin: '5px 0 0', fontSize: 14.5, lineHeight: 1.6, color: CK.ink, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{children}</div>
-    </section>
-  );
-}
-
 export default function CabinetPage() {
   const v = useCrisis();
   const { core, cabinetId, characterId, settings } = v;
-  const [openId, setOpenId] = useState<string | null>(null);
+  const openProfile = useOpenCharacter();
   const others: 'hidden' | Detail = settings.otherCabinets;
 
   const own = useMemo(
@@ -128,10 +90,6 @@ export default function CabinetPage() {
       .map((cab) => ({ cab, list: core.characters.filter((c) => c.cabinet_id === cab.id && c.status !== 'spare').sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name)) }))
       .filter((g) => g.list.length > 0);
   }, [core.cabinets, core.characters, cabinetId, others]);
-
-  const open = openId ? core.characters.find((c) => c.id === openId) ?? null : null;
-  const openIsOwn = !!open && !!cabinetId && open.cabinet_id === cabinetId;
-  const openColor = open ? core.cabinets.find((c) => c.id === open.cabinet_id)?.color ?? CK.red : CK.red;
 
   const grid = { display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 230px), 1fr))', columnGap: 12 } as const;
 
@@ -151,7 +109,7 @@ export default function CabinetPage() {
               ) : (
                 <div style={grid}>
                   {own.map((c) => (
-                    <CharacterCard key={c.id} c={c} color={ownCabinet.color} detail="profiles" isYou={c.id === characterId} showStatus onOpen={() => setOpenId(c.id)} />
+                    <CharacterCard key={c.id} c={c} color={ownCabinet.color} detail="profiles" isYou={c.id === characterId} showStatus onOpen={() => openProfile(c.id)} />
                   ))}
                 </div>
               )}
@@ -170,7 +128,7 @@ export default function CabinetPage() {
                 <div style={{ padding: 14 }}>
                   <div style={grid}>
                     {list.map((c) => (
-                      <CharacterCard key={c.id} c={c} color={cab.color} detail={others === 'profiles' ? 'profiles' : 'names'} isYou={false} showStatus={false} onOpen={() => setOpenId(c.id)} />
+                      <CharacterCard key={c.id} c={c} color={cab.color} detail={others === 'profiles' ? 'profiles' : 'names'} isYou={false} showStatus={false} onOpen={() => openProfile(c.id)} />
                     ))}
                   </div>
                 </div>
@@ -180,16 +138,6 @@ export default function CabinetPage() {
         )}
       </div>
 
-      {open && (
-        <ProfileDialog
-          key={open.id}
-          c={open}
-          color={openColor}
-          detail={openIsOwn || others === 'profiles' ? 'profiles' : 'names'}
-          status={openIsOwn}
-          onClose={() => setOpenId(null)}
-        />
-      )}
     </div>
   );
 }

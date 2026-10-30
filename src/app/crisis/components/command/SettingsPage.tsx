@@ -5,7 +5,7 @@
 // single-cabinet crisis) are hidden.
 
 import { useState } from 'react';
-import { Award, MessageSquare, Newspaper, Presentation, ScrollText, ShieldCheck, Siren, UsersRound } from 'lucide-react';
+import { Award, Map as MapIcon, MessageSquare, Newspaper, Presentation, ScrollText, ShieldCheck, Siren, UsersRound } from 'lucide-react';
 import GSelect from '@/components/GSelect';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { crisisError, patchCrisis, patchSettings } from '@/lib/crisis/api';
@@ -94,6 +94,22 @@ function SettingsBody() {
           <ToggleRow title="See all directives" checked={s.backroomPowers.seeAll} onChange={(on) => setPower('seeAll', on)} hint="Off means a backroomer sees only the directives of their own characters." />
           <ToggleRow title="Publish news without approval" checked={s.backroomPowers.news} onChange={(on) => setPower('news', on)} hint="Off means a backroomer's news waits for the Crisis Director." />
         </Card>
+
+        {full && (
+          <Card>
+            <CardTitle icon={<MapIcon size={16} strokeWidth={1.5} />}>Map</CardTitle>
+            <ToggleRow
+              title="Map changes wait until you send them" checked={s.mapChangesWait} onChange={(on) => save('mapChangesWait', on)}
+              hint="On: moves, borders and territory stay in one draft the crisis team shares, until someone presses Send to delegates. Delegates keep seeing the sent map. Off: every change reaches delegates at once."
+            />
+            {joint && (
+              <ToggleRow
+                title="Delegates see other cabinets' characters" checked={s.delegatesSeeOtherCharacters} onChange={(on) => save('delegatesSeeOtherCharacters', on)}
+                hint="Off: delegates see where their own cabinet's characters stand on the map, and no one else's."
+              />
+            )}
+          </Card>
+        )}
 
         <Card>
           <CardTitle icon={<Award size={16} strokeWidth={1.5} />}>Points</CardTitle>

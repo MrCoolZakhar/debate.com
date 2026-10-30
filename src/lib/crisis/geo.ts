@@ -302,6 +302,101 @@ export function cutOverlaps(growth: Multi, owner: string | null, others: Territo
   return out;
 }
 
+// ─────────── Territory belongs to a cabinet ───────────
+// A cabinet's land never overlaps anyone else's. Growing a territory (a new area, a border dragged outward)
+// joins it to the cabinet's own land it touches or overlaps and cuts the new ground out of everybody else's.
+
+export interface ClaimTerr extends TerritoryShape { kind: 'country' | 'area' }
+
+export function intersectM(a: Multi, b: Multi): Multi {
+  if (!a.length || !b.length) return [];
+  return tidy(pc.intersection(a as pcNs.MultiPolygon, b as pcNs.MultiPolygon) as Multi);
+}
+
+/** Drops pieces and holes too small to be land (floating-point dust left by clipping). */
+export function dropSlivers(m: Multi): Multi {
+  const out: Multi = [];
+  for (const poly of m) {
+    if (!poly[0] || Math.abs(ringArea(poly[0])) <= AREA_EPS) continue;
+    out.push([poly[0], ...poly.slice(1).filter((h) => Math.abs(ringArea(h)) > AREA_EPS)]);
+  }
+  return out;
+}
+
+/** True when the two shapes overlap or share an edge (their union is fewer pieces than the two together). */
+export function joins(a: Multi, b: Multi): boolean {
+  if (!a.length || !b.length) return false;
+  const ba = bboxOf(a); const bb = bboxOf(b);
+  if (!ba || !bb || !bboxHit(ba, bb)) return false;
+  return (pc.union(a as pcNs.MultiPolygon, b as pcNs.MultiPolygon) as Multi).length < a.length + b.length;
+}
+
+/** The cabinets (never "nobody") whose territory `land` touches or overlaps. */
+export function ownersTouching(land: Multi, others: ClaimTerr[]): string[] {
+  const out: string[] = [];
+  for (const o of others) {
+    if (!o.owner || out.includes(o.owner) || !o.multi.length) continue;
+    try { if (joins(land, o.multi)) out.push(o.owner); } catch { /* an unreadable shape touches nothing */ }
+  }
+  return out;
+}
+
+/** The cabinet's own territory a new area builds on: the one it overlaps most, else the first it touches. */
+export function pickClaimTarget(land: Multi, owner: string | null, others: ClaimTerr[]): ClaimTerr | null {
+  if (!owner) return null;
+  let best: ClaimTerr | null = null; let bestScore = -1;
+  for (const o of others) {
+    if (o.owner !== owner || !o.multi.length) continue;
+    let score = -1;
+    try { if (joins(land, o.multi)) score = areaOf(intersectM(land, o.multi)); } catch { score = -1; }
+    if (score > bestScore) { best = o; bestScore = score; }
+  }
+  return best;
+}
+
+export interface ClaimPlan {
+  /** The claiming territory's land afterwards. */
+  land: Multi;
+  /** Drawn areas of the same cabinet that were joined into it (to be removed). */
+  absorbed: string[];
+  /** Territories of others that lost land. */
+  cuts: Array<{ id: string; multi: Multi; emptied: boolean }>;
+  /** The ground that is new to the claimer. */
+  gained: Multi;
+}
+
+/**
+ * `growth` is ground the cabinet `owner` just claimed. With a `target` it is that territory's growth; without one
+ * it is a new area. Same-cabinet drawn areas it touches are joined in (when `merge`), same-cabinet countries keep
+ * their own land, and everybody else's territory loses what the growth covers.
+ */
+export function planClaim(growth: Multi, owner: string | null, target: { id: string | null; multi: Multi } | null, others: ClaimTerr[], merge: boolean): ClaimPlan {
+  let gained = dropSlivers(growth);
+  const rest = others.filter((o) => o.id !== target?.id);
+  const mine = owner ? rest.filter((o) => o.owner === owner) : [];
+  const theirs = owner ? rest.filter((o) => o.owner !== owner) : rest;
+  const gb = bboxOf(gained);
+  if (gb) for (const o of mine) {
+    if (o.kind === 'country' && o.bbox && bboxHit(o.bbox, gb)) gained = dropSlivers(differenceM(gained, o.multi));
+  }
+  const base = target?.multi ?? [];
+  let result = !gained.length ? base : base.length ? unionM(base, gained) : clean(gained);
+  const absorbed: string[] = [];
+  if (merge && result.length) {
+    let changed = true; let guard = 0;
+    while (changed && guard++ < 8) {
+      changed = false;
+      for (const o of mine) {
+        if (o.kind !== 'area' || absorbed.includes(o.id) || !o.multi.length) continue;
+        if (joins(result, o.multi)) { result = unionM(result, o.multi); absorbed.push(o.id); changed = true; }
+      }
+    }
+  }
+  result = dropSlivers(result);
+  const cuts = gained.length ? cutOverlaps(gained, owner, theirs) : [];
+  return { land: result, absorbed, cuts, gained };
+}
+
 /** Distance in km between two [lng, lat] points (haversine). */
 export function kmBetween(a: Pt, b: Pt): number {
   const R = 6371;

@@ -3,69 +3,24 @@
 // "Nothing changes yet" and a plus. The plus opens a small menu right inside the panel (Resources,
 // Move a unit, Change a border, A character, Newsflash); each choice adds a CARD that holds that one
 // action's controls and has its own remove X. The plus stays at the bottom, so several characters, unit
-// moves or borders can be added. Every change is STAGED in the reply's draft and summed at the top;
-// nothing is written until Send reply, which applies them all in one call (answerDirective).
+// moves or borders can be added. Every change is STAGED in the reply's draft; the small recap of them sits
+// at the bottom of the panel (EffectsRecap); nothing is written until Send reply, which applies them all in
+// one call (answerDirective). A unit move or a border opens the map full size in place of the whole
+// directive (MapFullView), never a pop-up on top of this one.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Coins, Map as MapIcon, Newspaper, Plus, X, Zap, type LucideIcon } from 'lucide-react';
-import { notifyErr } from '@/lib/appNotify';
-import { crisisError, loadMap, loadResources, type CrisisRef } from '@/lib/crisis/api';
-import { amount as fmtAmount } from '@/lib/crisis/format';
-import { Btn, CK, cabinetTint } from '../../crisisKit';
-import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
-import { applyLocal, diffData, emptySet, setSize, type MapData, type StageOptions } from '../map/mapEdits';
-import WarMap from '../map/WarMap';
-import { loadCountries, type CountryOption } from './countryPick';
-import {
-  BorderCard, CARD_META, CharacterCard, NewsCard, ResourcesCard, STATUS_META, UnitCard, clearCard, place, round2,
-  type CardEnv, type StageData,
-} from './effectCards';
-import type { ReplyPowers } from './ReplyActions';
-import { countChanges, newCardId, type EffectCard, type EffectCardKind, type EffectsDraft } from './replyDraft';
+import { useEffect, useRef, useState } from 'react';
+import { Plus, Zap, type LucideIcon } from 'lucide-react';
+import { CK } from '../../crisisKit';
+import { BorderCard, CARD_META, CharacterCard, NewsCard, ResourcesCard, UnitCard, clearCard, type CardEnv } from './effectCards';
+import { newCardId, type EffectCard, type EffectCardKind } from './replyDraft';
 
 interface MenuItem { kind: EffectCardKind; label: string; Icon: LucideIcon; blocked: string | null }
 
-export default function EffectsPanel({ crisisRef, authorCharacterId, cabinetId, powers, effects, setEffects }: {
-  crisisRef: CrisisRef;
-  authorCharacterId: string | null;
-  cabinetId: string | null;
-  powers: ReplyPowers;
-  effects: EffectsDraft;
-  setEffects: (next: (prev: EffectsDraft) => EffectsDraft) => void;
-}) {
-  const { core } = useCrisis();
-  const [data, setData] = useState<StageData | null>(null);
+export default function EffectsPanel({ env }: { env: CardEnv }) {
+  const { effects, setEffects, powers, authorCharacterId } = env;
   const [menuOpen, setMenuOpen] = useState(false);
-  /** The map editor, shown in place of the cards: the map as it is now with this reply's changes laid over it. */
-  const [editor, setEditor] = useState<MapData | null>(null);
   const justAdded = useRef<string | null>(null);
   const root = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    Promise.all([loadResources(crisisRef), loadMap(crisisRef), loadCountries().catch(() => [] as CountryOption[])])
-      .then(([r, m, countries]) => { if (!cancelled) setData({ types: r.types, resources: r.resources, units: m.units, regions: m.regions, shapes: m.shapes, countries }); })
-      .catch((e) => {
-        if (cancelled) return;
-        setData({ types: [], resources: [], units: [], regions: [], shapes: [], countries: [] });
-        notifyErr(crisisError(e, 'Could not load the resources and the map.'), 'crisis-effects');
-      });
-    return () => { cancelled = true; };
-  }, [crisisRef]);
-
-  const cabById = useMemo(() => new Map(core.cabinets.map((c) => [c.id, c])), [core.cabinets]);
-  const charById = useMemo(() => new Map(core.characters.map((c) => [c.id, c])), [core.characters]);
-  const cabinetColors = useMemo(() => core.cabinets.map((c) => ({ id: c.id, color: c.color })), [core.cabinets]);
-  const typeById = useMemo(() => new Map((data?.types ?? []).map((t, i) => [t.id, { t, i }])), [data]);
-  const countryName = useMemo(() => new Map((data?.countries ?? []).map((c) => [c.key, c.name])), [data]);
-  const baseHolder = useMemo(() => new Map((data?.regions ?? []).map((r) => [r.region_key, r.owner_cabinet_id])), [data]);
-
-  const baseMap = useMemo<MapData | null>(() => (data ? { regions: data.regions, units: data.units, shapes: data.shapes } : null), [data]);
-  const openMap = () => { if (baseMap) setEditor(applyLocal(baseMap, effects.map ?? emptySet(), crisisRef.id)); };
-  const env: CardEnv = {
-    data, powers, effects, setEffects, authorCharacterId, cabinetId, cabinets: core.cabinets, cabById, charById,
-    characters: core.characters, typeById, baseHolder, cabinetColors, openMap,
-  };
 
   // A card that was just added scrolls into view.
   const cardCount = effects.cards.length;
@@ -85,7 +40,6 @@ export default function EffectsPanel({ crisisRef, authorCharacterId, cabinetId, 
     justAdded.current = id;
   };
   const removeCard = (card: EffectCard) => setEffects((e) => ({ ...clearCard(e, card, env), cards: e.cards.filter((c) => c.id !== card.id) }));
-  const retarget = (card: EffectCard, target: string) => setEffects((e) => ({ ...clearCard(e, card, env), cards: e.cards.map((c) => (c.id === card.id ? { ...c, target } : c)) }));
 
   const hasNews = effects.cards.some((c) => c.kind === 'news');
   const hasBorder = effects.cards.some((c) => c.kind === 'border');
@@ -96,56 +50,6 @@ export default function EffectsPanel({ crisisRef, authorCharacterId, cabinetId, 
     { kind: 'character', label: 'A character', Icon: CARD_META.character.Icon, blocked: null },
     { kind: 'news', label: 'Newsflash', Icon: CARD_META.news.Icon, blocked: hasNews ? 'One per reply' : null },
   ];
-
-  // ── the summary ──
-  interface Change { id: string; icon: LucideIcon; text: string; remove: () => void }
-  const changes: Change[] = [];
-  if (data) {
-    for (const [id, delta] of Object.entries(effects.resources)) {
-      const r = data.resources.find((x) => x.id === id);
-      if (!r) continue;
-      const t = typeById.get(r.type_id)?.t;
-      const owner = r.character_id ? charById.get(r.character_id)?.name : cabById.get(r.cabinet_id ?? '')?.name;
-      changes.push({
-        id: `r-${id}`, icon: Coins, text: `${t?.name ?? 'Resource'}${owner ? `, ${owner}` : ''}: ${fmtAmount(r.amount)} to ${fmtAmount(round2(r.amount + delta))}`,
-        remove: () => setEffects((e) => { const resources = { ...e.resources }; delete resources[id]; return { ...e, resources }; }),
-      });
-    }
-    for (const [id, s] of Object.entries(effects.units)) {
-      const u = data.units.find((x) => x.id === id);
-      if (!u) continue;
-      const parts: string[] = [];
-      if (s.lng !== undefined && s.lat !== undefined) parts.push(`moves from ${place(u.lng, u.lat)} to ${place(s.lng, s.lat)}`);
-      if (s.strength !== undefined) parts.push(`amount ${fmtAmount(u.strength)} to ${fmtAmount(s.strength)}`);
-      changes.push({
-        id: `u-${id}`, icon: MapIcon, text: `${u.name}: ${parts.join(', ')}`,
-        remove: () => setEffects((e) => { const units = { ...e.units }; delete units[id]; return { ...e, units }; }),
-      });
-    }
-    if (setSize(effects.map)) {
-      const n = setSize(effects.map);
-      changes.push({
-        id: 'map', icon: MapIcon, text: `Map: ${n} ${n === 1 ? 'territory' : 'territories'} changed`,
-        remove: () => setEffects((e) => ({ ...e, map: null })),
-      });
-    }
-    for (const [key, owner] of Object.entries(effects.regions)) {
-      changes.push({
-        id: `b-${key}`, icon: MapIcon, text: `${countryName.get(key) ?? 'A country'}: held by ${owner ? (cabById.get(owner)?.name ?? 'a cabinet') : 'nobody'}`,
-        remove: () => setEffects((e) => { const regions = { ...e.regions }; delete regions[key]; return { ...e, regions }; }),
-      });
-    }
-  }
-  for (const [id, c] of Object.entries(effects.characters)) {
-    changes.push({
-      id: `c-${id}`, icon: STATUS_META[c.status].Icon, text: `${charById.get(id)?.name ?? 'A character'}: ${STATUS_META[c.status].label.toLowerCase()}`,
-      remove: () => setEffects((e) => { const characters = { ...e.characters }; delete characters[id]; return { ...e, characters }; }),
-    });
-  }
-  if (effects.news && effects.news.title.trim()) {
-    changes.push({ id: 'news', icon: Newspaper, text: `News: ${effects.news.title.trim()}`, remove: () => setEffects((e) => ({ ...e, news: null })) });
-  }
-  const total = countChanges(effects);
   const empty = effects.cards.length === 0;
 
   const addMenu = (
@@ -176,63 +80,20 @@ export default function EffectsPanel({ crisisRef, authorCharacterId, cabinetId, 
     </div>
   );
 
-  if (editor && baseMap) {
-    const stage: StageOptions = {
-      kind: 'border', data: editor, canUnits: false, canMap: powers.map, height: 400,
-      onData: (d) => setEffects((e) => {
-        const set = diffData(baseMap, d);
-        return { ...e, map: setSize(set) ? set : null };
-      }),
-    };
-    const n = setSize(effects.map);
-    return (
-      <div className="flex flex-col" style={{ gap: 10, fontFamily: CK.font }}>
-        <div className="flex items-center" style={{ gap: 10 }}>
-          <Btn tone="ghost" size="sm" icon={<ArrowLeft size={15} strokeWidth={1.5} />} onClick={() => setEditor(null)}>Back</Btn>
-          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: CK.ink }}>Change a Border</h3>
-        </div>
-        <p style={{ margin: 0, fontSize: 13, color: CK.muted, lineHeight: 1.45 }}>
-          {n ? `${n} ${n === 1 ? 'territory' : 'territories'} will change when you send the reply.` : 'Nothing changes yet.'} The real borders stay visible underneath.
-        </p>
-        <WarMap stage={stage} />
-      </div>
-    );
-  }
-
   return (
     <div ref={root} className="flex flex-col" style={{ gap: 12, fontFamily: CK.font }}>
-      {/* What will apply */}
-      <section aria-live="polite" className="flex flex-col" style={{ gap: 10, background: total ? cabinetTint(CK.red, 0.06) : CK.card, borderRadius: 18, padding: '12px 13px', boxShadow: total ? `inset 0 0 0 1px ${cabinetTint(CK.red, 0.22)}` : CK.shadowSm }}>
-        <p className="flex items-center" style={{ margin: 0, gap: 8 }}>
-          <Zap size={18} strokeWidth={1.5} aria-hidden style={{ color: CK.red }} />
-          <b style={{ fontSize: 15, color: CK.ink }}>
-            {empty ? 'Nothing changes yet' : total === 0 ? 'No changes yet' : total === 1 ? '1 change will apply' : `${total} changes will apply`}
-          </b>
-        </p>
-        {changes.length > 0 && (
-          <ul className="flex flex-col" style={{ listStyle: 'none', margin: 0, padding: 0, gap: 5 }}>
-            {changes.map((c) => {
-              const I = c.icon;
-              return (
-                <li key={c.id} className="flex items-center" style={{ gap: 8, background: CK.card, borderRadius: 11, padding: '5px 5px 5px 10px', boxShadow: `inset 0 0 0 1px ${CK.hair}` }}>
-                  <I size={15} strokeWidth={1.5} aria-hidden style={{ color: CK.red, flex: 'none' }} />
-                  <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 600, color: CK.ink, overflowWrap: 'anywhere' }}>{c.text}</span>
-                  <button type="button" onClick={c.remove} aria-label={`Remove: ${c.text}`} title="Remove this change"
-                    className="grid place-items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
-                    style={{ width: 24, height: 24, borderRadius: 8, border: 0, background: CK.well, color: CK.ink, cursor: 'pointer', flex: 'none' }}>
-                    <X size={13} strokeWidth={1.8} />
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-        {empty && addMenu}
-      </section>
+      {empty && (
+        <section className="flex flex-col" style={{ gap: 10, background: CK.card, borderRadius: 18, padding: '12px 13px', boxShadow: CK.shadowSm }}>
+          <p className="flex items-center" style={{ margin: 0, gap: 8 }}>
+            <Zap size={18} strokeWidth={1.5} aria-hidden style={{ color: CK.red }} />
+            <b style={{ fontSize: 15, color: CK.ink }}>Nothing changes yet</b>
+          </p>
+          {addMenu}
+        </section>
+      )}
 
-      {/* The cards */}
       {effects.cards.map((card) => {
-        const common = { card, env, onTarget: (t: string) => retarget(card, t), onRemove: () => removeCard(card) };
+        const common = { card, env, onTarget: (t: string) => env.retarget(card, t), onRemove: () => removeCard(card) };
         return (
           <div key={card.id} data-card={card.id}>
             {card.kind === 'resources' && <ResourcesCard {...common} />}

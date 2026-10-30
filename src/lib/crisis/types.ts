@@ -30,6 +30,10 @@ export interface CrisisSettings {
   /** A cabinet directive waits for its cabinet's chair before the backroom sees it (docs/crisis/sql/017). */
   chairApprovesCabinetDirectives: boolean;
   queueOrder: 'fair' | 'oldest' | 'newest';
+  /** Staff map edits wait in a shared draft until someone presses Send to delegates (docs/crisis/sql/020). */
+  mapChangesWait: boolean;
+  /** Delegates also see where the other cabinets' characters stand on the map. Their own cabinet's are always shown. */
+  delegatesSeeOtherCharacters: boolean;
 }
 
 export const DEFAULT_SETTINGS: CrisisSettings = {
@@ -43,6 +47,8 @@ export const DEFAULT_SETTINGS: CrisisSettings = {
   chairReadsPersonal: false,
   chairApprovesCabinetDirectives: true,
   queueOrder: 'fair',
+  mapChangesWait: true,
+  delegatesSeeOtherCharacters: false,
 };
 
 export function readSettings(raw: unknown): CrisisSettings {
@@ -176,6 +182,9 @@ export interface Directive {
   answered_by: string | null;
   waiting_since: string;
   word_count: number;
+  /** Who is typing a reply right now, and when they last typed (docs/crisis/sql/020). Within 5 minutes = being written. */
+  drafting_member?: string | null;
+  drafting_at?: string | null;
   created_at: string;
   updated_at: string;
 }
