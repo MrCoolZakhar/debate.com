@@ -35,8 +35,9 @@ const NOINDEX_ROUTES = [
 // ── Memory caps for local machines only (21 Oct 2026) ────────────────────────
 // On Peter's 8 GB MacBook one `next dev` (turbopack) grew to 8.1 GB, build
 // workers added more, and the Mac kernel-panicked with swap exhausted. Locally,
-// turbopack gets a 3 GB memory target (a soft target: it evicts cached work
-// past it, so it gets slower, never stops) and `next build` uses 2 workers
+// turbopack gets a 2 GB memory target (a soft target: it evicts cached work
+// past it, so it gets slower, never stops; it was 3 GB until 30 Oct 2026, when
+// dev servers still reached 3.2 to 3.9 GB) and `next build` uses 2 workers
 // instead of one per core. Vercel and CI set VERCEL / CI, so production builds
 // are unchanged.
 const LOCAL_MACHINE = !process.env.VERCEL && !process.env.CI;
@@ -44,7 +45,7 @@ const LOCAL_MACHINE = !process.env.VERCEL && !process.env.CI;
 const nextConfig: NextConfig = {
   ...(LOCAL_MACHINE && {
     experimental: {
-      turbopackMemoryLimit: 3 * 1024 ** 3,
+      turbopackMemoryLimit: 2 * 1024 ** 3,
       cpus: 2,
     },
   }),
