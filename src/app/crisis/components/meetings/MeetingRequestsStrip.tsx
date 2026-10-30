@@ -16,10 +16,11 @@ import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { crisisError, decideMeeting, listMeetings, loadWorld, type CrisisRef } from '@/lib/crisis/api';
 import { useCrisisLive } from '@/lib/crisis/live';
 import type { Cabinet, Meeting, Member } from '@/lib/crisis/types';
-import { Btn, CK, fieldStyle, waitLabel } from '../../crisisKit';
+import { Btn, CK, fieldStyle, agoLabel } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { CharacterName } from '../character/CharacterProfileHost';
 import { AvatarStack, NameList, requesterName, usePeople, whenText, type Person } from './meetingKit';
+import { serverNow } from '@/lib/serverClock';
 
 /** The pending requests (newest asked last, so the longest wait is first), live. null while the first read runs. */
 export function usePendingMeetings(ref: CrisisRef, enabled: boolean): { pending: Meeting[] | null; reload: () => Promise<void> } {
@@ -87,7 +88,7 @@ function Row({ m, refx, people, cabinets, members, canDecide, compact, now, onDe
           </p>
           <p style={{ margin: '2px 0 0', fontSize: 12.5, color: CK.inkSoft, lineHeight: 1.4, overflowWrap: 'anywhere' }}>{m.intention}</p>
           <p style={{ margin: '3px 0 0', fontSize: 12, fontWeight: 700, color: CK.muted, fontVariantNumeric: 'tabular-nums' }}>
-            {m.duration_minutes} min · {whenText(m)} · asked {waitLabel(m.created_at, now)}{waitLabel(m.created_at, now) === 'just now' ? '' : ' ago'}
+            {m.duration_minutes} min · {whenText(m)} · asked {agoLabel(m.created_at, now)}
           </p>
         </div>
         {canDecide && !declining && (
@@ -147,8 +148,8 @@ export default function MeetingRequestsStrip({ compact = false, bottomGap = 0 }:
   const canDecide = useCanDecideMeeting();
   const mayLook = staff || role === 'chair';
   const { pending, reload } = usePendingMeetings(ref, mayLook);
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => { const t = window.setInterval(() => setNow(Date.now()), 30_000); return () => window.clearInterval(t); }, []);
+  const [now, setNow] = useState(() => serverNow());
+  useEffect(() => { const t = window.setInterval(() => setNow(serverNow()), 30_000); return () => window.clearInterval(t); }, []);
   const list = useMemo(() => pending ?? [], [pending]);
   if (!mayLook || list.length === 0) return null;
 

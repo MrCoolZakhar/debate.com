@@ -1,21 +1,20 @@
 'use client';
 // Gavelling Crisis: the Performance tab of the character pop-up.
 //
-// Two headline numbers (owner, 30 Oct 2026), each with a hover breakdown:
-//   SPEAKING TIME     from the character's seat in the front-room session, summed exactly as a regular session
-//                     sums it (the session scoreboard row: GSL and caucus speeches, one ledger).
-//   DIRECTIVES SENT   every directive the character took part in, written or co-signed, with how each was answered.
-// Below them the SAME stats a chair or organiser sees for a delegation in a regular session: the session
-// scoreboard's DelegateProfile (points by source, ratings, the timeline of speeches and events), built by the
-// same functions from the character's seat. Chair notes and ratings are private to staff and chairs; everyone
-// else sees the numbers only. Then the crisis points and meetings.
+// ONE total (owner, 30 Oct 2026): the points from the committee room (the regular session scoring of the character's seat:
+// speeches, speaking time, motions, documents, summed exactly as a session sums them) plus the points from outside the
+// room (directives sent and how they were answered, cabinet and joint directives, meetings held; the values are the Crisis
+// Director's, in Settings > Points). One big number, one split bar, ONE breakdown that lists both parts, and the sentence
+// that says how points are given. The maths is src/lib/crisis/performance.ts; Statistics on Command ranks on the same total.
+// Below it the SAME record a chair or organiser sees for a delegation in a regular session (the session scoreboard's
+// DelegateProfile: ratings and the timeline of speeches and events). Chair notes and ratings are private to staff and chairs.
 //
 // The seat is the committee-room seat NAMED like the character, looked for in the character's cabinet room first
 // and then in the crisis's other rooms (a character can sit in another cabinet's room). Read only; the room is
 // re-read every 30 seconds while the tab is visible. Nothing here writes.
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Presentation, ScrollText } from 'lucide-react';
+import { ListChecks, Presentation } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { SeatArtProvider } from '@/components/SeatFlag';
 import DelegateProfile from '@/components/scoreboard/DelegateProfile';
@@ -23,40 +22,32 @@ import { getCommitteeByCode, getFeedbackForCommittee, type FeedbackEntry } from 
 import { buildSessionScoreboardRows, sessionPointSlices } from '@/lib/sessionScoreboard';
 import { formatSpeakingTime } from '@/lib/conferenceScoreboard';
 import { motionNames } from '@/lib/committeeFlags';
-import { readStatusHistory, rosterStatusSig, useEverPresent } from '@/lib/attendanceHistory';
+import { readStatusHistory } from '@/lib/attendanceHistory';
+import { everPresentFromHistory } from '@/lib/scoring';
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { rankByHeadline, speechesByCountryOf } from '@/app/manage/[slug]/live/SessionBoard';
 import type { CrisisRef } from '@/lib/crisis/api';
+import { isChairSendBack, isRealDenial } from '@/lib/crisis/format';
 import { getCrisisClient } from '@/lib/crisis/client';
-import type { characterPoints } from '@/lib/crisis/points';
+import { blendPerformance, findSeat, fmtPts, pointsRules, type Blend } from '@/lib/crisis/performance';
+import { readPoints, type characterPoints } from '@/lib/crisis/points';
 import type { Cabinet, Character, Directive, Meeting } from '@/lib/crisis/types';
 import type { Committee } from '@/lib/types';
 import { BigCount, CK, Skeleton } from '../../crisisKit';
+import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
+import { OUT_COLOR, ROOM_COLOR, SplitBar, SplitLegend } from '../command/blendKit';
 
 type Room =
   | { kind: 'loading' }
   | { kind: 'none' }
   | { kind: 'failed' }
   | { kind: 'nobody'; code: string }
-  | { kind: 'ok'; committee: Committee; feedback: FeedbackEntry[]; seat: string };
+  | { kind: 'ok'; committee: Committee; feedback: FeedbackEntry[]; seat: string; everPresent: Set<string> | null };
 
 const REFRESH_MS = 30_000;
 
-const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim().toLowerCase();
-
-/** The seat named like the character: an exact match first, then one name inside the other when only one seat fits. */
-function findSeat(committee: Committee, name: string): string | null {
-  const me = norm(name);
-  if (!me) return null;
-  const seats = committee.delegates.map((d) => d.country);
-  const exact = seats.find((s) => norm(s) === me);
-  if (exact) return exact;
-  const loose = seats.filter((s) => { const n = norm(s); return n.length >= 4 && (n.includes(me) || me.includes(n)); });
-  return loose.length === 1 ? loose[0] : null;
-}
-
 /** Finds the character's seat and reads its room. A failed re-read keeps what is on screen. */
-function useCharacterRoom(ref: CrisisRef, char: Character, cabinets: Cabinet[]): Room {
+function useCharacterRoom(ref: CrisisRef, char: Character, cabinets: Cabinet[], withNotes: boolean): Room {
   const [state, setState] = useState<Room>({ kind: 'loading' });
   // The character's own cabinet first, then the others; a stable key so the effect does not restart on every render.
   const order = useMemo(() => {
@@ -88,8 +79,12 @@ function useCharacterRoom(ref: CrisisRef, char: Character, cabinets: Cabinet[]):
           anyRead = true;
           const seat = findSeat(committee, name);
           if (!seat) continue;
-          const feedback = await getFeedbackForCommittee(committee.id, { code: committee.code, chairSuffix: committee.dbChairJoinSuffix ?? undefined }).catch(() => []);
-          if (alive) setState({ kind: 'ok', committee, feedback, seat });
+          const [feedback, history] = await Promise.all([
+            // Chair notes and ratings are read only for staff and chairs; everyone else never even asks for them.
+            withNotes ? getFeedbackForCommittee(committee.id, { code: committee.code, chairSuffix: committee.dbChairJoinSuffix ?? undefined }).catch(() => []) : Promise.resolve([] as FeedbackEntry[]),
+            getFreshAuthedClient().then((c) => readStatusHistory(c, committee.id)).catch(() => null),
+          ]);
+          if (alive) setState({ kind: 'ok', committee, feedback, seat, everPresent: everPresentFromHistory(history) });
           return;
         }
         if (!anyRead) throw new Error('read');
@@ -104,7 +99,7 @@ function useCharacterRoom(ref: CrisisRef, char: Character, cabinets: Cabinet[]):
     document.addEventListener('visibilitychange', onVisible);
     return () => { alive = false; window.clearTimeout(first); window.clearInterval(poll); document.removeEventListener('visibilitychange', onVisible); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ref, orderKey, name]);
+  }, [ref, orderKey, name, withNotes]);
 
   return state;
 }
@@ -165,28 +160,72 @@ function Hover({ children, rows, label }: { children: ReactNode; rows: Array<{ l
   );
 }
 
-function Headline({ n, word, note }: { n: ReactNode; word: string; note?: string }) {
+/** The one total: a big number, the split bar and what each part is. */
+function TotalCard({ blend, roomKnown, note }: { blend: Blend; roomKnown: boolean; note?: string }) {
   return (
-    <div style={{ background: CK.card, borderRadius: 20, boxShadow: CK.shadowSm, padding: '16px 18px', height: '100%', boxSizing: 'border-box' }}>
+    <div style={{ background: CK.card, borderRadius: 20, boxShadow: CK.shadowSm, padding: '16px 18px', boxSizing: 'border-box' }}>
       <p className="flex items-baseline flex-wrap" style={{ margin: 0, gap: '2px 10px' }}>
-        <b style={{ fontSize: 44, fontWeight: 800, lineHeight: 1, fontVariantNumeric: 'tabular-nums', color: CK.red }}>{n}</b>
-        <span style={{ fontSize: 15, fontWeight: 700, color: CK.ink }}>{word}</span>
+        <b style={{ fontSize: 44, fontWeight: 800, lineHeight: 1, fontVariantNumeric: 'tabular-nums', color: CK.red }}>{fmtPts(blend.total)}</b>
+        <span style={{ fontSize: 15, fontWeight: 700, color: CK.ink }}>{blend.total === 1 ? 'point in total' : 'points in total'}</span>
       </p>
+      <div style={{ margin: '12px 0 10px' }}><SplitBar room={blend.room} out={blend.out} height={12} /></div>
+      <SplitLegend room={roomKnown ? blend.room : null} out={blend.out} />
       {note && <p style={{ margin: '8px 0 0', fontSize: 12.5, color: CK.inkSoft }}>{note}</p>}
     </div>
   );
 }
 
-// ─────────── The committee-room stats, the same as a regular session ───────────
+function GroupHead({ label, color, pts, first }: { label: string; color: string; pts: number | null; first?: boolean }) {
+  return (
+    <div className="flex items-center justify-between gap-3" style={{ padding: '10px 0 6px', borderTop: first ? 0 : `1px solid ${CK.hair}` }}>
+      <span className="inline-flex items-center" style={{ gap: 7, fontSize: 13, fontWeight: 800, color }}>
+        <span aria-hidden style={{ width: 9, height: 9, borderRadius: '50%', background: color, flex: 'none' }} />{label}
+      </span>
+      {pts !== null && <b style={{ fontSize: 15, fontVariantNumeric: 'tabular-nums', color: CK.ink }}>{fmtPts(pts)}</b>}
+    </div>
+  );
+}
 
-function RoomStats({ committee, feedback, seat, showPrivate }: { committee: Committee; feedback: FeedbackEntry[]; seat: string; showPrivate: boolean }) {
+/** ONE breakdown of the one total: the room's lines, then the directive and meeting lines, then the total. */
+function Breakdown({ blend, roomNote }: { blend: Blend; roomNote: string | null }) {
+  const lineStyle = { padding: '7px 0 7px 16px', fontSize: 14 } as const;
+  return (
+    <div style={{ background: CK.card, borderRadius: 18, boxShadow: CK.shadowSm, padding: '4px 16px 8px' }}>
+      <GroupHead first label="In the committee room" color={ROOM_COLOR} pts={roomNote ? null : blend.room} />
+      {roomNote ? (
+        <p style={{ margin: 0, padding: '0 0 8px 16px', fontSize: 13.5, color: CK.inkSoft }}>{roomNote}</p>
+      ) : blend.roomLines.length === 0 ? (
+        <p style={{ margin: 0, padding: '0 0 8px 16px', fontSize: 13.5, color: CK.inkSoft }}>No points in the room yet.</p>
+      ) : blend.roomLines.map((l) => (
+        <div key={l.id} className="flex items-center justify-between gap-3" style={lineStyle}>
+          <span style={{ fontWeight: 600, overflowWrap: 'anywhere', minWidth: 0 }}>{l.label}</span>
+          <b style={{ fontVariantNumeric: 'tabular-nums', color: l.pts < 0 ? CK.danger : CK.ink }}>{fmtPts(l.pts)}</b>
+        </div>
+      ))}
+      <GroupHead label="Out of the room" color={OUT_COLOR} pts={blend.out} />
+      {blend.outLines.length === 0 ? (
+        <p style={{ margin: 0, padding: '0 0 8px 16px', fontSize: 13.5, color: CK.inkSoft }}>No directives or meetings yet.</p>
+      ) : blend.outLines.map((l) => (
+        <div key={l.id} className="flex items-center justify-between gap-3" style={lineStyle}>
+          <span style={{ fontWeight: 600, overflowWrap: 'anywhere', minWidth: 0 }}>{l.label}</span>
+          <span style={{ fontSize: 13, color: CK.inkSoft, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+            {l.count} × {l.each} = <b style={{ fontSize: 14, color: l.pts < 0 ? CK.danger : CK.ink }}>{fmtPts(l.pts)}</b>
+          </span>
+        </div>
+      ))}
+      <div className="flex items-center justify-between gap-3" style={{ padding: '10px 0 4px', borderTop: `1px solid ${CK.hair}` }}>
+        <b style={{ fontSize: 14, color: CK.ink }}>Total</b>
+        <b style={{ fontSize: 20, fontVariantNumeric: 'tabular-nums', color: CK.red }}>{fmtPts(blend.total)}</b>
+      </div>
+    </div>
+  );
+}
+
+// ─────────── The committee-room record, the same as a regular session ───────────
+
+function RoomStats({ committee, feedback, seat, everPresent, showPrivate }: { committee: Committee; feedback: FeedbackEntry[]; seat: string; everPresent: Set<string> | null; showPrivate: boolean }) {
   // Chair notes and ratings are private to staff and chairs (CLAUDE.md): everyone else gets none of them.
   const fb = useMemo(() => (showPrivate ? feedback : []), [feedback, showPrivate]);
-  const everPresent = useEverPresent(
-    committee.id,
-    async () => readStatusHistory(await getFreshAuthedClient(), committee.id),
-    rosterStatusSig(committee.delegates),
-  );
   const rows = useMemo(() => buildSessionScoreboardRows(committee, fb, 'en', { everPresent }), [committee, fb, everPresent]);
   const row = rows.find((r) => r.country === seat) ?? null;
   const rank = useMemo(() => (row ? rankByHeadline(rows).get(row.key) ?? 0 : 0), [rows, row]);
@@ -199,6 +238,7 @@ function RoomStats({ committee, feedback, seat, showPrivate }: { committee: Comm
           row={row}
           rank={rank}
           rankTotal={rows.length}
+          hideRank={!showPrivate}
           slices={sessionPointSlices(committee, row.ledger, 'en', 'Manual points')}
           speeches={speeches}
           consultationName={motionNames(committee, 'en').consultation}
@@ -226,15 +266,16 @@ export default function CharacterPerformance({ crisisRef, char, cabinet, cabinet
   /** Staff and chairs also see the chair notes and ratings in the room stats. */
   canSeeNotes?: boolean;
 }) {
-  const room = useCharacterRoom(crisisRef, char, cabinets ?? (cabinet ? [cabinet] : []));
+  const { core } = useCrisis();
+  const room = useCharacterRoom(crisisRef, char, cabinets ?? (cabinet ? [cabinet] : []), !!canSeeNotes);
 
   const back = useMemo(() => {
-    const all = directives ?? [];
+    // A directive the chair sent back is not a verdict and not a sent directive (same rule as the points).
+    const all = (directives ?? []).filter((d) => !isChairSendBack(d));
     const split = (list: Directive[]) => ({
       approved: list.filter((d) => d.outcome === 'approved').length,
       partial: list.filter((d) => d.outcome === 'partial').length,
-      denied: list.filter((d) => d.outcome === 'denied').length,
-      waiting: list.filter((d) => d.outcome !== 'approved' && d.outcome !== 'partial' && d.outcome !== 'denied').length,
+      denied: list.filter(isRealDenial).length,
     });
     const wrote = all.filter((d) => d.author_character_id === char.id);
     const co = all.filter((d) => d.author_character_id !== char.id);
@@ -248,53 +289,48 @@ export default function CharacterPerformance({ crisisRef, char, cabinet, cabinet
   }, [directives, char.id]);
 
   const held = meetings.filter((m) => m.status === 'held' && m.character_ids.includes(char.id)).length;
-  const live = useMemo(
-    () => (room.kind === 'ok' ? buildSessionScoreboardRows(room.committee, [], 'en').find((r) => r.country === room.seat) ?? null : null),
-    [room],
-  );
+  // The seat's row and its point slices, from the same functions a regular session uses (roll-call history included).
+  const live = useMemo(() => {
+    if (room.kind !== 'ok') return null;
+    const row = buildSessionScoreboardRows(room.committee, [], 'en', { everPresent: room.everPresent }).find((r) => r.country === room.seat) ?? null;
+    return row ? { row, slices: sessionPointSlices(room.committee, row.ledger, 'en', 'Manual points') } : null;
+  }, [room]);
+  const blend = useMemo(() => blendPerformance(live ? live.slices : null, points), [live, points]);
+  const rules = useMemo(() => pointsRules(readPoints(core.crisis.settings)), [core.crisis.settings]);
 
   if (loading) return <div className="flex flex-col" style={{ gap: 8 }}><Skeleton h={90} /><Skeleton h={30} /><Skeleton h={30} /></div>;
 
-  const speakingNote = room.kind === 'loading' ? 'Reading the committee room'
-    : room.kind === 'ok' ? `${live ? live.gslSpeeches + live.caucusSpeeches : 0} ${live && live.gslSpeeches + live.caucusSpeeches === 1 ? 'speech' : 'speeches'} in the committee room`
+  const speeches = live ? live.row.gslSpeeches + live.row.caucusSpeeches : 0;
+  const speakingSeconds = live?.row.speakingSeconds ?? 0;
+  const roomNote = room.kind === 'loading' ? 'Reading the committee room'
     : room.kind === 'nobody' ? `No seat named ${char.name} in the committee room yet`
     : room.kind === 'failed' ? 'Could not read the committee room. Trying again'
-    : 'This cabinet has no committee room yet';
+    : room.kind === 'none' ? 'This cabinet has no committee room yet'
+    : null;
 
   return (
     <div className="flex flex-col" style={{ gap: 16 }}>
-      <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
-        <Hover
-          label="Speaking time"
-          rows={[
-            { label: 'Speakers list speeches', value: live?.gslSpeeches ?? 0 },
-            { label: 'Caucus speeches', value: live?.caucusSpeeches ?? 0 },
-            { label: 'Speaking time', value: formatSpeakingTime(live?.speakingSeconds ?? 0) },
-          ]}
-        >
-          <Headline n={room.kind === 'loading' ? '...' : formatSpeakingTime(live?.speakingSeconds ?? 0)} word="speaking time" note={speakingNote} />
-        </Hover>
-        <Hover
-          label="Directives sent"
-          rows={[
-            { label: 'Written by them', value: back.wrote },
-            { label: 'Co-written', value: back.co },
-            { label: 'Approved', value: back.approved, color: '#9ED3B0' },
-            { label: 'Partly worked', value: back.partial, color: CK.gold },
-            { label: 'Denied', value: back.denied, color: '#F0A596' },
-            { label: 'Waiting', value: back.waiting },
-          ]}
-        >
-          <Headline
-            n={back.total}
-            word={back.total === 1 ? 'directive sent' : 'directives sent'}
-            note={back.total === 0 ? 'Nothing sent yet' : `${back.wrote} written, ${back.co} co-written`}
-          />
-        </Hover>
-      </div>
+      <Hover
+        label="Points in total"
+        rows={[
+          { label: 'In the committee room', value: roomNote ? 'None' : fmtPts(blend.room), color: '#9ED3B0' },
+          { label: 'Out of the room', value: fmtPts(blend.out), color: '#F0A596' },
+          { label: 'Total', value: fmtPts(blend.total), color: CK.gold },
+        ]}
+      >
+        <TotalCard blend={blend} roomKnown={!roomNote} note={roomNote ?? `${speeches} ${speeches === 1 ? 'speech' : 'speeches'}, ${formatSpeakingTime(speakingSeconds)} speaking time`} />
+      </Hover>
+
+      <section>
+        <h3 className="flex items-center" style={{ margin: '0 0 8px', gap: 7, fontSize: 13, fontWeight: 800, color: CK.red }}>
+          <ListChecks size={16} strokeWidth={1.5} aria-hidden />Where the Points Come From
+        </h3>
+        <Breakdown blend={blend} roomNote={roomNote} />
+        <p style={{ margin: '8px 0 0', fontSize: 12.5, lineHeight: 1.5, color: CK.inkSoft }}>{rules} The Crisis Director sets the out of the room values in Settings. Points help judge awards.</p>
+      </section>
 
       <div className="flex items-end flex-wrap" style={{ gap: '10px 28px' }}>
-        <BigCount n={points.total} word={points.total === 1 ? 'crisis point' : 'crisis points'} color={CK.red} />
+        <BigCount n={back.total} word={back.total === 1 ? 'directive sent' : 'directives sent'} />
         <BigCount n={held} word={held === 1 ? 'meeting held' : 'meetings held'} />
         <BigCount n={back.approved} word="approved" color={CK.ok} />
         <BigCount n={back.partial} word="partly worked" color={CK.goldDeep} />
@@ -303,33 +339,14 @@ export default function CharacterPerformance({ crisisRef, char, cabinet, cabinet
         {staff && back.replyMs !== null && <BigCount n={span(back.replyMs)} word="average reply time" />}
       </div>
 
-      <section>
-        <h3 className="flex items-center" style={{ margin: '0 0 8px', gap: 7, fontSize: 13, fontWeight: 800, color: CK.red }}>
-          <Presentation size={16} strokeWidth={1.5} aria-hidden />In the committee room
-        </h3>
-        {room.kind === 'loading' && <div className="flex flex-col" style={{ gap: 8 }}><Skeleton h={30} /><Skeleton h={30} w="70%" /></div>}
-        {room.kind === 'ok' && <RoomStats committee={room.committee} feedback={room.feedback} seat={room.seat} showPrivate={!!canSeeNotes} />}
-        {room.kind !== 'loading' && room.kind !== 'ok' && (
-          <p style={{ margin: 0, fontSize: 13.5, color: CK.inkSoft }}>{speakingNote}.</p>
-        )}
-      </section>
-
-      <section>
-        <h3 className="flex items-center" style={{ margin: '0 0 8px', gap: 7, fontSize: 13, fontWeight: 800, color: CK.red }}>
-          <ScrollText size={16} strokeWidth={1.5} aria-hidden />Crisis points
-        </h3>
-        <div style={{ background: CK.card, borderRadius: 18, boxShadow: CK.shadowSm, padding: '6px 16px' }}>
-          {points.lines.map((l, i) => (
-            <div key={l.label} className="flex items-center justify-between gap-3" style={{ padding: '10px 0', borderTop: i === 0 ? 0 : `1px solid ${CK.hair}` }}>
-              <span style={{ fontSize: 14, fontWeight: 600, overflowWrap: 'anywhere', minWidth: 0 }}>{l.label}</span>
-              <span style={{ fontSize: 13, color: CK.inkSoft, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-                {l.count} × {l.each} = <b style={{ fontSize: 15, color: l.total < 0 ? CK.danger : CK.ink }}>{l.total}</b>
-              </span>
-            </div>
-          ))}
-        </div>
-        <p style={{ margin: '8px 0 0', fontSize: 12.5, color: CK.inkSoft }}>The Crisis Director sets what each action is worth in Settings. Points help judge awards; they are not a score.</p>
-      </section>
+      {room.kind === 'ok' && (
+        <section>
+          <h3 className="flex items-center" style={{ margin: '0 0 8px', gap: 7, fontSize: 13, fontWeight: 800, color: CK.red }}>
+            <Presentation size={16} strokeWidth={1.5} aria-hidden />Committee Room Record
+          </h3>
+          <RoomStats committee={room.committee} feedback={room.feedback} seat={room.seat} everPresent={room.everPresent} showPrivate={!!canSeeNotes} />
+        </section>
+      )}
     </div>
   );
 }

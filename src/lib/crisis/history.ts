@@ -235,3 +235,37 @@ export function parseChange(row: HistoryRow): HistoryChange | null {
   }
   return null;
 }
+
+// ─────────── Batches ───────────
+// Everything sent together is one entry: one Send of the unsent map changes, one directive answer (each is one
+// transaction, so its rows share a time), or a quick burst by one person within a minute.
+
+export interface HistoryBatch {
+  /** The id of the newest row: stable while older rows are added below it. */
+  id: string;
+  /** The time of the newest row. */
+  at: string;
+  /** The time of the oldest row. */
+  from: string;
+  by: string | null;
+  /** Every row of the batch, newest first (including rows nobody reads, so a restore sees them all). */
+  rows: HistoryRow[];
+}
+
+export const BATCH_WINDOW_MS = 60_000;
+
+/** Groups rows (newest first) into batches: the same person, each row within a minute of the batch's newest. */
+export function groupBatches(rows: HistoryRow[], windowMs = BATCH_WINDOW_MS): HistoryBatch[] {
+  const out: HistoryBatch[] = [];
+  for (const r of rows) {
+    const t = new Date(r.created_at).getTime();
+    const cur = out[out.length - 1];
+    if (cur && cur.by === r.by_name && new Date(cur.at).getTime() - t <= windowMs) {
+      cur.rows.push(r);
+      cur.from = r.created_at;
+    } else {
+      out.push({ id: r.id, at: r.created_at, from: r.created_at, by: r.by_name, rows: [r] });
+    }
+  }
+  return out;
+}

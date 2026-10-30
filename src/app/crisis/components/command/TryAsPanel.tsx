@@ -137,7 +137,7 @@ export default function TryAsPanel({ cref, compact }: { cref: CrisisRef; compact
           )}
           {chairs.length > 0 && (
             <div>
-              <p style={{ margin: '0 0 6px', fontSize: 11.5, fontWeight: 800, color: CK.muted }}>Chairs (the front room)</p>
+              <p style={{ margin: '0 0 6px', fontSize: 11.5, fontWeight: 800, color: CK.muted }}>Chairs (the committee room)</p>
               <div className="flex flex-wrap" style={{ gap: 6 }}>
                 {chairs.map((m) => {
                   const cn = cabinetName(m.cabinet_id);

@@ -26,7 +26,8 @@ export default function AskMeeting({ refx, people, cabinets, myCharacterId, onDo
   // Own cabinet first, then the rest by cabinet order.
   const groups = useMemo(() => {
     const mineCab = myCharacterId ? people.get(myCharacterId)?.cabinet_id ?? null : null;
-    const all = [...people.values()].filter((p) => p.id !== myCharacterId);
+    // Nobody can meet a spare (nobody plays it) or a dead character.
+    const all = [...people.values()].filter((p) => p.id !== myCharacterId && p.status !== 'spare' && p.status !== 'dead');
     const order = [...cabinets].sort((a, b) => (a.id === mineCab ? -1 : b.id === mineCab ? 1 : a.sort - b.sort));
     const out = order.map((cab) => ({ cab, list: all.filter((p) => p.cabinet_id === cab.id).sort((a, b) => a.name.localeCompare(b.name)) })).filter((g) => g.list.length);
     const loose = all.filter((p) => !p.cabinet_id || !cabinets.some((c) => c.id === p.cabinet_id));
@@ -67,7 +68,7 @@ export default function AskMeeting({ refx, people, cabinets, myCharacterId, onDo
 
   return (
     <Card warm>
-      <CardTitle>Ask for a meeting</CardTitle>
+      <CardTitle>Ask for a Meeting</CardTitle>
       <FieldLabel>Who do you want to meet</FieldLabel>
       <div className="flex flex-col" style={{ gap: 12, marginBottom: 14 }}>
         {groups.out.map((g) => (

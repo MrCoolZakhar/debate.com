@@ -82,11 +82,13 @@ type TimelineItem =
   | { kind: 'speech'; at: string; speech: HistorySpeech; pts: number | null }
   | { kind: 'event'; at: string; row: ScoreboardDelegateRow['ledger'][number] };
 
-export default function DelegateProfile({ row, rank, rankTotal, slices, speeches, manualAuthors, extra, consultationName }: {
+export default function DelegateProfile({ row, rank, rankTotal, slices, speeches, manualAuthors, extra, consultationName, hideRank }: {
   row: ScoreboardDelegateRow;
   /** 1-based place by score among `rankTotal` delegations (ties share a place). */
   rank: number;
   rankTotal: number;
+  /** Leave the place out of the one line (Gavelling Crisis: a delegate never sees the ranking). */
+  hideRank?: boolean;
   /** `sessionPointSlices` for this row. */
   slices: PointSlice[];
   /** This delegation's speeches from `buildSessionHistory`, notes already attached. */
@@ -210,10 +212,12 @@ export default function DelegateProfile({ row, rank, rankTotal, slices, speeches
             <Clock size={13} strokeWidth={2.4} style={{ color: SOFT }} aria-hidden />
             {formatSpeakingTime(row.speakingSeconds)}
           </span>
-          <span className="inline-flex items-center gap-1.5" title={fmt(t('sb_profile_rank_title'), { rank, n: rankTotal })}>
-            <Trophy size={13} strokeWidth={2.4} style={{ color: SOFT }} aria-hidden />
-            #{rank}
-          </span>
+          {!hideRank && (
+            <span className="inline-flex items-center gap-1.5" title={fmt(t('sb_profile_rank_title'), { rank, n: rankTotal })}>
+              <Trophy size={13} strokeWidth={2.4} style={{ color: SOFT }} aria-hidden />
+              #{rank}
+            </span>
+          )}
           <span
             style={{
               display: 'inline-flex', alignItems: 'baseline', gap: 3,

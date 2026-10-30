@@ -12,7 +12,7 @@ import GSelect from '@/components/GSelect';
 import { notifyErr } from '@/lib/appNotify';
 import { crisisError, listDirectives } from '@/lib/crisis/api';
 import { useCrisisLive } from '@/lib/crisis/live';
-import { KIND_LABEL, THEMES, type Directive, type DirectiveKind } from '@/lib/crisis/types';
+import { KIND_LABEL, THEMES, type Directive } from '@/lib/crisis/types';
 import { Btn, Card, CK, Segmented, fieldStyle } from '../../crisisKit';
 import DirectiveReader from './DirectiveReader';
 import MeetingRequestsStrip from '../meetings/MeetingRequestsStrip';
@@ -21,7 +21,7 @@ import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import DirectivePopup from './DirectivePopup';
 import DirectiveDeepLink from '../notifications/DirectiveDeepLink';
 import {
-  NO_FILTERS, buildNames, inLane, lastAnsweredByAuthor, matchesFilters, sortDirectives,
+  CREATABLE_KINDS, NO_FILTERS, buildNames, inLane, lastAnsweredByAuthor, matchesFilters, sortDirectives,
   type Filters, type Lane, type QueueOrder,
 } from './directiveKit';
 
@@ -167,11 +167,11 @@ export default function BackroomInbox() {
     ...staffMembers.map((m) => ({ value: m.id, label: m.display_name })),
   ];
   const themeOptions = [{ value: '', label: 'All themes' }, ...THEMES.map((t) => ({ value: t, label: t }))];
-  const kindOptions = [{ value: '', label: 'All kinds' }, ...(Object.keys(KIND_LABEL) as DirectiveKind[]).map((k) => ({ value: k, label: KIND_LABEL[k] }))];
+  const kindOptions = [{ value: '', label: 'All kinds' }, ...CREATABLE_KINDS.map((k) => ({ value: k, label: KIND_LABEL[k] }))];
   const setF = (patch: Partial<Filters>) => setFilters((f) => ({ ...f, ...patch }));
 
   if (!staff) {
-    return <Card style={{ marginTop: 8 }}><h2 style={{ margin: 0, fontSize: 17, fontWeight: 800 }}>Only crisis staff can see the backroom</h2></Card>;
+    return <Card style={{ marginTop: 8 }}><h2 style={{ margin: 0, fontSize: 17, fontWeight: 800 }}>Only Crisis Staff Can See the Backroom</h2></Card>;
   }
 
   const laneOptions: Array<{ value: Lane; label: string; count: number }> = [
@@ -211,7 +211,7 @@ export default function BackroomInbox() {
             placeholder="Search number, title, author, text" style={{ ...fieldStyle, padding: '6px 10px 6px 31px', fontSize: 13, minHeight: 30 }} />
         </label>
         <span className="flex-1" />
-        <Segmented ariaLabel="Queue order" value={order} onChange={setOrder}
+        <Segmented ariaLabel="Queue order" value={order} onChange={(o) => { setOrder(o); setFocusId(null); }}
           options={[{ value: 'fair', label: 'Fair' }, { value: 'oldest', label: 'Oldest' }, { value: 'newest', label: 'Newest' }]} />
       </div>
 

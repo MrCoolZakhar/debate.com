@@ -134,7 +134,7 @@ export function makeCorner(): HTMLElement {
 export function makeMidpoint(): HTMLElement {
   const el = document.createElement('div');
   el.className = 'wm-marker wm-mid';
-  el.title = 'Click to add a corner';
+  el.title = 'Drag to add a corner here';
   return el;
 }
 
@@ -202,11 +202,14 @@ export const MAP_CSS = `
 .wm-legend{position:absolute;left:12px;right:12px;bottom:12px;z-index:4;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;pointer-events:none}
 .wm-legend>div{pointer-events:auto;background:rgba(255,255,255,0.93);border-radius:12px;padding:7px 11px;font-size:12px;color:#4E463C;box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),0 1px 2px rgba(27,56,40,0.1),0 3px 7px -2px rgba(27,56,40,0.15);display:flex;gap:6px 14px;flex-wrap:wrap;align-items:center}
 .wm-legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:-1px}
+.wm-legend i.wm-zsw{border-radius:3px;border:1.5px dashed;box-sizing:border-box}
 .wm-topleft{position:absolute;left:12px;top:12px;z-index:4;display:flex;flex-direction:column;align-items:flex-start;gap:8px;max-width:min(380px,calc(100% - 340px));pointer-events:none}
 .wm-topleft>*{pointer-events:auto}
-.wm-draftbar{width:100%;box-sizing:border-box;background:rgba(255,255,255,0.98);border-radius:14px;padding:9px 12px;box-shadow:inset 0 1px 0 rgba(255,255,255,0.75),0 0 0 1px rgba(142,36,36,0.18),5px 6px 16px rgba(27,56,40,0.2);display:flex;flex-direction:column;gap:8px;font-size:13px;color:#1C1410}
+.wm-top-right{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:8px 16px;margin-left:auto;min-width:0}
+.wm-draftbar{display:inline-flex;flex-wrap:wrap;align-items:center;gap:6px 12px;box-sizing:border-box;max-width:100%;background:#fff;border-radius:14px;padding:5px 6px 5px 12px;box-shadow:0 0 0 1px rgba(142,36,36,0.22),0 2px 7px rgba(27,56,40,0.14);font-size:13px;color:#1C1410}
 .wm-draftbar b{font-weight:800}
 .wm-draftbar-row{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center}
+.wm-root[data-compact] .wm-draftbar{padding:3px 10px;font-size:12px;box-shadow:0 0 0 1px rgba(142,36,36,0.2)}
 .wm-toolhint{flex-basis:100%;margin:0;font-size:12px;color:#4E463C;line-height:1.35}
 .wm-clabel-orig{font-size:9.5px;letter-spacing:0.04em;text-transform:none;font-style:italic;font-weight:600;color:#5E5340}
 .wm-hint{max-width:100%;background:rgba(255,255,255,0.93);border-radius:12px;padding:7px 11px;font-size:12.5px;color:#4E463C;box-shadow:0 1px 2px rgba(27,56,40,0.1),0 3px 7px -2px rgba(27,56,40,0.15)}
@@ -241,8 +244,14 @@ export const MAP_CSS = `
 .wm-clabel-big{font-size:13px;letter-spacing:0.16em;color:#7E7260}
 .wm-slabel{pointer-events:none;white-space:nowrap;font:800 11.5px/1 var(--font-brand),Inter,sans-serif;text-shadow:0 0 3px #fff,0 0 3px #fff,0 0 5px #fff}
 .wm-vtx{width:16px;height:16px;border-radius:50%;background:#fff;border:2.5px solid #8E2424;box-sizing:border-box;box-shadow:0 1px 4px rgba(0,0,0,0.35);cursor:grab}
-.wm-mid{width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,0.85);border:1.5px solid #8E2424;box-sizing:border-box;opacity:0.75}
-.wm-mid:hover{opacity:1}
+.wm-mid{width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,0.85);border:1.5px solid #8E2424;box-sizing:border-box;opacity:0.8;cursor:grab}
+.wm-mid:hover{opacity:1;background:#fff;box-shadow:0 0 0 3px rgba(142,36,36,0.25)}
+.wm-wlabel{pointer-events:none;white-space:nowrap;font:italic 600 11px/1 var(--font-brand),Inter,sans-serif;color:#6E9096;text-shadow:0 0 3px #DCE4DA,0 0 3px #DCE4DA,0 0 4px #DCE4DA}
+.wm-wlabel-ocean{font-size:13.5px;font-weight:600;font-style:normal;letter-spacing:0.34em;text-transform:uppercase;color:#8CA9AA}
+.wm-wlabel-strait{font-size:10px}
+.wm-wlabel-lake{color:#5F8890;text-shadow:0 0 3px #F5F0E4,0 0 3px #F5F0E4}
+.wm-wlabel-river{font-size:10.5px;color:#648C93;text-shadow:0 0 3px #F5F0E4,0 0 3px #F5F0E4,0 0 4px #F5F0E4}
+.wm-wlabel-region{font-style:normal;font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#A39777;text-shadow:0 0 3px #F5F0E4,0 0 3px #F5F0E4}
 .wm-ghost{width:30px;height:30px;border-radius:50%;border:2px dashed #8E2424;background:rgba(255,255,255,0.6);box-sizing:border-box;pointer-events:none}
 .wm-fog{position:absolute;left:0;top:0;pointer-events:none}
 .wm-city{pointer-events:none;white-space:nowrap;font:600 10.5px/1 var(--font-brand),Inter,sans-serif;color:#3A3328;text-shadow:0 0 3px #F5F0E4,0 0 3px #F5F0E4,0 0 4px #F5F0E4}

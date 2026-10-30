@@ -1,6 +1,7 @@
 'use client';
 // Gavelling Crisis: "My Character". It always shows something: title, status, location, bio, powers,
-// the character guide (a prominent button that opens the file in a new tab), and the secret goals,
+// the character guide (a prominent button that opens the file in a new tab), a small map snippet with
+// their marker when the crisis team set their spot, and the secret goals,
 // which stay hidden until the delegate presses the button (the dialog is thrown away on close).
 
 import { useState } from 'react';
@@ -8,7 +9,8 @@ import { BookOpenText, Eye, EyeOff, ExternalLink, Lock, MapPin, ScrollText, Zap 
 import type { Character } from '@/lib/crisis/types';
 import { Btn, CK, OverhangCard, Skeleton } from '../../crisisKit';
 import CrisisDialog from './CrisisDialog';
-import { STATUS_WORD } from './ProfileCard';
+import { STATUS_WORD } from '../character/characterStatus';
+import CharacterSpotSnippet from '../character/CharacterSpotSnippet';
 
 function Fact({ icon, label, children }: { icon: React.ReactNode; label: string; children: React.ReactNode }) {
   return (
@@ -27,6 +29,7 @@ export default function CharacterDialog({ me, color, goals, goalsLoaded, onClose
   me: Character; color: string; goals: string; goalsLoaded: boolean; onClose: () => void;
 }) {
   const [showGoals, setShowGoals] = useState(false);
+  const hasSpot = typeof me.location_lng === 'number' && typeof me.location_lat === 'number';
   const guide = me.guide_url && /^https?:\/\//i.test(me.guide_url) ? me.guide_url : null;
   return (
     <CrisisDialog title="My Character" onClose={onClose} width={720}>
@@ -55,7 +58,15 @@ export default function CharacterDialog({ me, color, goals, goalsLoaded, onClose
         </OverhangCard>
 
         <div className="grid gap-3.5 sm:grid-cols-2">
-          <Fact icon={<MapPin size={16} strokeWidth={1.5} aria-hidden />} label="Location">{me.location || none('Not set')}</Fact>
+          <Fact icon={<MapPin size={16} strokeWidth={1.5} aria-hidden />} label="Location">
+            {me.location || (hasSpot ? null : none('Not set'))}
+            {/* Where they stand on the map (the exact spot the crisis team set), read only. */}
+            {hasSpot && (
+              <div style={{ marginTop: me.location ? 8 : 0 }}>
+                <CharacterSpotSnippet lng={me.location_lng as number} lat={me.location_lat as number} picture={me.picture_url} width={300} />
+              </div>
+            )}
+          </Fact>
           <Fact icon={<Zap size={16} strokeWidth={1.5} aria-hidden />} label="Powers">{me.powers || none('No powers written down yet')}</Fact>
         </div>
         <Fact icon={<ScrollText size={16} strokeWidth={1.5} aria-hidden />} label="Bio">{me.bio || none('No bio yet')}</Fact>

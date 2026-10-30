@@ -119,7 +119,7 @@ export default function DirectivePopup(props: DirectivePopupProps) {
         return;
       }
       if ((e.key === 'ArrowRight' || e.key === 'ArrowLeft') && !guard.current.mapOpen && !e.defaultPrevented && !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey
-        && !typingTarget(e.target) && !document.querySelector('[data-gsel-popover]')) {
+        && !typingTarget(e.target) && !document.querySelector('[data-gsel-popover], [data-image-lightbox]')) {
         e.preventDefault();
         stepRef.current(e.key === 'ArrowRight' ? 1 : -1);
         return;

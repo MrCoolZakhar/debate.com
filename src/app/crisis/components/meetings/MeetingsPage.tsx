@@ -2,7 +2,7 @@
 // Gavelling Crisis: meetings. Delegates ask and follow their requests; staff approve, decline and
 // mark meetings held; chairs only see (to know who leaves the room). Meetings happen in person.
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CalendarCheck, Hourglass, X, type LucideIcon } from 'lucide-react';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { cancelMeeting, crisisError, listMeetings, loadWorld } from '@/lib/crisis/api';
@@ -15,34 +15,50 @@ import MeetingHistory from './MeetingHistory';
 import StaffMeetingCard from './StaffMeetingCard';
 import { InTheRoom, MeetingClockReadout } from './MeetingClock';
 import { meetingInProgress } from '@/lib/crisis/meetings';
+import { useClockOverlay } from '@/lib/crisis/meetingClockStore';
 import { AvatarStack, Fact, NameList, StatusLine, usePeople, whenText, type Person } from './meetingKit';
+import { serverNow } from '@/lib/serverClock';
 
 const isActive = (m: Meeting) => m.status === 'pending' || m.status === 'approved';
 
 export default function MeetingsPage() {
   const { ref, role, staff, memberId, characterId, core } = useCrisis();
-  const [meetings, setMeetings] = useState<Meeting[] | null>(null);
+  const [fetched, setFetched] = useState<Meeting[] | null>(null);
+  // A copy of the clock fields a press expects stays over the row until the re-read agrees (no snap back).
+  const meetings = useClockOverlay(fetched);
+  const seq = useRef(0);
+  const loaded = useRef(false);
   const [world, setWorld] = useState<Person[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [now, setNow] = useState(() => Date.now());
+  const [now, setNow] = useState(() => serverNow());
   const isDelegate = role === 'delegate';
 
-  useEffect(() => { const t = window.setInterval(() => setNow(Date.now()), 30_000); return () => window.clearInterval(t); }, []);
+  useEffect(() => { const t = window.setInterval(() => setNow(serverNow()), 30_000); return () => window.clearInterval(t); }, []);
 
+  // Every read is numbered: a slow older answer never overwrites a newer one (that made clocks jump back and forth).
   const load = useCallback(async () => {
-    try { setMeetings(await listMeetings(ref)); setError(null); } catch (e) {
-      if (!meetings) setError(crisisError(e, 'Could not load the meetings.')); else notifyErr(crisisError(e, 'Could not refresh the meetings.'), 'crisis-meetings-refresh');
+    const mine = ++seq.current;
+    try {
+      const r = await listMeetings(ref);
+      if (mine !== seq.current) return;
+      loaded.current = true;
+      setFetched(r);
+      setError(null);
+    } catch (e) {
+      if (mine !== seq.current) return;
+      if (!loaded.current) setError(crisisError(e, 'Could not load the meetings.'));
+      else notifyErr(crisisError(e, 'Could not refresh the meetings.'), 'crisis-meetings-refresh');
     }
-  }, [ref, meetings]);
+  }, [ref]);
 
   useEffect(() => {
+    const t = window.setTimeout(() => { void load(); }, 0);
     let cancelled = false;
-    listMeetings(ref).then((r) => { if (!cancelled) setMeetings(r); }).catch((e) => { if (!cancelled) setError(crisisError(e, 'Could not load the meetings.')); });
     if (isDelegate) {
-      loadWorld(ref).then((w) => { if (!cancelled) setWorld(w.map((x) => ({ id: x.id, name: x.name, picture_url: x.picture_url, cabinet_id: x.cabinet_id }))); }).catch(() => { /* own cabinet still works */ });
+      loadWorld(ref).then((w) => { if (!cancelled) setWorld(w.map((x) => ({ id: x.id, name: x.name, picture_url: x.picture_url, cabinet_id: x.cabinet_id, status: x.status }))); }).catch(() => { /* own cabinet still works */ });
     }
-    return () => { cancelled = true; };
-  }, [ref, isDelegate]);
+    return () => { cancelled = true; window.clearTimeout(t); };
+  }, [ref, isDelegate, load]);
   useCrisisLive(ref.id, ['crisis_meetings'], () => { void load(); });
 
   const people = usePeople(core.characters, world);
@@ -74,7 +90,7 @@ export default function MeetingsPage() {
         <div className="grid items-start" style={{ gap: 18, gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 460px), 1fr))' }}>
           <AskMeeting refx={ref} people={people} cabinets={core.cabinets} myCharacterId={characterId} onDone={() => void load()} />
           <div>
-            <h2 style={{ margin: '0 0 4px', fontSize: 16, fontWeight: 800, color: CK.ink }}>Your meetings</h2>
+            <h2 style={{ margin: '0 0 4px', fontSize: 16, fontWeight: 800, color: CK.ink }}>Your Meetings</h2>
             {!mine.length && <Card><p style={{ margin: 0, fontSize: 13.5, color: CK.inkSoft }}>You have not asked for a meeting yet.</p></Card>}
             {active.map((m) => (
               <div key={m.id} style={{ position: 'relative', overflow: 'visible', marginTop: 28, background: CK.card, borderRadius: 22, border: '1px solid rgba(27,56,40,0.14)', boxShadow: CK.shadow, padding: '34px 16px 14px' }}>
@@ -134,7 +150,7 @@ export default function MeetingsPage() {
           </section>
         ))}
       </div>
-      <MeetingHistory meetings={mine.filter((m) => !isActive(m))} people={people} now={now} />
+      <MeetingHistory meetings={mine.filter((m) => !isActive(m))} people={people} now={now} noteRef={staff ? ref : undefined} onChanged={() => void load()} />
     </div>
   );
 }

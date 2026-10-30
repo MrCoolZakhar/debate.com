@@ -7,7 +7,7 @@ import type { Cabinet, Character, Meeting, MeetingStatus, Member } from '@/lib/c
 import { Avatar, CK } from '../../crisisKit';
 import { CharacterName } from '../character/CharacterProfileHost';
 
-export interface Person { id: string; name: string; picture_url: string | null; cabinet_id: string | null }
+export interface Person { id: string; name: string; picture_url: string | null; cabinet_id: string | null; status?: string }
 
 export const STATUS_LOOK: Record<MeetingStatus, { Icon: LucideIcon; color: string }> = {
   pending: { Icon: Hourglass, color: CK.warn },
@@ -30,7 +30,7 @@ export function usePeople(characters: Character[], world: Person[]): Map<string,
   return useMemo(() => {
     const map = new Map<string, Person>();
     for (const w of world) map.set(w.id, w);
-    for (const c of characters) map.set(c.id, { id: c.id, name: c.name, picture_url: c.picture_url, cabinet_id: c.cabinet_id });
+    for (const c of characters) map.set(c.id, { id: c.id, name: c.name, picture_url: c.picture_url, cabinet_id: c.cabinet_id, status: c.status });
     return map;
   }, [characters, world]);
 }

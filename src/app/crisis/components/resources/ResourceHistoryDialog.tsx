@@ -24,6 +24,7 @@ import { resourceHistory, type ResourceHistoryRow } from '@/lib/crisis/history';
 import { Btn, CK, Skeleton } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import CrisisDialog from '../delegate/CrisisDialog';
+import { serverNow } from '@/lib/serverClock';
 
 export interface HistoryResource { id: string; amount: number }
 
@@ -112,14 +113,14 @@ export function ResourceHistoryBody({ resource, typeName, unit, color = CK.red }
   const { ref } = useCrisis();
   const [rows, setRows] = useState<ResourceHistoryRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [now, setNow] = useState(() => Date.now());
+  const [now, setNow] = useState(() => serverNow());
 
   const load = useCallback(async () => {
     try {
       const r = await resourceHistory(ref, resource.id);
       setRows(r);
       setError(null);
-      setNow(Date.now());
+      setNow(serverNow());
     } catch (e) {
       setError(crisisError(e, 'Could not load the history.'));
     }

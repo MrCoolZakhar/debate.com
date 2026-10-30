@@ -11,10 +11,11 @@ import { UserFacingError } from '@/lib/friendlyError';
 import { crisisError, saveCabinet, syncRoster, uploadCrisisFile } from '@/lib/crisis/api';
 import { getCrisisClient } from '@/lib/crisis/client';
 import type { Cabinet, Character, Member } from '@/lib/crisis/types';
-import { Avatar, Btn, Card, CK, OverhangCard, cabinetTint } from '../../crisisKit';
+import { Avatar, Btn, Card, CK, OverhangCard, cabinetTint, fieldStyle } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import CharacterModal from '../character/CharacterModal';
 import NewCharacterDialog from '../character/NewCharacterDialog';
+import CrisisDialog from '../delegate/CrisisDialog';
 import { STATUS_WORD, StatusIcon, mayEditCharacters, statusColor } from '../character/characterStatus';
 import { PageHeading } from './setupKit';
 
@@ -29,14 +30,18 @@ const nul = (s: string): string | null => (s.trim() ? s.trim() : null);
 // ─────────── Small inputs ───────────
 
 /** A text field that saves on Enter or when you leave it, and only if it changed. */
-function InlineText({ value, onCommit, label, placeholder, bold }: {
+function InlineText({ value, onCommit, label, placeholder, bold, boxed }: {
   value: string; onCommit: (next: string) => void; label: string; placeholder?: string; bold?: boolean;
+  /** A full-width field with its own box, for a form in a pop-up. */
+  boxed?: boolean;
 }) {
   const [draft, setDraft] = useState<string | null>(null);
   const shown = draft ?? value;
+  const cancelled = useRef(false);
   const commit = () => {
     const next = (draft ?? value).trim();
     setDraft(null);
+    if (cancelled.current) { cancelled.current = false; return; }
     if (next !== value) onCommit(next);
   };
   return (
@@ -47,9 +52,9 @@ function InlineText({ value, onCommit, label, placeholder, bold }: {
       onFocus={() => setDraft(value)}
       onChange={(e) => setDraft(e.target.value)}
       onBlur={commit}
-      onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') { setDraft(null); (e.target as HTMLInputElement).blur(); } }}
+      onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape' && draft !== null) { e.stopPropagation(); cancelled.current = true; setDraft(null); (e.target as HTMLInputElement).blur(); } }}
       className="focus:outline-none focus:ring-2 focus:ring-[#1B3828]/40"
-      style={{
+      style={boxed ? { ...fieldStyle, fontWeight: bold ? 800 : 600, width: '100%' } : {
         border: 0, background: 'transparent', borderRadius: 8, padding: '3px 6px', margin: '0 -6px', fontFamily: CK.font, color: CK.ink,
         fontWeight: bold ? 800 : 600, fontSize: bold ? 17 : 13.5, width: `${Math.max(shown.length, placeholder?.length ?? 4) + 2}ch`, maxWidth: '100%',
         boxShadow: draft === null ? 'none' : `inset 0 0 0 1px ${CK.hair}`,
@@ -98,11 +103,12 @@ export default function CharactersPage() {
   const byCabinet = useMemo(() => {
     const m = new Map<string | null, Character[]>();
     for (const c of core.characters) {
+      if (!v.staff && c.status === 'spare') continue; // nobody plays a spare; only staff see them
       const k = c.cabinet_id && core.cabinets.some((x) => x.id === c.cabinet_id) ? c.cabinet_id : null;
       m.set(k, [...(m.get(k) ?? []), c]);
     }
     return m;
-  }, [core.characters, core.cabinets]);
+  }, [core.characters, core.cabinets, v.staff]);
 
   const sync = async () => {
     if (syncing) return;
@@ -210,7 +216,7 @@ function CabinetLogo({ cab, editable }: { cab: Cabinet; editable: boolean }) {
 function CabinetSection({ cab, characters, members, canEditCabinet, canAdd, onOpen, onAdd }: {
   cab: Cabinet | null; characters: Character[]; members: Member[]; canEditCabinet: boolean; canAdd: boolean; onOpen: (id: string) => void; onAdd: () => void;
 }) {
-  const { ref, reloadCore } = useCrisis();
+  const { ref, reloadCore, staff } = useCrisis();
   const color = cab?.color ?? CK.muted;
   const [editing, setEditing] = useState(false);
 
@@ -241,12 +247,12 @@ function CabinetSection({ cab, characters, members, canEditCabinet, canAdd, onOp
             {canEditCabinet && (
               <button
                 type="button"
-                onClick={() => setEditing((e) => !e)}
-                aria-label={editing ? 'Close the cabinet settings' : 'Cabinet settings'}
-                aria-expanded={editing}
+                onClick={() => setEditing(true)}
+                aria-label="Cabinet settings"
+                aria-haspopup="dialog"
                 title="Cabinet settings"
                 className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] active:scale-[0.95] transition-transform"
-                style={{ border: 0, cursor: 'pointer', width: 34, height: 34, borderRadius: 10, display: 'grid', placeItems: 'center', background: editing ? CK.card : 'transparent', color: CK.forest, boxShadow: editing ? CK.shadowSm : 'none' }}
+                style={{ border: 0, cursor: 'pointer', width: 34, height: 34, borderRadius: 10, display: 'grid', placeItems: 'center', background: 'transparent', color: CK.forest }}
               >
                 <Settings size={18} strokeWidth={1.5} />
               </button>
@@ -259,33 +265,14 @@ function CabinetSection({ cab, characters, members, canEditCabinet, canAdd, onOp
         {canAdd && <Btn tone="ghost" size="sm" icon={<Plus size={14} strokeWidth={1.5} />} onClick={onAdd}>Add character</Btn>}
       </div>
       {cab && canEditCabinet && editing && (
-        <div className="flex items-end flex-wrap" style={{ gap: '12px 22px', padding: '14px 16px', background: CK.well, borderBottom: `1px solid ${CK.hair}` }}>
-          <div>
-            <p style={{ margin: '0 0 5px', fontSize: 12, fontWeight: 700, color: CK.inkSoft }}>Crest</p>
-            <CabinetLogo cab={cab} editable />
-          </div>
-          <div>
-            <p style={{ margin: '0 0 5px', fontSize: 12, fontWeight: 700, color: CK.inkSoft }}>Name</p>
-            <InlineText value={cab.name} label="Cabinet name" placeholder="Cabinet name" bold onCommit={(name) => { if (name) void save({ name }); }} />
-          </div>
-          <div>
-            <p style={{ margin: '0 0 5px', fontSize: 12, fontWeight: 700, color: CK.inkSoft }}>Short name</p>
-            <InlineText value={cab.short_name ?? ''} label="Short name" placeholder="Short name" onCommit={(sn) => save({ short_name: nul(sn) })} />
-          </div>
-          <div>
-            <p style={{ margin: '0 0 5px', fontSize: 12, fontWeight: 700, color: CK.inkSoft }}>Colour</p>
-            <SwatchPicker value={cab.color} onPick={(hex) => save({ color: hex })} />
-          </div>
-          <span className="flex-1" />
-          <Btn size="sm" icon={<Check size={14} strokeWidth={1.6} />} onClick={() => setEditing(false)}>Done</Btn>
-        </div>
+        <CabinetSettingsDialog cab={cab} onSave={save} onClose={() => setEditing(false)} />
       )}
       <div style={{ padding: 14 }}>
         {characters.length === 0 ? (
           <EmptyCast color={color} canAdd={canAdd} onAdd={onAdd} />
         ) : (
           <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', columnGap: 12 }}>
-            {characters.map((c) => <CharacterCard key={c.id} c={c} color={color} members={members} onOpen={() => onOpen(c.id)} />)}
+            {characters.map((c) => <CharacterCard key={c.id} c={c} color={color} members={members} staff={staff} onOpen={() => onOpen(c.id)} />)}
           </div>
         )}
       </div>
@@ -293,7 +280,42 @@ function CabinetSection({ cab, characters, members, canEditCabinet, canAdd, onOp
   );
 }
 
-function CharacterCard({ c, color, members, onOpen }: { c: Character; color: string; members: Member[]; onOpen: () => void }) {
+/** The cabinet's crest, name, short name and colour in a pop-up (the crisis pop-up shell: scroll lock, Escape, focus). Each field saves as it is left. */
+function CabinetSettingsDialog({ cab, onSave, onClose }: {
+  cab: Cabinet; onSave: (patch: Partial<Pick<Cabinet, 'name' | 'short_name' | 'color'>>) => Promise<void>; onClose: () => void;
+}) {
+  const label = { margin: '0 0 5px', fontSize: 12.5, fontWeight: 700, color: CK.inkSoft } as const;
+  return (
+    <CrisisDialog title="Cabinet Settings" eyebrow={cab.name} onClose={onClose} width={520}>
+      <div className="flex flex-col" style={{ gap: 16, fontFamily: CK.font }}>
+        <div className="flex items-center" style={{ gap: 14 }}>
+          <CabinetLogo cab={cab} editable />
+          <div>
+            <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: CK.ink }}>Crest</p>
+            <p style={{ margin: '2px 0 0', fontSize: 13, color: CK.inkSoft }}>Click it to choose a new picture.</p>
+          </div>
+        </div>
+        <div>
+          <p style={label}>Name</p>
+          <InlineText boxed bold value={cab.name} label="Cabinet name" placeholder="Cabinet name" onCommit={(name) => { if (name) void onSave({ name }); }} />
+        </div>
+        <div>
+          <p style={label}>Short name</p>
+          <InlineText boxed value={cab.short_name ?? ''} label="Short name" placeholder="Short name" onCommit={(sn) => { void onSave({ short_name: nul(sn) }); }} />
+        </div>
+        <div>
+          <p style={label}>Colour</p>
+          <SwatchPicker value={cab.color} onPick={(hex) => { void onSave({ color: hex }); }} />
+        </div>
+        <div className="flex justify-end">
+          <Btn icon={<Check size={15} strokeWidth={1.6} />} onClick={onClose}>Done</Btn>
+        </div>
+      </div>
+    </CrisisDialog>
+  );
+}
+
+function CharacterCard({ c, color, members, staff, onOpen }: { c: Character; color: string; members: Member[]; staff: boolean; onOpen: () => void }) {
   const owner = members.find((m) => m.id === c.owner_member_id);
   const delegates = members.filter((m) => m.character_id === c.id);
   const gone = c.status === 'dead' || c.status === 'arrested';
@@ -317,14 +339,18 @@ function CharacterCard({ c, color, members, onOpen }: { c: Character; color: str
         {c.status_note && <span style={{ fontWeight: 500, color: CK.inkSoft, overflowWrap: 'anywhere' }}>{`· ${c.status_note}`}</span>}
       </span>
       <span className="flex flex-col" style={{ marginTop: 8, gap: 3, fontSize: 12.5, color: CK.inkSoft, lineHeight: 1.45, textAlign: 'left' }}>
-        <span className="flex items-start gap-1.5" style={{ overflowWrap: 'anywhere' }}>
-          <UserRound size={14} strokeWidth={1.5} aria-hidden style={{ flex: 'none', marginTop: 2, color: CK.red }} />
-          <span>Backroomer: {owner ? <b style={{ color: CK.ink }}>{owner.display_name}</b> : <b style={{ color: CK.red }}>Not set</b>}</span>
-        </span>
-        <span className="flex items-start gap-1.5" style={{ overflowWrap: 'anywhere' }}>
-          <UsersRound size={14} strokeWidth={1.5} aria-hidden style={{ flex: 'none', marginTop: 2, color: CK.forest2 }} />
-          <span>Delegate: {delegates.length ? <b style={{ color: CK.ink }}>{delegates.map((d) => d.display_name).join(', ')}</b> : <span style={{ color: CK.muted }}>None</span>}</span>
-        </span>
+        {staff && (
+          <>
+          <span className="flex items-start gap-1.5" style={{ overflowWrap: 'anywhere' }}>
+            <UserRound size={14} strokeWidth={1.5} aria-hidden style={{ flex: 'none', marginTop: 2, color: CK.red }} />
+            <span>Backroomer: {owner ? <b style={{ color: CK.ink }}>{owner.display_name}</b> : <b style={{ color: CK.red }}>Not set</b>}</span>
+          </span>
+          <span className="flex items-start gap-1.5" style={{ overflowWrap: 'anywhere' }}>
+            <UsersRound size={14} strokeWidth={1.5} aria-hidden style={{ flex: 'none', marginTop: 2, color: CK.forest2 }} />
+            <span>Delegate: {delegates.length ? <b style={{ color: CK.ink }}>{delegates.map((d) => d.display_name).join(', ')}</b> : <span style={{ color: CK.muted }}>None</span>}</span>
+          </span>
+          </>
+        )}
         {c.guide_url && (
           <span className="flex items-start gap-1.5" style={{ overflowWrap: 'anywhere' }}>
             <BookOpen size={14} strokeWidth={1.5} aria-hidden style={{ flex: 'none', marginTop: 2, color: CK.goldDeep }} />

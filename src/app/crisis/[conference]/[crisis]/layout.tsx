@@ -2,12 +2,12 @@
 // Gavelling Crisis shell: resolves the viewer, then draws the dark red rail and the top bar
 // around every page of one crisis. Pages read the shared state with useCrisis().
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard, ScrollText, Map as MapIcon, Newspaper, ContactRound, UsersRound, Settings, Presentation,
-  Home, LogOut, KeyRound, CalendarClock, Boxes,
+  Home, LogOut, KeyRound, CalendarClock, Boxes, Ellipsis,
 } from 'lucide-react';
 import BrandLogo from '@/components/BrandLogo';
 import ProfileAvatarMenu from '@/components/ProfileAvatar';
@@ -67,11 +67,21 @@ function Rail({ v, items }: { v: CrisisContextValue; items: NavItem[] }) {
   // A new page closes the rail (adjusted while rendering, so no effect sets state).
   const [shownPath, setShownPath] = useState(pathname);
   if (shownPath !== pathname) { setShownPath(pathname); setOpen(false); }
+  // Opens on hover, on focus and on a tap (a touch screen has no hover); a tap anywhere else closes it again.
+  const rail = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: PointerEvent) => { if (rail.current && !rail.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('pointerdown', away);
+    return () => document.removeEventListener('pointerdown', away);
+  }, [open]);
   return (
     <aside
+      ref={rail}
       aria-label="Crisis navigation"
       onMouseEnter={() => setOpen(true)}
       onMouseLeave={() => setOpen(false)}
+      onClick={(e) => { if (!(e.target as Element).closest('a')) setOpen(true); }}
       onFocus={(e) => { if (e.target instanceof Element && e.target.matches(':focus-visible')) setOpen(true); }}
       onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setOpen(false); }}
       className="hidden md:flex flex-col fixed"
@@ -138,6 +148,20 @@ function TopBar({ v, items }: { v: CrisisContextValue; items: NavItem[] }) {
     return () => window.removeEventListener('scroll', on);
   }, []);
   const { user } = useAuth();
+  // Phone bar: the first five pages, then "More" for the rest (opened in place above the bar, closed by a tap elsewhere or a new page).
+  const [more, setMore] = useState(false);
+  const [moreAt, setMoreAt] = useState(pathname);
+  if (moreAt !== pathname) { setMoreAt(pathname); setMore(false); }
+  const bar = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!more) return;
+    const away = (e: PointerEvent) => { if (bar.current && !bar.current.contains(e.target as Node)) setMore(false); };
+    document.addEventListener('pointerdown', away);
+    return () => document.removeEventListener('pointerdown', away);
+  }, [more]);
+  const shown = items.length <= 6 ? items : items.slice(0, 5);
+  const rest = items.length <= 6 ? [] : items.slice(5);
+  const restActive = rest.some((it) => it.href === pathname || (pathname?.startsWith(it.href + '/') ?? false));
   const codeUser = !v.memberId ? false : !!readCrisisToken(v.ref.conf, v.ref.crisis);
   // A token on a device that is also signed in to an account is a director's "View as".
   const viewingAs = codeUser && !!user;
@@ -170,8 +194,20 @@ function TopBar({ v, items }: { v: CrisisContextValue; items: NavItem[] }) {
       )}
     </header>
     {/* Phone navigation: the rail is hidden under 768px. */}
-      <nav aria-label="Crisis pages" className="md:hidden fixed left-0 right-0 bottom-0 flex justify-around" style={{ background: CK.redGrad, padding: '6px 8px calc(6px + env(safe-area-inset-bottom, 0px))', zIndex: 40 }}>
-        {(items.length <= 6 ? items : items.slice(0, 5)).map((it) => {
+      <nav ref={bar} aria-label="Crisis pages" className="md:hidden fixed left-0 right-0 bottom-0 flex justify-around" style={{ background: CK.redGrad, padding: '6px 8px calc(6px + env(safe-area-inset-bottom, 0px))', zIndex: 40 }}>
+        {more && rest.length > 0 && (
+          <div role="menu" aria-label="More pages" style={{ position: 'absolute', right: 8, bottom: 'calc(100% + 8px)', minWidth: 200, background: CK.redGrad, borderRadius: 16, padding: 6, boxShadow: '0 14px 32px rgba(58,14,15,0.32)' }}>
+            {rest.map((it) => {
+              const active = it.href === pathname || (pathname?.startsWith(it.href + '/') ?? false);
+              return (
+                <Link key={it.href} href={it.href} role="menuitem" className="flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]" style={{ gap: 12, height: 44, padding: '0 12px', borderRadius: 11, textDecoration: 'none', fontWeight: 600, fontSize: 14.5, background: active ? '#F8EFE5' : 'transparent', color: active ? CK.red2 : 'rgba(255,232,214,0.9)' }}>
+                  {it.icon}<span>{it.label}</span>
+                </Link>
+              );
+            })}
+          </div>
+        )}
+        {shown.map((it) => {
           const active = it.href === pathname;
           return (
             <Link key={it.href} href={it.href} className="flex flex-col items-center focus:outline-none" style={{ gap: 2, fontSize: 10.5, fontWeight: 700, textDecoration: 'none', color: active ? CK.gold : 'rgba(255,232,214,0.78)', padding: '4px 6px' }}>
@@ -180,6 +216,12 @@ function TopBar({ v, items }: { v: CrisisContextValue; items: NavItem[] }) {
             </Link>
           );
         })}
+        {rest.length > 0 && (
+          <button type="button" onClick={() => setMore((o) => !o)} aria-expanded={more} aria-haspopup="menu" className="flex flex-col items-center focus:outline-none" style={{ gap: 2, fontSize: 10.5, fontWeight: 700, border: 0, background: 'transparent', cursor: 'pointer', fontFamily: 'inherit', color: more || restActive ? CK.gold : 'rgba(255,232,214,0.78)', padding: '4px 6px' }}>
+            <Ellipsis size={19} strokeWidth={1.6} />
+            <span>More</span>
+          </button>
+        )}
       </nav>
     </>
   );

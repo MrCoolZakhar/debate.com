@@ -1,21 +1,29 @@
 'use client';
 // Gavelling Crisis: the pop-up a Front Rooms tile opens. It is the organiser's live status for that room (the recap with
-// Overview, Documents, Scoreboard, History and Attendance), read only, fed by the same loader the staff board uses
-// (src/app/admin/liveRoomLoader.ts). Join as chair and Watch only sit at the top of the Overview.
-// One pop-up at a time: the scoreboard REPLACES the recap and its back button brings the recap back.
+// Overview, Cabinet Directives, Crisis News, Scoreboard, History and Attendance; commandRecap.tsx), read only, fed by the same
+// loader the staff board uses (src/app/admin/liveRoomLoader.ts). Join as chair and Watch only sit at the top of the Overview.
+// One pop-up at a time: the scoreboard, a directive or a story REPLACES the recap, and closing it brings the recap back on the
+// tab it was opened from. Directives and news are read live (the same lists the chair's Front Room shows).
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Eye, Gavel } from 'lucide-react';
 import Loader from '@/components/Loader';
 import { NEU, OUTFIT } from '@/components/neu';
-import { getAwardsConfig } from '@/lib/awards';
 import { loadAdminRoom, type AdminRoom } from '@/app/admin/liveRoomLoader';
-import { ModalShell, RecapModal } from '@/app/manage/[slug]/live/LiveModals';
+import { ModalShell } from '@/app/manage/[slug]/live/LiveModals';
 import { FloorDetail } from '@/app/manage/[slug]/live/PhaseVariants';
 import { CommitteeScoreboardModal } from '@/app/manage/[slug]/live/CommitteeScoreboardModal';
 import { SOFT } from '@/app/manage/[slug]/live/tokens';
-import type { Cabinet } from '@/lib/crisis/types';
+import { listDirectives } from '@/lib/crisis/api';
+import { useCrisisLive } from '@/lib/crisis/live';
+import type { Cabinet, Directive } from '@/lib/crisis/types';
 import { CK } from '../../crisisKit';
+import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
+import DirectivePopup from '../directives/DirectivePopup';
+import NewsDetailDialog from '../news/NewsDetailDialog';
+import { useCrisisNews } from '../news/useCrisisNews';
+import CrisisRecap, { type CrisisRecapTab } from './commandRecap';
+import { cabinetDirectivesOf } from './cabinetFeeds';
 import type { RoomState } from './commandData';
 import { LinkBtn } from './commandParts';
 import { RoomStagePanel } from './commandRoomLive';
@@ -29,7 +37,25 @@ export default function CommandRoomDialog({ cab, room, conferenceId, onClose }: 
   const [full, setFull] = useState<AdminRoom | null>(null);
   const [failed, setFailed] = useState(false);
   const [mode, setMode] = useState<'recap' | 'scoreboard'>('recap');
+  const [tab, setTab] = useState<CrisisRecapTab>('overview');
+  // A directive or a story opened from the lists: it replaces the recap until closed.
+  const [openDirective, setOpenDirective] = useState<string | null>(null);
+  const [openNews, setOpenNews] = useState<string | null>(null);
   const inFlight = useRef(false);
+
+  const { ref } = useCrisis();
+  const { items: news } = useCrisisNews(ref);
+  const [directives, setDirectives] = useState<Directive[] | null>(null);
+  const dseq = useRef(0);
+  const readDirectives = useCallback(async () => {
+    const mine = ++dseq.current;
+    try { const d = await listDirectives(ref); if (mine === dseq.current) setDirectives(d); } catch { /* keep what is on screen */ }
+  }, [ref]);
+  useEffect(() => {
+    const t = window.setTimeout(() => { void readDirectives(); }, 0);
+    return () => window.clearTimeout(t);
+  }, [readDirectives]);
+  useCrisisLive(ref.id, ['crisis_directives'], () => { void readDirectives(); });
 
   const load = useCallback(async () => {
     if (!sessionId || inFlight.current || document.visibilityState !== 'visible') return;
@@ -53,7 +79,7 @@ export default function CommandRoomDialog({ cab, room, conferenceId, onClose }: 
 
   if (!full) {
     return (
-      <ModalShell onClose={onClose} label={`${cab.name} room`}>
+      <ModalShell onClose={onClose} label={`${cab.name} committee room`}>
         <div className="flex flex-col items-center gap-3 py-10" style={{ fontFamily: OUTFIT }}>
           {failed ? (
             <>
@@ -78,16 +104,34 @@ export default function CommandRoomDialog({ cab, room, conferenceId, onClose }: 
   const code = room.code;
   const joinCode = code ? (room.chairPassword ? `${code}-${room.chairPassword}` : code) : null;
 
+  const dir = openDirective ? directives?.find((d) => d.id === openDirective) ?? null : null;
+  if (dir) {
+    const queue = cabinetDirectivesOf(directives, cab.id) ?? [dir];
+    return (
+      <DirectivePopup
+        directive={dir}
+        queue={queue.some((d) => d.id === dir.id) ? queue : [dir, ...queue]}
+        onSelect={setOpenDirective}
+        onClose={() => setOpenDirective(null)}
+        onChanged={(what) => { if (what === 'answered') setOpenDirective(null); }}
+      />
+    );
+  }
+  const story = openNews ? news?.find((n) => n.id === openNews) ?? null : null;
+  if (story) return <NewsDetailDialog n={story} onClose={() => setOpenNews(null)} />;
+
   return (
-    <RecapModal
+    <CrisisRecap
       data={data}
-      conferenceSlug=""
-      awardsConfig={getAwardsConfig(null)}
-      awardsPublishedAt={null}
-      conferenceEndDate={null}
-      showAwards={false}
-      showJoin={false}
+      cabinetId={cab.id}
+      tab={tab}
+      onTab={setTab}
+      directives={directives}
+      news={news}
       onClose={onClose}
+      onOpenDirective={(d) => setOpenDirective(d.id)}
+      onOpenNews={(n) => setOpenNews(n.id)}
+      onOpenScoreboard={() => setMode('scoreboard')}
       floorDetail={(
         <>
           {code && joinCode && (
@@ -100,8 +144,6 @@ export default function CommandRoomDialog({ cab, room, conferenceId, onClose }: 
           <FloorDetail data={data} />
         </>
       )}
-      onOpenScoreboard={() => setMode('scoreboard')}
-      onBroadcast={null}
     />
   );
 }

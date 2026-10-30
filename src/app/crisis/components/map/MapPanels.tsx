@@ -4,12 +4,13 @@
 // area: who holds it, and how to reshape it), drawing new territory, and a character's card.
 // Each panel keeps its own form state; the caller gives it a `key` so a new subject starts clean.
 
-import { useState, type ReactNode } from 'react';
-import { Check, RotateCcw, Trash2, X, Undo2 } from 'lucide-react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { Check, Pencil, Plus, RotateCcw, Trash2, X, Undo2 } from 'lucide-react';
 import GSelect from '@/components/GSelect';
 import { amount as fmtAmount } from '@/lib/crisis/format';
 import { Btn, CK, FieldLabel, fieldStyle } from '../../crisisKit';
-import type { Character, MapUnit, UnitKind } from '@/lib/crisis/types';
+import type { Character, MapShape, MapUnit, UnitKind } from '@/lib/crisis/types';
+import { ZONE_COLORS, ZONE_NAME_MAX, ZONE_NO_TYPE_COLOR, type ZoneType } from '@/lib/crisis/zones';
 import { KIND_META, KIND_ORDER } from './mapData';
 import { glyphSvg } from './glyphs';
 
@@ -161,16 +162,28 @@ export function UnitEditor({
 }) {
   const [d, setD] = useState<UnitDraft>(initial);
   const [confirm, setConfirm] = useState(false);
+  // The amount stays text while it is typed (so the 0 can be cleared); it is checked when the unit is saved.
+  const [amountText, setAmountText] = useState(String(Number.isFinite(initial.strength) ? initial.strength : 0));
+  const [amountErr, setAmountErr] = useState(false);
   const others = cabinets.filter((c) => c.id !== d.owner);
   const valid = d.name.trim().length > 0;
+  const submit = () => {
+    const t = amountText.trim();
+    const n = t === '' ? NaN : Number(t);
+    if (!Number.isInteger(n) || n < 0 || n > 1000000) { setAmountErr(true); return; }
+    onSubmit({ ...d, strength: n });
+  };
   const amount = (
     <Field label="Amount">
       <input
-        type="number" min={0} max={1000000} inputMode="numeric" style={{ ...fieldStyle, padding: '6px 10px' }} value={Number.isFinite(d.strength) ? d.strength : 0}
-        onChange={(e) => setD({ ...d, strength: Math.max(0, Math.min(1000000, Math.round(Number(e.target.value) || 0))) })}
+        type="text" inputMode="numeric" autoComplete="off" aria-invalid={amountErr} aria-label="Amount"
+        style={{ ...fieldStyle, padding: '6px 10px', ...(amountErr ? { boxShadow: `0 0 0 2px ${CK.red}` } : {}) }} value={amountText}
+        onChange={(e) => { setAmountText(e.target.value.replace(/[^0-9]/g, '').slice(0, 7)); setAmountErr(false); }}
+        onKeyDown={(e) => { if (e.key === 'Enter' && valid && !busy) submit(); }}
       />
     </Field>
   );
+  const amountMsg = amountErr ? <p role="alert" style={{ margin: '-4px 0 8px', fontSize: 12, fontWeight: 600, color: CK.red }}>Enter a whole number from 0 to 1,000,000.</p> : null;
   const ownerField = (
     <Field label="Owner">
       <GSelect
@@ -191,14 +204,17 @@ export function UnitEditor({
         <input
           style={fieldStyle} value={d.name} maxLength={120} autoFocus={isNew}
           onChange={(e) => setD({ ...d, name: e.target.value })}
-          onKeyDown={(e) => { if (e.key === 'Enter' && isNew && valid && !busy) onSubmit(d); }}
+          onKeyDown={(e) => { if (e.key === 'Enter' && isNew && valid && !busy) submit(); }}
         />
       </Field>
       {isNew ? (
-        <div className="grid" style={{ gridTemplateColumns: '88px 1fr', gap: 8 }}>
-          {amount}
-          {ownerField}
-        </div>
+        <>
+          <div className="grid" style={{ gridTemplateColumns: '96px 1fr', gap: 8 }}>
+            {amount}
+            {ownerField}
+          </div>
+          {amountMsg}
+        </>
       ) : (
         <>
           <div className="grid" style={{ gridTemplateColumns: '1fr 96px', gap: 8 }}>
@@ -207,6 +223,7 @@ export function UnitEditor({
             </Field>
             {amount}
           </div>
+          {amountMsg}
           {ownerField}
           <Field label="Sight range (km)">
             <input
@@ -237,7 +254,7 @@ export function UnitEditor({
         </>
       )}
       <div className="flex flex-wrap items-center" style={{ gap: 8 }}>
-        <Btn size="sm" disabled={busy || !valid} icon={<Check size={14} strokeWidth={1.5} />} onClick={() => onSubmit(d)}>{isNew ? 'Add unit' : 'Save'}</Btn>
+        <Btn size="sm" disabled={busy || !valid} icon={<Check size={14} strokeWidth={1.5} />} onClick={submit}>{isNew ? 'Add unit' : 'Save'}</Btn>
         {isNew && <Btn size="sm" tone="ghost" onClick={onClose}>Cancel</Btn>}
         {!isNew && onDelete && !confirm && (
           <Btn size="sm" tone="danger" disabled={busy} icon={<Trash2 size={14} strokeWidth={1.5} />} onClick={() => setConfirm(true)}>Delete</Btn>
@@ -285,20 +302,37 @@ function Confirm({ text, yes, busy, onYes, onNo }: { text: string; yes: string; 
   );
 }
 
+/** The details of a drawn territory that are saved with its outline. */
+export interface TerritoryInfo { label: string; description: string }
+
 /**
- * A selected country or drawn area: who holds it and, for staff with map power, how to reshape it.
+ * A selected country or drawn area: who holds it and, for staff with map power, how to reshape it. Like a map editor's
+ * side card: the outline is changed on the map (corners, small dots on the sides, or the outline itself), the name and
+ * description are typed here, and Save keeps all of it while Cancel puts everything back. The holder applies at once.
  * `detailed` outlines (many corners) are reshaped by pressing on the outline; simple ones also show corners.
  */
 export function TerritoryCard({
-  name, kind, owner, cabinets, editable, detailed, edited, busy, onOwner, onReset, onDelete, onClose,
+  name, kind, owner, cabinets, editable, detailed, edited, busy, info, outlineDirty, canUndo,
+  onOwner, onUndo, onSave, onCancel, onReset, onDelete, onClose,
 }: {
   name: string; kind: 'country' | 'area'; owner: string | null; cabinets: PanelCabinet[]; editable: boolean; detailed: boolean;
-  edited: boolean; busy: boolean; onOwner: (id: string | null) => void; onReset?: () => void; onDelete?: () => void; onClose: () => void;
+  edited: boolean; busy: boolean;
+  /** A drawn area's saved name and description (null for a country). */
+  info: TerritoryInfo | null;
+  /** The outline has been changed on the map and not saved yet. */
+  outlineDirty: boolean; canUndo: boolean;
+  onOwner: (id: string | null) => void; onUndo: () => void; onSave: (info: TerritoryInfo | null) => void; onCancel: () => void;
+  onReset?: () => void; onDelete?: () => void; onClose: () => void;
 }) {
   const [confirm, setConfirm] = useState<'reset' | 'delete' | null>(null);
+  const [label, setLabel] = useState(info?.label ?? '');
+  const [desc, setDesc] = useState(info?.description ?? '');
   const holder = cabinets.find((c) => c.id === owner);
+  const infoDirty = !!info && (label.trim() !== info.label.trim() || desc.trim() !== info.description.trim());
+  const dirty = outlineDirty || infoDirty;
+  const cancel = () => { setLabel(info?.label ?? ''); setDesc(info?.description ?? ''); onCancel(); };
   return (
-    <Shell title={name} onClose={onClose}>
+    <Shell title={kind === 'area' && (info?.label || '').trim() ? (info?.label ?? name) : name} onClose={() => { cancel(); onClose(); }}>
       <p style={{ margin: '-6px 0 10px', fontSize: 12.5, fontWeight: 600, color: CK.muted }}>
         {kind === 'country' ? (edited ? 'Country, border changed in this crisis' : 'Country') : 'Drawn territory'}
       </p>
@@ -312,15 +346,38 @@ export function TerritoryCard({
           {holder ? (<><Dot color={holder.color} /><b>{holder.name}</b></>) : <b>Nobody</b>}
         </p>
       )}
+      {kind === 'area' && editable && (
+        <>
+          <Field label="Name">
+            <input style={fieldStyle} value={label} maxLength={ZONE_NAME_MAX} aria-label="Name" onChange={(e) => setLabel(e.target.value)} />
+          </Field>
+          <Field label="Description">
+            <textarea style={{ ...fieldStyle, minHeight: 60, resize: 'vertical' }} value={desc} maxLength={2000} aria-label="Description" onChange={(e) => setDesc(e.target.value)} />
+          </Field>
+        </>
+      )}
+      {kind === 'area' && !editable && (info?.description || '').trim() && (
+        <p style={{ margin: '8px 0 0', fontSize: 13.5, color: CK.ink, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{info?.description}</p>
+      )}
       {editable && (
         <p style={{ margin: '0 0 10px', fontSize: 12.5, color: CK.inkSoft }}>
           {detailed
-            ? 'To move the border, press on the outline and drag. It bends out or in from that point, and pulling it outward cuts the new ground out of everyone else\'s. Do it again elsewhere to change it another way.'
-            : 'Drag a white corner to move it, or press anywhere on the outline and drag to add a corner there. Double-click a corner to remove it. Pulling it outward extends this holder\'s land and cuts the new ground out of everyone else\'s.'}
+            ? 'To move the border, press on the outline and drag. It bends out or in from that point; pulling it outward extends this holder\'s land, and saving cuts the new ground out of everyone else\'s. The holder applies at once, the rest when you save.'
+            : 'Drag a white corner to move it, or drag a small dot on a side to add a corner there. Double-click a corner to remove it. Pulling outward extends this holder\'s land, and saving cuts the new ground out of everyone else\'s. The holder applies at once, the rest when you save.'}
         </p>
       )}
+      {editable && (
+        <div className="flex flex-wrap items-center" style={{ gap: 8, marginBottom: confirm ? 0 : 2 }}>
+          <Btn size="sm" disabled={busy || !dirty} icon={<Check size={14} strokeWidth={1.5} />} onClick={() => onSave(info ? { label: label.trim(), description: desc.trim() } : null)}>Save</Btn>
+          <Btn size="sm" tone="ghost" disabled={busy || !dirty} onClick={cancel}>Cancel</Btn>
+          <Btn size="sm" tone="ghost" disabled={busy || !canUndo} icon={<Undo2 size={14} strokeWidth={1.5} />} onClick={onUndo}>Undo</Btn>
+        </div>
+      )}
+      {editable && dirty && (
+        <p style={{ margin: '6px 0 0', fontSize: 12, fontWeight: 600, color: CK.red }}>{outlineDirty ? 'The shape on the map is not saved yet.' : 'Your changes are not saved yet.'}</p>
+      )}
       {editable && (onReset || onDelete) && !confirm && (
-        <div className="flex flex-wrap" style={{ gap: 8 }}>
+        <div className="flex flex-wrap" style={{ gap: 8, marginTop: 10 }}>
           {onReset && edited && (
             <Btn size="sm" tone="ghost" disabled={busy} icon={<RotateCcw size={14} strokeWidth={1.5} />} onClick={() => setConfirm('reset')}>Back to the real border</Btn>
           )}
@@ -344,9 +401,10 @@ export function TerritoryCard({
 
 /** Borders tool: a new territory being drawn on the map, then who holds it. */
 export function NewTerritoryPanel({
-  phase, owner, ownerHint, canSave, pointCount, minPoints, cabinets, busy, onOwner, onUndo, onFinish, onSave, onClose,
+  phase, owner, ownerHint, canSave, pointCount, minPoints, cabinets, busy, canUndo, onOwner, onUndo, onFinish, onSave, onClose,
 }: {
   phase: 'draw' | 'refine'; owner: string | null | undefined; ownerHint?: string; canSave: boolean; pointCount: number; minPoints: number; cabinets: PanelCabinet[]; busy: boolean;
+  canUndo: boolean;
   onOwner: (id: string | null) => void; onUndo: () => void; onFinish: () => void; onSave: () => void; onClose: () => void;
 }) {
   const ownerPick = (
@@ -376,12 +434,246 @@ export function NewTerritoryPanel({
       {ownerPick}
       {ownerHint && <p style={{ margin: '0 0 8px', fontSize: 12.5, fontWeight: 600, color: CK.ink }}>{ownerHint}</p>}
       <p style={{ margin: '0 0 10px', fontSize: 12.5, color: CK.inkSoft }}>
-        You can still drag the corners. Land it covers is taken from whoever holds it now.
+        Drag a corner to move it, or drag a small dot on a side to add a corner. Double-click a corner to remove it. Land it covers is taken from whoever holds it now.
       </p>
       <div className="flex flex-wrap items-center" style={{ gap: 8 }}>
         <Btn size="sm" disabled={busy || !canSave} icon={<Check size={14} strokeWidth={1.5} />} onClick={onSave}>Save territory</Btn>
         <Btn size="sm" tone="ghost" onClick={onClose}>Cancel</Btn>
+        <Btn size="sm" tone="ghost" disabled={!canUndo} icon={<Undo2 size={14} strokeWidth={1.5} />} onClick={onUndo}>Undo</Btn>
       </div>
+    </Shell>
+  );
+}
+
+// ─────────── Zones ───────────
+
+export interface ZoneForm {
+  name: string;
+  /** A zone type id, or null for no type. */
+  type: string | null;
+  /** Used only when there is no type. */
+  color: string;
+  description: string;
+  vis: 'public' | 'cabinets' | 'staff';
+  revealed: string[];
+}
+
+/** A zone's visibility as the database columns hold it. */
+export function zoneVisibility(f: Pick<ZoneForm, 'vis' | 'revealed'>): { public: boolean; revealed_to: string[] } {
+  return f.vis === 'public' ? { public: true, revealed_to: [] } : { public: false, revealed_to: f.vis === 'cabinets' ? f.revealed : [] };
+}
+
+export function zoneFormOf(z: MapShape, types: ZoneType[]): ZoneForm {
+  const typed = z.zone_type && types.some((t) => t.id === z.zone_type) ? z.zone_type : null;
+  return {
+    name: z.label ?? '', type: typed, color: z.color ?? ZONE_NO_TYPE_COLOR, description: z.description ?? '',
+    vis: z.public ? 'public' : z.revealed_to.length ? 'cabinets' : 'staff', revealed: z.revealed_to,
+  };
+}
+
+/** The colour a zone is drawn in: its type's, else its own. */
+export function zoneColorOf(z: Pick<MapShape, 'zone_type' | 'color'>, types: ZoneType[]): string {
+  return types.find((t) => t.id === z.zone_type)?.color ?? z.color ?? ZONE_NO_TYPE_COLOR;
+}
+
+function Swatch({ color, size = 12 }: { color: string; size?: number }) {
+  return <i aria-hidden style={{ display: 'inline-block', width: size, height: size, borderRadius: 4, flex: 'none', background: `${color}33`, border: `2px dashed ${color}`, boxSizing: 'border-box' }} />;
+}
+
+/** The 20 colours a zone without a type can take. */
+function Palette({ value, onChange }: { value: string; onChange: (c: string) => void }) {
+  return (
+    <div role="radiogroup" aria-label="Zone colour" className="flex flex-wrap" style={{ gap: 6 }}>
+      {ZONE_COLORS.map((c) => (
+        <button
+          key={c} type="button" role="radio" aria-checked={c.toLowerCase() === value.toLowerCase()} aria-label={c} title={c} onClick={() => onChange(c)}
+          className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+          style={{
+            width: 22, height: 22, borderRadius: 7, border: 0, cursor: 'pointer', background: c, flex: 'none',
+            boxShadow: c.toLowerCase() === value.toLowerCase() ? `0 0 0 2px #fff, 0 0 0 4px ${CK.ink}` : 'none',
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * A zone being drawn, or an existing zone being edited: the outline is changed on the map, the name, type, description and
+ * who sees it are set here, Save keeps all of it and Cancel puts everything back.
+ */
+export function ZoneEditor({
+  isNew, phase, initial, types, cabinets, pointCount, minPoints, canUndo, outlineDirty, busy,
+  onColor, onUndo, onFinish, onSave, onCancel, onDelete,
+}: {
+  isNew: boolean; phase: 'draw' | 'refine'; initial: ZoneForm; types: ZoneType[]; cabinets: PanelCabinet[]; pointCount: number; minPoints: number;
+  canUndo: boolean; outlineDirty: boolean; busy: boolean;
+  /** The colour the zone is drawn in now (so the map's preview follows the type or the swatch). */
+  onColor: (c: string) => void;
+  onUndo: () => void; onFinish: () => void; onSave: (f: ZoneForm) => void; onCancel: () => void; onDelete?: () => void;
+}) {
+  const [f, setF] = useState<ZoneForm>(initial);
+  const [confirm, setConfirm] = useState(false);
+  const type = types.find((t) => t.id === f.type) ?? null;
+  const color = type?.color ?? f.color;
+  useEffect(() => { onColor(color); }, [color, onColor]);
+  const dirty = outlineDirty || JSON.stringify(f) !== JSON.stringify(initial);
+  const valid = f.name.trim().length > 0 && pointCount >= minPoints && (f.vis !== 'cabinets' || f.revealed.length > 0);
+  const title = isNew ? 'New Zone' : 'Zone';
+
+  if (phase === 'draw') {
+    return (
+      <Shell title={title} onClose={onCancel}>
+        <p style={{ margin: '0 0 10px', fontSize: 13, color: CK.inkSoft }}>
+          Click the map to add points, or press and drag to draw the outline freehand. Double-click, or click the first point, to close the shape.
+        </p>
+        <p style={{ margin: '0 0 10px', fontSize: 13.5 }}>
+          <b style={{ fontSize: 20, fontVariantNumeric: 'tabular-nums' }}>{pointCount}</b> <span style={{ color: CK.inkSoft }}>{pointCount === 1 ? 'point' : 'points'}</span>
+        </p>
+        <div className="flex flex-wrap" style={{ gap: 8 }}>
+          <Btn size="sm" disabled={pointCount < minPoints} icon={<Check size={14} strokeWidth={1.5} />} onClick={onFinish}>Close the shape</Btn>
+          <Btn size="sm" tone="ghost" disabled={pointCount === 0} icon={<Undo2 size={14} strokeWidth={1.5} />} onClick={onUndo}>Undo point</Btn>
+          <Btn size="sm" tone="ghost" onClick={onCancel}>Cancel</Btn>
+        </div>
+      </Shell>
+    );
+  }
+
+  return (
+    <Shell title={title} onClose={onCancel}>
+      <Field label="Name">
+        <input
+          style={fieldStyle} value={f.name} maxLength={ZONE_NAME_MAX} aria-label="Zone name" autoFocus={isNew}
+          onChange={(e) => setF({ ...f, name: e.target.value })}
+        />
+      </Field>
+      <Field label="Type">
+        <GSelect
+          size="sm" value={f.type ?? ''} aria-label="Zone type"
+          options={[{ value: '', label: 'No type' }, ...types.map((t) => ({ value: t.id, label: t.name }))]}
+          onChange={(v) => setF({ ...f, type: v || null })}
+        />
+        {type ? (
+          <p className="flex items-start" style={{ margin: '6px 0 0', gap: 7, fontSize: 12.5, color: CK.inkSoft, overflowWrap: 'anywhere' }}>
+            <span style={{ marginTop: 2 }}><Swatch color={type.color} /></span>
+            <span>{type.description || type.name}</span>
+          </p>
+        ) : (
+          <div style={{ marginTop: 8 }}>
+            <Palette value={f.color} onChange={(c) => setF({ ...f, color: c })} />
+            {types.length === 0 && (
+              <p style={{ margin: '6px 0 0', fontSize: 12, color: CK.inkSoft }}>The Crisis Director can add zone types in Settings, under Map.</p>
+            )}
+          </div>
+        )}
+      </Field>
+      <Field label="Description">
+        <textarea style={{ ...fieldStyle, minHeight: 60, resize: 'vertical' }} value={f.description} maxLength={2000} aria-label="Zone description" onChange={(e) => setF({ ...f, description: e.target.value })} />
+      </Field>
+      <Field label="Seen by">
+        <div role="radiogroup" aria-label="Who sees this zone" className="flex flex-wrap" style={{ background: CK.well, borderRadius: 11, padding: 3, gap: 2 }}>
+          {([['public', 'Everyone'], ['cabinets', 'Chosen cabinets'], ['staff', 'Staff only']] as const).map(([v, l]) => (
+            <button
+              key={v} type="button" role="radio" aria-checked={f.vis === v} onClick={() => setF({ ...f, vis: v })}
+              className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+              style={{
+                border: 0, padding: '5px 10px', borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: 'pointer', fontFamily: CK.font,
+                background: f.vis === v ? CK.card : 'transparent', color: f.vis === v ? CK.forest : CK.inkSoft, boxShadow: f.vis === v ? CK.shadowSm : 'none',
+              }}
+            >
+              {l}
+            </button>
+          ))}
+        </div>
+        {f.vis === 'cabinets' && (
+          <div style={{ marginTop: 6 }}>
+            {cabinets.map((c) => (
+              <CheckRow key={c.id} label={c.name} color={c.color} checked={f.revealed.includes(c.id)} onChange={(on) => setF({ ...f, revealed: toggled(f.revealed, c.id, on) })} />
+            ))}
+            {f.revealed.length === 0 && <p style={{ margin: '4px 0 0', fontSize: 12, color: CK.red, fontWeight: 600 }}>Choose at least one cabinet.</p>}
+          </div>
+        )}
+      </Field>
+      <p style={{ margin: '0 0 10px', fontSize: 12.5, color: CK.inkSoft }}>
+        Drag a white corner to move it, or drag a small dot on a side to add a corner. Double-click a corner to remove it. A zone never changes who holds the land.
+      </p>
+      <div className="flex flex-wrap items-center" style={{ gap: 8 }}>
+        <Btn size="sm" disabled={busy || !valid || (!isNew && !dirty)} icon={<Check size={14} strokeWidth={1.5} />} onClick={() => onSave(f)}>Save zone</Btn>
+        <Btn size="sm" tone="ghost" onClick={onCancel}>Cancel</Btn>
+        <Btn size="sm" tone="ghost" disabled={!canUndo} icon={<Undo2 size={14} strokeWidth={1.5} />} onClick={onUndo}>Undo</Btn>
+        {!isNew && onDelete && !confirm && (
+          <Btn size="sm" tone="danger" disabled={busy} icon={<Trash2 size={14} strokeWidth={1.5} />} onClick={() => setConfirm(true)}>Delete</Btn>
+        )}
+      </div>
+      {!isNew && dirty && <p style={{ margin: '6px 0 0', fontSize: 12, fontWeight: 600, color: CK.red }}>Your changes are not saved yet.</p>}
+      {confirm && onDelete && <Confirm text="Remove this zone from the map?" yes="Yes, remove it" busy={busy} onYes={onDelete} onNo={() => setConfirm(false)} />}
+    </Shell>
+  );
+}
+
+/** A zone's card for everyone who can see it: its name, type, description. Staff can open it for editing. */
+export function ZoneInfoCard({ zone, type, cabinets, staff, canEdit, onEdit, onClose }: {
+  zone: MapShape; type: ZoneType | null; cabinets: PanelCabinet[]; staff: boolean; canEdit: boolean; onEdit: () => void; onClose: () => void;
+}) {
+  const color = type?.color ?? zone.color ?? ZONE_NO_TYPE_COLOR;
+  const seen = zone.public ? 'Everyone' : zone.revealed_to.length
+    ? zone.revealed_to.map((id) => cabinets.find((c) => c.id === id)?.name ?? 'A cabinet').join(', ') : 'Staff only';
+  return (
+    <Shell title={zone.label?.trim() || 'Zone'} onClose={onClose}>
+      <p className="flex items-start" style={{ margin: '-4px 0 10px', gap: 8, fontSize: 13, color: CK.ink, overflowWrap: 'anywhere' }}>
+        <span style={{ marginTop: 3 }}><Swatch color={color} /></span>
+        <span><b>{type ? type.name : 'Zone'}</b>{type?.description ? <span style={{ display: 'block', fontSize: 12.5, color: CK.inkSoft }}>{type.description}</span> : null}</span>
+      </p>
+      {zone.description?.trim() ? (
+        <p style={{ margin: '0 0 10px', fontSize: 13.5, color: CK.ink, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{zone.description}</p>
+      ) : null}
+      {staff && (
+        <p style={{ margin: '0 0 10px', fontSize: 12.5, color: CK.inkSoft, overflowWrap: 'anywhere' }}><span style={{ color: CK.muted }}>Seen by</span> {seen}</p>
+      )}
+      {canEdit && <Btn size="sm" tone="ghost" icon={<Pencil size={14} strokeWidth={1.5} />} onClick={onEdit}>Edit zone</Btn>}
+    </Shell>
+  );
+}
+
+/** The Zones tool with nothing selected: every zone you can see, and a way to draw a new one. */
+export function ZonesPanel({ zones, types, cabinets, onDraw, onPick, onClose }: {
+  zones: MapShape[]; types: ZoneType[]; cabinets: PanelCabinet[]; onDraw: () => void; onPick: (id: string) => void; onClose: () => void;
+}) {
+  void cabinets;
+  return (
+    <Shell title="Zones" onClose={onClose}>
+      <p style={{ margin: '0 0 10px', fontSize: 13, color: CK.inkSoft }}>
+        Zones sit on top of the map and are not territory: they never cut or merge anyone&apos;s land and may overlap. Click a zone to edit it.
+      </p>
+      <div style={{ margin: '0 0 10px' }}>
+        <Btn size="sm" icon={<Plus size={14} strokeWidth={1.5} />} onClick={onDraw}>Draw a new zone</Btn>
+      </div>
+      {zones.length === 0 ? (
+        <p style={{ margin: 0, fontSize: 13, color: CK.muted }}>No zones yet.</p>
+      ) : (
+        <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 2 }}>
+          {zones.map((z) => {
+            const t = types.find((x) => x.id === z.zone_type);
+            return (
+              <li key={z.id}>
+                <button
+                  type="button" onClick={() => onPick(z.id)}
+                  className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] flex items-start w-full text-left"
+                  style={{ gap: 8, border: 0, background: 'transparent', padding: '6px 6px', borderRadius: 9, cursor: 'pointer', fontFamily: CK.font }}
+                >
+                  <span style={{ marginTop: 3 }}><Swatch color={zoneColorOf(z, types)} /></span>
+                  <span style={{ minWidth: 0 }}>
+                    <b style={{ display: 'block', fontSize: 13.5, color: CK.ink, overflowWrap: 'anywhere' }}>{z.label?.trim() || 'Zone'}</b>
+                    <span style={{ display: 'block', fontSize: 12, color: CK.inkSoft, overflowWrap: 'anywhere' }}>
+                      {t ? t.name : 'No type'}{z.public ? '' : z.revealed_to.length ? ' · Some cabinets' : ' · Staff only'}
+                    </span>
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </Shell>
   );
 }

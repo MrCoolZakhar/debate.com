@@ -12,12 +12,13 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { ChevronLeft, ChevronRight, Clock, MessageCircle, Pencil, Reply } from 'lucide-react';
 import { dirNumber } from '@/lib/crisis/format';
-import { KIND_LABEL, OUTCOME_LABEL, type Directive } from '@/lib/crisis/types';
-import { Avatar, Btn, CK, ThemeTag, cabinetTint, waitLabel, waitSeverity } from '../../crisisKit';
+import { KIND_LABEL, type Directive } from '@/lib/crisis/types';
+import { Avatar, Btn, CK, ThemeTag, agoLabel, cabinetTint, waitLabel, waitSeverity } from '../../crisisKit';
 import { CharacterLink } from '../character/CharacterProfileHost';
 import CharacterBackroomer from './CharacterBackroomer';
 import { CabinetLogo, NameStack, NumberBadge, StaffPic, shortName } from './directiveParts';
-import { KIND_ICON, OUTCOME_STYLE, authorName, isBeingWritten, memberName, type Lane, type Names } from './directiveKit';
+import { KIND_ICON, authorName, isBeingWritten, memberName, outcomeView, type Lane, type Names } from './directiveKit';
+import { DirectiveBody, plainText } from './attachedImage';
 
 const WAIT_COLOR = { ok: CK.ink, late: CK.goldDeep, very: CK.danger } as const;
 
@@ -43,8 +44,8 @@ function typingTarget(t: EventTarget | null): boolean {
 
 /** When a directive was sent or answered, in the words of its lane. */
 function whenOf(d: Directive, lane: Lane, now: number): { text: string; sev: 'ok' | 'late' | 'very' | null } {
-  if (lane === 'answered') return { text: `Answered ${waitLabel(d.answered_at, now)} ago`, sev: null };
-  if (lane === 'waiting') return { text: `Asked ${waitLabel(d.answered_at, now)} ago`, sev: null };
+  if (lane === 'answered') return { text: `Answered ${agoLabel(d.answered_at, now)}`, sev: null };
+  if (lane === 'waiting') return { text: `Asked ${agoLabel(d.answered_at, now)}`, sev: null };
   return { text: waitLabel(d.waiting_since, now), sev: waitSeverity(d.waiting_since, now) };
 }
 
@@ -101,7 +102,7 @@ function NextCard({ d, k, fw, names, lane, now, onPick }: { d: Directive; k: num
           </span>
           {isBeingWritten(d, now) && <span style={{ flex: 'none', marginTop: 8 }}><Writing d={d} names={names} now={now} small /></span>}
           {/* The start of the text, fading out where the card ends. */}
-          <span className="rd-fade" style={{ display: 'block', flex: 1, minHeight: 0, overflow: 'hidden', marginTop: 11, fontSize: 14, lineHeight: 1.55, fontWeight: 500, color: CK.inkSoft, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{d.body}</span>
+          <span className="rd-fade" style={{ display: 'block', flex: 1, minHeight: 0, overflow: 'hidden', marginTop: 11, fontSize: 14, lineHeight: 1.55, fontWeight: 500, color: CK.inkSoft, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{plainText(d.body)}</span>
         </button>
       </div>
     </div>
@@ -120,14 +121,14 @@ function FrontCard({ d, names, lane, now, all, index, total, onPrev, onNext, onR
   const KindIcon = KIND_ICON[d.kind];
   const when = whenOf(d, lane, now);
   const open = d.status === 'queued' || d.status === 'claimed';
-  const outcome = d.outcome ? OUTCOME_STYLE[d.outcome] : null;
+  const outcome = outcomeView(d);
   const responsible = d.assigned_member_id ?? ch?.owner_member_id ?? null;
 
   const facts: ReactNode[] = [];
   facts.push(<span key="w">{d.word_count} words</span>);
   if (d.receiver?.trim()) facts.push(<span key="t">To {d.receiver}</span>);
   if (d.covert) facts.push(<span key="c" style={{ color: CK.redDeep }}>Covert</span>);
-  facts.push(<span key="r">{responsible ? `With ${memberName(responsible, names)}` : 'Nobody has it yet'}</span>);
+  facts.push(<span key="r">{responsible ? `Responsible: ${memberName(responsible, names)}` : 'Nobody responsible yet'}</span>);
 
   const iconBtn = { width: 34, height: 34, borderRadius: '50%', border: 0, background: CK.well, color: CK.forest, cursor: 'pointer', flex: 'none' } as const;
 
@@ -175,12 +176,12 @@ function FrontCard({ d, names, lane, now, all, index, total, onPrev, onNext, onR
 
       {/* The text of the directive (scrolls when it is long), then the answer when there is one. */}
       <div className="rd-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '14px 26px 12px 30px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <p style={{ margin: 0, fontSize: 16.5, lineHeight: 1.65, fontWeight: 500, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{d.body}</p>
+        <DirectiveBody body={d.body} thumb={300} asSpan style={{ margin: 0, fontSize: 16.5, lineHeight: 1.65, fontWeight: 500, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }} />
         {d.reply && (
           <div style={{ background: outcome ? cabinetTint(outcome.color, 0.09) : CK.well, borderRadius: 16, padding: '11px 14px', boxShadow: outcome ? `inset 0 0 0 1px ${cabinetTint(outcome.color, 0.28)}` : 'none' }}>
             <p className="flex items-center" style={{ margin: 0, gap: 6, fontSize: 12.5, fontWeight: 800, color: outcome?.color ?? CK.inkSoft }}>
               {outcome ? <outcome.Icon size={15} strokeWidth={1.6} aria-hidden /> : <MessageCircle size={15} strokeWidth={1.6} aria-hidden />}
-              {d.outcome ? OUTCOME_LABEL[d.outcome] : 'Reply'}
+              {outcome ? outcome.word : 'Reply'}
             </p>
             <p style={{ margin: '4px 0 0', fontSize: 14, lineHeight: 1.55, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{d.reply}</p>
           </div>
@@ -246,10 +247,10 @@ export default function DirectiveReader({ queue, focusId, onFocus, onOpen, activ
     if (!active) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
-      if (typingTarget(e.target) || document.querySelector('[data-gsel-popover], [data-crisis-popover]')) return;
+      if (typingTarget(e.target) || document.querySelector('[data-gsel-popover], [data-crisis-popover], [data-image-lightbox]')) return;
       if (e.key === 'ArrowRight') { e.preventDefault(); moveRef.current(1); }
       else if (e.key === 'ArrowLeft') { e.preventDefault(); moveRef.current(-1); }
-      else if (e.key === 'Enter' && !(e.target as HTMLElement | null)?.closest?.('button, a, [role="combobox"]')) { e.preventDefault(); openRef.current(); }
+      else if (e.key === 'Enter' && !(e.target as HTMLElement | null)?.closest?.('button, a, [role="combobox"], [role="button"]')) { e.preventDefault(); openRef.current(); }
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
@@ -277,7 +278,7 @@ export default function DirectiveReader({ queue, focusId, onFocus, onOpen, activ
   return (
     <div ref={stage} className="rd-stage" style={{ ['--fw' as string]: `${fw}px` } as CSSProperties} role="region" aria-label="Directives, one by one">
       <style>{`
-        .rd-stage { position: relative; overflow: hidden; width: 100%; height: clamp(470px, calc(100dvh - 232px), 800px); }
+        .rd-stage { position: relative; z-index: 0; isolation: isolate; overflow: hidden; width: 100%; height: clamp(470px, calc(100dvh - 232px), 800px); }
         .rd-next { transition: left 320ms cubic-bezier(0.22,1,0.36,1), height 320ms cubic-bezier(0.22,1,0.36,1), top 320ms cubic-bezier(0.22,1,0.36,1), width 320ms cubic-bezier(0.22,1,0.36,1); animation: rd-in 280ms cubic-bezier(0.22,1,0.36,1) backwards; }
         .rd-front { animation: rd-front 260ms cubic-bezier(0.22,1,0.36,1) backwards; }
         .rd-scroll { scrollbar-width: thin; }

@@ -16,7 +16,8 @@ import { useCrisisLive } from '@/lib/crisis/live';
 import type { CharacterSecret, Directive, DirectiveNote, News, Resource, ResourceType } from '@/lib/crisis/types';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { Card, CK } from '../../crisisKit';
-import DirectiveForm, { type WorldCharacter } from './DirectiveForm';
+import DirectiveForm, { type DirectivePrefill, type WorldCharacter } from './DirectiveForm';
+import { splitAttached } from '../directives/attachedImage';
 import MyDirectives, { type PersonRef } from './MyDirectives';
 import RoomActions from './RoomActions';
 import CharacterDialog from './CharacterDialog';
@@ -48,6 +49,7 @@ export default function DelegateHome() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [dialog, setDialog] = useState<'character' | 'news' | 'chat' | null>(null);
   const [story, setStory] = useState<News | null>(null);
+  const [prefill, setPrefill] = useState<DirectivePrefill | null>(null);
   const news = useCrisisNews(ref);
   const seq = useRef<Record<string, number>>({});
 
@@ -107,6 +109,16 @@ export default function DelegateHome() {
   }, [everyone, cabinetColor, me, myColor]);
   const memberName = useCallback((id: string | null) => (id ? core.members.find((m) => m.id === id)?.display_name ?? null : null), [core.members]);
 
+  // "Edit and send again": a directive the chair sent back is copied into the form, and the form comes into view.
+  const sendAgain = useCallback((d: Directive) => {
+    const { text, image } = splitAttached(d.body);
+    setPrefill({
+      token: Date.now(), kind: d.kind, title: d.title, body: text, image: image ?? null, themes: d.themes,
+      coauthors: coauthors.filter((x) => x.directive_id === d.id).map((x) => x.character_id),
+    });
+    document.getElementById('crisis-send-directive')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [coauthors]);
+
   const goals = secrets?.find((s) => s.character_id === characterId)?.goals?.trim() || '';
   const myResources = (res?.resources ?? []).filter((r) => (cabinetId && r.cabinet_id === cabinetId) || (characterId && r.character_id === characterId));
   const open = crisis.directives_open;
@@ -144,7 +156,7 @@ export default function DelegateHome() {
         </div>
 
         {/* Middle: the most important thing on the page. */}
-        <div className="order-3 xl:order-none min-w-0 xl:pt-[38px]">
+        <div id="crisis-send-directive" className="order-3 xl:order-none min-w-0 xl:pt-[38px]">
           <DirectiveForm
             cref={ref}
             memberId={memberId}
@@ -156,6 +168,7 @@ export default function DelegateHome() {
             open={open}
             pausedNote={crisis.directives_paused_note}
             onSent={() => { void readDirectives(ref); }}
+            prefill={prefill}
           />
         </div>
 
@@ -179,6 +192,7 @@ export default function DelegateHome() {
               memberName={memberName}
               myMemberId={memberId}
               onChanged={() => { void readDirectives(ref); }}
+              onSendAgain={sendAgain}
             />
           </div>
         </div>

@@ -28,12 +28,18 @@ export function clockText(totalSeconds: number): string {
 
 type ClockFields = { started_at: string | null; ended_at: string | null; paused_at?: string | null; paused_seconds?: number | null };
 
-/** Seconds a meeting has run: (ended_at, else paused_at, else now) - started_at - paused_seconds; null when never started. */
+/**
+ * Seconds a meeting has run, derived ONLY from the row and the database clock (pass serverNow() as `nowMs`):
+ * (ended_at, else paused_at, else now) - started_at - paused_seconds. Whole seconds, rounded down, so a clock only ever
+ * moves forward while it runs; null when never started. Nothing is counted locally.
+ */
 export function meetingSeconds(m: ClockFields, nowMs: number): number | null {
   if (!m.started_at) return null;
-  const start = new Date(m.started_at).getTime();
-  const end = m.ended_at ? new Date(m.ended_at).getTime() : m.paused_at ? new Date(m.paused_at).getTime() : nowMs;
-  return Math.max(0, Math.round((end - start) / 1000 - Number(m.paused_seconds ?? 0)));
+  const start = Date.parse(m.started_at);
+  if (!Number.isFinite(start)) return null;
+  const stop = m.ended_at ? Date.parse(m.ended_at) : m.paused_at ? Date.parse(m.paused_at) : nowMs;
+  const end = Number.isFinite(stop) ? stop : nowMs;
+  return Math.max(0, Math.floor((end - start) / 1000 - Number(m.paused_seconds ?? 0)));
 }
 
 /** In progress = started, not stopped, and still an approved meeting (a hand-marked "held" or a cancelled one is not). Paused counts. */

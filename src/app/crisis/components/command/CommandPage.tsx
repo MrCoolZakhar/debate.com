@@ -11,7 +11,7 @@ import { crisisError, listDirectives, listNews, loadResources } from '@/lib/cris
 import { useCrisisLive } from '@/lib/crisis/live';
 import type { Directive, News, Resource, ResourceType } from '@/lib/crisis/types';
 import { Card, CK, Skeleton } from '../../crisisKit';
-import { crisisBase, useCrisis } from '../../[conference]/[crisis]/CrisisContext';
+import { crisisBase, useCrisis, usePresencePoll } from '../../[conference]/[crisis]/CrisisContext';
 import { loadLastChanges } from './commandData';
 import { ApprovalCard, CommandHeader, LinkBtn } from './commandParts';
 import { ResourcesStrip } from './commandResources';
@@ -19,6 +19,7 @@ import { DirectiveDrawer, WaitingCard } from './commandQueue';
 import { NeedsAttentionCard } from './commandAttention';
 import { FrontRoomsCard, useRoomStates } from './commandRooms';
 import StatsDialog, { StatsButton } from './commandStats';
+import { serverNow } from '@/lib/serverClock';
 
 const WarMap = dynamic(() => import('../map/WarMap'), {
   ssr: false,
@@ -68,6 +69,7 @@ export default function CommandPage() {
   const v = useCrisis();
   const { ref, core, reloadCore } = v;
   const base = crisisBase(ref);
+  usePresencePoll(); // the Online figure: a heartbeat no longer pings the live channel
 
   const [directives, setDirectives] = useState<Directive[] | null>(null);
   const [news, setNews] = useState<News[] | null>(null);
@@ -75,12 +77,12 @@ export default function CommandPage() {
   const [changes, setChanges] = useState<Map<string, number>>(new Map());
   const [open, setOpen] = useState<string | null>(null);
   const [stats, setStats] = useState(false);
-  const [now, setNow] = useState(() => Date.now());
+  const [now, setNow] = useState(() => serverNow());
   const { rooms, failed: roomsFailed } = useRoomStates(ref, core.cabinets);
   const seq = useRef({ d: 0, n: 0, r: 0 });
   const failedOnce = useRef({ d: false, n: false, r: false });
 
-  useEffect(() => { const t = window.setInterval(() => setNow(Date.now()), 30_000); return () => window.clearInterval(t); }, []);
+  useEffect(() => { const t = window.setInterval(() => setNow(serverNow()), 30_000); return () => window.clearInterval(t); }, []);
 
   // A failed re-read keeps what is on screen and says so once; the next ping or poll tries again.
   const failed = useCallback((part: 'd' | 'n' | 'r', e: unknown) => {

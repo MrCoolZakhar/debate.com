@@ -5,12 +5,13 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { friendlyError, UserFacingError } from '@/lib/friendlyError';
+import { serverNowIso } from '@/lib/serverClock';
 import { getCrisisClient, saveCrisisToken, anonClient } from './client';
 import {
   MEMBER_COLUMNS,
   type Cabinet, type Character, type CharacterSecret, type Crisis, type Directive, type DirectiveNote,
   type MapRegion, type MapShape, type MapUnit, type Member, type News, type Resource, type ResourceType,
-  type ResolvedCrisis, type RegionGeometry, type DirectiveOutcome, type DirectiveKind, type CrisisMessage, type Meeting, type MeetingStatus, type CharacterStatus, type CrisisNotification,
+  type ResolvedCrisis, type RegionGeometry, type DirectiveOutcome, type DirectiveKind, type Meeting, type MeetingStatus, type CharacterStatus, type CrisisNotification,
 } from './types';
 
 export interface CrisisRef { conf: string; crisis: string; id: string }
@@ -85,6 +86,14 @@ export async function heartbeat(ref: CrisisRef): Promise<void> {
   await client.rpc('crisis_heartbeat', { p_crisis: ref.id });
 }
 
+/** Just the presence stamps of everyone in the crisis (the "online" dots refresh from this, not from a full core reload). */
+export async function readPresence(ref: CrisisRef): Promise<Array<{ id: string; last_seen_at: string | null }>> {
+  const client = await c(ref);
+  const res = await client.from('crisis_members').select('id, last_seen_at').eq('crisis_id', ref.id);
+  if (res.error) throw new UserFacingError(crisisError(res.error, 'Could not refresh who is online.'));
+  return (res.data ?? []) as Array<{ id: string; last_seen_at: string | null }>;
+}
+
 /** Organiser: switch Gavelling Crisis on for a crisis committee. */
 export async function enableCrisis(conferenceCommitteeId: string, pkg: 'basic' | 'full', name?: string): Promise<{ crisis_id: string; slug: string; created: boolean }> {
   const client = await getCrisisClient('', '');
@@ -142,7 +151,7 @@ export async function loadSecrets(ref: CrisisRef): Promise<CharacterSecret[]> {
 export async function saveSecret(ref: CrisisRef, characterId: string, patch: Partial<Pick<CharacterSecret, 'goals' | 'staff_notes'>>): Promise<void> {
   const client = await c(ref);
   const res = await client.from('crisis_character_secrets')
-    .upsert({ character_id: characterId, crisis_id: ref.id, ...patch, updated_at: new Date().toISOString() }).select('character_id');
+    .upsert({ character_id: characterId, crisis_id: ref.id, ...patch, updated_at: serverNowIso() }).select('character_id');
   if (res.error || !res.data?.length) throw new UserFacingError(crisisError(res.error, 'Could not save the goals.'));
 }
 
@@ -178,12 +187,6 @@ export async function syncRoster(ref: CrisisRef): Promise<{ characters_added: nu
   const client = await c(ref);
   const res = await client.rpc('crisis_sync_roster', { p_crisis: ref.id });
   return must(res, 'Could not bring in the seats and delegates.') as { characters_added: number; members_added: number };
-}
-
-export async function addCabinet(ref: CrisisRef, conferenceCommitteeId: string): Promise<string> {
-  const client = await c(ref);
-  const res = await client.rpc('crisis_add_cabinet', { p_crisis: ref.id, p_conference_committee: conferenceCommitteeId });
-  return must(res, 'Could not add that cabinet.') as string;
 }
 
 export async function saveCabinet(ref: CrisisRef, id: string, patch: Partial<Pick<Cabinet, 'name' | 'short_name' | 'color' | 'sort'>>): Promise<void> {
@@ -376,7 +379,7 @@ export async function loadMap(ref: CrisisRef): Promise<{ regions: MapRegion[]; u
 export async function setRegionOwner(ref: CrisisRef, regionKey: string, ownerCabinetId: string | null): Promise<void> {
   const client = await c(ref);
   const res = await client.from('crisis_map_regions')
-    .upsert({ crisis_id: ref.id, region_key: regionKey, owner_cabinet_id: ownerCabinetId, updated_at: new Date().toISOString() })
+    .upsert({ crisis_id: ref.id, region_key: regionKey, owner_cabinet_id: ownerCabinetId, updated_at: serverNowIso() })
     .select('region_key');
   if (res.error || !res.data?.length) throw new UserFacingError(crisisError(res.error, 'Could not change the border.'));
 }
@@ -387,7 +390,7 @@ export async function saveRegionGeometries(
 ): Promise<void> {
   if (!rows.length) return;
   const client = await c(ref);
-  const at = new Date().toISOString();
+  const at = serverNowIso();
   const res = await client.from('crisis_map_regions')
     .upsert(rows.map((r) => ({ crisis_id: ref.id, region_key: r.key, owner_cabinet_id: r.owner_cabinet_id, geometry: r.geometry, updated_at: at })))
     .select('region_key');
@@ -452,7 +455,7 @@ export async function saveMapDraft(ref: CrisisRef, payload: Record<string, unkno
     return;
   }
   const res = await client.from('crisis_map_drafts')
-    .upsert({ crisis_id: ref.id, payload, updated_at: new Date().toISOString() })
+    .upsert({ crisis_id: ref.id, payload, updated_at: serverNowIso() })
     .select('crisis_id');
   if (res.error || !res.data?.length) throw new UserFacingError(crisisError(res.error, 'Could not save the unsent map changes.'));
 }
@@ -482,6 +485,14 @@ export async function uploadCrisisBanner(ref: CrisisRef, file: File): Promise<st
   return upload(ref, `${ref.id}/news/${Date.now()}-banner.${ext}`, file);
 }
 
+/** A picture attached to a directive or a clarification: JPG, PNG, WebP or GIF up to 20 MB. Returns the public address. */
+export async function uploadCrisisImage(ref: CrisisRef, file: File): Promise<string> {
+  if (!BANNER_TYPES.includes(file.type)) throw new UserFacingError('Use a JPG, PNG, WebP or GIF image.');
+  if (file.size > MAX_MEDIA_BYTES) throw new UserFacingError('The image is over 20 MB.');
+  const ext = file.type === 'image/jpeg' ? 'jpg' : file.type.split('/')[1];
+  return upload(ref, `${ref.id}/directives/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`, file);
+}
+
 /** Any attached file: PDF, Word, PowerPoint, Excel, text or an image, up to 20 MB. */
 export async function uploadCrisisFile(ref: CrisisRef, file: File): Promise<{ url: string; name: string }> {
   if (!FILE_TYPES.includes(file.type)) throw new UserFacingError('Use a PDF, Word, PowerPoint, Excel, text or image file.');
@@ -489,27 +500,6 @@ export async function uploadCrisisFile(ref: CrisisRef, file: File): Promise<{ ur
   const safe = file.name.normalize('NFKD').replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(-80) || 'file';
   const url = await upload(ref, `${ref.id}/files/${Date.now()}-${safe}`, file);
   return { url, name: file.name };
-}
-
-// ─────────── Chat between characters ───────────
-
-export async function listMessages(ref: CrisisRef): Promise<CrisisMessage[]> {
-  const client = await c(ref);
-  const res = await client.from('crisis_messages').select('*').eq('crisis_id', ref.id).order('created_at').limit(5000);
-  return must(res, 'Could not load the messages.') as CrisisMessage[];
-}
-
-export type SendMessageResult = { ok: true; id: string; status: 'sent' | 'pending' } | { ok: false; reason: 'off' };
-export async function sendMessage(ref: CrisisRef, toCharacterId: string, body: string): Promise<SendMessageResult> {
-  const client = await c(ref);
-  const res = await client.rpc('crisis_send_message', { p_crisis: ref.id, p_to_character: toCharacterId, p_body: body });
-  return must(res, 'Could not send the message. It is kept, try again.') as SendMessageResult;
-}
-
-export async function decideMessage(ref: CrisisRef, messageId: string, approve: boolean): Promise<void> {
-  const client = await c(ref);
-  const res = await client.rpc('crisis_decide_message', { p_message: messageId, p_approve: approve });
-  must(res, 'Could not save that decision.');
 }
 
 // ─────────── View as, room codes ───────────
@@ -567,5 +557,6 @@ export async function listNotifications(ref: CrisisRef): Promise<CrisisNotificat
 /** Mark some (or, with no ids, all) of my notifications read. */
 export async function markNotificationsRead(ref: CrisisRef, ids?: string[]): Promise<void> {
   const client = await c(ref);
-  await client.rpc('crisis_mark_notifications_read', { p_crisis: ref.id, p_ids: ids ?? null });
+  const res = await client.rpc('crisis_mark_notifications_read', { p_crisis: ref.id, p_ids: ids ?? null });
+  if (res.error) throw new UserFacingError(crisisError(res.error, 'Could not mark those as read.'));
 }

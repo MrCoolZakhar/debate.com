@@ -23,6 +23,7 @@ import { KIND_ICON, authorName, buildNames, listDirectiveCoauthors } from './dir
 import DirectiveComposer from './DirectiveComposer';
 import DirectiveFacts from './DirectiveFacts';
 import DirectiveThread from './DirectiveThread';
+import { DirectiveBody } from './attachedImage';
 import type { DirectiveReply } from './useDirectiveReply';
 
 const PORTRAIT = 72;
@@ -87,7 +88,7 @@ export default function DirectiveMain({ directive: d, reply, notesVersion = 0, o
       {/* Top, fixed: the title, the character, then the facts and who is responsible */}
       <div style={{ flex: 'none', position: 'relative' }}>
         <div style={{ position: 'absolute', zIndex: 3, top: 'var(--dp-badge-top)', left: 22 }}><NumberBadge n={dirNumber(d)} /></div>
-        <div style={{ background: CK.redGrad, color: '#FFF4E6', padding: 'var(--dp-pt) 18px 16px 22px', borderRadius: 'var(--dp-r) var(--dp-r) 0 0' }}>
+        <div style={{ background: CK.redGrad, color: '#FFF4E6', padding: 'var(--dp-pt) 18px 11px 22px', borderRadius: 'var(--dp-r) var(--dp-r) 0 0' }}>
           <div className="flex items-center justify-between" style={{ gap: 10 }}>
             <p className="inline-flex items-center flex-wrap" style={{ margin: 0, gap: '2px 12px', fontSize: 12.5, fontWeight: 700, color: 'rgba(255,232,214,0.88)' }}>
               <span className="inline-flex items-center" style={{ gap: 6 }}><KindIcon size={15} strokeWidth={1.5} aria-hidden />{KIND_LABEL[d.kind]}</span>
@@ -100,18 +101,18 @@ export default function DirectiveMain({ directive: d, reply, notesVersion = 0, o
               </button>
             </span>
           </div>
-          <h2 style={{ margin: '6px 0 0', fontSize: 26, lineHeight: 1.18, fontWeight: 800, overflowWrap: 'anywhere' }}>{d.title}</h2>
+          <h2 style={{ margin: '4px 0 0', fontSize: 24, lineHeight: 1.18, fontWeight: 800, overflowWrap: 'anywhere' }}>{d.title}</h2>
         </div>
         {/* One white band: the character on the left, the facts and who is responsible in the space beside them */}
-        <div className="flex flex-wrap" style={{ gap: '10px 26px', padding: '0 22px 14px', background: CK.card, boxShadow: `0 1px 0 ${CK.hair}` }}>
-          <div className="flex" style={{ gap: 14, flex: '0 1 320px', minWidth: 0 }}>
+        <div className="flex flex-wrap" style={{ gap: '8px 20px', padding: '0 22px 12px', background: CK.card, boxShadow: `0 1px 0 ${CK.hair}` }}>
+          <div className="flex" style={{ gap: 14, flex: '0 1 270px', minWidth: 0 }}>
             <span style={{ flex: 'none', marginTop: -OVERHANG, lineHeight: 0 }}>
               <CharacterLink id={character?.id} style={{ borderRadius: '50%', lineHeight: 0 }}>
                 <Avatar name={who} src={character?.picture_url} size={PORTRAIT} color={accent} style={{ boxShadow: '0 4px 12px rgba(27,56,40,0.25)' }} />
               </CharacterLink>
             </span>
             <div className="flex flex-col" style={{ paddingTop: 8, minWidth: 0, flex: 1, gap: 4 }}>
-              <NameStack name={who} align="left" big={19} small={12.5} width={190} characterId={character?.id} />
+              <NameStack name={who} align="left" big={19} small={12.5} width={170} characterId={character?.id} />
               {character?.title && <p style={{ margin: 0, fontSize: 13, fontWeight: 600, lineHeight: 1.3, color: CK.inkSoft, overflowWrap: 'anywhere' }}>{character.title}</p>}
               <p className="flex items-center" style={{ margin: 0, gap: 7 }}>
                 <CabinetLogo cabinet={cabinet} size={24} />
@@ -119,16 +120,14 @@ export default function DirectiveMain({ directive: d, reply, notesVersion = 0, o
               </p>
             </div>
           </div>
-          <div style={{ flex: '1 1 340px', minWidth: 0, paddingTop: 12 }}>
-            <DirectiveFacts d={d} names={names} editing={reply.editing} onChanged={onChanged} />
-          </div>
+          <DirectiveFacts d={d} names={names} editing={reply.editing} onChanged={onChanged} />
         </div>
       </div>
 
       {/* Middle, scrolls: the directive itself, big, then the conversation */}
-      <div className="flex flex-col dp-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px 22px 18px', gap: 14 }}>
+      <div className="flex flex-col dp-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '14px 22px 16px', gap: 12 }}>
         <article aria-label="The directive" style={{ background: CK.card, borderRadius: 20, padding: '16px 20px 18px', boxShadow: `inset 5px 0 0 ${accent}, ${CK.shadowSm}` }}>
-          <p style={{ margin: 0, fontSize: 15, lineHeight: 1.6, fontWeight: 500, color: CK.ink, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{d.body}</p>
+          <DirectiveBody body={d.body} style={{ margin: 0, fontSize: 16, lineHeight: 1.6, fontWeight: 500, color: CK.ink, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }} />
           {d.kind === 'joint' && coChars.length > 0 && (
             <div className="flex items-center flex-wrap" style={{ gap: '6px 12px', marginTop: 14 }}>
               <span style={{ fontSize: 12, fontWeight: 700, color: CK.inkSoft }}>With</span>

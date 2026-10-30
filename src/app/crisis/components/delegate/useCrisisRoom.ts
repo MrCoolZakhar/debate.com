@@ -182,12 +182,13 @@ export function useCrisisRoom(): CrisisRoom {
 
   let status: RoomStatus;
   let reason: string | null = null;
-  if (!ready) status = 'loading';
+  if (!character) { status = 'no_seat'; reason = 'You have no character yet. Ask your Crisis Director'; }
+  else if (!ready) status = 'loading';
   else if (!code) { status = 'no_room'; reason = 'Your committee room opens on the conference days'; }
   else if (!room.loaded) status = 'loading';
   else if (room.failed) { status = 'failed'; reason = 'Your committee room did not load'; }
   else if (!committee) { status = 'no_room'; reason = 'Your committee room opens on the conference days'; }
-  else if (!seat) { status = 'no_seat'; reason = 'Your seat is not in the room yet. Ask your chair'; }
+  else if (!seat) { status = 'no_seat'; reason = 'Your seat is not in the committee room yet. Ask your chair'; }
   else status = 'ready';
 
   return {

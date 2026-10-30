@@ -13,6 +13,7 @@ import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { Btn, Card, CardTitle, CK, FieldLabel, fieldStyle } from '../../crisisKit';
 import { NewsDetailBody } from './NewsDetailDialog';
 import { ALL_ROOMS, type NewsForm } from './useNewsDraft';
+import { ZoomableImage } from './ImageLightbox';
 
 export default function NewsComposer({ form, setForm, discard, savedAt, hasContent, canPublish, busy, onSave, onPublish }: {
   form: NewsForm;
@@ -92,8 +93,7 @@ export default function NewsComposer({ form, setForm, discard, savedAt, hasConte
         <div className="grid gap-3" style={{ marginBottom: 12 }}>
           {form.bannerUrl && (
             <div style={{ position: 'relative' }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={form.bannerUrl} alt="Banner preview" style={{ display: 'block', width: '100%', aspectRatio: '16 / 6', objectFit: 'cover', borderRadius: 16, boxShadow: CK.shadowSm }} />
+              <ZoomableImage src={form.bannerUrl} alt="Banner preview" style={{ width: '100%', aspectRatio: '16 / 6', borderRadius: 16, boxShadow: CK.shadowSm }} />
               <button
                 type="button" aria-label="Remove the banner" onClick={() => setForm({ bannerUrl: null })}
                 className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"

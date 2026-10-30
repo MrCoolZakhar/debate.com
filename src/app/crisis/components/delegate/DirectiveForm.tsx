@@ -13,6 +13,11 @@ import { THEMES, type Character, type DirectiveKind } from '@/lib/crisis/types';
 import { Btn, Card, CK, FieldLabel, fieldStyle, Segmented } from '../../crisisKit';
 import MultiSelect, { type MultiOption } from './MultiSelect';
 import { themeIcon } from './directiveUi';
+import { AttachBar, useImageAttach } from './ImageAttach';
+import { withAttached } from '../directives/attachedImage';
+
+/** A directive copied back into the form ("Edit and send again" after the chair sent it back). A new token = a new copy. */
+export interface DirectivePrefill { token: number; kind: DirectiveKind; title: string; body: string; image: string | null; themes: string[]; coauthors: string[] }
 
 export type WorldCharacter = Pick<Character, 'id' | 'cabinet_id' | 'name' | 'status' | 'title'> & { picture_url?: string | null };
 
@@ -23,8 +28,10 @@ interface Draft {
   title: string;
   body: string;
   themes: string[];
+  /** An optional picture, already uploaded; it goes in as the last line of the text. */
+  image: string | null;
 }
-const EMPTY: Draft = { kind: 'personal', coauthors: [], title: '', body: '', themes: [] };
+const EMPTY: Draft = { kind: 'personal', coauthors: [], title: '', body: '', themes: [], image: null };
 
 export function countWords(text: string): number {
   const t = text.trim();
@@ -48,12 +55,13 @@ function readDraft(key: string): Draft {
       title: typeof p.title === 'string' ? p.title : '',
       body: typeof p.body === 'string' ? p.body : '',
       themes: strings(p.themes).filter((t) => (THEMES as readonly string[]).includes(t)),
+      image: typeof p.image === 'string' && p.image.startsWith('https://') ? p.image : null,
     };
   } catch { return EMPTY; }
 }
 
 export default function DirectiveForm({
-  cref, memberId, characterId, world, ownCabinetId, cabinetNames, wordLimit, open, pausedNote, onSent,
+  cref, memberId, characterId, world, ownCabinetId, cabinetNames, wordLimit, open, pausedNote, onSent, prefill,
 }: {
   cref: CrisisRef;
   memberId: string | null;
@@ -65,6 +73,7 @@ export default function DirectiveForm({
   open: boolean;
   pausedNote: string | null;
   onSent: () => void;
+  prefill?: DirectivePrefill | null;
 }) {
   const draftKey = `gavelling-crisis-draft:${cref.id}:${memberId ?? 'me'}`;
   const [d, setD] = useState<Draft>(EMPTY);
@@ -76,13 +85,25 @@ export default function DirectiveForm({
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const sendingRef = useRef(false);
   const latest = useRef<Draft>(EMPTY);
+  const attach = useImageAttach(cref);
+  const attachSet = attach.setUrl;
 
   useEffect(() => {
     const saved = readDraft(draftKey);
     // A saved cabinet directive makes no sense for someone without a cabinet.
     setD(saved.kind === 'committee' && !ownCabinetId ? { ...saved, kind: 'personal' } : saved);
+    attachSet(saved.image);
     setLoaded(true);
-  }, [draftKey, ownCabinetId]);
+  }, [draftKey, ownCabinetId, attachSet]);
+  // A directive copied back in replaces the form (the sender asked for it by pressing Edit and send again).
+  useEffect(() => {
+    if (!prefill || !loaded) return;
+    const kind: FormKind = prefill.kind === 'joint' ? 'joint' : prefill.kind === 'committee' && ownCabinetId ? 'committee' : 'personal';
+    setProblem(null); setConfirmDiscard(false);
+    setD({ kind, coauthors: kind === 'joint' ? prefill.coauthors : [], title: prefill.title, body: prefill.body, themes: prefill.themes, image: prefill.image });
+    attachSet(prefill.image);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill?.token, loaded]);
   const saveDraft = useCallback((draft: Draft) => {
     try {
       if (draft === EMPTY) window.localStorage.removeItem(draftKey);
@@ -91,9 +112,11 @@ export default function DirectiveForm({
   }, [draftKey]);
   useEffect(() => {
     if (!loaded) return;
-    latest.current = d;
-    saveDraft(d);
-  }, [d, loaded, saveDraft]);
+    // The picture is uploaded the moment it is picked; the draft remembers its address.
+    const draft = d.image === attach.url ? d : { ...d, image: attach.url };
+    latest.current = draft;
+    saveDraft(draft);
+  }, [d, attach.url, loaded, saveDraft]);
   // Closing the tab right after a keystroke still keeps the text.
   useEffect(() => {
     if (!loaded) return;
@@ -116,21 +139,21 @@ export default function DirectiveForm({
   }, [until]);
 
   const set = useCallback(<K extends keyof Draft>(k: K, val: Draft[K]) => { setProblem(null); setConfirmDiscard(false); setD((p) => ({ ...p, [k]: val })); }, []);
-  const hasDraft = d.title.trim() !== '' || d.body.trim() !== '' || d.themes.length > 0 || d.coauthors.length > 0;
+  const hasDraft = d.title.trim() !== '' || d.body.trim() !== '' || d.themes.length > 0 || d.coauthors.length > 0 || attach.url !== null;
   const words = countWords(d.body);
   const over = wordLimit > 0 && words > wordLimit;
   const waitLeft = until === null ? 0 : Math.max(0, Math.ceil((until - now) / 1000));
   const needsCo = d.kind === 'joint' && d.coauthors.length === 0;
   const cabinetName = ownCabinetId ? cabinetNames[ownCabinetId] ?? 'your cabinet' : null;
   const complete = d.title.trim() !== '' && d.body.trim() !== '';
-  const canSend = open && complete && !over && !needsCo && waitLeft === 0 && !sending;
+  const canSend = open && complete && !over && !needsCo && waitLeft === 0 && !sending && !attach.uploading;
 
   // Co-authors can be any character in the crisis, from any cabinet.
   const coauthorOptions = useMemo<MultiOption[]>(() => {
     const own = ownCabinetId ?? '';
     const groupName = (c: WorldCharacter) => (c.cabinet_id ? cabinetNames[c.cabinet_id] ?? 'Another cabinet' : 'Others');
     return world
-      .filter((c) => c.id !== characterId && c.status !== 'dead')
+      .filter((c) => c.id !== characterId && c.status !== 'dead' && c.status !== 'spare')
       .map((c) => ({ value: c.id, label: c.title ? `${c.name}, ${c.title}` : c.name, group: groupName(c), mine: c.cabinet_id === own, name: c.name, person: { name: c.name, title: c.title, picture_url: c.picture_url ?? null } }))
       .sort((a, b) => (a.mine === b.mine ? a.group.localeCompare(b.group) || a.name.localeCompare(b.name) : a.mine ? -1 : 1))
       .map(({ value, label, group, person }) => ({ value, label, group, person }));
@@ -146,7 +169,7 @@ export default function DirectiveForm({
     try {
       const kind: DirectiveKind = d.kind;
       const r = await submitDirective(cref, {
-        kind, title: d.title.trim(), body: d.body.trim(), themes: d.themes,
+        kind, title: d.title.trim(), body: withAttached(d.body, attach.url), themes: d.themes,
         covert: true, // a personal directive is always secret
         coauthors: kind === 'joint' ? d.coauthors : [],
       } as DirectiveDraft); // no "To": the receiver is left out and the database stores none
@@ -154,6 +177,7 @@ export default function DirectiveForm({
         const num = dirNumber({ no: r.no, cabinet_no: r.cabinet_no ?? null });
         notifyOk(r.awaiting_chair ? `Directive ${num} sent to your chair` : `Directive ${num} sent`);
         setD(EMPTY);
+        attach.setUrl(null);
         onSent();
       } else if (r.reason === 'cooldown') {
         setUntil(Date.now() + r.wait_seconds * 1000);
@@ -186,7 +210,7 @@ export default function DirectiveForm({
             </span>
             {confirmDiscard ? (
               <>
-                <button type="button" onClick={() => { setProblem(null); setConfirmDiscard(false); setD(EMPTY); }} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]" style={{ border: 0, background: 'transparent', padding: 0, cursor: 'pointer', fontFamily: CK.font, fontSize: 12.5, fontWeight: 800, color: CK.danger, textDecoration: 'underline' }}>Yes, discard it</button>
+                <button type="button" onClick={() => { setProblem(null); setConfirmDiscard(false); setD(EMPTY); attach.setUrl(null); }} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]" style={{ border: 0, background: 'transparent', padding: 0, cursor: 'pointer', fontFamily: CK.font, fontSize: 12.5, fontWeight: 800, color: CK.danger, textDecoration: 'underline' }}>Yes, discard it</button>
                 <button type="button" onClick={() => setConfirmDiscard(false)} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]" style={{ border: 0, background: 'transparent', padding: 0, cursor: 'pointer', fontFamily: CK.font, fontSize: 12.5, fontWeight: 800, color: CK.forest, textDecoration: 'underline' }}>Keep it</button>
               </>
             ) : (
@@ -204,9 +228,9 @@ export default function DirectiveForm({
       )}
 
       <div className="grid gap-3">
-        <div>
-          <div>
-            <FieldLabel>Kind</FieldLabel>
+        <div className="flex flex-wrap items-end" style={{ gap: '10px 16px' }}>
+          <div style={{ flex: 'none' }}>
+            <FieldLabel hint={d.kind === 'committee' ? `From the whole cabinet${cabinetName ? `, ${cabinetName}` : ''}` : undefined}>Kind</FieldLabel>
             <Segmented<FormKind>
               ariaLabel="Kind of directive"
               value={d.kind}
@@ -217,11 +241,17 @@ export default function DirectiveForm({
               ]}
               onChange={(k) => set('kind', k)}
             />
-            {d.kind === 'committee' && (
-              <p style={{ margin: '6px 0 0', fontSize: 12.5, color: CK.inkSoft }}>
-                From the whole cabinet{cabinetName ? `, ${cabinetName}` : ''}.
-              </p>
-            )}
+          </div>
+          <div style={{ flex: '1 1 240px', minWidth: 0 }}>
+            <FieldLabel htmlFor="dir-themes" hint="Optional">Themes</FieldLabel>
+            <MultiSelect
+              id="dir-themes"
+              ariaLabel="Themes"
+              options={themeOptions}
+              value={d.themes}
+              onChange={(v) => set('themes', v)}
+              placeholder="Pick any that fit"
+            />
           </div>
         </div>
 
@@ -253,19 +283,14 @@ export default function DirectiveForm({
               {words}{wordLimit > 0 ? ` / ${wordLimit}` : ''} words
             </span>
           </div>
-          <textarea id="dir-body" value={d.body} onChange={(e) => set('body', e.target.value)} rows={8} style={{ ...fieldStyle, resize: 'vertical', boxShadow: over ? 'inset 0 0 0 2px rgba(163,65,47,0.6)' : fieldStyle.boxShadow }} placeholder="Say what you do, how, and when." />
-        </div>
-
-        <div>
-          <FieldLabel htmlFor="dir-themes" hint="Optional">Themes</FieldLabel>
-          <MultiSelect
-            id="dir-themes"
-            ariaLabel="Themes"
-            options={themeOptions}
-            value={d.themes}
-            onChange={(v) => set('themes', v)}
-            placeholder="Pick any that fit"
-          />
+          <div style={{ position: 'relative' }}>
+            <textarea id="dir-body" value={d.body} onChange={(e) => set('body', e.target.value)} rows={13}
+              style={{ ...fieldStyle, minHeight: 280, resize: 'vertical', paddingBottom: 50, boxShadow: over ? 'inset 0 0 0 2px rgba(163,65,47,0.6)' : fieldStyle.boxShadow }}
+              placeholder="Say what you do, how, and when." />
+            <div style={{ position: 'absolute', left: 10, bottom: 9 }}>
+              <AttachBar url={attach.url} uploading={attach.uploading} onPick={(f) => { setProblem(null); void attach.pick(f); }} onClear={() => attach.setUrl(null)} disabled={sending} />
+            </div>
+          </div>
         </div>
 
         {problem && <p role="alert" style={{ margin: 0, fontSize: 13.5, fontWeight: 600, color: CK.danger }}>{problem}</p>}

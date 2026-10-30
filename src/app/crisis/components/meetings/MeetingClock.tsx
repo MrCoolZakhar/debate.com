@@ -1,34 +1,28 @@
 'use client';
 // Gavelling Crisis: the timer on a meeting itself. Not strict (Peter, 26 Oct 2026): staff and chairs press Start
 // and Stop, the clock shows "06:12 of 10:00" against the planned length, turns warm and then red past it and never
-// stops by itself. Delegates in the meeting see the same clock read only. The page ticks a local clock once a
-// second from started_at; nothing is written per second (the database stamps started_at / ended_at once each).
+// stops by itself. Delegates in the meeting see the same clock read only. The seconds are derived purely from the row
+// (started_at, paused_at, paused_seconds, ended_at) and the DATABASE clock, from one shared ticking source
+// (src/lib/crisis/meetingClockStore.ts): no local counter, no write per second, and a press keeps its expected clock
+// on screen until the re-read agrees, so the clock never snaps back.
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Pause, Play, RotateCcw, Square, Timer } from 'lucide-react';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
-import { type CrisisRef } from '@/lib/crisis/api';
+import { serverNow } from '@/lib/serverClock';
+import { crisisError, type CrisisRef } from '@/lib/crisis/api';
+import { holdClockAction, useMeetingNow } from '@/lib/crisis/meetingClockStore';
 import { clockText, meetingClock, meetingInProgress, meetingPaused, meetingRunning, meetingSeconds, type MeetingClockAction } from '@/lib/crisis/meetings';
 import type { Cabinet, Meeting } from '@/lib/crisis/types';
 import { Btn, CK } from '../../crisisKit';
 import { AvatarStack, NameList, type Person } from './meetingKit';
-
-function useNow(active: boolean): number {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (!active) return;
-    const t = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(t);
-  }, [active]);
-  return now;
-}
 
 /** The running clock, or how long a finished meeting lasted. Draws nothing for a meeting that never started. */
 export function MeetingClockReadout({ m }: { m: Meeting }) {
   const inProgress = meetingInProgress(m);
   const running = meetingRunning(m);
   const paused = inProgress && meetingPaused(m);
-  const now = useNow(running);
+  const now = useMeetingNow(running);
   const secs = meetingSeconds(m, now);
   if (secs === null || (!inProgress && !m.ended_at)) return null;
   const planned = m.duration_minutes * 60;
@@ -56,7 +50,7 @@ export function MeetingClockReadout({ m }: { m: Meeting }) {
         )}
       </div>
       <div aria-hidden style={{ marginTop: 8, height: 5, borderRadius: 3, background: 'rgba(27,56,40,0.1)', overflow: 'hidden' }}>
-        <div style={{ width: `${share * 100}%`, height: '100%', background: color, borderRadius: 3, transition: 'width 600ms linear' }} />
+        <div style={{ width: `${share * 100}%`, height: '100%', background: color, borderRadius: 3, transition: 'width 300ms linear' }} />
       </div>
     </div>
   );
@@ -83,8 +77,9 @@ export function MeetingClockControls({ m, refx, onChanged }: { m: Meeting; refx:
   const paused = meetingPaused(m);
   const act = async (action: MeetingClockAction, ok: string) => {
     setBusy(true);
-    try { await meetingClock(refx, m.id, action); notifyOk(ok, 'crisis-meeting-clock'); onChanged?.(); } catch (e) {
-      notifyErr((e as Error).message || 'Could not change the meeting clock.', 'crisis-meeting-clock');
+    const pressedAt = serverNow();
+    try { await meetingClock(refx, m.id, action); holdClockAction(m, action, pressedAt); notifyOk(ok, 'crisis-meeting-clock'); onChanged?.(); } catch (e) {
+      notifyErr(crisisError(e, 'Could not change the meeting clock.'), 'crisis-meeting-clock');
     } finally { setBusy(false); }
   };
   return (

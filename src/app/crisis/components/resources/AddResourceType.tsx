@@ -29,7 +29,7 @@ export default function AddResourceType({ refx, onClose }: { refx: CrisisRef; on
 
   return (
     <Card warm style={{ marginBottom: 16 }}>
-      <CardTitle icon={<Plus size={17} strokeWidth={1.5} aria-hidden />}>Add a resource type</CardTitle>
+      <CardTitle icon={<Plus size={17} strokeWidth={1.5} aria-hidden />}>Add a Resource Type</CardTitle>
       <div className="grid" style={{ gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
         <div><FieldLabel htmlFor="rt-name">Name</FieldLabel><input id="rt-name" value={name} onChange={(e) => { setName(e.target.value); setHint(null); }} maxLength={60} style={fieldStyle} placeholder="For example: Submarines" /></div>
         <div><FieldLabel htmlFor="rt-unit" hint="what it is counted in">Measure</FieldLabel><input id="rt-unit" value={unit} onChange={(e) => setUnit(e.target.value)} maxLength={20} style={fieldStyle} placeholder="For example: ships, tonnes, $bn" /><UnitChips value={unit} onPick={setUnit} /></div>

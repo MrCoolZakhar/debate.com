@@ -4,6 +4,7 @@
 // Outcomes reward a good plan (approved > partly > denied); sending is worth a little so quiet
 // delegates are visible; meetings held and cabinet directives count because they move the committee.
 
+import { isChairSendBack } from './format';
 import type { Directive, Meeting } from './types';
 
 export interface PointsConfig {
@@ -37,7 +38,8 @@ export function characterPoints(
   config: PointsConfig,
   coauthored: Set<string> = new Set(), // ids of joint directives this character co-wrote
 ): PointsResult {
-  const mine = directives.filter((d) => d.author_character_id === characterId && d.status !== 'withdrawn');
+  // A directive the chair turned back never reached the backroom: it earns nothing and is never a denial.
+  const mine = directives.filter((d) => d.author_character_id === characterId && d.status !== 'withdrawn' && !isChairSendBack(d));
   const sent = mine.length;
   const approved = mine.filter((d) => d.outcome === 'approved').length;
   const partial = mine.filter((d) => d.outcome === 'partial').length;

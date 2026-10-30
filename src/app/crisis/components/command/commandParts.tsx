@@ -9,7 +9,7 @@ import { DatePicker } from '@/components/DatePicker';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { crisisError, patchCrisis, publishNews, type CrisisRef } from '@/lib/crisis/api';
 import type { Cabinet, Crisis, Member, News } from '@/lib/crisis/types';
-import { Btn, Card, CardTitle, CK, cabinetTint, Eyebrow, fieldStyle, scenarioLabel, Skeleton, waitLabel } from '../../crisisKit';
+import { Btn, Card, CardTitle, CK, cabinetTint, Eyebrow, fieldStyle, scenarioLabel, Skeleton, agoLabel } from '../../crisisKit';
 import NewsComposerDialog from './NewsComposerDialog';
 import { TryAsButton } from './TryAsPanel';
 
@@ -45,10 +45,7 @@ export function EmptyLine({ children }: { children: ReactNode }) {
   return <p style={{ margin: '4px 0 0', fontSize: 13, color: CK.inkSoft }}>{children}</p>;
 }
 
-const ago = (iso: string | null | undefined, now: number) => {
-  const w = waitLabel(iso, now);
-  return w === 'just now' ? w : `${w} ago`;
-};
+const ago = agoLabel;
 
 // ─────────── Header and status strip ───────────
 // One compact row. Editing the date or pausing directives opens a small pop-over, so the strip
@@ -119,7 +116,11 @@ export function CommandHeader({ crisis, cref, acronym, logoUrl, members, now, on
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState<'date' | 'open' | null>(null);
 
-  const online = useMemo(() => members.filter((m) => m.last_seen_at && now - new Date(m.last_seen_at).getTime() <= 3 * 60_000).length, [members, now]);
+  // Online counts only people who can sign in at all (an account or a personal code), so the total is not padded with empty seats.
+  const { online, canSignIn } = useMemo(() => {
+    const people = members.filter((m) => m.user_id || m.access_code);
+    return { online: people.filter((m) => m.last_seen_at && now - new Date(m.last_seen_at).getTime() <= 3 * 60_000).length, canSignIn: people.length };
+  }, [members, now]);
 
   const words = crisis.name.trim().split(/\s+/);
   const last = words.length > 1 ? words[words.length - 1] : '';
@@ -197,7 +198,7 @@ export function CommandHeader({ crisis, cref, acronym, logoUrl, members, now, on
         </StripCell>
 
         <StripCell icon={<Users size={13} strokeWidth={1.5} />} label="Online">
-          <span style={{ fontSize: 14.5, fontWeight: 800, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{online} of {members.length}</span>
+          <span style={{ fontSize: 14.5, fontWeight: 800, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{online} of {canSignIn}</span>
         </StripCell>
       </div>
       {extra}
@@ -252,7 +253,7 @@ export function ApprovalCard({ news, cabinets, members, cref, now, onChanged }: 
     setBusy(n.id);
     try {
       const r = await publishNews(cref, n.id);
-      notifyOk(`Published to ${r.rooms} room${r.rooms === 1 ? '' : 's'}`, 'crisis-command');
+      notifyOk(`Published to ${r.rooms} committee room${r.rooms === 1 ? '' : 's'}`, 'crisis-command');
       onChanged();
     } catch (e) { notifyErr(crisisError(e, 'Could not publish that.'), 'crisis-command'); }
     finally { setBusy(null); }
@@ -277,7 +278,7 @@ export function ApprovalCard({ news, cabinets, members, cref, now, onChanged }: 
               <div style={{ flex: 1, minWidth: 0 }}>
                 <b style={{ display: 'block', fontSize: 13, color: CK.ink, overflowWrap: 'anywhere' }}>{n.title}</b>
                 <span style={{ display: 'block', fontSize: 11.5, color: CK.inkSoft, overflowWrap: 'anywhere' }}>
-                  {by ? `${by}` : 'Draft'} · {aud ? `${aud} room` : 'every room'} · {ago(n.created_at, now)}
+                  {by ? `${by}` : 'Draft'} · {aud ? `${aud} committee room` : 'every committee room'} · {ago(n.created_at, now)}
                 </span>
               </div>
               <div className="flex" style={{ gap: 6, flex: 'none' }}>

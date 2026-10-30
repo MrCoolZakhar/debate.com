@@ -4,7 +4,8 @@
 // (crisis, cabinets, people, characters) and keeps it live. Pages read it with useCrisis().
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { heartbeat, loadCore, resolveCrisis, type CrisisCore, type CrisisRef } from '@/lib/crisis/api';
+import { crisisError, heartbeat, loadCore, readPresence, resolveCrisis, type CrisisCore, type CrisisRef } from '@/lib/crisis/api';
+import { ensureServerClock } from '@/lib/serverClock';
 import { useCrisisLive } from '@/lib/crisis/live';
 import { readSettings, isDirector, isStaff, type CrisisRole, type CrisisSettings, type ResolvedCrisis } from '@/lib/crisis/types';
 
@@ -23,6 +24,9 @@ export interface CrisisContextValue {
   live: boolean;
   /** Re-read the core world now (after a write the page made). */
   reloadCore: () => Promise<void>;
+  /** A screen that shows who is online calls this (use usePresencePoll). While any does, ONE poll re-reads the members' last_seen_at
+   *  every 60 s with the tab visible, because a heartbeat no longer pings the live channel. Returns the release function. */
+  watchPresence: () => () => void;
 }
 
 const Ctx = createContext<CrisisContextValue | null>(null);
@@ -31,6 +35,12 @@ export function useCrisis(): CrisisContextValue {
   const v = useContext(Ctx);
   if (!v) throw new Error('useCrisis must be used inside the crisis layout');
   return v;
+}
+
+/** Keeps the "online" figures of the calling screen fresh (one shared poller, however many screens call it). */
+export function usePresencePoll(): void {
+  const { watchPresence } = useCrisis();
+  useEffect(() => watchPresence(), [watchPresence]);
 }
 
 export type CrisisGate =
@@ -48,6 +58,8 @@ export function useCrisisGate(conf: string, crisis: string, identityKey: string)
   const [attempt, setAttempt] = useState(0);
   const loading = useRef(false);
 
+  useEffect(() => { ensureServerClock(); }, []);
+
   useEffect(() => {
     let cancelled = false;
     setError(null);
@@ -61,7 +73,7 @@ export function useCrisisGate(conf: string, crisis: string, identityKey: string)
           if (!cancelled) setCore(c);
         }
       } catch (e) {
-        if (!cancelled) setError((e as Error).message || 'Could not open this crisis.');
+        if (!cancelled) setError(crisisError(e, 'Could not open this crisis.'));
       }
     })();
     return () => { cancelled = true; };
@@ -91,6 +103,43 @@ export function useCrisisGate(conf: string, crisis: string, identityKey: string)
     return () => window.clearInterval(t);
   }, [ref]);
 
+  // ONE presence poller for the whole page: it runs only while a screen that shows who is online is mounted.
+  const watchers = useRef(0);
+  const pollTimer = useRef<number | null>(null);
+  const refRef = useRef(ref);
+  useEffect(() => { refRef.current = ref; }, [ref]);
+  const watchPresence = useCallback(() => {
+    const tick = async () => {
+      const r = refRef.current;
+      if (!r || document.visibilityState !== 'visible') return;
+      try {
+        const rows = await readPresence(r);
+        const seen = new Map(rows.map((x) => [x.id, x.last_seen_at]));
+        setCore((prev) => {
+          if (!prev) return prev;
+          let changed = false;
+          const members = prev.members.map((m) => {
+            if (!seen.has(m.id)) return m;
+            const at = seen.get(m.id) ?? null;
+            if (at === m.last_seen_at) return m;
+            changed = true;
+            return { ...m, last_seen_at: at };
+          });
+          return changed ? { ...prev, members } : prev;
+        });
+      } catch { /* keep the dots as they are; the next poll retries */ }
+    };
+    watchers.current += 1;
+    if (pollTimer.current === null) {
+      void tick();
+      pollTimer.current = window.setInterval(() => { void tick(); }, 60_000);
+    }
+    return () => {
+      watchers.current = Math.max(0, watchers.current - 1);
+      if (watchers.current === 0 && pollTimer.current !== null) { window.clearInterval(pollTimer.current); pollTimer.current = null; }
+    };
+  }, []);
+
   const value = useMemo<CrisisContextValue | null>(() => {
     if (!ref || !resolved?.role || !resolved.conference || !core) return null;
     const role = resolved.role;
@@ -107,8 +156,9 @@ export function useCrisisGate(conf: string, crisis: string, identityKey: string)
       director: isDirector(role),
       live,
       reloadCore,
+      watchPresence,
     };
-  }, [ref, resolved, core, live, reloadCore]);
+  }, [ref, resolved, core, live, reloadCore, watchPresence]);
 
   let gate: CrisisGate;
   if (error && !value) gate = { state: 'error', message: error };

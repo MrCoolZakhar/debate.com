@@ -8,13 +8,14 @@
 
 import { useState } from 'react';
 import { Clock } from 'lucide-react';
-import { dirNumber, timeAgo } from '@/lib/crisis/format';
-import { OUTCOME_LABEL, type Directive, type DirectiveNote } from '@/lib/crisis/types';
+import { dirNumber, isChairSendBack, timeAgo } from '@/lib/crisis/format';
+import type { Directive, DirectiveNote } from '@/lib/crisis/types';
 import type { CrisisRef } from '@/lib/crisis/api';
 import { Avatar, Card, CK, Skeleton } from '../../crisisKit';
 import DirectiveDialog from './DirectiveDialog';
 import DirectiveDeepLink from '../notifications/DirectiveDeepLink';
-import { KIND_WORD, kindIcon, outcomeColor, outcomeIcon, statusColor, statusIcon, STATUS_WORDS } from './directiveUi';
+import { KIND_WORD, kindIcon, verdictOf } from './directiveUi';
+import { plainText } from '../directives/attachedImage';
 
 export interface PersonRef { name: string; picture_url: string | null; color: string }
 
@@ -23,11 +24,11 @@ const PORTRAIT = 48;
 const OVERHANG = PORTRAIT / 3;
 
 function DirectiveCard({ d, author, onOpen }: { d: Directive; author: PersonRef; onOpen: () => void }) {
-  const tagColor = d.outcome ? outcomeColor(d.outcome) : statusColor(d.status);
-  const tagWord = d.outcome ? OUTCOME_LABEL[d.outcome] : STATUS_WORDS[d.status];
-  const tagIcon = d.outcome ? outcomeIcon(d.outcome, 13) : statusIcon(d.status, 13);
-  const reply = d.reply?.trim() ?? '';
-  const text = reply || d.body.trim();
+  const { color: tagColor, word: tagWord, icon: tagIcon } = verdictOf(d, 13);
+  const sentBack = isChairSendBack(d);
+  // A send-back's stored reply is only a notice; the card shows what the author wrote, and the chair's note is in the conversation.
+  const reply = sentBack ? '' : d.reply?.trim() ?? '';
+  const text = reply || plainText(d.body).trim();
   const ask = d.status === 'clarify';
   return (
     <button
@@ -67,7 +68,7 @@ function DirectiveCard({ d, author, onOpen }: { d: Directive; author: PersonRef;
         </b>
         <span className="inline-flex items-center" style={{ gap: 4, marginTop: 3, fontSize: 12, fontWeight: 700, color: d.answered_at ? CK.red : CK.muted }}>
           <Clock size={12} strokeWidth={1.6} aria-hidden />
-          {d.answered_at ? `Reply ${timeAgo(d.answered_at)}` : `Sent ${timeAgo(d.created_at)}`}
+          {d.answered_at ? `${sentBack ? 'Sent back' : 'Reply'} ${timeAgo(d.answered_at)}` : `Sent ${timeAgo(d.created_at)}`}
         </span>
         <span
           title={text}
@@ -82,7 +83,7 @@ function DirectiveCard({ d, author, onOpen }: { d: Directive; author: PersonRef;
 }
 
 export default function MyDirectives({
-  cref, directives, notes, coauthors, personOf, memberName, myMemberId, onChanged,
+  cref, directives, notes, coauthors, personOf, memberName, myMemberId, onChanged, onSendAgain,
 }: {
   cref: CrisisRef;
   directives: Directive[] | null;
@@ -92,6 +93,8 @@ export default function MyDirectives({
   memberName: (memberId: string | null) => string | null;
   myMemberId: string | null;
   onChanged: () => void;
+  /** Copy a directive its chair sent back into the Send a Directive form. */
+  onSendAgain?: (d: Directive) => void;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
   const openOne = openId ? (directives ?? []).find((d) => d.id === openId) ?? null : null;
@@ -125,6 +128,7 @@ export default function MyDirectives({
           answeredBy={memberName(openOne.answered_by)}
           onChanged={onChanged}
           onClose={() => setOpenId(null)}
+          onSendAgain={onSendAgain ? () => { setOpenId(null); onSendAgain(openOne); } : undefined}
         />
       )}
     </section>

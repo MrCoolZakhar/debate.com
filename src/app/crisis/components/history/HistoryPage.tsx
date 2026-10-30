@@ -2,20 +2,30 @@
 // Gavelling Crisis: the History page. Every change on the map, newest first, grouped by day: troop moves and
 // strength, borders (countries changing hands) and drawn areas. Staff see all of it and who did it; everyone
 // else sees what changed for their own cabinet, never who (the database decides which rows come back).
-// A row opens the same still-map pop-up as a notification. It re-reads whenever the map changes.
+// Everything sent together is one entry that opens to list its changes; a change opens the same still-map pop-up as a
+// notification, and staff with map and unit power can bring the map back to the point after an entry.
+// It re-reads whenever the map changes.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import { History as HistoryIcon } from 'lucide-react';
 import GSelect from '@/components/GSelect';
-import { crisisError } from '@/lib/crisis/api';
-import { crisisHistory, parseChange, type ChangeFilter, type HistoryChange } from '@/lib/crisis/history';
+import { notifyErr, notifyOk } from '@/lib/appNotify';
+import { UserFacingError } from '@/lib/friendlyError';
+import { crisisError, loadMap, saveMapDraft } from '@/lib/crisis/api';
+import { crisisHistory, groupBatches, parseChange, type ChangeFilter, type HistoryBatch, type HistoryChange } from '@/lib/crisis/history';
 import { useCrisisLive } from '@/lib/crisis/live';
 import { Btn, Card, CK, Segmented, Skeleton } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
+import { isEmptySet, sendSet } from '../map/mapEdits';
+import { buildRestoreSet } from '../map/mapRestore';
+import BatchEntry from './BatchEntry';
 import ChangeDialog from './ChangeDialog';
-import { ChangeDisc, PieceLine, describe, useChangeCtx, type ChangeCtx } from './changeKit';
+import { useChangeCtx } from './changeKit';
 
 const PAGE = 200;
+/** How far back a restore reads the history. */
+const RESTORE_ROWS = 3000;
 type Filter = 'all' | ChangeFilter;
 
 function dayKey(iso: string): string {
@@ -32,31 +42,16 @@ function dayLabel(iso: string): string {
 }
 const timeOf = (iso: string) => new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 
-function Row({ c, ctx, staff, onOpen }: { c: HistoryChange; ctx: ChangeCtx; staff: boolean; onOpen: () => void }) {
-  const d = describe(c, ctx);
-  return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="flex w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8E2424] hover:bg-[rgba(142,36,36,0.04)]"
-      style={{ gap: 12, padding: '11px 6px', border: 0, borderTop: `1px solid ${CK.hair}`, background: 'transparent', cursor: 'pointer', font: 'inherit', borderRadius: 10 }}
-    >
-      <ChangeDisc d={d} />
-      <span className="min-w-0 flex-1">
-        <b style={{ display: 'block', fontSize: 14.5, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{d.title}</b>
-        {d.lines.map((l, i) => <span key={i} style={{ display: 'block', marginTop: 3 }}><PieceLine pieces={l} ctx={ctx} /></span>)}
-        <span style={{ display: 'block', marginTop: 3, fontSize: 12.5, fontWeight: 600, color: CK.muted }} title={new Date(c.at).toLocaleString()}>
-          {timeOf(c.at)}{staff && c.by ? <> · by <b style={{ color: CK.inkSoft }}>{c.by}</b></> : null}
-        </span>
-      </span>
-    </button>
-  );
-}
+interface Entry { batch: HistoryBatch; changes: HistoryChange[] }
 
 /** `embedded`: shown as the History tab of the Map page, which carries the page title. */
 export default function HistoryPage({ embedded = false }: { embedded?: boolean } = {}) {
-  const { ref, staff } = useCrisis();
+  const { ref, staff, director, settings } = useCrisis();
   const ctx = useChangeCtx();
+  const router = useRouter();
+  const pathname = usePathname();
+  // Going back touches units, territories and shapes, so it needs power over both.
+  const canRestore = staff && (director || (settings.backroomPowers.map && settings.backroomPowers.units));
   const [limit, setLimit] = useState(PAGE);
   const [rows, setRows] = useState<Awaited<ReturnType<typeof crisisHistory>> | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -70,19 +65,55 @@ export default function HistoryPage({ embedded = false }: { embedded?: boolean }
   useEffect(() => { void Promise.resolve().then(load); }, [load]);
   useCrisisLive(ref.id, ['crisis_units', 'crisis_map_regions', 'crisis_shapes'], () => { void load(); });
 
-  const changes = useMemo(() => (rows ?? []).map(parseChange).filter((c): c is HistoryChange => !!c), [rows]);
-  const people = useMemo(() => [...new Set(changes.map((c) => c.by).filter((x): x is string => !!x))].sort((a, b) => a.localeCompare(b)), [changes]);
-  const shown = useMemo(() => changes.filter((c) => (filter === 'all' || c.filter === filter) && (who === 'all' || c.by === who)), [changes, filter, who]);
+  // Everything sent together is one entry; the filters then keep the changes that match.
+  const entries = useMemo<Entry[]>(
+    () => groupBatches(rows ?? []).map((batch) => ({ batch, changes: batch.rows.map(parseChange).filter((c): c is HistoryChange => !!c) })).filter((e) => e.changes.length > 0),
+    [rows],
+  );
+  const people = useMemo(() => [...new Set(entries.flatMap((e) => e.changes.map((c) => c.by)).filter((x): x is string => !!x))].sort((a, b) => a.localeCompare(b)), [entries]);
+  const shown = useMemo(
+    () => entries
+      .map((e) => ({ ...e, changes: e.changes.filter((c) => (filter === 'all' || c.filter === filter) && (who === 'all' || c.by === who)) }))
+      .filter((e) => e.changes.length > 0),
+    [entries, filter, who],
+  );
   const days = useMemo(() => {
-    const out: Array<{ key: string; label: string; items: HistoryChange[] }> = [];
-    for (const c of shown) {
-      const k = dayKey(c.at);
+    const out: Array<{ key: string; label: string; items: Entry[] }> = [];
+    for (const e of shown) {
+      const k = dayKey(e.batch.at);
       const last = out[out.length - 1];
-      if (last && last.key === k) last.items.push(c);
-      else out.push({ key: k, label: dayLabel(c.at), items: [c] });
+      if (last && last.key === k) last.items.push(e);
+      else out.push({ key: k, label: dayLabel(e.batch.at), items: [e] });
     }
     return out;
   }, [shown]);
+
+  /** Brings the map back to the point right after a batch: as unsent changes when those wait, else at once. */
+  const restore = useCallback(async (b: HistoryBatch) => {
+    try {
+      const [current, full] = await Promise.all([loadMap(ref), crisisHistory(ref, { limit: RESTORE_ROWS })]);
+      const plan = buildRestoreSet(current, full, b.id, ref.id);
+      if (!plan) throw new UserFacingError('That point is too far back to bring the map back to.');
+      if (isEmptySet(plan.set)) { notifyOk('The map already looks like it did then', 'crisis-map'); return; }
+      const skipped = plan.skipped ? ` ${plan.skipped} older ${plan.skipped === 1 ? 'change' : 'changes'} had no earlier state and stay as they are.` : '';
+      if (settings.mapChangesWait) {
+        await saveMapDraft(ref, plan.set as unknown as Record<string, unknown>);
+        notifyOk(`Brought back as unsent changes. Look at the map, then send them.${skipped}`, 'crisis-map');
+        const q = new URLSearchParams(window.location.search);
+        q.delete('tab');
+        const qs = q.toString();
+        router.replace(`${pathname}${qs ? `?${qs}` : ''}`, { scroll: false });
+        return;
+      }
+      const r = await sendSet(ref, plan.set);
+      if (r.error) throw r.error;
+      notifyOk(`The map is back to that point.${skipped}`, 'crisis-map');
+      void load();
+    } catch (e) {
+      notifyErr(crisisError(e, 'Could not bring the map back.'), 'crisis-map');
+      throw e;
+    }
+  }, [ref, settings.mapChangesWait, router, pathname, load]);
 
   const whoOptions = useMemo(() => [{ value: 'all', label: 'Everyone' }, ...people.map((p) => ({ value: p, label: p }))], [people]);
 
@@ -119,7 +150,7 @@ export default function HistoryPage({ embedded = false }: { embedded?: boolean }
       ) : days.length === 0 ? (
         <Card>
           <p style={{ margin: 0, fontSize: 14.5, color: CK.inkSoft }}>
-            {changes.length === 0 ? 'Nothing has changed on the map yet. Moves, borders and areas will appear here.' : 'Nothing matches that filter.'}
+            {entries.length === 0 ? 'Nothing has changed on the map yet. Moves, borders and areas will appear here.' : 'Nothing matches that filter.'}
           </p>
         </Card>
       ) : (
@@ -128,7 +159,13 @@ export default function HistoryPage({ embedded = false }: { embedded?: boolean }
             {days.map((day) => (
               <Card key={day.key} style={{ padding: '14px 12px 8px' }}>
                 <h2 style={{ margin: '0 6px 6px', fontSize: 15, fontWeight: 800, color: CK.ink }}>{day.label}</h2>
-                {day.items.map((c) => <Row key={c.rowId} c={c} ctx={ctx} staff={staff} onOpen={() => setOpen(c)} />)}
+                {day.items.map((e) => (
+                  <BatchEntry
+                    key={e.batch.id} changes={e.changes} at={e.batch.at} by={e.batch.by} ctx={ctx} staff={staff} canRestore={canRestore}
+                    whenLabel={`${dayLabel(e.batch.at).toLowerCase()} at ${timeOf(e.batch.at)}`}
+                    onOpen={setOpen} onRestore={() => restore(e.batch)}
+                  />
+                ))}
               </Card>
             ))}
           </div>

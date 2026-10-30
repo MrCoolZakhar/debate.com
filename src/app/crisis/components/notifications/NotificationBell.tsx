@@ -15,6 +15,7 @@ import { useCrisisLive } from '@/lib/crisis/live';
 import { crisisBase, useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { CK } from '../../crisisKit';
 import NotificationDetail, { hasMapDetail } from './NotificationDetail';
+import { serverNow } from '@/lib/serverClock';
 
 const POPUP_MS = 6000;
 const MAX_POPUPS = 3;
@@ -80,7 +81,7 @@ export default function NotificationBell() {
   const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
   const [popups, setPopups] = useState<CrisisNotification[]>([]);
   const [detail, setDetail] = useState<CrisisNotification | null>(null);
-  const [now, setNow] = useState(() => Date.now());
+  const [now, setNow] = useState(() => serverNow());
   const btnRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const seen = useRef<Set<string> | null>(null);
@@ -166,7 +167,7 @@ export default function NotificationBell() {
       <button
         ref={btnRef}
         type="button"
-        onClick={() => { setNow(Date.now()); setOpen((o) => !o); }}
+        onClick={() => { setNow(serverNow()); setOpen((o) => !o); }}
         aria-label={unread ? `Notifications, ${unread} unread` : 'Notifications'}
         aria-expanded={open}
         className="relative grid place-items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8E2424]"
@@ -227,7 +228,7 @@ export default function NotificationBell() {
 
       {popups.length > 0 && (
         <Portal>
-          <div aria-live="polite" style={{ position: 'fixed', top: 'calc(env(safe-area-inset-top, 0px) + 64px)', right: 12, zIndex: 65, width: 'min(340px, calc(100vw - 24px))', display: 'flex', flexDirection: 'column', gap: 8, fontFamily: CK.font }}>
+          <div aria-live="polite" style={{ position: 'fixed', top: 'calc(env(safe-area-inset-top, 0px) + 64px)', right: 12, zIndex: 250, width: 'min(340px, calc(100vw - 24px))', display: 'flex', flexDirection: 'column', gap: 8, fontFamily: CK.font }}>
             {popups.map((n) => (
               <div key={n.id} className="flex items-start" style={{ gap: 10, padding: '10px 10px 10px 12px', background: CK.card, borderRadius: 16, boxShadow: CK.shadow, animation: 'crisisBellIn 260ms cubic-bezier(0.22,1,0.36,1)' }}>
                 <button type="button" onClick={() => void go(n)} className="flex flex-1 min-w-0 text-left focus:outline-none" style={{ gap: 10, border: 'none', background: 'none', padding: 0, cursor: 'pointer', font: 'inherit' }}>

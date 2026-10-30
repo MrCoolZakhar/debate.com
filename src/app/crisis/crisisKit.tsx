@@ -202,6 +202,12 @@ export function waitLabel(fromIso: string | null | undefined, nowMs: number): st
   return `${Math.floor(mins / 60)} h ${mins % 60} min`;
 }
 
+/** "12 min ago" or "just now" (never "just now ago"). The one phrase for a past real-world time. */
+export function agoLabel(fromIso: string | null | undefined, nowMs: number): string {
+  const w = waitLabel(fromIso, nowMs);
+  return w === '' || w === 'just now' ? w : `${w} ago`;
+}
+
 export function waitSeverity(fromIso: string | null | undefined, nowMs: number): 'ok' | 'late' | 'very' {
   if (!fromIso) return 'ok';
   const mins = (nowMs - new Date(fromIso).getTime()) / 60000;

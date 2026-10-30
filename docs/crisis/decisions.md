@@ -10,7 +10,7 @@ Peter's answers to the 42 plan questions (25 Oct 2026), plus the follow-ups the 
 
 ## People and access
 - Roles: Crisis Director, sometimes Assistant Crisis Directors, backroomers, front room chairs, sometimes press. There is no cabinet director.
-- Everyone gets in with their Gavelling account, OR with a personal code and their own password issued by the Crisis Director. There is no shared room code for crisis.
+- Everyone gets in with their Gavelling account, OR with a personal code and their own password issued by the Crisis Director. The committee room code also works in place of a personal code, but always with the person's OWN password (round 5): nobody gets in with a shared code alone.
 - Set-up: the organiser switches Gavelling Crisis on for a crisis committee (a package choice), then the Crisis Director sets up characters, staff, the map and settings in `/crisis`.
 - Backroomers own specific delegates by default (they know them best). They can still see every directive and claim any, and the CD can assign any directive to anyone.
 - Backroomer powers are one setting for all backroomers (not per person).
@@ -139,3 +139,12 @@ Design rule (standing): **no random white space.** Every card fills its slot, co
 - Map: changes wait in a shared draft until "Send to delegates" (setting, default on), planned moves keep their line until sent, an undo button, territory of one cabinet merges when extended and never overlaps another's, the original country always shows underneath, characters on one spot fan out, other cabinets' characters hidden from delegates (setting, default off).
 - Answering a directive is one transaction: news with its file is published by the database when allowed, and map edits ride in effects.map (part 20).
 - Characters: a delegate name anywhere opens their profile; performance = speaking time and directives (incl. co-authored, breakdown on hover), with the same stats page as regular sessions.
+
+## Round 8 (Peter, 30 Oct 2026)
+
+- Never set `turbopack.root` in next.config (it made `next dev` spawn PostCSS helpers without limit and crashed the Mac twice). Agents run only eslint on their files; one build at the end by the lead.
+- Command's live room pop-up: Cabinet Directives and Crisis News tabs instead of Documents; the crisis chair's home shows the same.
+- Map: the unsent-changes bar sits top right outside the map; every map change (characters, units added or deleted too) waits for Send to delegates; drawing ends back on Select; Go back also undoes a discarded draft; History groups changes into batches and can bring the map back to a past point; no flicker on apply; the sight ring's line is clickable; unit deletes work; fog never leaves a no-longer-spotted unit visible; country ownership always shows to delegates; custom zones (up to 20 colours, name, description) and more map detail in the spirit of Google My Maps.
+- Delegate directive form: Themes beside Kind on one row, a bigger text box, an optional image through a pin inside the box, shown inline in the chat. News images open full size. My Character shows the character on the map.
+- Performance is ONE blended total (in-room session points plus directive points) with one breakdown; Statistics compares delegates on that blend.
+- Cabinet settings open as a pop-up; meeting clocks run only from the database anchors.

@@ -8,6 +8,7 @@ import type { Cabinet, News } from '@/lib/crisis/types';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { CK, Card } from '../../crisisKit';
 import NewsDetailDialog from './NewsDetailDialog';
+import { ZoomableImage } from './ImageLightbox';
 
 /** "12 min ago": never a calendar date (the crisis has its own in-world date). */
 export function newsTime(iso: string | null | undefined): string {
@@ -25,8 +26,8 @@ export function newsTimeTitle(iso: string | null | undefined): string | undefine
 }
 
 export function audienceLabel(n: Pick<News, 'audience_cabinet_id'>, cabinets: Cabinet[]): string {
-  if (!n.audience_cabinet_id) return 'Every room';
-  return cabinets.find((c) => c.id === n.audience_cabinet_id)?.name ?? 'One room';
+  if (!n.audience_cabinet_id) return 'Every committee room';
+  return cabinets.find((c) => c.id === n.audience_cabinet_id)?.name ?? 'One committee room';
 }
 
 /** A story's picture, or null when it has none: then the story is all text and reserves no picture space. */
@@ -35,15 +36,13 @@ export function newsPicture(n: Pick<News, 'banner_url'>): string | null {
   return u ? u : null;
 }
 
-/** The banner of a story. Draws nothing at all when there is no picture or it fails to load. */
+/** The banner of a story; pressing it opens the whole picture full screen. Draws nothing at all when there is no picture or it fails to load. */
 export function NewsPicture({ n, style }: { n: Pick<News, 'banner_url'>; style?: CSSProperties }) {
   const [broken, setBroken] = useState<string | null>(null);
   const src = newsPicture(n);
   if (!src || broken === src) return null;
-  return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img src={src} alt="" onError={() => setBroken(src)} style={{ display: 'block', width: '100%', aspectRatio: '16 / 6', objectFit: 'cover', background: CK.well, ...style }} />
-  );
+  // Pressing the picture opens it whole, uncropped (a span, because a story card around it is itself a button).
+  return <ZoomableImage asSpan src={src} alt="Newsflash picture" onError={() => setBroken(src)} style={{ width: '100%', aspectRatio: '16 / 6', background: CK.well, ...style }} />;
 }
 
 /** The number of a story in the viewer's own cabinet, or null when it has none (a draft, or older news). */

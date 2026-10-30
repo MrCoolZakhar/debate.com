@@ -9,7 +9,7 @@ import BrandLogo from '@/components/BrandLogo';
 import ProfileAvatarMenu from '@/components/ProfileAvatar';
 import { useAuth } from '@/components/AuthProvider';
 import { openAuth } from '@/lib/authModal';
-import { codeLogin, listMyCrises, type MyCrisis } from '@/lib/crisis/api';
+import { codeLogin, crisisError, listMyCrises, type MyCrisis } from '@/lib/crisis/api';
 import { ROLE_LABEL, type CrisisRole } from '@/lib/crisis/types';
 import { CK, Btn, Card, Eyebrow, fieldStyle, FieldLabel, Skeleton } from './crisisKit';
 import { Suspense } from 'react';
@@ -34,7 +34,7 @@ function CodeEntry({ next, initialCode }: { next: string | null; initialCode: st
       const target = `/crisis/${r.conference_slug}/${r.crisis_slug}`;
       router.push(next && next.startsWith(target) ? next : target);
     } catch (err) {
-      setError((err as Error).message);
+      setError(crisisError(err, 'Could not enter the crisis. Try again.'));
     } finally {
       setBusy(false);
     }
@@ -73,7 +73,7 @@ function CrisisHome() {
   useEffect(() => {
     if (loading || !user) return;
     let cancelled = false;
-    listMyCrises().then((l) => { if (!cancelled) setList(l); }).catch((e) => { if (!cancelled) setError((e as Error).message); });
+    listMyCrises().then((l) => { if (!cancelled) setList(l); }).catch((e) => { if (!cancelled) setError(crisisError(e, 'Could not load your crises. Try again.')); });
     return () => { cancelled = true; };
   }, [user?.id, loading]); // eslint-disable-line react-hooks/exhaustive-deps
 

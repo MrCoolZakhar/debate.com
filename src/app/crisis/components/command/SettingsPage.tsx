@@ -5,7 +5,7 @@
 // single-cabinet crisis) are hidden.
 
 import { useState } from 'react';
-import { Award, Map as MapIcon, MessageSquare, Newspaper, Presentation, ScrollText, ShieldCheck, Siren, UsersRound } from 'lucide-react';
+import { Award, Hexagon, Map as MapIcon, Newspaper, Presentation, ScrollText, ShieldCheck, Siren, UsersRound } from 'lucide-react';
 import GSelect from '@/components/GSelect';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { crisisError, patchCrisis, patchSettings } from '@/lib/crisis/api';
@@ -14,6 +14,7 @@ import { readSettings, type CrisisSettings } from '@/lib/crisis/types';
 import { Btn, Card, CardTitle, CK, fieldStyle, Segmented } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { ChoiceRow, DirectorOnlyCard, Hint, PageHeading, ToggleRow } from './setupKit';
+import ZoneTypesEditor from '../map/ZoneTypesEditor';
 
 const COOLDOWNS = [
   { value: '0', label: 'Off' }, { value: '60', label: '1 minute' }, { value: '120', label: '2 minutes' },
@@ -55,6 +56,19 @@ function SettingsBody() {
       notifyErr(crisisError(e, 'Could not save that setting.'), 'crisis-settings');
     }
   };
+  const saveMany = async (patch: Record<string, unknown>) => {
+    const before = local;
+    setLocal({ base: core.crisis.settings, blob: { ...raw, ...patch } });
+    try {
+      const blob = await patchSettings(ref, patch);
+      setLocal({ base: core.crisis.settings, blob });
+      notifyOk('Saved', 'crisis-settings');
+      void reloadCore();
+    } catch (e) {
+      setLocal(before);
+      notifyErr(crisisError(e, 'Could not save that setting.'), 'crisis-settings');
+    }
+  };
   const powers = s.backroomPowers as Powers;
   const setPower = (k: keyof Powers, on: boolean) => save('backroomPowers', { ...s.backroomPowers, [k]: on });
   const points = readPoints(raw);
@@ -62,8 +76,10 @@ function SettingsBody() {
   return (
     <div style={{ fontFamily: CK.font }}>
       <PageHeading eyebrow="SET UP" title="Settings" />
+      {/* The rule sits OUTSIDE the column box: inside it, `.crisis-settings-cols>*{display:block}` turned the <style> element itself
+          into a visible block and its CSS showed up as text on the page. */}
+      <style>{`.crisis-settings-cols{column-width:420px;column-gap:14px}.crisis-settings-cols>*{break-inside:avoid;margin-bottom:14px;display:block}`}</style>
       <div className="crisis-settings-cols">
-        <style>{`.crisis-settings-cols{column-width:420px;column-gap:14px}.crisis-settings-cols>*{break-inside:avoid;margin-bottom:14px;display:block}`}</style>
         <Card>
           <CardTitle icon={<ScrollText size={16} strokeWidth={1.5} />}>Directives</CardTitle>
           <ChoiceRow title="Time between directives" hint="How long a delegate waits before sending another directive.">
@@ -88,11 +104,9 @@ function SettingsBody() {
           <p style={{ margin: '-4px 0 6px', fontSize: 13, color: CK.inkSoft }}>One set of powers for every backroomer.</p>
           {full && <ToggleRow title="Edit the map" checked={s.backroomPowers.map} onChange={(on) => setPower('map', on)} hint="Move borders and draw shapes on the map." />}
           {full && <ToggleRow title="Change resources" checked={s.backroomPowers.resources} onChange={(on) => setPower('resources', on)} hint="Add or take away resources, with a reason." />}
-          {full && <ToggleRow title="Fog of war" checked={s.backroomPowers.fog} onChange={(on) => setPower('fog', on)} hint="Choose what each cabinet can see on the map." />}
           {full && <ToggleRow title="Units" checked={s.backroomPowers.units} onChange={(on) => setPower('units', on)} hint="Place and move units on the map." />}
           <ToggleRow title="Edit characters" checked={!!powers.characters} onChange={(on) => setPower('characters', on)} hint="Change a character's bio, picture, powers, status and guide. Off means a backroomer can only read them." />
           <ToggleRow title="See all directives" checked={s.backroomPowers.seeAll} onChange={(on) => setPower('seeAll', on)} hint="Off means a backroomer sees only the directives of their own characters." />
-          <ToggleRow title="Publish news without approval" checked={s.backroomPowers.news} onChange={(on) => setPower('news', on)} hint="Off means a backroomer's news waits for the Crisis Director." />
         </Card>
 
         {full && (
@@ -102,29 +116,30 @@ function SettingsBody() {
               title="Map changes wait until you send them" checked={s.mapChangesWait} onChange={(on) => save('mapChangesWait', on)}
               hint="On: moves, borders and territory stay in one draft the crisis team shares, until someone presses Send to delegates. Delegates keep seeing the sent map. Off: every change reaches delegates at once."
             />
-            {joint && (
-              <ToggleRow
-                title="Delegates see other cabinets' characters" checked={s.delegatesSeeOtherCharacters} onChange={(on) => save('delegatesSeeOtherCharacters', on)}
-                hint="Off: delegates see where their own cabinet's characters stand on the map, and no one else's."
-              />
-            )}
+          </Card>
+        )}
+
+        {full && (
+          <Card>
+            <CardTitle icon={<Hexagon size={16} strokeWidth={1.5} />}>Zone Types</CardTitle>
+            <p style={{ margin: '-4px 0 6px', fontSize: 13, color: CK.inkSoft }}>
+              Zones are areas on the map that are not territory, such as a blockade line or a no-fly zone. Each type has a colour, a name and a description. Up to 20.
+            </p>
+            <ZoneTypesEditor types={s.zoneTypes} onSave={(next) => save('zoneTypes', next)} />
           </Card>
         )}
 
         <Card>
           <CardTitle icon={<Award size={16} strokeWidth={1.5} />}>Points</CardTitle>
-          <p style={{ margin: '-4px 0 6px', fontSize: 13, color: CK.inkSoft }}>What each action is worth in a character&apos;s crisis points. They help judge awards.</p>
+          <p style={{ margin: '-4px 0 6px', fontSize: 13, color: CK.inkSoft }}>What each action is worth outside the room. A character&apos;s total adds these to the points from the committee room, set by the chairs in the room&apos;s own scoring.</p>
           <PointsFields points={points} onSave={(next) => save('points', next)} />
         </Card>
 
         <Card>
           <CardTitle icon={<Newspaper size={16} strokeWidth={1.5} />}>News</CardTitle>
-          <ToggleRow title="News needs the Crisis Director's approval" checked={s.newsNeedsApproval} onChange={(on) => save('newsNeedsApproval', on)} hint="Off means news goes live as soon as it is published." />
-        </Card>
-
-        <Card>
-          <CardTitle icon={<MessageSquare size={16} strokeWidth={1.5} />}>Meetings</CardTitle>
-          <ToggleRow title="Meetings need approval" checked={s.meetingsNeedApproval} onChange={(on) => save('meetingsNeedApproval', on)} hint="Meetings happen in person. The backroomer or the Crisis Director approves the request." />
+          {/* One switch (audit, 30 Oct 2026): it sets both the approval rule and the backroom's publish power, which
+              used to be two switches that only worked together. */}
+          <ToggleRow title="News needs the Crisis Director's approval" checked={s.newsNeedsApproval} onChange={(on) => { void saveMany({ newsNeedsApproval: on, backroomPowers: { ...s.backroomPowers, news: !on } }); }} hint="On: a backroomer's news waits for the Crisis Director. Off: backroomers publish news at once." />
         </Card>
 
         {joint && (
@@ -138,11 +153,17 @@ function SettingsBody() {
                 options={[{ value: 'hidden', label: 'Nothing' }, { value: 'names', label: 'Names and pictures' }, { value: 'profiles', label: 'Full profiles' }]}
               />
             </ChoiceRow>
+            {full && (
+              <ToggleRow
+                title="Delegates see other cabinets' characters on the map" checked={s.delegatesSeeOtherCharacters} onChange={(on) => save('delegatesSeeOtherCharacters', on)}
+                hint="Off: delegates see where their own cabinet's characters stand on the map, and no one else's."
+              />
+            )}
           </Card>
         )}
 
         <Card>
-          <CardTitle icon={<Presentation size={16} strokeWidth={1.5} />}>Front Room</CardTitle>
+          <CardTitle icon={<Presentation size={16} strokeWidth={1.5} />}>Committee Room</CardTitle>
           <ToggleRow title="Chair can read personal directives" checked={s.chairReadsPersonal} onChange={(on) => save('chairReadsPersonal', on)} hint="Off keeps personal directives between the delegate and the backroom." />
         </Card>
 

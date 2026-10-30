@@ -2,7 +2,7 @@
 // Gavelling Crisis: the news page (/news, and the press home).
 // Staff write news, save drafts and publish. Everyone reads the published history (RLS decides what they see).
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { FileText, Newspaper, Paperclip, Pencil, Radio, Send } from 'lucide-react';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { crisisError, publishNews, saveNews } from '@/lib/crisis/api';
@@ -13,16 +13,22 @@ import NewsComposer from './NewsComposer';
 import { audienceLabel, newsTime, newsTimeTitle, NewsHistory } from './NewsList';
 import { useCrisisNews } from './useCrisisNews';
 import { ALL_ROOMS, useNewsDraft } from './useNewsDraft';
+import { ZoomableImage } from './ImageLightbox';
 
 function roomsText(rooms: number): string {
-  if (rooms <= 0) return 'Published. No live room was open to show it in.';
-  return `Published to ${rooms} ${rooms === 1 ? 'room' : 'rooms'}`;
+  if (rooms <= 0) return 'Published. No committee room was open to show it in.';
+  return `Published to ${rooms} committee ${rooms === 1 ? 'room' : 'rooms'}`;
 }
 
 export default function NewsPage() {
   const v = useCrisis();
-  const { items, error, reload } = useCrisisNews(v.ref);
+  const { items: allItems, error, reload } = useCrisisNews(v.ref);
   const cabinets = v.core.cabinets;
+  // Staff see every room's news. A chair or the press sees what went to every room and to their own cabinet, never another cabinet's.
+  const items = useMemo(
+    () => (allItems && !v.staff ? allItems.filter((n) => !n.audience_cabinet_id || n.audience_cabinet_id === v.cabinetId) : allItems),
+    [allItems, v.staff, v.cabinetId],
+  );
   const canPublish = v.director || (!v.settings.newsNeedsApproval && v.settings.backroomPowers.news);
   const draft = useNewsDraft(v.ref.id);
   const { form } = draft;
@@ -117,8 +123,7 @@ export default function NewsPage() {
         {drafts.map((n) => (
           <div key={n.id} style={{ background: CK.well, borderRadius: 14, padding: '10px 12px' }}>
             {n.banner_url && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={n.banner_url} alt="" style={{ display: 'block', width: '100%', maxWidth: 260, aspectRatio: '16 / 6', objectFit: 'cover', borderRadius: 10, marginBottom: 8 }} />
+              <ZoomableImage src={n.banner_url} alt="Newsflash picture" style={{ width: '100%', maxWidth: 260, aspectRatio: '16 / 6', borderRadius: 10, marginBottom: 8 }} />
             )}
             <b style={{ display: 'block', fontSize: 14, color: CK.ink, overflowWrap: 'anywhere' }}>{n.title}</b>
             <span style={{ fontSize: 12, color: CK.muted }}>

@@ -1,0 +1,7 @@
+-- Gavelling Crisis, parts 23 and 24 (applied 30 Oct 2026).
+-- 23 crisis_part23_history_limit_3000: crisis_history's p_limit cap raised from 500 to 3000 (History's "bring the map back").
+-- 24 crisis_part24_zone_fields: crisis_shapes.description (<= 2000 chars) and crisis_shapes.zone_type (a zone type id from
+--    crises.settings.zoneTypes).
+-- 24b crisis_part24b_map_set_zone_info: crisis_apply_map_set takes shapeInfo:[{id, label?, color?, description?, zone_type?,
+--    public?, revealed_to?}] (only keys present change) and addShapes rows may carry description and zone_type;
+--    crisis_apply_map_set_v2 forwards shapeInfo.

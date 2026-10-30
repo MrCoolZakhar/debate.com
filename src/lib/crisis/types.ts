@@ -1,5 +1,7 @@
 // Gavelling Crisis: row types (mirror docs/crisis/sql/*.sql) and settings with their defaults.
 
+import { readZoneTypes, type ZoneType } from './zones';
+
 export type CrisisRole = 'director' | 'assistant_director' | 'backroomer' | 'chair' | 'press' | 'delegate' | 'organiser';
 
 export const STAFF_ROLES: CrisisRole[] = ['director', 'assistant_director', 'organiser', 'backroomer'];
@@ -34,6 +36,8 @@ export interface CrisisSettings {
   mapChangesWait: boolean;
   /** Delegates also see where the other cabinets' characters stand on the map. Their own cabinet's are always shown. */
   delegatesSeeOtherCharacters: boolean;
+  /** The zone types the Crisis Director defined (at most 20): a name, a colour and a description each. */
+  zoneTypes: ZoneType[];
 }
 
 export const DEFAULT_SETTINGS: CrisisSettings = {
@@ -49,6 +53,7 @@ export const DEFAULT_SETTINGS: CrisisSettings = {
   queueOrder: 'fair',
   mapChangesWait: true,
   delegatesSeeOtherCharacters: false,
+  zoneTypes: [],
 };
 
 export function readSettings(raw: unknown): CrisisSettings {
@@ -59,6 +64,7 @@ export function readSettings(raw: unknown): CrisisSettings {
     ...s,
     otherCabinets: other === 'names' ? 'names' : other === 'profiles' || other === 'full' ? 'profiles' : 'hidden',
     backroomPowers: { ...DEFAULT_SETTINGS.backroomPowers, ...(s.backroomPowers ?? {}) },
+    zoneTypes: readZoneTypes(s),
   };
 }
 
@@ -219,19 +225,6 @@ export interface News {
   created_at: string;
 }
 
-/** Chat between characters (docs/crisis/sql/006). Staff read everything; approval is a setting. */
-export interface CrisisMessage {
-  id: string;
-  crisis_id: string;
-  from_member_id: string | null;
-  from_character_id: string | null;
-  to_character_id: string;
-  body: string;
-  status: 'sent' | 'pending' | 'rejected';
-  decided_by: string | null;
-  created_at: string;
-}
-
 export interface ResourceType {
   id: string;
   crisis_id: string;
@@ -283,13 +276,18 @@ export interface MapUnit {
 export interface MapShape {
   id: string;
   crisis_id: string;
-  kind: 'line' | 'area';
+  /** 'area' is territory (one cabinet's land); 'zone' is an overlay (a blockade, a no-fly zone) that is not territory. */
+  kind: 'line' | 'area' | 'zone';
   owner_cabinet_id: string | null;
   label: string | null;
   color: string | null;
   geometry: { type: 'LineString' | 'Polygon' | 'MultiPolygon'; coordinates: unknown };
   public: boolean;
   revealed_to: string[];
+  /** Up to 2000 characters (docs/crisis/sql/023_024). */
+  description?: string | null;
+  /** A zone's type: an id from settings.zoneTypes. */
+  zone_type?: string | null;
 }
 
 /** What crisis_resolve answers for /crisis/<conference>/<crisis>. */

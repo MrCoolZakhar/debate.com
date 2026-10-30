@@ -7,12 +7,13 @@
 
 import { useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { Lock } from 'lucide-react';
-import { OUTCOME_LABEL, type Character, type Directive, type DirectiveNote } from '@/lib/crisis/types';
+import { type Character, type Directive, type DirectiveNote } from '@/lib/crisis/types';
 import { Avatar, CK, cabinetTint } from '../../crisisKit';
 import { CharacterLink, CharacterName } from '../character/CharacterProfileHost';
 import { whenLabel, whenTitle } from '../delegate/directiveUi';
 import { StaffPic } from './directiveParts';
-import { OUTCOME_STYLE, memberName, type Names } from './directiveKit';
+import { memberName, outcomeView, type Names } from './directiveKit';
+import { DirectiveBody } from './attachedImage';
 
 type Side = 'delegate' | 'staff';
 interface Item {
@@ -27,6 +28,8 @@ interface Item {
   internal?: boolean;
   /** The final answer carries its outcome chip. */
   outcome?: Directive['outcome'];
+  /** How that outcome is drawn (a chair's send-back is its own thing, never Denied). */
+  view?: ReturnType<typeof outcomeView>;
   /** A small label next to the name ("Directive", "Seen by the delegate"). */
   tag?: string;
   /** What staff see after the bubble (who answered). */
@@ -37,7 +40,7 @@ interface Item {
 
 function Bubble({ item, accent }: { item: Item; accent: string }) {
   const staff = item.side === 'staff';
-  const o = item.outcome ? OUTCOME_STYLE[item.outcome] : null;
+  const o = item.view ?? null;
   const answer = !!item.outcome;
   const bg = item.internal ? cabinetTint(CK.gold, 0.3) : answer && o ? cabinetTint(o.color, 0.1) : staff ? cabinetTint(CK.forest, 0.11) : CK.card;
   const edge = item.internal ? `inset 0 0 0 1.5px ${cabinetTint(CK.goldDeep, 0.5)}` : answer && o ? `inset 0 0 0 1px ${cabinetTint(o.color, 0.3)}` : staff ? 'none' : CK.shadowSm;
@@ -60,10 +63,10 @@ function Bubble({ item, accent }: { item: Item; accent: string }) {
         </p>
         {answer && o && item.outcome && (
           <p className="inline-flex items-center" style={{ margin: '6px 0 0', gap: 6, fontSize: 12.5, fontWeight: 800, color: '#fff', background: o.color, borderRadius: 999, padding: '3px 11px 3px 8px' }}>
-            <o.Icon size={16} strokeWidth={1.6} aria-hidden />{OUTCOME_LABEL[item.outcome]}
+            <o.Icon size={16} strokeWidth={1.6} aria-hidden />{o.word}
           </p>
         )}
-        <p style={{ margin: '4px 0 0', fontSize: 14, lineHeight: 1.55, color: CK.ink, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{item.body}</p>
+        <DirectiveBody body={item.body} thumb={260} style={{ margin: '4px 0 0', fontSize: 14, lineHeight: 1.55, color: CK.ink, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }} />
         {item.foot && (
           <p style={{ margin: '5px 0 0', fontSize: 11.5, fontWeight: 600, color: CK.muted }}>{item.foot}</p>
         )}
@@ -105,7 +108,7 @@ export default function DirectiveThread({ d, notes, names, who, character, accen
       out.push({
         key: 'answer', side: 'staff', at, sort: at ? new Date(at).getTime() : t0 + 1, who: memberName(d.answered_by, names, 'Staff'),
         pic: <StaffPic member={d.answered_by ? names.members.get(d.answered_by) : null} size={30} />,
-        body: d.reply, outcome: d.outcome ?? 'later', tag: d.status === 'answered' ? 'Answer' : 'Reply',
+        body: d.reply, outcome: d.outcome ?? 'later', view: outcomeView({ status: d.status, reply: d.reply, outcome: d.outcome ?? 'later' }), tag: d.status === 'answered' ? 'Answer' : 'Reply',
       });
     }
     return (skipDirective ? out.filter((x) => x.key !== 'directive') : out).sort((a, b) => a.sort - b.sort);

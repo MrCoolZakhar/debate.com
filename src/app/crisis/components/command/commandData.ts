@@ -2,7 +2,7 @@
 // adds locally (the front rooms' live state and the resource log); everything else comes from api.ts.
 
 import { getCrisisClient } from '@/lib/crisis/client';
-import { amount } from '@/lib/crisis/format';
+import { amount, isChairSendBack } from '@/lib/crisis/format';
 import type { Cabinet, Character, Directive, Member, Resource } from '@/lib/crisis/types';
 import type { CrisisRef } from '@/lib/crisis/api';
 import type { CaucusJson, LiveCommittee } from '@/app/manage/[slug]/live/LiveModals';
@@ -130,7 +130,10 @@ export interface StaffLoad {
 }
 
 export const isStaffRow = (m: Member) => m.role === 'backroomer' || m.role === 'director' || m.role === 'assistant_director';
-const isLoadStatus = (d: Directive) => isOpenStatus(d) || d.status === 'clarify';
+
+/** ONE definition of backroom load (owner rule): a directive is load while it waits on the backroom, i.e. queued or claimed
+ *  (isOpenStatus, directives/directiveKit.ts). "More detail needed" waits for the delegate and is NOT backroom load. */
+export const isLoadStatus = isOpenStatus;
 
 /** A reply is being typed (isBeingWritten, directives/directiveKit.ts: drafting_at within 5 minutes) on a still-open directive.
  *  Such a directive is being dealt with, so it is not waiting and not load. */
@@ -160,7 +163,6 @@ export function suggestRebalance(loads: StaffLoad[]): { from: StaffLoad; to: Sta
   const gap = from.open.length - to.open.length;
   if (from.member.id === to.member.id || gap < 3) return null;
   const move = [...from.open]
-    .filter((d) => d.status !== 'clarify')
     .sort((a, b) => new Date(a.waiting_since).getTime() - new Date(b.waiting_since).getTime())
     .slice(0, Math.floor(gap / 2));
   return move.length > 0 ? { from, to, move } : null;
@@ -203,9 +205,12 @@ export interface DelegateStat {
   waiting: number;
 }
 
-export function delegateStats(characters: Character[], directives: Directive[]): DelegateStat[] {
-  return characters.filter((c) => c.status !== 'spare').map((character) => {
-    const mine = directives.filter((d) => d.author_character_id === character.id && d.status !== 'withdrawn');
+/** The Delegates ranking: only characters somebody plays (a delegate member holds them), never a spare or an empty seat. */
+export function delegateStats(characters: Character[], directives: Directive[], members: Member[]): DelegateStat[] {
+  const played = new Set(members.filter((m) => m.role === 'delegate' && m.character_id).map((m) => m.character_id as string));
+  return characters.filter((c) => c.status !== 'spare' && played.has(c.id)).map((character) => {
+    // A directive the chair sent back never reached the backroom: it is not sent, not denied and not waiting (same as the points).
+    const mine = directives.filter((d) => d.author_character_id === character.id && d.status !== 'withdrawn' && !isChairSendBack(d));
     return {
       character,
       sent: mine.length,

@@ -6,7 +6,8 @@
 import { Newspaper, Radio } from 'lucide-react';
 import type { News } from '@/lib/crisis/types';
 import { Btn, Card, CardTitle, CK, Skeleton } from '../../crisisKit';
-import { newsTime, newsTimeTitle } from '../news/NewsList';
+import { newsPicture, newsTime, newsTimeTitle } from '../news/NewsList';
+import { ZoomableImage } from '../news/ImageLightbox';
 
 const SHOWN = 3;
 
@@ -53,6 +54,9 @@ export default function NewsPanel({ items, cabinetId, onOpen, onAll }: {
                     </span>
                     <b title={n.title} style={{ display: '-webkit-box', marginTop: 2, fontSize: 14, lineHeight: 1.3, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{n.title}</b>
                   </span>
+                  {newsPicture(n) && (
+                    <ZoomableImage asSpan hint={false} src={newsPicture(n) as string} alt="Newsflash picture" style={{ flex: 'none', width: 62, height: 44, borderRadius: 10, marginTop: 2, boxShadow: '0 0 0 1px rgba(110,30,30,0.14)' }} />
+                  )}
                 </button>
               </li>
             );

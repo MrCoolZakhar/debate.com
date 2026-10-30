@@ -57,7 +57,7 @@ export function FrontRoomsCard({ cabinets, conferenceId, rooms, failed }: {
   return (
     <Card warm className="cmd-card cmd-rooms" style={{ display: 'flex', flexDirection: 'column' }}>
       <style>{ROOM_CARD_CSS}</style>
-      <CardTitle icon={<Presentation size={17} strokeWidth={1.5} />}>Front Rooms</CardTitle>
+      <CardTitle icon={<Presentation size={17} strokeWidth={1.5} />}>Committee Rooms</CardTitle>
       {cabinets.length === 0 ? <EmptyLine>No cabinets yet.</EmptyLine> : (
         <div className="cmd-rooms-list flex flex-col" style={{ gap: 0 }}>
           {cabinets.map((cab) => {
@@ -68,7 +68,7 @@ export function FrontRoomsCard({ cabinets, conferenceId, rooms, failed }: {
                 <CrisisRoomCard
                   cab={cab}
                   live={r?.live ?? null}
-                  placeholder={rooms === null ? (failed ? 'Could not read this room' : 'Reading the room') : 'No room linked'}
+                  placeholder={rooms === null ? (failed ? 'Could not read this committee room' : 'Reading the committee room') : 'No committee room linked'}
                   onOpen={linked ? () => setOpenId(cab.id) : undefined}
                 />
               </div>

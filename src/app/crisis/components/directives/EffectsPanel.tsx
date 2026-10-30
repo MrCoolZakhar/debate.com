@@ -5,7 +5,7 @@
 // action's controls and has its own remove X. The plus stays at the bottom, so several characters, unit
 // moves or borders can be added. Every change is STAGED in the reply's draft; the small recap of them sits
 // at the bottom of the panel (EffectsRecap); nothing is written until Send reply, which applies them all in
-// one call (answerDirective). A unit move or a border opens the map full size in place of the whole
+// one call (answerDirective). Adding a unit move or a border opens the map full size at once (and the card's button reopens it) in place of the whole
 // directive (MapFullView), never a pop-up on top of this one.
 
 import { useEffect, useRef, useState } from 'react';
@@ -38,6 +38,9 @@ export default function EffectsPanel({ env }: { env: CardEnv }) {
     setEffects((e) => ({ ...e, cards: [...e.cards, { id, kind, target }] }));
     setMenuOpen(false);
     justAdded.current = id;
+    // Move a unit and Change a border go straight to the big map; Back returns to the card (owner, 30 Oct 2026).
+    if (kind === 'unit') env.openMap({ kind: 'unit', cardId: id });
+    else if (kind === 'border') env.openMap({ kind: 'border' });
   };
   const removeCard = (card: EffectCard) => setEffects((e) => ({ ...clearCard(e, card, env), cards: e.cards.filter((c) => c.id !== card.id) }));
 

@@ -98,7 +98,7 @@ export default function QueueRow({ d, names, whenLabel, sev, selected, delegateN
               <Clock size={12} strokeWidth={1.6} aria-hidden />{whenLabel}
             </span>
             {!compact && (
-              <span title="Responsible backroomer" style={{ fontSize: 11.5, fontWeight: 700, color: backroomer ? CK.inkSoft : CK.muted, overflowWrap: 'anywhere' }}>
+              <span title="Responsible" style={{ fontSize: 11.5, fontWeight: 700, color: backroomer ? CK.inkSoft : CK.muted, overflowWrap: 'anywhere' }}>
                 {backroomer ? backroomer.display_name : 'Unclaimed'}
               </span>
             )}

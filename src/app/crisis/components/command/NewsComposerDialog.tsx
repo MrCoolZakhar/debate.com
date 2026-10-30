@@ -13,8 +13,8 @@ import NewsComposer from '../news/NewsComposer';
 import { ALL_ROOMS, useNewsDraft } from '../news/useNewsDraft';
 
 function roomsText(rooms: number): string {
-  if (rooms <= 0) return 'Published. No live room was open to show it in.';
-  return `Published to ${rooms} ${rooms === 1 ? 'room' : 'rooms'}`;
+  if (rooms <= 0) return 'Published. No committee room was open to show it in.';
+  return `Published to ${rooms} committee ${rooms === 1 ? 'room' : 'rooms'}`;
 }
 
 export default function NewsComposerDialog({ edit, onClose, onChanged }: { edit: News | null; onClose: () => void; onChanged: () => void }) {

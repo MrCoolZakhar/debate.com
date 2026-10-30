@@ -1,6 +1,6 @@
 'use client';
 // Gavelling Crisis: the facts of an opened directive, in the white band beside the character at the top of the
-// pop-up, as a tidy grid of small labelled cells: how long it has waited (or when it was answered), when the author
+// pop-up (their own grid, then who is responsible in a column of its own on the same row), as a tidy grid of small labelled cells: how long it has waited (or when it was answered), when the author
 // last heard back, the length in words, who it is for, the themes, the secret goals (staff only), and who is
 // responsible with a picture and a compact picker to hand it to another backroomer. While someone is writing the
 // reply it says so, and handing the directive to somebody else then asks first, in place.
@@ -14,7 +14,7 @@ import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { assignDirective, crisisError, loadSecrets } from '@/lib/crisis/api';
 import { getCrisisClient } from '@/lib/crisis/client';
 import { ROLE_LABEL, type Directive } from '@/lib/crisis/types';
-import { Btn, CK, ThemeTag, cabinetTint, waitLabel, waitSeverity } from '../../crisisKit';
+import { Btn, CK, ThemeTag, agoLabel, cabinetTint, waitLabel, waitSeverity } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { StaffPic } from './directiveParts';
 import { isBeingWritten, memberName, type Names } from './directiveKit';
@@ -82,9 +82,9 @@ export default function DirectiveFacts({ d, names, editing, onChanged }: {
 
   const answered = d.status === 'answered';
   const waitLabelText = answered ? 'Answered' : d.status === 'clarify' ? 'Status' : 'Waiting since';
-  const waitValue = answered ? `${waitLabel(d.answered_at, now)} ago` : d.status === 'clarify' ? 'Waiting for the delegate' : waitLabel(d.waiting_since, now);
+  const waitValue = answered ? agoLabel(d.answered_at, now) : d.status === 'clarify' ? 'Waiting for the delegate' : waitLabel(d.waiting_since, now);
   const sev = d.status === 'queued' || d.status === 'claimed' ? waitSeverity(d.waiting_since, now) : 'ok';
-  const heard = lastHeard === undefined ? 'Loading' : lastHeard ? `${waitLabel(lastHeard, now)} ago` : 'Not heard back yet';
+  const heard = lastHeard === undefined ? 'Loading' : lastHeard ? agoLabel(lastHeard, now) : 'Not heard back yet';
   const covertShown = d.covert && !d.themes.some((t) => t.toLowerCase() === 'covert');
 
   const staffOptions = useMemo(
@@ -114,7 +114,10 @@ export default function DirectiveFacts({ d, names, editing, onChanged }: {
   };
 
   return (
-    <div style={{ display: 'grid', gap: '10px 16px', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', alignContent: 'start', minWidth: 0 }}>
+    // Three pieces that sit in the pop-up's white band beside the character, on ONE row when there is room (owner,
+    // 30 Oct 2026): the small facts in a grid, then who is responsible in its own column, then the secret goals full width.
+    <>
+    <div className="dp-facts" style={{ flex: '1 1 250px', display: 'grid', gap: '8px 14px', gridTemplateColumns: 'repeat(auto-fill, minmax(104px, 1fr))', alignContent: 'start', minWidth: 0, paddingTop: 12 }}>
       <Fact icon={<Clock size={13} strokeWidth={1.6} />} label={waitLabelText}><span style={{ color: SEV_COLOR[sev] }}>{waitValue}</span></Fact>
       {d.author_member_id && <Fact icon={<MessageCircle size={13} strokeWidth={1.6} />} label="Last heard back">{heard}</Fact>}
       <Fact icon={<FileText size={13} strokeWidth={1.6} />} label="Length">{d.word_count} words</Fact>
@@ -138,7 +141,9 @@ export default function DirectiveFacts({ d, names, editing, onChanged }: {
         </Fact>
       )}
 
-      <Fact icon={<UserRound size={13} strokeWidth={1.6} />} label="Responsible" span={2}>
+    </div>
+    <div className="dp-resp flex flex-col" style={{ flex: '0 1 215px', gap: 8, minWidth: 180, paddingTop: 12 }}>
+      <Fact icon={<UserRound size={13} strokeWidth={1.6} />} label="Responsible">
         {confirmTo ? (
           <div className="flex flex-col" role="alertdialog" aria-label="Move it anyway?" style={{ gap: 6 }}>
             <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: CK.goldDeep, lineHeight: 1.35 }}>
@@ -151,7 +156,7 @@ export default function DirectiveFacts({ d, names, editing, onChanged }: {
           </div>
         ) : open && staffOptions.length > 0 ? (
           <GSelect size="sm" value={d.assigned_member_id ?? ''} onChange={(v) => hand(v)} options={staffOptions}
-            placeholder="Unclaimed, choose a person" aria-label="Responsible backroomer" disabled={handing} />
+            placeholder="Unclaimed, choose a person" aria-label="Responsible" disabled={handing} />
         ) : (
           <span className="inline-flex items-center" style={{ gap: 7 }}>
             <StaffPic member={d.assigned_member_id ? names.members.get(d.assigned_member_id) : null} size={24} />
@@ -159,14 +164,14 @@ export default function DirectiveFacts({ d, names, editing, onChanged }: {
           </span>
         )}
         {!confirmTo && ownerId && ownerId !== d.assigned_member_id && (
-          <span className="inline-flex items-center" title="The backroomer set for this character" style={{ gap: 6, marginTop: 4, fontSize: 12, fontWeight: 600, color: CK.inkSoft }}>
+          <span className="inline-flex items-center" title="The backroomer for this character" style={{ gap: 6, marginTop: 4, fontSize: 12, fontWeight: 600, color: CK.inkSoft }}>
             <StaffPic member={names.members.get(ownerId)} size={18} />
             Usually {memberName(ownerId, names)}
           </span>
         )}
       </Fact>
       {writer && !confirmTo && (
-        <Fact icon={<Pencil size={13} strokeWidth={1.6} />} label="Being written" span={2}>
+        <Fact icon={<Pencil size={13} strokeWidth={1.6} />} label="Being written">
           <span className="inline-flex items-center" style={{ gap: 7, color: CK.goldDeep }}>
             <StaffPic member={names.members.get(writer)} size={22} />
             {memberName(writer, names)} is writing a reply
@@ -174,12 +179,13 @@ export default function DirectiveFacts({ d, names, editing, onChanged }: {
         </Fact>
       )}
 
+    </div>
       {hasGoals && goalsOpen && (
-        <div style={{ gridColumn: '1 / -1', maxHeight: 120, overflowY: 'auto', background: `linear-gradient(180deg, ${cabinetTint(CK.gold, 0.5)}, ${cabinetTint(CK.gold, 0.26)})`, borderRadius: 14, padding: '9px 12px', boxShadow: `inset 0 0 0 1px ${cabinetTint(CK.goldDeep, 0.25)}` }}>
+        <div style={{ flex: '1 1 100%', maxHeight: 120, overflowY: 'auto', background: `linear-gradient(180deg, ${cabinetTint(CK.gold, 0.5)}, ${cabinetTint(CK.gold, 0.26)})`, borderRadius: 14, padding: '9px 12px', boxShadow: `inset 0 0 0 1px ${cabinetTint(CK.goldDeep, 0.25)}` }}>
           <span style={{ display: 'block', fontSize: 11.5, fontWeight: 800, color: CK.goldDeep }}>Secret goals, only staff see this</span>
           <b style={{ display: 'block', fontSize: 13.5, marginTop: 3, fontWeight: 600, lineHeight: 1.5, whiteSpace: 'pre-wrap', overflowWrap: 'break-word', color: CK.ink }}>{goals}</b>
         </div>
       )}
-    </div>
+    </>
   );
 }

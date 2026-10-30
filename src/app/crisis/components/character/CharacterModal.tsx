@@ -20,19 +20,20 @@ import { getCrisisClient } from '@/lib/crisis/client';
 import { useCrisisLive } from '@/lib/crisis/live';
 import { characterPoints, readPoints } from '@/lib/crisis/points';
 import {
-  KIND_LABEL, OUTCOME_LABEL, ROLE_LABEL, type Character, type CharacterSecret, type CharacterStatus, type Directive, type Meeting,
+  KIND_LABEL, ROLE_LABEL, type Character, type CharacterSecret, type CharacterStatus, type Directive, type Meeting,
 } from '@/lib/crisis/types';
 import { Avatar, Btn, CK, FieldLabel, Skeleton, ThemeTag, cabinetTint, fieldStyle, useScrollLock } from '../../crisisKit';
 import { dirNumber, timeAgo } from '@/lib/crisis/format';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { ConfirmInline, responsibleMembers } from '../command/setupKit';
-import { KIND_ICON, OUTCOME_STYLE } from '../directives/directiveKit';
+import { KIND_ICON, outcomeView } from '../directives/directiveKit';
 import { NumberBadge, StaffPic } from '../directives/directiveParts';
 import CharacterMapPicker, { type PickedSpot } from './CharacterMapPicker';
 import CharacterPerformance from './CharacterPerformance';
 import CharacterSpotSnippet from './CharacterSpotSnippet';
 import { STATUS_WORDS, statusColor as dirStatusColor, statusIcon } from '../delegate/directiveUi';
 import { STATUS_ORDER, STATUS_WORD, StatusIcon, mayEditCharacters, statusColor } from './characterStatus';
+import { DirectiveBody } from '../directives/attachedImage';
 
 export interface CharacterModalProps {
   characterId: string;
@@ -631,8 +632,8 @@ function GuideStep({ char, canEdit, uploading, onReplace }: { char: Character; c
 }
 
 function OutcomeMark({ d }: { d: Directive }) {
-  const o = d.outcome && (d.status === 'answered' || d.status === 'clarify' || d.status === 'queued') ? OUTCOME_STYLE[d.outcome] : null;
-  if (!o || !d.outcome) {
+  const o = d.outcome && (d.status === 'answered' || d.status === 'clarify' || d.status === 'queued') ? outcomeView(d) : null;
+  if (!o) {
     const color = dirStatusColor(d.status);
     return (
       <span className="inline-flex items-center" style={{ gap: 5, fontSize: 12.5, fontWeight: 800, color }}>
@@ -643,14 +644,14 @@ function OutcomeMark({ d }: { d: Directive }) {
   const I = o.Icon;
   return (
     <span className="inline-flex items-center" style={{ gap: 5, fontSize: 12.5, fontWeight: 800, color: o.color }}>
-      <I size={15} strokeWidth={1.5} aria-hidden />{OUTCOME_LABEL[d.outcome]}
+      <I size={15} strokeWidth={1.5} aria-hidden />{o.word}
     </span>
   );
 }
 
 /** One past directive: the title first under the No. badge, then the outcome as an icon and a word, the date, and a short look at the reply. */
 function DirectiveRow({ d, wrote, onOpen }: { d: Directive; wrote: boolean; onOpen: () => void }) {
-  const o = d.outcome ? OUTCOME_STYLE[d.outcome] : null;
+  const o = outcomeView(d);
   const tone = o?.color ?? CK.muted;
   const K = KIND_ICON[d.kind];
   const reply = d.reply?.trim() ?? '';
@@ -697,7 +698,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 
 function DirectiveView({ d }: { d: Directive }) {
   const K = KIND_ICON[d.kind];
-  const o = d.outcome ? OUTCOME_STYLE[d.outcome] : null;
+  const o = outcomeView(d);
   return (
     <article>
       <div className="flex items-center flex-wrap" style={{ gap: '4px 12px', fontSize: 12.5, color: CK.inkSoft }}>
@@ -708,7 +709,7 @@ function DirectiveView({ d }: { d: Directive }) {
       <h3 style={{ margin: '6px 0 8px', fontSize: 22, lineHeight: 1.25, fontWeight: 800, overflowWrap: 'anywhere' }}>{dirNumber(d)}: {d.title}</h3>
       {d.themes.length > 0 && <div className="flex flex-wrap" style={{ gap: 6, marginBottom: 10 }}>{d.themes.map((t) => <ThemeTag key={t} theme={t} size="md" />)}</div>}
       {d.receiver && <p style={{ margin: '0 0 10px', fontSize: 13.5, color: CK.inkSoft, overflowWrap: 'anywhere' }}>To: <b style={{ color: CK.ink }}>{d.receiver}</b></p>}
-      <p style={{ margin: 0, fontSize: 15, lineHeight: 1.65, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{d.body}</p>
+      <DirectiveBody body={d.body} style={{ margin: 0, fontSize: 15, lineHeight: 1.65, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }} />
       {d.resources_used && <Section title="Resources used"><p style={{ margin: 0, fontSize: 14, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{d.resources_used}</p></Section>}
       {d.goal && <Section title="Goal"><p style={{ margin: 0, fontSize: 14, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{d.goal}</p></Section>}
       {d.affects && <Section title="Who it affects"><p style={{ margin: 0, fontSize: 14, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{d.affects}</p></Section>}

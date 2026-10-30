@@ -26,11 +26,24 @@ export const SRC_PLANS = 'planned-moves';
 export const SRC_SIGHT = 'sight-ring';
 /** Capitals and big cities (public/crisis/world-cities.json). */
 export const SRC_CITIES = 'cities';
+/** Offline water and regions (public/crisis/world-water.json, world-regions.json): lakes, rivers (coarse and fine), first-level borders. */
+export const SRC_LAKES = 'lakes';
+export const SRC_RIVERS = 'rivers-coarse';
+export const SRC_RIVERS_FINE = 'rivers-fine';
+export const SRC_REGIONS = 'regions';
 
 export const L_LAND = 'c-land';
 export const L_SHAPE_FILL = 'shape-area-fill';
 export const L_SHAPE_HIT = 'shape-hit';
 export const L_BASE_FILL = 'c-base-fill';
+export const L_ZONE_FILL = 'zone-fill';
+/** Layers the Water toggle shows and hides, and the one the Regions toggle shows and hides. */
+export const WATER_LAYERS = ['water-lakes', 'water-lakes-line', 'river-coarse', 'river-fine'];
+export const REGION_LAYERS = ['region-line'];
+
+export const WATER = '#DCE4DA';
+export const WATER_LINE = '#B9CBC8';
+export const RIVER = '#A9C4C7';
 
 const CLEAR = 'rgba(0,0,0,0)';
 
@@ -52,6 +65,9 @@ export function baseLayers(): AddLayerObject[] {
 export function mapLayers(): AddLayerObject[] {
   return [
     { id: L_LAND, type: 'fill', source: SRC_COUNTRIES, paint: { 'fill-color': LAND } },
+    // Lakes sit on the land, under every tint, so a cabinet's colour still shows through them.
+    { id: 'water-lakes', type: 'fill', source: SRC_LAKES, paint: { 'fill-color': WATER } },
+    { id: 'water-lakes-line', type: 'line', source: SRC_LAKES, layout: { 'line-join': 'round' }, paint: { 'line-color': WATER_LINE, 'line-width': 0.7 } },
     // The original country of every changed border: its full outline gets a light fill over the land (and over the
     // sea where its land was taken), under the cabinet tints and the drawn territory, so it never disappears.
     { id: L_BASE_FILL, type: 'fill', source: SRC_BASE, paint: { 'fill-color': '#CFC19F', 'fill-opacity': 0.5 } },
@@ -59,6 +75,20 @@ export function mapLayers(): AddLayerObject[] {
     {
       id: 'c-line', type: 'line', source: SRC_COUNTRIES, layout: { 'line-join': 'round' },
       paint: { 'line-color': LAND_LINE, 'line-width': ['interpolate', ['linear'], ['zoom'], 0, 0.4, 6, 1.1] },
+    },
+    // First-level borders (states and provinces), fainter than a country's.
+    {
+      id: 'region-line', type: 'line', source: SRC_REGIONS, minzoom: 3, layout: { 'line-join': 'round' },
+      paint: { 'line-color': '#B7AA88', 'line-width': ['interpolate', ['linear'], ['zoom'], 3, 0.5, 7, 1], 'line-dasharray': [3, 2], 'line-opacity': 0.85 },
+    },
+    // Rivers: the biggest ones from far out, the full set once zoomed in.
+    {
+      id: 'river-coarse', type: 'line', source: SRC_RIVERS, minzoom: 2, maxzoom: 4.2, layout: { 'line-join': 'round', 'line-cap': 'round' },
+      paint: { 'line-color': RIVER, 'line-width': ['interpolate', ['linear'], ['zoom'], 2, 0.7, 4.2, 1.3] },
+    },
+    {
+      id: 'river-fine', type: 'line', source: SRC_RIVERS_FINE, minzoom: 4.2, layout: { 'line-join': 'round', 'line-cap': 'round' },
+      paint: { 'line-color': RIVER, 'line-width': ['interpolate', ['linear'], ['zoom'], 4.2, 0.9, 9, 2.2] },
     },
     {
       id: 'c-own-line', type: 'line', source: SRC_COUNTRIES, layout: { 'line-join': 'round' },
@@ -75,6 +105,12 @@ export function mapLayers(): AddLayerObject[] {
     {
       id: 'shape-line', type: 'line', source: SRC_SHAPES, filter: ['==', ['get', 'kind'], 'line'], layout: { 'line-join': 'round', 'line-cap': 'butt' },
       paint: { 'line-color': ['get', 'color'], 'line-width': 3, 'line-dasharray': [2, 1.5] },
+    },
+    // Zones: overlays that are not territory. They sit over the territory and never cut it.
+    { id: L_ZONE_FILL, type: 'fill', source: SRC_SHAPES, filter: ['==', ['get', 'kind'], 'zone'], paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.2 } },
+    {
+      id: 'zone-line', type: 'line', source: SRC_SHAPES, filter: ['==', ['get', 'kind'], 'zone'], layout: { 'line-join': 'round' },
+      paint: { 'line-color': ['get', 'color'], 'line-width': ['interpolate', ['linear'], ['zoom'], 0, 1.4, 6, 2.6], 'line-dasharray': [3, 1.6] },
     },
     // The original outline again, dashed, over everything drawn, so it can be followed under any territory.
     {

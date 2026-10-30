@@ -1,7 +1,8 @@
 'use client';
 // Gavelling Crisis: the live news pop-up for every crisis page (mounted once in the crisis layout).
 // When a news item is published while the page is open, a red card rises from the bottom centre.
-// It never shows for news that was already there when the page opened, and the newest one wins.
+// It never shows for news that was already there when the page opened, nor to the person who published it, and the newest one wins.
+// It sits above every pop-up (z 200) and under the picture viewer.
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -32,8 +33,10 @@ export default function NewsPopup() {
     if (!fresh.length) return;
     fresh.forEach((n) => seen.current!.add(n.id));
     fresh.sort((a, b) => new Date(b.published_at ?? b.created_at).getTime() - new Date(a.published_at ?? a.created_at).getTime());
+    // The person who just published it knows already: no card for them.
+    if (v.memberId && fresh[0].published_by === v.memberId) return;
     setCard(fresh[0]);
-  }, [items]);
+  }, [items, v.memberId]);
 
   useEffect(() => {
     if (!card) return;
@@ -45,7 +48,7 @@ export default function NewsPopup() {
   return (
     <>
       <style>{`
-        .crisis-news-pop { position: fixed; left: 50%; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 50; width: min(440px, calc(100vw - 24px)); animation: crisis-news-rise 360ms cubic-bezier(0.22,1,0.36,1); }
+        .crisis-news-pop { position: fixed; left: 50%; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 250; width: min(440px, calc(100vw - 24px)); animation: crisis-news-rise 360ms cubic-bezier(0.22,1,0.36,1); }
         @media (min-width: 768px) { .crisis-news-pop { bottom: 22px; } }
         @keyframes crisis-news-rise { from { opacity: 0; transform: translate(-50%, 24px); } to { opacity: 1; transform: translate(-50%, 0); } }
         @media (prefers-reduced-motion: reduce) { .crisis-news-pop { animation: none; } }

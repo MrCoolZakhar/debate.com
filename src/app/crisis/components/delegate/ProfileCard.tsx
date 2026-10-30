@@ -4,13 +4,9 @@
 // title and cabinet (logo and name) sit under it, and a click opens My Character.
 
 import { ChevronRight } from 'lucide-react';
-import type { Cabinet, Character, CharacterStatus } from '@/lib/crisis/types';
+import type { Cabinet, Character } from '@/lib/crisis/types';
 import { Card, CK, OverhangCard } from '../../crisisKit';
-
-const STATUS_WORD: Record<CharacterStatus, string> = {
-  active: 'Active', spare: 'Not in play', dead: 'Dead', arrested: 'Arrested', missing: 'Missing',
-};
-export { STATUS_WORD };
+import { STATUS_WORD } from '../character/characterStatus';
 
 export const AVATAR_SIZE = 96;
 

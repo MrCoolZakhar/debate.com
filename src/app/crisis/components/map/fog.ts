@@ -11,7 +11,10 @@ import type { LngLat } from './mapData';
 export interface FogHoles {
   geometries: Geometry[];
   rings: LngLat[][];
-  circles: Array<{ id?: string; lng: number; lat: number; km: number }>;
+  /** `ring: false` leaves the dashed ring off one circle (another layer draws it), the fog still opens around it. */
+  circles: Array<{ id?: string; lng: number; lat: number; km: number; ring?: boolean }>;
+  /** Land held by someone else: tinted and outlined in its holder's colour over the fog, so who holds it is never hidden. */
+  owners?: Array<{ geometry: Geometry; fill: string; edge: string }>;
   /** false: no hatch and no holes, only the sight rings (a preview without the fog). Default true. */
   fog?: boolean;
   /** false: the fog is drawn without the dashed sight rings. Default true. */
@@ -68,6 +71,30 @@ export function drawFog(canvas: HTMLCanvasElement, map: MLMap, holes: FogHoles |
   const withFog = holes.fog !== false;
   const bounds = map.getBounds();
   const west = bounds.getWest(); const east = bounds.getEast(); const south = bounds.getSouth(); const north = bounds.getNorth();
+  // Tracing a ring and testing it against the view.
+  const trace = (rings: number[][][]) => {
+    ctx.beginPath();
+    for (const ring of rings) {
+      let lx = Infinity; let ly = Infinity; let started = false;
+      for (const pt of ring) {
+        const p = map.project([pt[0], pt[1]]);
+        if (started && Math.abs(p.x - lx) < 0.8 && Math.abs(p.y - ly) < 0.8) continue;
+        if (!started) { ctx.moveTo(p.x, p.y); started = true; } else ctx.lineTo(p.x, p.y);
+        lx = p.x; ly = p.y;
+      }
+      ctx.closePath();
+    }
+  };
+  const cut = (rings: number[][][]) => {
+    const key = rings[0] as unknown as object;
+    let b = boxCache.get(key);
+    if (!b) { b = boxOf(rings); boxCache.set(key, b); }
+    if (b[2] < west || b[0] > east || b[3] < south || b[1] > north) return;
+    trace(rings);
+    ctx.fill('evenodd');
+    ctx.lineWidth = 26; ctx.stroke();
+  };
+
   if (withFog) {
     const pattern = ctx.createPattern(hatchTile(dpr), 'repeat');
     if (!pattern) return;
@@ -82,37 +109,31 @@ export function drawFog(canvas: HTMLCanvasElement, map: MLMap, holes: FogHoles |
     ctx.fillStyle = '#000'; ctx.strokeStyle = '#000';
     ctx.lineJoin = 'round';
 
-    const trace = (rings: number[][][]) => {
-      ctx.beginPath();
-      for (const ring of rings) {
-        let lx = Infinity; let ly = Infinity; let started = false;
-        for (const pt of ring) {
-          const p = map.project([pt[0], pt[1]]);
-          if (started && Math.abs(p.x - lx) < 0.8 && Math.abs(p.y - ly) < 0.8) continue;
-          if (!started) { ctx.moveTo(p.x, p.y); started = true; } else ctx.lineTo(p.x, p.y);
-          lx = p.x; ly = p.y;
-        }
-        ctx.closePath();
-      }
-    };
-    const cut = (rings: number[][][]) => {
-      const key = rings[0] as unknown as object;
-      let b = boxCache.get(key);
-      if (!b) { b = boxOf(rings); boxCache.set(key, b); }
-      if (b[2] < west || b[0] > east || b[3] < south || b[1] > north) return;
-      trace(rings);
-      ctx.fill('evenodd');
-      ctx.lineWidth = 26; ctx.stroke();
-    };
-
     for (const g of holes.geometries) {
       if (g.type === 'Polygon') cut(g.coordinates);
       else if (g.type === 'MultiPolygon') for (const poly of g.coordinates) cut(poly);
     }
     for (const r of holes.rings) cut([r.map((p) => [p[0], p[1]])]);
+
+    // Who holds the land the viewer cannot see into: a tint and an outline over the hatch (the sight circles cut through it).
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.lineJoin = 'round';
+    for (const o of holes.owners ?? []) {
+      const polys = o.geometry.type === 'Polygon' ? [o.geometry.coordinates] : o.geometry.type === 'MultiPolygon' ? o.geometry.coordinates : [];
+      for (const rings of polys) {
+        const key = rings[0] as unknown as object;
+        let b = boxCache.get(key);
+        if (!b) { b = boxOf(rings); boxCache.set(key, b); }
+        if (b[2] < west || b[0] > east || b[3] < south || b[1] > north) continue;
+        trace(rings);
+        ctx.fillStyle = o.fill; ctx.fill('evenodd');
+        ctx.lineWidth = 2; ctx.strokeStyle = o.edge; ctx.stroke();
+      }
+    }
+    ctx.globalCompositeOperation = 'destination-out';
   }
 
-  const seen: Array<{ x: number; y: number; r: number }> = [];
+  const seen: Array<{ x: number; y: number; r: number; ring?: boolean }> = [];
   for (const c of holes.circles) {
     const p = map.project([c.lng, c.lat]);
     // The radius in km, measured north-south on screen (Mercator grows it towards the poles, like the land).
@@ -126,13 +147,14 @@ export function drawFog(canvas: HTMLCanvasElement, map: MLMap, holes: FogHoles |
       ctx.fillStyle = grad;
       ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.fill();
     }
-    seen.push({ x: p.x, y: p.y, r });
+    seen.push({ x: p.x, y: p.y, r, ring: c.ring });
   }
   // The sight rings, drawn over the cleared fog.
   ctx.globalCompositeOperation = 'source-over';
   ctx.setLineDash([5, 4]);
   ctx.lineWidth = 1.4;
   ctx.strokeStyle = 'rgba(142,36,36,0.5)';
-  if (holes.showRings !== false) for (const s of seen) { ctx.beginPath(); ctx.arc(s.x, s.y, s.r * 0.97, 0, Math.PI * 2); ctx.stroke(); }
+  if (holes.showRings !== false) for (const s of seen) {
+    if (s.ring === false) continue; ctx.beginPath(); ctx.arc(s.x, s.y, s.r * 0.97, 0, Math.PI * 2); ctx.stroke(); }
   ctx.setLineDash([]);
 }

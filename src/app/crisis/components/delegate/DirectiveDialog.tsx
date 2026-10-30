@@ -6,16 +6,18 @@
 // status, even before the backroom has replied (addNote).
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Send } from 'lucide-react';
+import { Pencil, Send } from 'lucide-react';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { addNote, crisisError, type CrisisRef } from '@/lib/crisis/api';
-import { dirNumber } from '@/lib/crisis/format';
-import { OUTCOME_LABEL, type Directive, type DirectiveNote } from '@/lib/crisis/types';
+import { CHAIR_SEND_BACK_WORD, dirNumber, isChairSendBack } from '@/lib/crisis/format';
+import type { Directive, DirectiveNote } from '@/lib/crisis/types';
 import { Btn, cabinetTint, CK, fieldStyle, ThemeTag } from '../../crisisKit';
 import { CharacterName } from '../character/CharacterProfileHost';
 import CrisisDialog from './CrisisDialog';
 import type { PersonRef } from './MyDirectives';
-import { KIND_WORD, kindIcon, outcomeColor, outcomeIcon, statusColor, statusIcon, STATUS_WORDS, whenLabel, whenTitle } from './directiveUi';
+import { AttachBar, useImageAttach } from './ImageAttach';
+import { DirectiveBody, withAttached } from '../directives/attachedImage';
+import { KIND_WORD, kindIcon, statusColor, statusIcon, STATUS_WORDS, verdictOf, whenLabel, whenTitle } from './directiveUi';
 
 interface Bubble { key: string; mine: boolean; who: string; at: string | null; body: string; sort: number }
 
@@ -29,30 +31,35 @@ function BubbleView({ b, lead }: { b: Bubble; lead?: string }) {
         <p style={{ margin: 0, fontSize: 11.5, fontWeight: 800, color: b.mine ? CK.forest : CK.red, overflowWrap: 'anywhere' }}>
           {lead ? `${lead}, ` : ''}{b.who}{b.at ? <span title={whenTitle(b.at)}>{`, ${whenTitle(b.at) ?? ''} (${whenLabel(b.at)})`}</span> : ''}
         </p>
-        <p style={{ margin: '2px 0 0', fontSize: 14.5, lineHeight: 1.55, color: CK.ink, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{b.body}</p>
+        <DirectiveBody body={b.body} thumb={260} style={{ margin: '2px 0 0', fontSize: 14.5, lineHeight: 1.55, color: CK.ink, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }} />
       </div>
     </div>
   );
 }
 
 export default function DirectiveDialog({
-  cref, d, notes, withNames, myMemberId, author, isAuthor, answeredBy, onChanged, onClose,
+  cref, d, notes, withNames, myMemberId, author, isAuthor, answeredBy, onChanged, onClose, onSendAgain,
 }: {
   cref: CrisisRef; d: Directive; notes: DirectiveNote[]; withNames: string[]; myMemberId: string | null;
   author: PersonRef; isAuthor: boolean; answeredBy: string | null; onChanged: () => void; onClose: () => void;
+  /** A directive its chair sent back: copy it into a new directive and close this pop-up. */
+  onSendAgain?: () => void;
 }) {
+  const sentBack = isChairSendBack(d);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
+  const attach = useImageAttach(cref);
 
   const send = async () => {
     const body = text.trim();
-    if (!body || busy) return;
+    if (!body || busy || attach.uploading) return;
     setBusy(true);
     try {
-      await addNote(cref, d.id, body);
+      await addNote(cref, d.id, withAttached(body, attach.url));
       notifyOk('Message sent');
       setText('');
+      attach.setUrl(null);
       onChanged();
     } catch (e) {
       notifyErr(crisisError(e, 'Could not send your message. Your text is kept, try again.'));
@@ -67,13 +74,13 @@ export default function DirectiveDialog({
     const out: Bubble[] = [{ key: 'directive', mine: true, who: isAuthor ? 'You' : author.name, at: d.created_at, body: d.body, sort: t0 }];
     if (d.reply) {
       const at = d.answered_at ?? null;
-      out.push({ key: 'reply', mine: false, who: answeredBy ?? 'Backroom', at, body: d.reply, sort: at ? new Date(at).getTime() : t0 + 1 });
+      out.push({ key: 'reply', mine: false, who: sentBack ? 'Your chair' : answeredBy ?? 'Backroom', at, body: d.reply, sort: at ? new Date(at).getTime() : t0 + 1 });
     }
     for (const n of notes) {
-      out.push({ key: n.id, mine: n.member_id === myMemberId, who: n.member_id === myMemberId ? 'You' : 'Backroom', at: n.created_at, body: n.body, sort: new Date(n.created_at).getTime() });
+      out.push({ key: n.id, mine: n.member_id === myMemberId, who: n.member_id === myMemberId ? 'You' : sentBack ? 'Your chair' : 'Backroom', at: n.created_at, body: n.body, sort: new Date(n.created_at).getTime() });
     }
     return out.sort((a, b) => a.sort - b.sort);
-  }, [d, notes, isAuthor, author.name, answeredBy, myMemberId]);
+  }, [d, notes, isAuthor, author.name, answeredBy, myMemberId, sentBack]);
 
   // A new message scrolls into view (not on the very first paint of a thread with only the directive).
   const count = thread.length;
@@ -81,12 +88,10 @@ export default function DirectiveDialog({
     if (count > 1) endRef.current?.scrollIntoView({ block: 'nearest' });
   }, [count]);
 
-  const tone = d.outcome ? outcomeColor(d.outcome) : statusColor(d.status);
-  const verdict = d.outcome ? OUTCOME_LABEL[d.outcome] : STATUS_WORDS[d.status];
-  const verdictIcon = d.outcome ? outcomeIcon(d.outcome, 30) : statusIcon(d.status, 30);
+  const { color: tone, word: verdict, icon: verdictIcon } = verdictOf(d, 30);
 
   return (
-    <CrisisDialog title="Your directive" onClose={onClose} width={720} flush>
+    <CrisisDialog title="Your Directive" onClose={onClose} width={720} flush>
       <div style={{ background: CK.redGrad, color: '#FFF4E6', padding: '14px 22px 16px' }}>
         <p className="flex items-center justify-between gap-3 flex-wrap" style={{ margin: 0, fontSize: 12.5, fontWeight: 700, color: 'rgba(255,232,214,0.85)' }}>
           <span className="inline-flex items-center gap-1.5">{kindIcon(d.kind, 15)}{KIND_WORD[d.kind]}</span>
@@ -106,7 +111,7 @@ export default function DirectiveDialog({
           )}
           {d.answered_at && (
             <span className="block" style={{ marginTop: 2, fontSize: 13, fontWeight: 700, color: CK.inkSoft }}>
-              Reply came in {whenTitle(d.answered_at)} ({whenLabel(d.answered_at)})
+              {sentBack ? 'Sent back' : 'Reply came in'} {whenTitle(d.answered_at)} ({whenLabel(d.answered_at)})
             </span>
           )}
           {d.outcome && d.status !== 'answered' && (
@@ -127,30 +132,40 @@ export default function DirectiveDialog({
       </div>
 
       <section aria-label="Conversation with the backroom" className="grid gap-2.5" style={{ padding: '14px 22px 16px' }}>
-        {thread.map((b) => <BubbleView key={b.key} b={b} lead={b.key === 'directive' ? 'Directive' : b.key === 'reply' ? 'Reply' : undefined} />)}
+        {thread.map((b) => <BubbleView key={b.key} b={b} lead={b.key === 'directive' ? 'Directive' : b.key === 'reply' ? (sentBack ? CHAIR_SEND_BACK_WORD : 'Reply') : undefined} />)}
         {!d.reply && (
           <p style={{ margin: '2px 0 0', fontSize: 13, color: CK.muted, textAlign: 'center' }}>No reply yet. It shows up here by itself.</p>
         )}
         <div ref={endRef} style={{ scrollMarginBottom: 110 }} />
       </section>
 
-      {isAuthor && (
+      {isAuthor && sentBack && onSendAgain && (
+        <div style={{ position: 'sticky', bottom: 0, background: CK.surface, boxShadow: `0 -1px 0 ${CK.hair}`, padding: '10px 22px 14px' }}>
+          <Btn tone="green" icon={<Pencil size={15} strokeWidth={1.5} />} onClick={onSendAgain}>Edit and send again</Btn>
+        </div>
+      )}
+      {isAuthor && !sentBack && (
         <div style={{ position: 'sticky', bottom: 0, background: CK.surface, boxShadow: `0 -1px 0 ${CK.hair}`, padding: '10px 22px 14px' }}>
           {d.status === 'clarify' && (
             <p style={{ margin: '0 0 6px', fontSize: 13, fontWeight: 700, color: CK.red }}>The backroom needs more detail. Answer here and it goes back in the queue.</p>
           )}
           <div className="flex items-end" style={{ gap: 8 }}>
             <label htmlFor={`note-${d.id}`} className="sr-only">Write to the backroom</label>
-            <textarea
-              id={`note-${d.id}`}
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void send(); } }}
-              rows={2}
-              style={{ ...fieldStyle, resize: 'none', flex: 1 }}
-              placeholder="Add a clarification for the backroom"
-            />
-            <Btn tone="green" icon={<Send size={15} strokeWidth={1.5} />} disabled={!text.trim() || busy} onClick={send} style={{ height: 42 }}>
+            <div style={{ position: 'relative', flex: 1 }}>
+              <textarea
+                id={`note-${d.id}`}
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void send(); } }}
+                rows={2}
+                style={{ ...fieldStyle, resize: 'none', paddingBottom: 42 }}
+                placeholder="Add a clarification for the backroom"
+              />
+              <div style={{ position: 'absolute', left: 8, bottom: 7 }}>
+                <AttachBar url={attach.url} uploading={attach.uploading} onPick={(f) => { void attach.pick(f); }} onClear={() => attach.setUrl(null)} disabled={busy} />
+              </div>
+            </div>
+            <Btn tone="green" icon={<Send size={15} strokeWidth={1.5} />} disabled={!text.trim() || busy || attach.uploading} onClick={send} style={{ height: 42 }}>
               {busy ? 'Sending' : 'Send'}
             </Btn>
           </div>

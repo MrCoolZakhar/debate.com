@@ -14,6 +14,7 @@ import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import AddResourceType from './AddResourceType';
 import EditResourceTypes from './EditResourceTypes';
 import ResourceTile, { signed, type LastChange } from './ResourceTile';
+import { serverNow } from '@/lib/serverClock';
 
 interface LogRow { id: string; resource_id: string; delta: number; amount_after: number; reason: string | null; member_id: string | null; created_at: string }
 
@@ -23,10 +24,10 @@ export default function ResourcesPage() {
   const [log, setLog] = useState<LogRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<null | 'add' | 'edit'>(null);
-  const [now, setNow] = useState(() => Date.now());
+  const [now, setNow] = useState(() => serverNow());
   const canEdit = director || (role === 'backroomer' && settings.backroomPowers.resources);
 
-  useEffect(() => { const t = window.setInterval(() => setNow(Date.now()), 30_000); return () => window.clearInterval(t); }, []);
+  useEffect(() => { const t = window.setInterval(() => setNow(serverNow()), 30_000); return () => window.clearInterval(t); }, []);
 
   const read = useCallback(async () => {
     const d = await loadResources(ref);
@@ -144,7 +145,7 @@ export default function ResourcesPage() {
 
       {staff && (
         <Card style={{ marginTop: 18 }}>
-          <CardTitle icon={<History size={17} strokeWidth={1.5} aria-hidden />} right={<span><b style={{ fontSize: 22, fontVariantNumeric: 'tabular-nums' }}>{log.length}</b> <span style={{ fontSize: 13, color: CK.inkSoft, fontWeight: 600 }}>changes</span></span>}>Change log</CardTitle>
+          <CardTitle icon={<History size={17} strokeWidth={1.5} aria-hidden />} right={<span><b style={{ fontSize: 22, fontVariantNumeric: 'tabular-nums' }}>{log.length}</b> <span style={{ fontSize: 13, color: CK.inkSoft, fontWeight: 600 }}>changes</span></span>}>Change Log</CardTitle>
           {!log.length && <p style={{ margin: 0, fontSize: 13.5, color: CK.inkSoft }}>No changes yet.</p>}
           <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
             {log.map((l) => {

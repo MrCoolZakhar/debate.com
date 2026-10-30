@@ -1,11 +1,11 @@
 'use client';
 // Gavelling Crisis: "Needs Attention" on Crisis Command, a bento card under Front Rooms. It collects what the Crisis
 // Director can act on right now: meeting requests waiting for a yes or no, the backroom rebalance suggestion, the oldest
-// directive that has waited too long, and a room with no chair in it. When nothing needs attention it says so in one plain
+// directive that has waited too long, cabinet directives still with their chair, and a room with no chair in it. When nothing needs attention it says so in one plain
 // line. Every item is derived from what Command already reads (nothing extra is loaded except the pending meetings).
 
-import { useMemo } from 'react';
-import { BellRing, CircleCheck, Clock, DoorOpen } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { BellRing, CircleCheck, Clock, DoorOpen, Gavel } from 'lucide-react';
 import { dirNumber } from '@/lib/crisis/format';
 import type { CrisisRef } from '@/lib/crisis/api';
 import type { Cabinet, Directive, Member } from '@/lib/crisis/types';
@@ -49,8 +49,15 @@ export function NeedsAttentionCard({ cref, cabinets, members, directives, rooms,
     });
   }, [rooms, cabinets]);
 
+  // Cabinet directives the chair has not sent on yet. The backroom cannot see them, so this is the only place they show up.
+  const [showChair, setShowChair] = useState(false);
+  const withChair = useMemo(
+    () => (directives ?? []).filter((d) => d.status === 'awaiting_chair').sort((a, b) => a.created_at.localeCompare(b.created_at)),
+    [directives],
+  );
+
   const meetings = pending ?? [];
-  const count = meetings.length + (tip ? 1 : 0) + (oldest ? 1 : 0) + noChair.length;
+  const count = meetings.length + (tip ? 1 : 0) + (oldest ? 1 : 0) + (withChair.length > 0 ? 1 : 0) + noChair.length;
   const loading = pending === null || directives === null;
 
   return (
@@ -86,10 +93,40 @@ export function NeedsAttentionCard({ cref, cabinets, members, directives, rooms,
               </ItemRow>
             </div>
           )}
+          {withChair.length > 0 && (
+            <div style={{ borderTop: meetings.length || tip || oldest ? `1px solid ${CK.hair}` : 0 }}>
+              <ItemRow
+                icon={<Gavel size={17} strokeWidth={1.5} />}
+                color="#7B3F61"
+                action={<Btn size="sm" tone="ghost" onClick={() => setShowChair((o) => !o)}>{showChair ? 'Hide' : 'Show'}</Btn>}
+              >
+                <b>{withChair.length}</b> cabinet {withChair.length === 1 ? 'directive is' : 'directives are'} with the chair
+              </ItemRow>
+              {showChair && (
+                <ul style={{ listStyle: 'none', margin: '0 0 6px', padding: '0 0 0 40px' }}>
+                  {withChair.map((d) => {
+                    const cab = cabinets.find((c) => c.id === d.cabinet_id);
+                    return (
+                      <li key={d.id}>
+                        <button
+                          type="button"
+                          onClick={() => onOpenDirective(d)}
+                          className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+                          style={{ border: 0, background: 'transparent', padding: '3px 0', cursor: 'pointer', textAlign: 'left', fontFamily: CK.font, fontSize: 12.5, fontWeight: 700, color: CK.forest, textDecoration: 'underline', overflowWrap: 'anywhere' }}
+                        >
+                          No. {dirNumber(d)}: {d.title}{cab ? `, ${cab.short_name || cab.name}` : ''}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          )}
           {noChair.map((c, i) => (
-            <div key={c.id} style={{ borderTop: meetings.length || tip || oldest || i > 0 ? `1px solid ${CK.hair}` : 0 }}>
+            <div key={c.id} style={{ borderTop: meetings.length || tip || oldest || withChair.length > 0 || i > 0 ? `1px solid ${CK.hair}` : 0 }}>
               <ItemRow icon={<DoorOpen size={17} strokeWidth={1.5} />} color={CK.goldDeep}>
-                <b>{c.short_name || c.name}</b> has no chair in its room
+                <b>{c.short_name || c.name}</b> has no chair in its committee room
               </ItemRow>
             </div>
           ))}

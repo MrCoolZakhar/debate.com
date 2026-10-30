@@ -1,11 +1,12 @@
 // Gavelling Crisis: the backroom inbox rules in one place (lanes, filters, queue order, names).
-import { CircleCheck, CircleDashed, CircleHelp, CircleX, Clock, Landmark, Lock, Megaphone, Newspaper, Users, type LucideIcon } from 'lucide-react';
+import { CircleCheck, CircleDashed, CircleHelp, CircleX, Clock, Landmark, Lock, Megaphone, Newspaper, Undo2, Users, type LucideIcon } from 'lucide-react';
 import { getCrisisClient } from '@/lib/crisis/client';
-import { dirNumber } from '@/lib/crisis/format';
+import { CHAIR_SEND_BACK_WORD, dirNumber, isChairSendBack } from '@/lib/crisis/format';
 import type { CrisisRef } from '@/lib/crisis/api';
-import type { Cabinet, Character, Directive, DirectiveKind, DirectiveOutcome, Member } from '@/lib/crisis/types';
+import { OUTCOME_LABEL, type Cabinet, type Character, type Directive, type DirectiveKind, type DirectiveOutcome, type Member } from '@/lib/crisis/types';
 
-/** A kind with its icon (owner, 25 Oct 2026: personal Lock, joint Users, cabinet Landmark). */
+/** A kind with its icon: THE one map (owner, 25 Oct 2026: personal Lock, joint Users, cabinet Landmark). press_release and communique can
+ *  no longer be created by anyone; they stay here only so old rows still draw. */
 export const KIND_ICON: Record<DirectiveKind, LucideIcon> = {
   personal: Lock,
   joint: Users,
@@ -23,6 +24,16 @@ export const OUTCOME_STYLE: Record<DirectiveOutcome, { Icon: LucideIcon; color: 
   later: { Icon: Clock, color: '#7A6E5E' },
 };
 
+/** The chair turned a cabinet directive back: its own colour (plum, as "With your chair"), never the denied red. */
+const SEND_BACK_STYLE = { Icon: Undo2, color: '#7B3F61' };
+
+/** What to say and draw for a directive's outcome: the real outcome, or "Sent back by your chair" (never "Denied") for a send-back. */
+export function outcomeView(d: Pick<Directive, 'status' | 'reply' | 'outcome'>): { Icon: LucideIcon; color: string; word: string } | null {
+  if (isChairSendBack(d)) return { ...SEND_BACK_STYLE, word: CHAIR_SEND_BACK_WORD };
+  if (!d.outcome) return null;
+  return { ...OUTCOME_STYLE[d.outcome], word: OUTCOME_LABEL[d.outcome] };
+}
+
 /** The character ids that co-signed a joint directive (staff read every row). */
 export async function listDirectiveCoauthors(ref: CrisisRef, directiveId: string): Promise<string[]> {
   const client = await getCrisisClient(ref.conf, ref.crisis);
@@ -33,6 +44,9 @@ export async function listDirectiveCoauthors(ref: CrisisRef, directiveId: string
 
 export type Lane = 'mine' | 'unclaimed' | 'open' | 'waiting' | 'answered';
 export type QueueOrder = 'fair' | 'oldest' | 'newest';
+
+/** The kinds anyone can still create (the others only exist on old rows): the pickers and filters list these. */
+export const CREATABLE_KINDS: DirectiveKind[] = ['personal', 'joint', 'committee'];
 
 export const isOpenStatus = (d: Directive) => d.status === 'queued' || d.status === 'claimed';
 
@@ -110,7 +124,9 @@ const minute = (iso: string) => Math.floor(new Date(iso).getTime() / 60000);
 export function sortDirectives(list: Directive[], order: QueueOrder, lane: Lane, lastAnswered: Map<string, number>): Directive[] {
   const out = [...list];
   if (lane === 'answered' || lane === 'waiting') {
-    return out.sort((a, b) => new Date(b.answered_at ?? b.updated_at).getTime() - new Date(a.answered_at ?? a.updated_at).getTime());
+    // These lanes follow the day of the last answer: Fair and Newest show the latest first, Oldest the earliest.
+    const at = (d: Directive) => new Date(d.answered_at ?? d.updated_at).getTime();
+    return out.sort((a, b) => (order === 'oldest' ? at(a) - at(b) : at(b) - at(a)));
   }
   if (order === 'oldest') return out.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
   if (order === 'newest') return out.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());

@@ -10,6 +10,7 @@ import { notifyErr } from '@/lib/appNotify';
 import { crisisError, uploadCrisisBanner, uploadCrisisFile } from '@/lib/crisis/api';
 import { Btn, CK } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
+import { ZoomableImage } from '../news/ImageLightbox';
 
 export interface NewsMedia { bannerUrl: string | null; fileUrl: string | null; fileName: string | null }
 
@@ -38,8 +39,7 @@ export default function NewsMediaPicker({ media, onChange }: { media: NewsMedia;
     <div className="flex flex-col" style={{ gap: 8 }}>
       {media.bannerUrl && (
         <div style={{ position: 'relative' }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={media.bannerUrl} alt="Picture of the newsflash" style={{ display: 'block', width: '100%', aspectRatio: '16 / 7', objectFit: 'cover', borderRadius: 14, boxShadow: CK.shadowSm }} />
+          <ZoomableImage src={media.bannerUrl} alt="Picture of the newsflash" style={{ width: '100%', aspectRatio: '16 / 7', borderRadius: 14, boxShadow: CK.shadowSm }} />
           <button type="button" aria-label="Remove the picture" onClick={() => onChange({ bannerUrl: null })}
             className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
             style={{ position: 'absolute', top: 6, right: 6, border: 0, borderRadius: 9, width: 28, height: 28, display: 'grid', placeItems: 'center', cursor: 'pointer', background: 'rgba(255,255,255,0.92)', color: CK.red, boxShadow: CK.shadowSm }}>

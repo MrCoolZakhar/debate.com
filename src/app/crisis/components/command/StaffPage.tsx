@@ -10,9 +10,10 @@ import GSelect, { type GSelectOption } from '@/components/GSelect';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { addMember, crisisError, issueCode, removeMember, saveCharacter, saveMember } from '@/lib/crisis/api';
 import { ROLE_LABEL, type Cabinet, type Character, type Member } from '@/lib/crisis/types';
-import { Avatar, Btn, Card, CardTitle, CK, fieldStyle, waitLabel } from '../../crisisKit';
-import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
+import { Avatar, Btn, Card, CardTitle, CK, fieldStyle, agoLabel } from '../../crisisKit';
+import { useCrisis, usePresencePoll } from '../../[conference]/[crisis]/CrisisContext';
 import { ConfirmInline, copyText, DirectorOnlyCard, Labelled, PageHeading, responsibleMembers } from './setupKit';
+import { serverNow } from '@/lib/serverClock';
 
 type MemberRole = Member['role'];
 const ROLE_OPTIONS: GSelectOption<MemberRole>[] = (['director', 'assistant_director', 'backroomer', 'chair', 'press', 'delegate'] as MemberRole[])
@@ -59,10 +60,11 @@ interface Issued { code: string; password: string }
 
 function StaffBody() {
   const { core, memberId, reloadCore } = useCrisis();
-  const [now, setNow] = useState(() => Date.now());
+  usePresencePoll(); // the online dots: a heartbeat no longer pings the live channel
+  const [now, setNow] = useState(() => serverNow());
   const [showAdd, setShowAdd] = useState(false);
   const [issued, setIssued] = useState<Record<string, Issued>>({});
-  useEffect(() => { const t = window.setInterval(() => setNow(Date.now()), 30_000); return () => window.clearInterval(t); }, []);
+  useEffect(() => { const t = window.setInterval(() => setNow(serverNow()), 30_000); return () => window.clearInterval(t); }, []);
 
   const cabinetName = useMemo(() => new Map(core.cabinets.map((c) => [c.id, c.name])), [core.cabinets]);
   const cabinetColor = useMemo(() => new Map(core.cabinets.map((c) => [c.id, c.color])), [core.cabinets]);
@@ -259,7 +261,7 @@ function PersonRow({ m, delegates, now, isMe, cabinetName, characterName, pictur
 }) {
   const [open, setOpen] = useState(false);
   const online = !!m.last_seen_at && now - new Date(m.last_seen_at).getTime() < 3 * 60_000;
-  const seen = online ? null : m.last_seen_at ? `${waitLabel(m.last_seen_at, now)}${waitLabel(m.last_seen_at, now) === 'just now' ? '' : ' ago'}` : 'Never';
+  const seen = online ? null : m.last_seen_at ? agoLabel(m.last_seen_at, now) : 'Never';
   const expanded = open || !!issued;
 
   return (

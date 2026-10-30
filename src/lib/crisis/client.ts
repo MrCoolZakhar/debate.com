@@ -6,7 +6,7 @@
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { SUPABASE_URL, SUPABASE_ANON_KEY, supabase } from '@/lib/supabase';
-import { getFreshAuthedClient } from '@/lib/supabase-auth';
+import { getFreshAuthedClient, supabaseAuthClient } from '@/lib/supabase-auth';
 
 const tokenKey = (conferenceSlug: string, crisisSlug: string) => `gavelling-crisis-token:${conferenceSlug}/${crisisSlug}`;
 
@@ -37,9 +37,18 @@ function clientForToken(token: string): SupabaseClient {
 export async function getCrisisClient(conferenceSlug: string, crisisSlug: string): Promise<SupabaseClient> {
   const token = readCrisisToken(conferenceSlug, crisisSlug);
   if (token) return clientForToken(token);
-  const authed = await getFreshAuthedClient();
-  return authed ?? supabase;
+  // One client per access token, reused by every call and poller. Making a new one per call (getFreshAuthedClient)
+  // created a fresh auth client every few seconds: hundreds of them per tab, each warning in the dev server's log,
+  // until the dev server ran out of memory (30 Oct 2026). A new token (after a refresh) gets one new client.
+  const { data: { session } } = await supabaseAuthClient.auth.getSession();
+  if (!session) return supabase;
+  if (authed && authed.token === session.access_token) return authed.client;
+  const fresh = await getFreshAuthedClient();
+  if (!fresh) return supabase;
+  authed = { token: session.access_token, client: fresh };
+  return fresh;
 }
+let authed: { token: string; client: SupabaseClient } | null = null;
 
 /** True when this device entered the crisis with a personal code. */
 export function usesPersonalCode(conferenceSlug: string, crisisSlug: string): boolean {

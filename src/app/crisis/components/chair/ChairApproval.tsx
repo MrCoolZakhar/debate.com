@@ -11,10 +11,12 @@ import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { crisisError, reviewDirectiveAsChair, type CrisisRef } from '@/lib/crisis/api';
 import { dirNumber } from '@/lib/crisis/format';
 import type { Cabinet, Character, Directive, Member } from '@/lib/crisis/types';
-import { Avatar, Btn, Card, CardTitle, CK, fieldStyle, OverhangCard, Skeleton } from '../../crisisKit';
+import { Btn, Card, CardTitle, CK, fieldStyle, OverhangCard, Skeleton } from '../../crisisKit';
 import { NumberBadge } from '../directives/directiveParts';
 import DirectiveDeepLink from '../notifications/DirectiveDeepLink';
-import { StatusLine, whenLabel, whenTitle, OutcomeLine } from '../delegate/directiveUi';
+import { whenLabel, whenTitle } from '../delegate/directiveUi';
+import { splitAttached } from '../directives/attachedImage';
+import { ZoomableImage } from '../news/ImageLightbox';
 
 const PORTRAIT = 44;
 const LONG = 260; // characters; a longer text starts folded
@@ -80,8 +82,9 @@ function Waiting({ d, author, cref, cabinetName, focused, onDone }: {
           className={long && !open ? 'line-clamp-3' : undefined}
           style={{ margin: '8px 0 0', fontSize: 14, lineHeight: 1.55, color: CK.ink, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}
         >
-          {d.body}
+          {splitAttached(d.body).text}
         </p>
+        {splitAttached(d.body).image && <ZoomableImage src={splitAttached(d.body).image as string} alt="Attached image" style={{ width: 'min(100%, 240px)', height: 160, borderRadius: 14, marginTop: 8 }} />}
         {long && (
           <button
             type="button"
@@ -123,28 +126,6 @@ function Waiting({ d, author, cref, cabinetName, focused, onDone }: {
   );
 }
 
-function SentRow({ d, author }: { d: Directive; author: Author }) {
-  return (
-    <div className="flex items-start gap-3" style={{ padding: '10px 0', borderTop: `1px solid ${CK.hair}` }}>
-      <Avatar name={author.name} src={author.picture_url} size={32} color={author.color} />
-      <div className="min-w-0" style={{ flex: 1 }}>
-        <div className="flex items-start gap-2 flex-wrap">
-          <b style={{ flex: '1 1 180px', minWidth: 0, fontSize: 15, lineHeight: 1.3, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{d.title}</b>
-          <NumberBadge n={dirNumber(d)} style={{ marginTop: 2 }} />
-        </div>
-        <p style={{ margin: '2px 0 0', fontSize: 12, fontWeight: 700, color: CK.muted }}>
-          <span title={author.name}><CharacterName name={author.name}>{surname(author.name)}</CharacterName></span>
-          <span title={whenTitle(d.created_at)}>{` · ${whenLabel(d.created_at)}`}</span>
-        </p>
-        <div className="flex items-center flex-wrap" style={{ gap: '2px 12px', marginTop: 3 }}>
-          <StatusLine s={d.status} />
-          <OutcomeLine d={d} />
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function ChairApproval({ cref, directives, cabinetId, characters, members, cabinets, onChanged }: {
   cref: CrisisRef;
   directives: Directive[] | null;
@@ -162,7 +143,6 @@ export default function ChairApproval({ cref, directives, cabinetId, characters,
     [directives, cabinetId],
   );
   const waiting = mine.filter((d) => d.status === 'awaiting_chair').sort((a, b) => b.created_at.localeCompare(a.created_at));
-  const sentOn = mine.filter((d) => d.status !== 'awaiting_chair').sort((a, b) => b.created_at.localeCompare(a.created_at));
   const cabName = (d: Directive) => (cabinets.length > 1 ? cabinets.find((c) => c.id === d.cabinet_id)?.name ?? null : null);
 
   return (
@@ -192,12 +172,6 @@ export default function ChairApproval({ cref, directives, cabinetId, characters,
           </div>
         )}
 
-        {sentOn.length > 0 && (
-          <div style={{ marginTop: 18 }}>
-            <h3 style={{ margin: '0 0 2px', fontSize: 14, fontWeight: 800, color: CK.ink }}>Already Sent On</h3>
-            {sentOn.map((d) => <SentRow key={d.id} d={d} author={authorOf(d, characters, members, cabinets)} />)}
-          </div>
-        )}
       </Card>
     </section>
   );

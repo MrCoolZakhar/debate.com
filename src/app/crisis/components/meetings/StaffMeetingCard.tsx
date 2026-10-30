@@ -7,7 +7,7 @@ import { Check, ClipboardCheck, X } from 'lucide-react';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { crisisError, decideMeeting, type CrisisRef } from '@/lib/crisis/api';
 import type { Cabinet, Meeting, MeetingStatus, Member } from '@/lib/crisis/types';
-import { Btn, CK, fieldStyle, waitLabel } from '../../crisisKit';
+import { Btn, CK, fieldStyle, agoLabel } from '../../crisisKit';
 import { AvatarStack, Fact, NameList, StatusLine, requesterName, whenText, type Person } from './meetingKit';
 import { InTheRoom, MeetingClockControls, MeetingClockReadout } from './MeetingClock';
 import { meetingInProgress } from '@/lib/crisis/meetings';
@@ -40,7 +40,7 @@ export default function StaffMeetingCard({ m, refx, people, cabinets, members, c
       </span>
       <div className="flex items-start justify-between gap-2 flex-wrap" style={{ marginBottom: 8 }}>
         <StatusLine status={m.status} />
-        <span style={{ fontSize: 12, color: CK.muted, fontWeight: 600 }}>Asked {waitLabel(m.created_at, now)} ago</span>
+        <span style={{ fontSize: 12, color: CK.muted, fontWeight: 600 }}>Asked {agoLabel(m.created_at, now)}</span>
       </div>
       <p style={{ margin: 0, fontSize: 14.5, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}><NameList ids={m.character_ids} people={people} /></p>
       <p style={{ margin: '6px 0 10px', fontSize: 13.5, lineHeight: 1.5, color: CK.inkSoft, overflowWrap: 'anywhere' }}>{m.intention}</p>

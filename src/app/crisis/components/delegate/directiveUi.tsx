@@ -3,12 +3,13 @@
 // and chair pages (the chair page uses StatusLine and whenLabel).
 
 import {
-  CheckCircle2, CircleDot, CircleHelp, Clock, Contrast, Gavel, Hourglass, Landmark, Lock, Megaphone, ScrollText, Undo2, UserRoundCog, Users, XCircle,
+  CheckCircle2, CircleDot, CircleHelp, Clock, Contrast, Gavel, Hourglass, Undo2, UserRoundCog, XCircle,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { OUTCOME_LABEL, type Directive, type DirectiveKind, type DirectiveOutcome, type DirectiveStatus } from '@/lib/crisis/types';
-import { timeAgo } from '@/lib/crisis/format';
+import { CHAIR_SEND_BACK_WORD, isChairSendBack, timeAgo } from '@/lib/crisis/format';
 import { CK, THEME_STYLE } from '../../crisisKit';
+import { KIND_ICON } from '../directives/directiveKit';
 
 export const STATUS_WORDS: Record<DirectiveStatus, string> = {
   awaiting_chair: 'With your chair',
@@ -63,22 +64,27 @@ export const KIND_WORD: Record<DirectiveKind, string> = {
   personal: 'Personal', joint: 'Joint', committee: 'Cabinet', press_release: 'Press release', communique: 'Communiqué',
 };
 
+/** The kind's icon: the ONE map is KIND_ICON in directives/directiveKit.ts. */
 export function kindIcon(k: DirectiveKind, size = 15): ReactNode {
-  const p = { size, strokeWidth: 1.5, 'aria-hidden': true } as const;
-  if (k === 'personal') return <Lock {...p} />;
-  if (k === 'joint') return <Users {...p} />;
-  if (k === 'committee') return <Landmark {...p} />;
-  if (k === 'press_release') return <Megaphone {...p} />;
-  return <ScrollText {...p} />;
+  const I = KIND_ICON[k];
+  return <I size={size} strokeWidth={1.5} aria-hidden />;
+}
+
+/** What the delegate reads as a directive's verdict. A directive its chair turned back is "Sent back by your chair" (plum, never the denied red). */
+export function verdictOf(d: Pick<Directive, 'status' | 'reply' | 'outcome'>, size = 15): { word: string; color: string; icon: ReactNode } {
+  if (isChairSendBack(d)) return { word: CHAIR_SEND_BACK_WORD, color: PLUM, icon: <Undo2 size={size} strokeWidth={1.5} aria-hidden /> };
+  if (d.outcome) return { word: OUTCOME_LABEL[d.outcome], color: outcomeColor(d.outcome), icon: outcomeIcon(d.outcome, size) };
+  return { word: STATUS_WORDS[d.status], color: statusColor(d.status), icon: statusIcon(d.status, size) };
 }
 
 /** "Approved" etc., or nothing while there is no outcome. */
-export function OutcomeLine({ d }: { d: Pick<Directive, 'outcome'> }) {
+export function OutcomeLine({ d }: { d: Pick<Directive, 'status' | 'reply' | 'outcome'> }) {
   if (!d.outcome) return null;
+  const v = verdictOf(d);
   return (
-    <span className="inline-flex items-center gap-1.5" style={{ fontSize: 13, fontWeight: 800, color: outcomeColor(d.outcome) }}>
-      {outcomeIcon(d.outcome)}
-      {OUTCOME_LABEL[d.outcome]}
+    <span className="inline-flex items-center gap-1.5" style={{ fontSize: 13, fontWeight: 800, color: v.color }}>
+      {v.icon}
+      {v.word}
     </span>
   );
 }
