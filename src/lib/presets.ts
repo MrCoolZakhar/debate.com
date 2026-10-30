@@ -121,25 +121,33 @@ export const US_SENATE_MEMBERS: string[] = [
   'Washington', 'West Virginia', 'Wisconsin', 'Wyoming',
 ];
 
-// Press — ROLE-based international press corps: wire services, broadcasters and
-// papers of record, plus specialist correspondents. ~16 seats.
+// Press: the outlets a MUN press corps is actually made of, most common first
+// (source: the press-corps lists of about 15 conferences, 30 Oct 2026). Outlet
+// seats only: role seats such as Photojournalist or Press Corps Editor are not
+// real MUN seats. Each outlet's logo is its round seat picture
+// (src/lib/pressOutlets.ts, public/press-logos/). Free-text seat names, NOT
+// countries, so they never resolve to a flag.
 export const PRESS_ROLES: string[] = [
-  'Reuters',
-  'Associated Press',
-  'Agence France-Presse',
-  'BBC News',
-  'CNN',
+  'BBC',
   'Al Jazeera',
+  'Xinhua',
+  'RT',
   'The New York Times',
   'The Guardian',
   'Le Monde',
-  'Der Spiegel',
-  'Xinhua News Agency',
+  'Reuters',
+  'CNN',
+  'Fox News',
   'The Economist',
-  'Photojournalist',
-  'Editorial Cartoonist',
-  'Broadcast Anchor',
-  'Press Corps Editor',
+  'The Times of India',
+  'Associated Press',
+  'AFP',
+  'Africanews',
+  'Hindustan Times',
+  'Dawn',
+  'Al Arabiya',
+  'The Korea Herald',
+  'China Daily',
 ];
 
 // European Parliament — COUNTRY-based: the 27 EU member states. All resolve in
