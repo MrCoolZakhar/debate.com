@@ -488,7 +488,7 @@ export default function PositionPaperPage() {
         /* 88px of top padding was written for the desktop floating nav pill.
            On a phone SiteNav's bar is already in normal flow above this, so
            the same 88 was 88px of dead space at the top of a 667px screen. */
-        className="flex-1 w-full max-w-[1100px] mx-auto px-6 pt-4 lg:pt-[88px]"
+        className="flex-1 w-full max-w-[1100px] mx-auto px-6 pt-4 lg:pt-[88px] lg:min-h-0"
         style={{ display: 'flex', flexDirection: 'column', height: '100%', boxSizing: 'border-box', paddingBottom: 24 }}
       >
         <ActionButton
@@ -607,7 +607,10 @@ export default function PositionPaperPage() {
             )}
 
             {/* Body: chat left, PDF right */}
-            <div className="grid grid-cols-1 lg:grid-cols-[400px_1fr] gap-6" style={{ flex: 1, minHeight: 0 }}>
+            {/* One row that fills what is left and may shrink (lg:grid-rows-[minmax(0,1fr)]): an
+                implicit row is sized by its content, so a long paper grew the PDF card past the
+                fixed screen. Now only the thread and the pages scroll, inside their cards. */}
+            <div className="grid grid-cols-1 lg:grid-cols-[400px_1fr] lg:grid-rows-[minmax(0,1fr)] gap-6" style={{ flex: 1, minHeight: 0 }}>
               {/* Chat */}
               <NeuCard className="h-[min(480px,62dvh)] lg:h-full" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0, minHeight: 0 }}>
                 <div ref={threadRef} className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3" style={{ minHeight: 0 }}>

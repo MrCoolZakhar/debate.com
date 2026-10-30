@@ -683,6 +683,7 @@ export default function ApplicationQuestionCard({
           variant="well"
           describedBy={describedBy}
           invalid={hasError}
+          anyYear
           value={str}
           onChange={(iso) => onChange(iso)}
           placeholder={q.placeholder ?? 'Pick a date'}

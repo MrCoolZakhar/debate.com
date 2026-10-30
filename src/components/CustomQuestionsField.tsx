@@ -142,6 +142,7 @@ export default function CustomQuestionsField({ blocks, answers, onChange, missin
 
             {q.type === 'date' && (
               <DatePicker
+                anyYear
                 value={(value as string) ?? ''}
                 onChange={(iso) => setAnswer(q.id, iso)}
               />
