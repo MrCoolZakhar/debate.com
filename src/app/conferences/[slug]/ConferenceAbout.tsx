@@ -55,15 +55,24 @@ const linkStyle: React.CSSProperties = {
 export default function ConferenceAbout({
   about,
   hubLinks,
+  embedded = false,
 }: {
   about: ConferenceAboutContent;
   hubLinks: { href: string; label: string }[];
+  /** Owner, 31 Oct 2026: one About, not two. Embedded = no card and no heading of its own,
+   *  drawn inside the organiser's "About the Conference" card right under their description. */
+  embedded?: boolean;
 }) {
+  const Wrap = embedded ? 'div' : 'section';
   return (
-    <section aria-labelledby="conference-about-heading" className={cardClass} style={cardStyle}>
-      <h2 id="conference-about-heading" style={h2Style}>{about.heading}</h2>
-      {about.intro.map((p) => (
-        <p key={p} style={{ ...textStyle, marginTop: 12 }}>{p}</p>
+    <Wrap
+      {...(embedded ? {} : { 'aria-labelledby': 'conference-about-heading' })}
+      className={embedded ? undefined : cardClass}
+      style={embedded ? { fontFamily: SANS, color: BODY, marginTop: 16 } : cardStyle}
+    >
+      {!embedded && <h2 id="conference-about-heading" style={h2Style}>{about.heading}</h2>}
+      {about.intro.map((p, i) => (
+        <p key={p} style={{ ...textStyle, marginTop: embedded && i === 0 ? 0 : 12 }}>{p}</p>
       ))}
 
       {about.committees.length > 0 && (
@@ -134,7 +143,7 @@ export default function ConferenceAbout({
         links={hubLinks}
         style={{ margin: '24px 0 0', fontSize: 14, lineHeight: 1.7, color: 'var(--gv-on-surface)' }}
       />
-    </section>
+    </Wrap>
   );
 }
 

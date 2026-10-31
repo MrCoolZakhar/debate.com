@@ -94,17 +94,17 @@ function QuestionNumeral({ n, done }: { n: number; done: boolean }) {
       className="relative inline-flex items-center justify-center flex-shrink-0"
       style={{
         width: 26, height: 26, borderRadius: 999,
-        background: done
-          ? `linear-gradient(135deg, ${NEU.green}, ${NEU.forest})`
-          : `linear-gradient(135deg, ${NEU.gold}, ${NEU.deepGold})`,
-        boxShadow: done ? `0 2px 7px color-mix(in srgb, ${NEU.forest} 27%, transparent)` : `0 2px 7px color-mix(in srgb, ${NEU.deepGold} 33%, transparent)`,
+        // Owner, 31 Oct 2026 ("colours here don't make sense"): the number sits on the
+        // conference's main colour in its on-main ink; a finished question turns to the accent.
+        background: done ? 'var(--gv-accent)' : 'var(--gv-main)',
+        boxShadow: done ? '0 2px 7px color-mix(in srgb, var(--gv-accent) 33%, transparent)' : '0 2px 7px color-mix(in srgb, var(--gv-main) 27%, transparent)',
         transition: `background 320ms ${EASE}, box-shadow 320ms ${EASE}`,
       }}
     >
       <span
         style={{
           position: 'absolute', fontFamily: OUTFIT, fontWeight: 900, fontSize: 12,
-          color: NEU.forest, fontVariantNumeric: 'tabular-nums',
+          color: 'var(--gv-on-main)', fontVariantNumeric: 'tabular-nums',
           opacity: done ? 0 : 1,
           transform: done ? 'scale(0.25)' : 'scale(1)',
           filter: done ? 'blur(4px)' : 'blur(0px)',
@@ -122,7 +122,7 @@ function QuestionNumeral({ n, done }: { n: number; done: boolean }) {
           transition: `opacity 260ms ${EASE}, transform 260ms ${EASE}, filter 260ms ${EASE}`,
         }}
       >
-        <Check size={14} strokeWidth={3.2} style={{ color: NEU.gold }} />
+        <Check size={14} strokeWidth={3.2} style={{ color: 'var(--gv-on-accent)' }} />
       </span>
     </span>
   );

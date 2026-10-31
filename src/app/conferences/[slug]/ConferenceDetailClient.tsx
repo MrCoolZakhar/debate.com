@@ -685,9 +685,11 @@ export interface ConferenceDetailClientProps {
   /** Server-built "About" section (ConferenceAbout.tsx) for a thin
    *  description, mounted right below the description on Overview. */
   aboutFallback?: React.ReactNode;
+  /** The same About facts without a card or heading, drawn inside the description card. */
+  aboutInline?: React.ReactNode;
 }
 
-export default function ConferenceDetailClient({ initialView, initialRole = null, initialConference = null, initialCommittees = [], overviewFooter = null, placeLinks = null, aboutFallback = null }: ConferenceDetailClientProps) {
+export default function ConferenceDetailClient({ initialView, initialRole = null, initialConference = null, initialCommittees = [], overviewFooter = null, placeLinks = null, aboutFallback = null, aboutInline = null }: ConferenceDetailClientProps) {
   const params = useParams<{ slug: string }>();
   const slug = params.slug;
   const router = useRouter();
@@ -2325,7 +2327,10 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                     About the Conference
                   </h2>
                   {conference.description ? (
-                    <ConferenceDescription text={conference.description} />
+                    <>
+                      <ConferenceDescription text={conference.description} />
+                      {aboutInline}
+                    </>
                   ) : (
                     <button
                       type="button"
@@ -2346,7 +2351,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                   )}
                 </SectionCard>
               )}
-              {pane === 'overview' && aboutFallback}
+              {pane === 'overview' && !conference.description && aboutFallback}
 
 
               {/* Organiser */}

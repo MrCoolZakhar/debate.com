@@ -59,7 +59,7 @@ import {
   NoDelegationMatch, CreateDelegationButton, CreateDelegationRow, CreateDelegationDialog, RoleSwitchedNotice,
   type DelegationSwitchRole, useHeadDelegateAvailability,
 } from './CreateDelegationPrompt';
-import { NewDelegationCard } from './NewDelegationCard';
+import { NewDelegationCard, DelegationPlaceholder } from './NewDelegationCard';
 import {
   EMPTY_NEW_DELEGATION, hasNewDelegationProblems, newDelegationProblems, normalizeNewDelegation, societyInsertRow,
   type NewDelegationDetails,
@@ -2729,6 +2729,29 @@ function ConferenceApplyInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, user, showMunExperienceStep, munCvRows]);
 
+  // Owner, 31 Oct 2026: "when applying ... automatically import the MUN CV from their
+  // profile". A NEW application with nothing on its experience list takes every MUN CV
+  // entry once, with its logo; the applicant can still remove any. A saved application or
+  // a restored draft keeps its own list (a draft restore replaces the list anyway).
+  const cvAutoImported = useRef(false);
+  useEffect(() => {
+    if (cvAutoImported.current || previewing || existingApp) return;
+    if (!munCvRows || munCvRows.length === 0) return;
+    cvAutoImported.current = true;
+    setExperienceEntries(prev => (prev.length > 0 ? prev : munCvRows.map(row => ({
+      id: crypto.randomUUID(),
+      source_cv_entry_id: row.id,
+      entry_type: row.entry_type,
+      conference_name: row.conference_name,
+      committee: row.committee,
+      allocation: row.allocation,
+      event_date: row.event_date,
+      awards: row.awards,
+      description: row.description,
+      logo_url: row.logo_url ?? null,
+    }))));
+  }, [munCvRows, previewing, existingApp]);
+
   // Delete handler wired into the shared CVEntryModal (only reachable when
   // editing an existing entry — the inline "add" flow never triggers it).
   async function handleDeleteCvEntry(id: string) {
@@ -3736,39 +3759,10 @@ function ConferenceApplyInner() {
                 Delegation chosen and Independent locked, its explanation (and a
                 way to apply as a delegate) shown on hover, focus or a tap
                 (owner, 12 Oct 2026: the step without pictures "looks ugly"). ── */}
-            {isInvoicingRole && (
-              <TwoTabPick
-                value="society"
-                onChange={(key) => { if (key === 'society') { setIsIndependent(false); setSocietyError(''); } }}
-                options={[
-                  {
-                    key: 'independent',
-                    label: 'Independent',
-                    image: '/onboarding/podium-01.jpg',
-                    sub: 'Applying on your own',
-                    disabled: true,
-                    disabledHint: (
-                      <>
-                        {role === 'faculty-advisor' ? 'Faculty advisors' : 'Head delegates'} lead a delegation. To apply on your own,{' '}
-                        <a
-                          href={`/conferences/${slug}/apply?role=delegate`}
-                          style={{ fontWeight: 700, textDecoration: 'underline', color: NEU.forest }}
-                        >
-                          apply as a delegate instead
-                        </a>
-                      </>
-                    ),
-                  },
-                  {
-                    key: 'society',
-                    label: 'With a delegation',
-                    image: '/onboarding/handshake-01.jpg',
-                    sub: role === 'faculty-advisor' ? 'The society or school you advise' : 'The society or school you lead',
-                  },
-                ]}
-              />
-            )}
-            {isInvoicingRole && <div className="mb-6" />}
+            {/* Head delegates and faculty advisors always lead a delegation, so
+                there is no Independent / With a delegation choice for them
+                (owner, 31 Oct 2026): straight to the delegation's name, then its
+                picture, city and country in one column. */}
             {!isInvoicingRole && (
               <TwoTabPick
                 value={isIndependent ? 'independent' : 'society'}
@@ -3979,18 +3973,48 @@ function ConferenceApplyInner() {
                     ? <NoDelegationMatch name={typedName} onCreate={openCreate} blockedReason={createBlocked} />
                     : <CreateDelegationButton name={typedName} onCreate={openCreate} blockedReason={createBlocked} />
                 )}
-                {creatingDelegation && conference && (
-                  <NewDelegationCard
-                    name={typedName}
-                    details={newDelegation}
-                    onChange={setNewDelegation}
-                    problems={newDelegationShownProblems}
-                    conferenceId={conference.id}
-                    userId={user?.id ?? null}
-                    accessToken={session?.access_token ?? null}
-                    previewing={previewing}
-                  />
-                )}
+                {conference && (creatingDelegation || isInvoicingRole) && (() => {
+                  const card = creatingDelegation ? (
+                    <NewDelegationCard
+                      name={typedName}
+                      details={newDelegation}
+                      onChange={setNewDelegation}
+                      problems={newDelegationShownProblems}
+                      conferenceId={conference.id}
+                      userId={user?.id ?? null}
+                      accessToken={session?.access_token ?? null}
+                      previewing={previewing}
+                      vertical={isInvoicingRole}
+                    />
+                  ) : (
+                    // Before a delegation is picked or started the left column is
+                    // never empty (owner, 31 Oct 2026): the delegation-to-be.
+                    <DelegationPlaceholder
+                      name={selectedSocietyId ? (societies.find(x => x.id === selectedSocietyId)?.name ?? typedName) : ''}
+                    />
+                  );
+                  if (!isInvoicingRole) return card;
+                  // Head delegates and faculty advisors (owner, 31 Oct 2026): two
+                  // columns, the delegation where Independent used to be and
+                  // the "With a delegation" picture beside it.
+                  return (
+                    <div className="grid items-stretch mt-4" style={{ gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
+                      <div className="min-w-0 [&>section]:mt-0 [&>section]:h-full">{card}</div>
+                      <div className="min-w-0">
+                        <TwoTabPick
+                          value="society"
+                          onChange={() => {}}
+                          options={[{
+                            key: 'society',
+                            label: 'With a delegation',
+                            image: '/onboarding/handshake-01.jpg',
+                            sub: role === 'faculty-advisor' ? 'The society or school you advise' : 'The society or school you lead',
+                          }]}
+                        />
+                      </div>
+                    </div>
+                  );
+                })()}
               </>
             )}
           </>
@@ -4903,6 +4927,7 @@ function ConferenceApplyInner() {
         event_date: row.event_date,
         awards: row.awards,
         description: row.description,
+        logo_url: row.logo_url ?? null,
       }));
       setExperienceEntries(prev => [...prev, ...imported]);
     }
@@ -4967,21 +4992,9 @@ function ConferenceApplyInner() {
         extraChrome={wizardExtraChrome}
         onBack={step > 1 ? () => setStep(s => s - 1) : undefined}
         title="MUN Experience"
-        sub="The conferences you have chaired or staffed. Import them from your MUN CV or add them one by one."
+        sub="The conferences you have chaired or staffed. A conference you add here is saved to your MUN CV too."
       >
-        {sortedEntries.length > 0 && (
-          <div className="flex flex-col gap-3 mb-4">
-            {sortedEntries.map(entry => (
-              <CVSummaryRow
-                key={entry.id}
-                entry={{ ...entry, logo_url: null }}
-                onEdit={() => openEditEntry(entry)}
-                onRemove={() => removeEntry(entry.id)}
-              />
-            ))}
-          </div>
-        )}
-
+        {/* Owner, 31 Oct 2026: Add a conference sits at the very top of the step. */}
         <button
           type="button"
           onClick={openAddEntry}
@@ -5006,6 +5019,22 @@ function ConferenceApplyInner() {
           {sortedEntries.length > 0 ? 'Add another conference' : 'Add a conference'}
         </button>
 
+        {sortedEntries.length > 0 && (
+          <div className="flex flex-col gap-3 mt-4 mb-4">
+            {sortedEntries.map(entry => (
+              <CVSummaryRow
+                key={entry.id}
+                entry={{ ...entry, logo_url: entry.logo_url ?? null }}
+                onEdit={() => openEditEntry(entry)}
+                onRemove={() => removeEntry(entry.id)}
+              />
+            ))}
+          </div>
+        )}
+
+
+        {/* Owner, 31 Oct 2026: shown only when the CV has entries this application does not. */}
+        {munCvRows !== null && importableRows.length > 0 && (
         <div className="mt-4">
           <button
             type="button"
@@ -5036,8 +5065,11 @@ function ConferenceApplyInner() {
             </p>
           )}
         </div>
+        )}
 
-        {!previewing && (
+        {/* Shown only when this application holds conferences not yet on the MUN CV
+            (new ones save themselves; this catches a save that failed). */}
+        {!previewing && newEntries.length > 0 && (
         <div className="mt-3">
           <button
             type="button"
@@ -5108,12 +5140,44 @@ function ConferenceApplyInner() {
                 event_date: entry.event_date,
                 awards: entry.awards,
                 description: entry.description,
+                logo_url: entry.logo_url ?? munExpEditing?.logo_url ?? null,
               };
               setExperienceEntries(prev =>
                 munExpEditing
                   ? prev.map(e => (e.id === built.id ? built : e))
                   : [...prev, built]
               );
+              // Owner, 31 Oct 2026: a conference ADDED here also goes onto the applicant's
+              // MUN CV at once (edits stay on this application). Never from a preview.
+              if (!munExpEditing && !previewing && session && user) {
+                void (async () => {
+                  const supabase = getAuthedClient(session.access_token);
+                  const { data, error } = await supabase.from('mun_cv_entries').insert({
+                    user_id: user.id,
+                    source: 'manual',
+                    entry_type: entry.entry_type,
+                    conference_name: entry.conference_name,
+                    committee: entry.committee,
+                    allocation: entry.allocation,
+                    expertise_level: entry.expertise_level ?? null,
+                    event_date: entry.event_date,
+                    awards: entry.awards,
+                    award: entry.awards[0] ?? 'None',
+                    photos: entry.photos ?? [],
+                    description: entry.description,
+                    logo_url: entry.logo_url ?? null,
+                    conference_id: entry.conference_id ?? null,
+                  }).select('id').single();
+                  if (error || !data) {
+                    setCvSaveError('Added to this application, but it could not be saved to your MUN CV. Use the button below to try again.');
+                    return;
+                  }
+                  // Linked to its CV row, so it never counts as "new" or imports twice.
+                  setExperienceEntries(prev => prev.map(e => (e.id === built.id ? { ...e, source_cv_entry_id: data.id as string } : e)));
+                  await loadMunCvRows();
+                  await refreshCvCount();
+                })();
+              }
             }}
           />
         )}

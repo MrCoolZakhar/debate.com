@@ -16,8 +16,9 @@
  * by ConferenceApplyClient with societyInsertRow() from src/lib/delegationCreate.ts.
  */
 
-import { useId, useRef, useState } from 'react';
-import { ImagePlus, Loader2, MapPin, X } from 'lucide-react';
+import { useEffect, useId, useRef, useState } from 'react';
+import { loadGeoCountryGuess } from '@/components/GeoCountryGuess';
+import { ImagePlus, Loader2, MapPin, Users, X } from 'lucide-react';
 import { NEU, OUTFIT } from '@/components/neu';
 import { CountryField } from '@/components/CountryField';
 import { CircleFlag } from '@/components/CircleFlag';
@@ -40,7 +41,7 @@ function monogram(name: string): string {
 }
 
 export function NewDelegationCard({
-  name, details, onChange, problems, conferenceId, userId, accessToken, previewing,
+  name, details, onChange, problems, conferenceId, userId, accessToken, previewing, vertical = false,
 }: {
   name: string;
   details: NewDelegationDetails;
@@ -52,6 +53,9 @@ export function NewDelegationCard({
   accessToken: string | null;
   /** Organiser preview: the picture button does nothing (nothing is written). */
   previewing: boolean;
+  /** One column: the picture on top, then the name, city and country beneath
+   *  (head delegates and faculty advisors, owner 31 Oct 2026). */
+  vertical?: boolean;
 }) {
   const cityId = useId();
   const countryId = useId();
@@ -61,6 +65,22 @@ export function NewDelegationCard({
   const [cropFile, setCropFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [logoError, setLogoError] = useState('');
+
+  // The country starts as the visitor's IP country (/api/geo, Vercel's header,
+  // first party; owner 31 Oct 2026), only while the field is still empty and
+  // only once. It is a plain prefill: nothing is saved until Submit.
+  const detailsRef = useRef(details);
+  const onChangeRef = useRef(onChange);
+  useEffect(() => { detailsRef.current = details; onChangeRef.current = onChange; });
+  useEffect(() => {
+    if (previewing) return;
+    let cancelled = false;
+    loadGeoCountryGuess().then((c) => {
+      if (cancelled || !c || detailsRef.current.countryName.trim() !== '') return;
+      onChangeRef.current({ ...detailsRef.current, countryName: c.name });
+    });
+    return () => { cancelled = true; };
+  }, [previewing]);
 
   const country = getCountryByName(details.countryName);
   const canUpload = !previewing && !!userId && !!accessToken;
@@ -108,15 +128,15 @@ export function NewDelegationCard({
       <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.16em', color: NEU.inkSoft, marginBottom: 10 }}>
         NEW DELEGATION
       </p>
-      <div className="grid gap-3.5 sm:gap-5" style={{ gridTemplateColumns: 'clamp(88px, 26vw, 132px) minmax(0, 1fr)' }}>
+      <div className="grid gap-3.5 sm:gap-5" style={{ gridTemplateColumns: vertical ? 'minmax(0, 1fr)' : 'clamp(88px, 26vw, 132px) minmax(0, 1fr)' }}>
         {/* ── Picture ───────────────────────────────────────────────────── */}
-        <div className="flex flex-col items-stretch gap-1.5">
+        <div className="flex flex-col items-stretch gap-1.5" style={vertical ? { width: 132, justifySelf: 'center' } : undefined}>
           <button
             type="button"
             onClick={() => { if (canUpload && !uploading) fileRef.current?.click(); }}
             disabled={!canUpload || uploading}
             aria-label={details.logoUrl ? 'Change the delegation picture' : 'Add a delegation picture'}
-            className={`relative w-full flex flex-col items-center justify-center rounded-2xl overflow-hidden ${FOCUS}`}
+            className={`relative w-full flex flex-col items-center justify-center rounded-full overflow-hidden ${FOCUS}`}
             style={{
               aspectRatio: '1 / 1',
               cursor: canUpload && !uploading ? 'pointer' : 'default',
@@ -127,7 +147,7 @@ export function NewDelegationCard({
           >
             {details.logoUrl ? (
               /* eslint-disable-next-line @next/next/no-img-element */
-              <img src={details.logoUrl} alt="" className="absolute inset-0 w-full h-full" style={{ objectFit: 'contain', padding: '4%' }} />
+              <img src={details.logoUrl} alt="" className="absolute inset-0 w-full h-full" style={{ objectFit: 'contain', padding: '14%' }} />
             ) : name.trim() ? (
               <span aria-hidden style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 26, color: 'color-mix(in srgb, var(--gv-main) 45%, transparent)' }}>
                 {monogram(name)}
@@ -138,7 +158,7 @@ export function NewDelegationCard({
                 <Loader2 size={20} className="animate-spin motion-reduce:animate-none" />
               </span>
             ) : !details.logoUrl && (
-              <span className="absolute bottom-2 flex flex-col items-center gap-0.5" style={{ fontFamily: OUTFIT }}>
+              <span className="absolute flex flex-col items-center gap-0.5" style={{ fontFamily: OUTFIT, bottom: "14%" }}>
                 <ImagePlus size={18} strokeWidth={2.2} />
               </span>
             )}
@@ -169,12 +189,12 @@ export function NewDelegationCard({
         <div className="min-w-0">
           <p
             className="min-w-0"
-            style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 18, lineHeight: 1.25, color: NEU.ink, overflowWrap: 'anywhere' }}
+            style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 18, lineHeight: 1.25, color: NEU.ink, overflowWrap: 'anywhere', textAlign: vertical ? 'center' : undefined }}
           >
             {name.trim()}
           </p>
           {(details.city.trim() || country) && (
-            <p className="mt-1 flex items-start gap-1.5 min-w-0" style={{ fontFamily: OUTFIT, fontWeight: 600, fontSize: 12.5, lineHeight: 1.3, color: NEU.inkSoft }}>
+            <p className={`mt-1 flex items-start gap-1.5 min-w-0${vertical ? ' justify-center' : ''}`} style={{ fontFamily: OUTFIT, fontWeight: 600, fontSize: 12.5, lineHeight: 1.3, color: NEU.inkSoft }}>
               {country ? <CircleFlag code={country.code} size={16} decorative /> : <MapPin size={14} strokeWidth={2.4} style={{ flexShrink: 0 }} />}
               <span className="min-w-0 [overflow-wrap:anywhere]">
                 {[details.city.trim(), country?.name].filter(Boolean).join(', ')}
@@ -228,6 +248,46 @@ export function NewDelegationCard({
       {cropFile && (
         <LogoCropModal file={cropFile} onCancel={() => setCropFile(null)} onSave={saveCropped} />
       )}
+    </section>
+  );
+}
+
+/** The left column before a delegation is found or started (head delegates and
+ *  faculty advisors, owner 31 Oct 2026), so the step never looks empty: the
+ *  same frame as the new delegation card, with the delegation-to-be. Writes
+ *  nothing. With an existing delegation chosen it names it. */
+export function DelegationPlaceholder({ name }: { name: string }) {
+  const chosen = name.trim();
+  return (
+    <section
+      aria-label="Your delegation"
+      className="rounded-2xl flex flex-col items-center justify-center text-center"
+      style={{
+        padding: 22,
+        minHeight: 320,
+        backgroundColor: 'color-mix(in srgb, var(--gv-main) 4%, var(--gv-surface))',
+        border: '1px solid color-mix(in srgb, var(--gv-main) 16%, transparent)',
+      }}
+    >
+      <span
+        aria-hidden
+        className="flex items-center justify-center rounded-full"
+        style={{
+          width: 112, height: 112,
+          backgroundColor: 'color-mix(in srgb, var(--gv-main) 6%, transparent)',
+          border: chosen ? '1px solid var(--gv-border)' : '1.5px dashed color-mix(in srgb, var(--gv-main) 26%, transparent)',
+          color: 'var(--gv-main)',
+          fontFamily: OUTFIT, fontWeight: 900, fontSize: 34,
+        }}
+      >
+        {chosen ? monogram(chosen) : <Users size={34} strokeWidth={1.5} />}
+      </span>
+      <p className="mt-4" style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 19, lineHeight: 1.25, color: NEU.ink, overflowWrap: 'anywhere' }}>
+        {chosen || 'Your delegation'}
+      </p>
+      <p className="mt-1.5" style={{ fontFamily: OUTFIT, fontWeight: 500, fontSize: 14, lineHeight: 1.45, color: NEU.inkSoft, maxWidth: 260 }}>
+        {chosen ? 'You will apply with this delegation' : 'Type its name above to find it or start a new one'}
+      </p>
     </section>
   );
 }
