@@ -55,6 +55,8 @@ import { conferenceImageSrc } from '@/lib/listingImage';
 
 // Ink-on-cream tokens for the light slabs.
 const INK = '#1C1410';
+/** Most cards in the "Conferences near you" row (it scrolls; See every conference covers the rest). */
+const NEAR_MAX = 24;
 const INK_55 = '#6B5F52';
 
 // "Find your seat" role carousel, one slide per way to be on the circuit.
@@ -250,10 +252,24 @@ export default function VariantStagefront({
   // crawler, this is the no-country answer, which the server rendered too, so
   // hydration never disagrees.
   const nearby = useMemo(() => {
-    // Gavelling listings (src/lib/listings.ts) stay in Explore: this row is about taking applications.
-    const upcoming = conferences.filter(c => !isConcluded(c) && !isGavellingListing(c));
-    return recommendNearby(upcoming, geo?.code ?? null, 3);
+    // Owner, 31 Oct 2026: the row scrolls and shows Gavelling listings too, but conferences
+    // that are on Gavelling themselves always come first, each group ranked by nearness.
+    const upcoming = conferences.filter(c => !isConcluded(c));
+    const own = upcoming.filter(c => !isGavellingListing(c));
+    const listed = upcoming.filter(c => isGavellingListing(c));
+    const code = geo?.code ?? null;
+    const a = recommendNearby(own, code, own.length);
+    const b = recommendNearby(listed, code, listed.length);
+    return {
+      picks: [...a.picks, ...b.picks].slice(0, NEAR_MAX),
+      tier: a.picks.length ? a.tier : b.tier,
+    };
   }, [conferences, geo]);
+  const nearRowRef = useRef<HTMLDivElement>(null);
+  const scrollNear = (dir: 1 | -1) => {
+    const el = nearRowRef.current;
+    if (el) el.scrollBy({ left: dir * Math.max(300, el.clientWidth * 0.8), behavior: 'smooth' });
+  };
 
   const nearbySub = !geo?.country
     ? 'Taking applications now, soonest first'
@@ -268,6 +284,8 @@ export default function VariantStagefront({
       {spotPreview.preview && <SpotlightPreviewBar placement="homepage" preview={spotPreview.preview} onClose={spotPreview.close} />}
       <style>{`
         /* Hero "up next" rail: horizontal snap on narrow screens, vertical stack ≥lg. */
+        .sf-near-row { scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+        .sf-near-row::-webkit-scrollbar { display: none; }
         .sf-hero-rail { scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
         .sf-hero-rail::-webkit-scrollbar { display: none; }
         /* Hero search field: translucent light-on-dark, muted cream placeholder. */
@@ -536,12 +554,13 @@ export default function VariantStagefront({
             "Conferences on Gavelling" logo row that sat above it was removed
             for good the same day. */}
 
-        {/* ── Conferences near you: always three cards (src/lib/nearbyConferences.ts) ── */}
+        {/* ── Conferences near you (src/lib/nearbyConferences.ts): a slim scrolling row, conferences
+            on Gavelling first, then Gavelling listings (owner, 31 Oct 2026) ── */}
         {nearby.picks.length > 0 && (
           <section
             className="relative px-6 md:px-14"
             aria-labelledby="sf-near-heading"
-            style={{ backgroundColor: IVORY, paddingTop: 'clamp(40px, 4vw, 56px)', paddingBottom: 'clamp(40px, 4vw, 56px)' }}
+            style={{ backgroundColor: IVORY, paddingTop: 'clamp(28px, 3vw, 44px)', paddingBottom: 'clamp(28px, 3vw, 44px)' }}
           >
             <div className="mx-auto" style={{ maxWidth: '1320px' }}>
               <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
@@ -559,26 +578,40 @@ export default function VariantStagefront({
                     {nearbySub}
                   </p>
                 </div>
-                <Link
-                  href="/conferences/explore"
-                  className="inline-flex min-h-11 items-center gap-1.5 self-start sm:self-auto rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
-                  style={{ fontFamily: SANS, fontSize: '14px', fontWeight: 800, color: FOREST, textDecoration: 'underline', textUnderlineOffset: '4px', textDecorationThickness: '1.5px', whiteSpace: 'nowrap' }}
-                >
-                  See every conference
-                </Link>
+                <div className="flex items-center gap-3 self-start sm:self-auto">
+                  <Link
+                    href="/conferences/explore"
+                    className="inline-flex min-h-11 items-center gap-1.5 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+                    style={{ fontFamily: SANS, fontSize: '14px', fontWeight: 800, color: FOREST, textDecoration: 'underline', textUnderlineOffset: '4px', textDecorationThickness: '1.5px', whiteSpace: 'nowrap' }}
+                  >
+                    See every conference
+                  </Link>
+                  {nearby.picks.length > 3 && (
+                    <span className="hidden md:inline-flex items-center gap-2">
+                      <CarouselArrow direction="left" onClick={() => scrollNear(-1)} label="Previous conferences" />
+                      <CarouselArrow direction="right" onClick={() => scrollNear(1)} label="More conferences" />
+                    </span>
+                  )}
+                </div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-5 md:gap-6" style={{ marginTop: '22px' }}>
+              <div
+                ref={nearRowRef}
+                className="sf-near-row flex gap-4 overflow-x-auto -mx-6 px-6 md:-mx-14 md:px-14"
+                style={{ marginTop: '14px', paddingTop: '6px', paddingBottom: '18px', scrollSnapType: 'x mandatory', scrollPaddingLeft: '24px' }}
+              >
                 {nearby.picks.map(c => (
-                  <ConferenceCard
-                    key={c.id}
-                    conf={c}
-                    applied={appliedIds.has(c.id)}
-                    member={memberIds.has(c.id)}
-                    hovered={hoveredId === c.id}
-                    onHover={() => setHoveredId(c.id)}
-                    onLeave={() => setHoveredId(null)}
-                    onClick={() => goTo(c.slug)}
-                  />
+                  <div key={c.id} className="flex-shrink-0 w-[272px] md:w-[300px]" style={{ scrollSnapAlign: 'start' }}>
+                    <ConferenceCard
+                      conf={c}
+                      variant="listing"
+                      applied={appliedIds.has(c.id)}
+                      member={memberIds.has(c.id)}
+                      hovered={hoveredId === c.id}
+                      onHover={() => setHoveredId(c.id)}
+                      onLeave={() => setHoveredId(null)}
+                      onClick={() => goTo(c.slug)}
+                    />
+                  </div>
                 ))}
               </div>
             </div>

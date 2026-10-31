@@ -16,11 +16,12 @@
 
 import Link from 'next/link';
 import { Clock, Crown, Sparkles } from 'lucide-react';
+import { JobRoleGlyph } from '@/lib/jobRoleIcon';
 import { LogoDisc } from '@/components/LogoDisc';
 import VerifiedCheck from '@/components/VerifiedCheck';
 import { getCountryByName } from '@/lib/countries';
 import { formatConferenceDates, DATES_TO_BE_DECIDED } from '@/lib/conferenceDates';
-import { jobOfferChips, type JobCard as JobCardData, type JobConference } from '@/lib/jobBoard';
+import { jobOfferChips, JOB_ROLE_LABEL, type JobCard as JobCardData, type JobConference } from '@/lib/jobBoard';
 
 const FONT = "var(--font-brand), sans-serif";
 const INK = '#1C1410';
@@ -170,13 +171,19 @@ export default function JobCard({
         <JobLogo conf={conf} size={logo} standalone={card.standalone} />
         <span className="flex-1 min-w-0" style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
           <span className="flex items-start justify-between" style={{ gap: 8 }}>
-            <span
-              style={{
-                fontSize: compact ? 15.5 : 17, fontWeight: 700, lineHeight: 1.25, color: INK,
-                letterSpacing: '-0.01em', overflowWrap: 'anywhere', minWidth: 0,
-              }}
-            >
-              {card.title}
+            <span className="flex items-start" style={{ gap: 7, minWidth: 0 }}>
+              {/* The role's fine-line icon beside the title (owner, 31 Oct 2026). */}
+              <span style={{ flexShrink: 0, display: 'inline-flex', color: FOREST, marginTop: compact ? 1 : 2 }} title={JOB_ROLE_LABEL[card.role]}>
+                <JobRoleGlyph role={card.role} size={compact ? 16 : 18} />
+              </span>
+              <span
+                style={{
+                  fontSize: compact ? 15.5 : 17, fontWeight: 700, lineHeight: 1.25, color: INK,
+                  letterSpacing: '-0.01em', overflowWrap: 'anywhere', minWidth: 0,
+                }}
+              >
+                {card.title}
+              </span>
             </span>
             {hasTags && (
               <span className="flex flex-wrap justify-end" style={{ gap: 5, flexShrink: 0, marginTop: 1 }}>

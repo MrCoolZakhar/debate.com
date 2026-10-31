@@ -28,8 +28,11 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { BellRing, Banknote, Clock, Gavel, Landmark, Megaphone, PlusCircle, Search, Sparkles, Crown } from 'lucide-react';
 import type { JobCard as JobCardData } from '@/lib/jobBoard';
-import { jobDates, jobPlace } from '@/app/jobs/JobCard';
+import { jobDates, jobPlace, JobLogo } from '@/app/jobs/JobCard';
+import { CircleFlag } from '@/components/CircleFlag';
 import { CREAM, FOREST, IVORY, SANS } from './shared';
+import { JobRoleGlyph } from '@/lib/jobRoleIcon';
+import { JOB_ROLE_LABEL } from '@/lib/jobBoard';
 
 const INK = '#1C1410';
 const INK_70 = '#4A4036';
@@ -150,27 +153,47 @@ function ListingTile({ card, now }: { card: JobCardData; now: number }) {
   return (
     <Link
       href={`/jobs?listing=${encodeURIComponent(card.id)}`}
-      className={`hs-jobs-tile${card.promoted ? ' hs-jobs-tile-promoted' : ''} focus:outline-none`}
+      className={`hs-jobs-tile hs-jobs-tile-listing${card.promoted ? ' hs-jobs-tile-promoted' : ''} focus:outline-none`}
     >
+      {/* The conference's logo over the tile's top-right edge, half outside (owner, 31 Oct 2026). */}
+      <span className="hs-jobs-logo"><JobLogo conf={conf} size={36} standalone={card.standalone} /></span>
       {(card.promoted || card.premium) && (
         <span className="hs-jobs-tags">
           {card.premium && <span className="hs-jobs-tag hs-jobs-tag-premium"><Crown size={10} strokeWidth={2.6} aria-hidden />Premium</span>}
           {card.promoted && <span className="hs-jobs-tag"><Sparkles size={10} strokeWidth={2.6} aria-hidden />Promoted</span>}
         </span>
       )}
-      <span className="hs-jobs-title" style={{ fontSize: long ? 13.5 : 15 }}>{card.title}</span>
+      <span className="hs-jobs-titlerow">
+        <RoleIcon role={card.role} />
+        <span className="hs-jobs-title" style={{ fontSize: long ? 13.5 : 15 }}>{card.title}</span>
+      </span>
       <span className="hs-jobs-conf">{conf.short || conf.name}</span>
       <span className="hs-jobs-meta">{jobDates(conf)}</span>
       {(place || closing) && (
         // The place and the closing line share one line when there is room, so tiles keep their size.
         <span className="hs-jobs-metarow">
-          {place && <span className="hs-jobs-meta">{place}</span>}
+          {place && (
+            <span className="hs-jobs-meta hs-jobs-place">
+              {conf.format !== 'online' && conf.country && <CircleFlag country={conf.country} size={14} />}
+              {place}
+            </span>
+          )}
           {closing && (
             <span className="hs-jobs-closing"><Clock size={11} strokeWidth={2.6} aria-hidden />{closing}</span>
           )}
         </span>
       )}
     </Link>
+  );
+}
+
+/** The role's fine-line icon beside the title (chair, secretariat, staff). */
+function RoleIcon({ role }: { role: JobCardData['role'] }) {
+  const label = JOB_ROLE_LABEL[role] ?? 'Role';
+  return (
+    <span className="hs-jobs-roleicon" role="img" aria-label={label} title={label}>
+      <JobRoleGlyph role={role} size={17} />
+    </span>
   );
 }
 
@@ -199,12 +222,12 @@ const SECTION_CSS = `
 .hs-jobs-go:focus-visible { outline: 2px solid ${FOREST}; outline-offset: 3px; }
 
 /* Tiles: a swipe row on phones, 2 across on tablets, 3 by 2 from 1024px. */
-.hs-jobs-tiles { list-style: none; margin: 0; display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; padding-top: 4px; padding-bottom: 6px;
+.hs-jobs-tiles { list-style: none; margin: 0; display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; padding-top: 22px; padding-bottom: 6px;
   scrollbar-width: none; -ms-overflow-style: none; }
 .hs-jobs-tiles::-webkit-scrollbar { display: none; }
 .hs-jobs-cell { display: flex; flex: 0 0 min(64vw, 230px); scroll-snap-align: start; min-width: 0; }
 @media (min-width: 768px) {
-  .hs-jobs-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; overflow: visible; padding: 0; }
+  .hs-jobs-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 26px 12px; overflow: visible; padding: 18px 0 0; }
   .hs-jobs-cell { flex: initial; }
 }
 @media (min-width: 1024px) { .hs-jobs-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
@@ -223,6 +246,11 @@ const SECTION_CSS = `
 .hs-jobs-tag { display: inline-flex; align-items: center; gap: 3px; padding: 2px 7px; border-radius: 9999px; font-size: 10.5px; font-weight: 700; line-height: 1.3;
   color: #4A3410; background: linear-gradient(145deg, #F3E3A1 0%, #EED98A 55%, #D9B44A 100%); }
 .hs-jobs-tag-premium { color: #F4F1E8; background: linear-gradient(90deg, #1B3828 0%, #2A5A3C 100%); }
+.hs-jobs-titlerow { display: flex; align-items: flex-start; gap: 7px; }
+.hs-jobs-tile-listing .hs-jobs-titlerow, .hs-jobs-tile-listing .hs-jobs-tags { padding-right: 34px; }
+.hs-jobs-logo { position: absolute; top: -18px; right: 12px; z-index: 1; line-height: 0; }
+.hs-jobs-place { display: inline-flex; align-items: center; gap: 5px; }
+.hs-jobs-roleicon { flex-shrink: 0; display: inline-flex; color: ${FOREST}; margin-top: 1px; }
 .hs-jobs-icon { width: 28px; height: 28px; border-radius: 9999px; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 6px;
   color: ${FOREST}; background: rgba(27,56,40,0.07); }
 .hs-jobs-title { font-weight: 700; line-height: 1.25; letter-spacing: -0.005em; color: ${INK}; overflow-wrap: anywhere; }
