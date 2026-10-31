@@ -2729,6 +2729,29 @@ function ConferenceApplyInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, user, showMunExperienceStep, munCvRows]);
 
+  // Owner, 31 Oct 2026: "when applying ... automatically import the MUN CV from their
+  // profile". A NEW application with nothing on its experience list takes every MUN CV
+  // entry once, with its logo; the applicant can still remove any. A saved application or
+  // a restored draft keeps its own list (a draft restore replaces the list anyway).
+  const cvAutoImported = useRef(false);
+  useEffect(() => {
+    if (cvAutoImported.current || previewing || existingApp) return;
+    if (!munCvRows || munCvRows.length === 0) return;
+    cvAutoImported.current = true;
+    setExperienceEntries(prev => (prev.length > 0 ? prev : munCvRows.map(row => ({
+      id: crypto.randomUUID(),
+      source_cv_entry_id: row.id,
+      entry_type: row.entry_type,
+      conference_name: row.conference_name,
+      committee: row.committee,
+      allocation: row.allocation,
+      event_date: row.event_date,
+      awards: row.awards,
+      description: row.description,
+      logo_url: row.logo_url ?? null,
+    }))));
+  }, [munCvRows, previewing, existingApp]);
+
   // Delete handler wired into the shared CVEntryModal (only reachable when
   // editing an existing entry — the inline "add" flow never triggers it).
   async function handleDeleteCvEntry(id: string) {
@@ -4903,6 +4926,7 @@ function ConferenceApplyInner() {
         event_date: row.event_date,
         awards: row.awards,
         description: row.description,
+        logo_url: row.logo_url ?? null,
       }));
       setExperienceEntries(prev => [...prev, ...imported]);
     }
@@ -4974,7 +4998,7 @@ function ConferenceApplyInner() {
             {sortedEntries.map(entry => (
               <CVSummaryRow
                 key={entry.id}
-                entry={{ ...entry, logo_url: null }}
+                entry={{ ...entry, logo_url: entry.logo_url ?? null }}
                 onEdit={() => openEditEntry(entry)}
                 onRemove={() => removeEntry(entry.id)}
               />

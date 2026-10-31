@@ -576,10 +576,11 @@ export default async function ConferenceDetailPage({ params }: { params: Promise
           country: countryHub ? { href: hubPath(countryHub.slug), label: `Model UN conferences in ${countryHub.name}` } : null,
           online: onlineHub ? { href: hubPath(onlineHub.slug), label: 'Online Model UN conferences' } : null,
         } : null}
-        // Owner (19 Oct 2026): only the About section, and only when the
-        // organiser's description is thin. No FAQ card, no facts paragraph,
-        // no row of hub links at the foot of the page.
-        aboutFallback={about?.thin ? <ConferenceAbout about={about} hubLinks={[]} /> : null}
+        // Owner (19 Oct 2026): only the About section, no FAQ card, facts paragraph
+        // or hub links. Owner (31 Oct 2026, "why is there two sections of about the
+        // conference??"): only when the organiser wrote NO description at all, so it
+        // never sits under their own About the Conference.
+        aboutFallback={about?.thin && !(conf.description ?? '').trim() ? <ConferenceAbout about={about} hubLinks={[]} /> : null}
       />
     </>
   );

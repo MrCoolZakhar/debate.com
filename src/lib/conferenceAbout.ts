@@ -432,7 +432,13 @@ export function buildConferenceAbout(
     steps,
     stepsHeading: listing ? 'How to Apply' : 'How to Apply on Gavelling',
     gavellingLine,
-    applyHref: listing ? (listing.outboundUrl ?? '') : `/conferences/${conf.slug}/apply`,
+    // Owner, 31 Oct 2026: the link went to the bare apply page, which opens the delegate form even
+    // when only another role is open. It now opens the first OPEN role (then one opening later),
+    // and the conference page itself when none is set up.
+    applyHref: listing ? (listing.outboundUrl ?? '') : (() => {
+      const pick = rolesIn.find(r => r.window.state === 'open') ?? rolesIn.find(r => r.window.state === 'not_open');
+      return pick ? `/conferences/${conf.slug}/apply?role=${encodeURIComponent(pick.role)}` : `/conferences/${conf.slug}`;
+    })(),
     applyLabel: listing ? `Visit the ${short} website` : `Apply to ${short}`,
     applyExternal: !!listing,
     concluded: past,

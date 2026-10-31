@@ -76,6 +76,8 @@ export interface ExperienceEntry {
   event_date: string | null;
   awards: string[];
   description: string | null;
+  /** The conference logo, carried over when the entry is imported from the MUN CV (31 Oct 2026). */
+  logo_url?: string | null;
 }
 
 // ── Entry-type config ────────────────────────────────────────────────────────
