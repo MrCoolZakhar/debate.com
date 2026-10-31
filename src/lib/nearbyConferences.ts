@@ -138,3 +138,28 @@ export function recommendNearby<T extends NearbyCandidate>(
   const picks = ranked.slice(0, n);
   return { picks: picks.map(p => p.c), tier: picks.length ? picks[0].tier : 4 };
 }
+
+/**
+ * The scrolling "Conferences near you" row (owner, 31 Oct 2026: "It should first show my
+ * conferences in my country, if there is none on Gavelling, then show me the ones in Spain
+ * added by Gavelling"). Nearness comes first, always: own country, neighbours, sub-region,
+ * continent, anywhere. Within one distance, a conference on Gavelling comes before a Gavelling
+ * listing, then the ones taking applications, then the soonest. `isListing` tells the two apart.
+ */
+export function rankNearbyMixed<T extends NearbyCandidate>(
+  conferences: readonly T[],
+  visitorCode: string | null,
+  isListing: (c: T) => boolean,
+  n: number,
+): { picks: T[]; tier: number } {
+  const v = visitorCode ? visitorCode.toUpperCase() : null;
+  const ranked = conferences
+    .map(c => ({ c, tier: tierOf(countryCodeOf(c.country), v), listing: isListing(c), w: windowRank(c.window) }))
+    .sort((a, b) =>
+      a.tier - b.tier
+      || Number(a.listing) - Number(b.listing)
+      || a.w - b.w
+      || (a.c.start_date ?? '9999').localeCompare(b.c.start_date ?? '9999'));
+  const picks = ranked.slice(0, n);
+  return { picks: picks.map(p => p.c), tier: picks.length ? picks[0].tier : 4 };
+}

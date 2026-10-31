@@ -35,7 +35,7 @@ import SiteNav from '@/components/SiteNav';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { UN_COUNTRIES } from '@/lib/countries';
-import { recommendNearby } from '@/lib/nearbyConferences';
+import { rankNearbyMixed } from '@/lib/nearbyConferences';
 import { ConferenceCard } from '../ConferenceCard';
 import { LogoDisc } from '@/components/LogoDisc';
 import SiteFooter from '@/components/SiteFooter';
@@ -252,18 +252,11 @@ export default function VariantStagefront({
   // crawler, this is the no-country answer, which the server rendered too, so
   // hydration never disagrees.
   const nearby = useMemo(() => {
-    // Owner, 31 Oct 2026: the row scrolls and shows Gavelling listings too, but conferences
-    // that are on Gavelling themselves always come first, each group ranked by nearness.
+    // Owner, 31 Oct 2026: nearest first, always. Within the visitor's country (then
+    // neighbours, region, continent, anywhere) conferences on Gavelling come before
+    // Gavelling listings (src/lib/nearbyConferences.ts rankNearbyMixed).
     const upcoming = conferences.filter(c => !isConcluded(c));
-    const own = upcoming.filter(c => !isGavellingListing(c));
-    const listed = upcoming.filter(c => isGavellingListing(c));
-    const code = geo?.code ?? null;
-    const a = recommendNearby(own, code, own.length);
-    const b = recommendNearby(listed, code, listed.length);
-    return {
-      picks: [...a.picks, ...b.picks].slice(0, NEAR_MAX),
-      tier: a.picks.length ? a.tier : b.tier,
-    };
+    return rankNearbyMixed(upcoming, geo?.code ?? null, isGavellingListing, NEAR_MAX);
   }, [conferences, geo]);
   const nearRowRef = useRef<HTMLDivElement>(null);
   const scrollNear = (dir: 1 | -1) => {
@@ -272,10 +265,10 @@ export default function VariantStagefront({
   };
 
   const nearbySub = !geo?.country
-    ? 'Taking applications now, soonest first'
+    ? 'Coming up soon, on Gavelling first'
     : nearby.tier === 0
-      ? `Coming up in ${geo.country}`
-      : `Nothing open in ${geo.country} right now. These are the nearest`;
+      ? `Coming up in ${geo.country}, then nearby`
+      : `Nothing in ${geo.country} yet. These are the nearest`;
 
   const goTo = (slug: string) => router.push(`/conferences/${slug}`);
 
