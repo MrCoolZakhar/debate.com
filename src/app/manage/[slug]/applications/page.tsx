@@ -3806,16 +3806,21 @@ export default function ApplicationsPage() {
     // silently (owner, 20 Oct 2026: organizers never see who holds Unlimited,
     // so nothing on screen marks them). Priority never depends on status, so a
     // decision still leaves the row where it is.
+    //
+    // The priority applies ONLY to the to-decide group (owner, 31 Oct 2026: older
+    // accepted applications sitting above newer ones looked like a broken sort).
+    // The perk is being reviewed first; once decided, a row sorts newest first
+    // like everyone else, which also stops the order hinting who holds Unlimited.
     .sort((a, b) => {
       const atOpen = groupAtOpen.current;
+      const group = (x: Application) => atOpen?.get(x.id) ?? statusSortGroup(x.status);
       if (atOpen) {
-        const group = (x: Application) => atOpen.get(x.id) ?? statusSortGroup(x.status);
         const aG = group(a);
         const bG = group(b);
         if (aG !== bG) return aG - bG;
       }
-      const aP = jobExtras.priorityIds.has(a.id) ? 0 : 1;
-      const bP = jobExtras.priorityIds.has(b.id) ? 0 : 1;
+      const aP = group(a) === 0 && jobExtras.priorityIds.has(a.id) ? 0 : 1;
+      const bP = group(b) === 0 && jobExtras.priorityIds.has(b.id) ? 0 : 1;
       if (aP !== bP) return aP - bP;
       return (b.submitted_at ?? '').localeCompare(a.submitted_at ?? '');
     });
