@@ -40,6 +40,10 @@ function FlagTile({ seat, active, spoken }: { seat: Committee['delegates'][numbe
 
 // Live delegation board for a Consultation of the Whole (open floor, no queue).
 // Read-only everywhere; chairs pass onTap to set the current speaker.
+// Fits the room it is given (28 Oct 2026): a column that may shrink (min-h-0), with the tile
+// grid giving way first (down to one row, then it scrolls as it always did above 280px), so a
+// chair floor that is short of height never lets the board spill over the controls below it.
+// In a parent with no fixed height (the delegate phone) nothing shrinks and it looks as before.
 export default function CowDelegationBoard({ committee, onTap }: {
   committee: Committee; onTap?: (country: string) => void;
 }) {
@@ -53,14 +57,14 @@ export default function CowDelegationBoard({ committee, onTap }: {
     .sort((a, b) => compareCountryNames(a.country, b.country, language));
 
   return (
-    <div className="rounded-xl p-3" style={{ backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0' }}>
+    <div className="rounded-xl p-3 min-h-0 flex flex-col" style={{ backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0' }}>
       {current && (
-        <p className="text-xs text-center mb-2 font-mono" style={{ color: '#6A5A4A' }}>
+        <p className="shrink-0 text-xs text-center mb-2 font-mono" style={{ color: '#6A5A4A' }}>
           <span style={{ color: '#9A8A78' }}>Speaking: </span>
           <SeatName name={getCountryDisplayName(current, language)} max={30} align="center" style={{ color: '#1B3828', fontWeight: 700, verticalAlign: 'top' }} />
         </p>
       )}
-      <div className="flex flex-wrap justify-center gap-2 max-h-[280px] overflow-y-auto">
+      <div className="flex flex-wrap justify-center content-start gap-2 max-h-[280px] min-h-[4.75rem] overflow-y-auto">
         {delegates.map((d) => {
           const tile = <FlagTile seat={d} active={d.country === current} spoken={spoken.has(d.country)} />;
           return onTap ? (

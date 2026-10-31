@@ -303,6 +303,9 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
   /* See the delegate page: a failed attachment was console-only and looked
      like nothing had happened at all. */
   const [uploadError, setUploadError] = useState(false);
+  // The bucket refuses files over 25 MB (session-documents file_size_limit, raised from 10 MB on 31 Oct 2026). Checked here first,
+  // like the delegate page, so a chair sees the size instead of a generic failure (31 Oct 2026).
+  const [fileTooBig, setFileTooBig] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const docCode = autoDocCode(type, committee.documents ?? []);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -316,6 +319,14 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
   const canSubmit = !limitReached && !isSubmitting && !isUploading && !isDuplicate && !!title.trim();
 
   const uploadFile = async (file: File) => {
+    if (file.size > 25 * 1024 * 1024) {
+      setUploadError(false);
+      setFileName(null);
+      setFileTooBig(`${file.name} · ${(file.size / 1024 / 1024).toFixed(1)} MB · PDF ≤ 25 MB`);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+    setFileTooBig(null);
     setFileName(file.name);
     setIsUploading(true);
     try {
@@ -438,6 +449,11 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
         {uploadError && (
           <p className="text-xs mt-1.5" style={{ color: '#8B2020' }}>
             {t('delegate_doc_upload_failed')}
+          </p>
+        )}
+        {fileTooBig && (
+          <p className="text-xs mt-1.5 [overflow-wrap:anywhere]" style={{ color: '#8B2020' }}>
+            {fileTooBig}
           </p>
         )}
       </div>

@@ -19,12 +19,13 @@
 //   committee_country_slots.logo_url (text)           a seat's own crest
 //
 // A seat renders, in order of preference: its own logo_url, its group's
-// logo_url, then the national flag from country_code, then the initials
+// logo_url, a press outlet's logo (pressOutletLogo), then the national flag from country_code, then the initials
 // fallback the surface already had. `effectiveSlotArt` below is that rule;
 // every flag renderer that honours custom art goes through it.
 // ============================================================
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { pressOutletLogo } from '@/lib/pressOutlets';
 
 export interface SlotGroup {
   /** Stable id, generated once (`grp_` + random). Slots reference it. */
@@ -103,6 +104,8 @@ export function effectiveSlotArt(slot: SlotArtSource, groups: SlotGroup[] = []):
     const g = groups.find((x) => x.id === slot.group_id);
     if (g?.logo_url) return { kind: 'logo', url: g.logo_url, label: g.name };
   }
+  const outlet = pressOutletLogo(slot.country_code);
+  if (outlet) return { kind: 'logo', url: outlet, label: slot.country_code };
   if (isIsoCode(slot.country_code)) return { kind: 'flag', code: slot.country_code.toUpperCase() };
   return { kind: 'none' };
 }
@@ -163,6 +166,8 @@ export async function loadSlotArtIndex(
 export function artFromIndex(entry: SlotArtEntry | undefined, countryCode: string): SlotArt {
   if (entry?.logoUrl) return { kind: 'logo', url: entry.logoUrl, label: countryCode };
   if (entry?.groupLogoUrl) return { kind: 'logo', url: entry.groupLogoUrl, label: entry.groupName ?? countryCode };
+  const outlet = pressOutletLogo(countryCode);
+  if (outlet) return { kind: 'logo', url: outlet, label: countryCode };
   if (isIsoCode(countryCode)) return { kind: 'flag', code: countryCode.toUpperCase() };
   return { kind: 'none' };
 }

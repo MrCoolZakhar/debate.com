@@ -10,7 +10,7 @@ import type { OutboxMsg } from '@/lib/chatOutbox';
 import type { ChatEntryKind } from '@/lib/chatConversations';
 import ChatMessageGroup from './ChatMessageGroup';
 import SecretariatMessage, { broadcastImageSize } from './SecretariatMessage';
-import { broadcastAuthor, isPressBroadcast } from '@/lib/broadcastMessages';
+import { broadcastAuthor, isAdminBroadcast, isPressBroadcast } from '@/lib/broadcastMessages';
 import { trustedBroadcastImageUrl } from '@/lib/chatAttachments';
 import { ChatAvatar } from './ChatAvatar';
 import ChatLightbox, { type LightboxItem } from './ChatLightbox';
@@ -221,7 +221,7 @@ export default function ChatThread({
           if (!url) continue;
           const size = broadcastImageSize(url);
           out.push({
-            id: it.id, kind: 'image', url, name: t(isPressBroadcast(it.broadcast) ? 'bc_press_image' : 'bc_image'),
+            id: it.id, kind: 'image', url, name: t(isPressBroadcast(it.broadcast) ? 'bc_press_image' : isAdminBroadcast(it.broadcast) ? 'bc_admins_image' : 'bc_image'),
             caption: `${broadcastAuthor(it.broadcast, t)} · ${formatTime(it.timestamp, locale)}`,
             width: size?.width, height: size?.height,
           });

@@ -128,6 +128,23 @@ export function isUpcoming(c: { start_date: string | null; end_date: string | nu
 
 export interface PlatformStats { total_conferences: number; published_conferences: number; countries: number }
 
+/** The homepage's conference figure: every organiser conference (the
+ *  platform total) plus every Gavelling listing a visitor can see. The
+ *  /organisers page keeps the organiser-only total. */
+export async function fetchHomepageConferenceTotal(stats: PlatformStats | null): Promise<number | null> {
+  if (!stats) return null;
+  try {
+    const { count, error } = await supabase
+      .from('conferences')
+      .select('id', { count: 'exact', head: true })
+      .eq('listed_by', 'gavelling');
+    if (error || count == null) return stats.total_conferences;
+    return stats.total_conferences + count;
+  } catch {
+    return stats.total_conferences;
+  }
+}
+
 /** Platform totals (every conference, not only public ones), counts only. */
 export async function fetchPlatformStats(): Promise<PlatformStats | null> {
   try {
