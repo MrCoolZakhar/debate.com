@@ -10,8 +10,9 @@
 // Names are never cut: the short form large, the full name beneath, wrapping.
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import IntentLink from '../IntentLink';
-import { DoorOpen, CalendarDays, MapPin, Monitor, Globe, School, GraduationCap, Check, CircleSlash } from 'lucide-react';
+import { CalendarDays, MapPin, Monitor, Globe, School, GraduationCap, Check } from 'lucide-react';
 import { LogoDisc } from '@/components/LogoDisc';
 import { CircleFlag } from '@/components/CircleFlag';
 import VerifiedCheck from '@/components/VerifiedCheck';
@@ -22,7 +23,7 @@ import { getCountryByName } from '@/lib/countries';
 import { currencySymbol, formatFeeAmountCompact } from '@/lib/utils';
 import { TBD_PRICE, type DelegatePrice } from '@/lib/publicFees';
 import type { FeaturedRow } from '@/lib/spotlight';
-import { ROLE_OPTIONS, parseDateOnly, type ConferenceFacet } from './exploreFilters';
+import { parseDateOnly, type ConferenceFacet } from './exploreFilters';
 import { DuoIcon } from './ExploreChrome';
 import { isGavellingListing } from '@/lib/listings';
 import { conferenceImageSrc } from '@/lib/listingImage';
@@ -76,7 +77,6 @@ const FORMAT_WORDS: Record<string, string> = { 'in-person': 'In person', online:
 const FORMAT_GLYPHS: Record<string, typeof MapPin> = { 'in-person': MapPin, online: Monitor, hybrid: Globe };
 const LEVEL_WORDS: Record<string, string> = { school: 'High school', university: 'University', both: 'High school and university' };
 const LEVEL_GLYPHS: Record<string, typeof School> = { school: School, university: GraduationCap, both: GraduationCap };
-const ROLE_WORDS = new Map<string, string>(ROLE_OPTIONS.map(r => [r.key, r.label]));
 
 const PALE: [string, string][] = [['#E6EEE3', '#F4EFE2'], ['#EFE7D2', '#E3ECDF'], ['#F3EBD3', '#EAF0E6'], ['#E0EADC', '#F1EAD8']];
 function paleFor(key: string): [string, string] {
@@ -363,8 +363,13 @@ export const FEED_CSS = `
 @media (prefers-reduced-motion: reduce) { .gv-row, .gv-row-img { transition: none !important; } }
 `;
 
-function DateBlock({ start }: { start: string | null }) {
+function DateBlock({ start, end }: { start: string | null; end?: string | null }) {
   const d = parseDateOnly(start);
+  // The finish date under a little drawn dash (owner, 31 Oct 2026), smaller than
+  // the start; its month only when it differs. Nothing for a one-day conference.
+  const e = parseDateOnly(end ?? null);
+  const showEnd = !!d && !!e && e.getTime() > d.getTime();
+  const endMonthDiffers = showEnd && (e!.getMonth() !== d!.getMonth() || e!.getFullYear() !== d!.getFullYear());
   if (!d) {
     return (
       <div className="gv-row-date" style={{ textAlign: 'center', fontFamily: FONT, paddingTop: 4 }}>
@@ -383,6 +388,23 @@ function DateBlock({ start }: { start: string | null }) {
       <span style={{ display: 'block', fontSize: 11.5, fontWeight: 600, color: INK_SOFT, marginTop: 4 }}>
         {d.toLocaleDateString('en-GB', { weekday: 'short' })}
       </span>
+      {showEnd && e && (
+        <>
+          <span aria-hidden style={{ display: 'block', width: 12, height: 2, borderRadius: 2, background: INK_SOFT, opacity: 0.45, margin: '9px auto 8px' }} />
+          <span className="sr-only">to </span>
+          {endMonthDiffers && (
+            <span style={{ display: 'block', fontSize: 10.5, fontWeight: 700, color: '#8A6414', marginBottom: 2 }}>
+              {e.toLocaleDateString('en-GB', { month: 'short' })}
+            </span>
+          )}
+          <span style={{ display: 'block', fontSize: 'clamp(17px, 1.6vw, 20px)', fontWeight: 800, color: INK, fontVariantNumeric: 'tabular-nums' }}>
+            {e.getDate()}
+          </span>
+          <span style={{ display: 'block', fontSize: 10.5, fontWeight: 600, color: INK_SOFT, marginTop: 3 }}>
+            {e.toLocaleDateString('en-GB', { weekday: 'short' })}
+          </span>
+        </>
+      )}
     </div>
   );
 }
@@ -418,23 +440,32 @@ function RowThumb({ conf }: { conf: ExploreConference }) {
   );
 }
 
-function OpenRoles({ facet, facetsLoaded }: { facet?: ConferenceFacet; facetsLoaded: boolean }) {
-  if (!facetsLoaded) return null;
-  const roles = (facet?.open_roles ?? []).map(r => ROLE_WORDS.get(r)).filter((x): x is string => !!x);
-  if (roles.length === 0) {
+/** The row's own action (owner, 31 Oct 2026): Apply when applications are open
+ *  and the viewer has not applied, else View. The whole row is already a link
+ *  to the conference page, so this is a button that goes to the apply page
+ *  without nesting a second link; View simply lets the row's link open. */
+function RowAction({ slug, canApply, compact = false }: { slug: string; canApply: boolean; compact?: boolean }) {
+  const router = useRouter();
+  const base: React.CSSProperties = {
+    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+    height: compact ? 36 : 40, padding: compact ? '0 16px' : '0 20px', borderRadius: 12,
+    fontFamily: FONT, fontSize: compact ? 14 : 15, fontWeight: 700, whiteSpace: 'nowrap',
+  };
+  if (!canApply) {
     return (
-      <span className="inline-flex items-center" style={{ gap: 6, color: '#6B5F52' }}>
-        <CircleSlash size={15} strokeWidth={2} aria-hidden style={{ color: '#8A7D6C', flexShrink: 0 }} />
-        Applications not open
-      </span>
+      <span style={{ ...base, background: '#FFFFFF', color: INK, border: '1px solid rgba(27,56,40,0.18)' }}>View</span>
     );
   }
-  const list = roles.length === ROLE_OPTIONS.length ? 'every role' : roles.map((r, i) => (i === 0 ? r : r.toLowerCase())).join(', ');
   return (
-    <span className="inline-flex items-center" style={{ gap: 6, color: FOREST, fontWeight: 600 }}>
-      <DuoIcon icon={DoorOpen} size={16} tone="green" />
-      <span style={{ overflowWrap: 'anywhere' }}>Open for {list}</span>
-    </span>
+    <button
+      type="button"
+      onClick={(e) => { e.preventDefault(); e.stopPropagation(); router.push(`/conferences/${slug}/apply`); }}
+      onMouseEnter={() => router.prefetch(`/conferences/${slug}/apply`)}
+      className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-offset-2"
+      style={{ ...base, border: 0, cursor: 'pointer', color: '#FFFFFF', background: 'linear-gradient(90deg, #1B3828 0%, #2A5A3C 55%, #1E4A31 100%)', boxShadow: '0 6px 14px -8px rgba(27,56,40,0.6)' }}
+    >
+      Apply
+    </button>
   );
 }
 
@@ -461,9 +492,10 @@ function FeedRow({
   // A Gavelling listing: the mark in the price's place, no open roles line.
   const listing = isGavellingListing(conf);
   const showHiring = hiring && !listing;
+  const canApply = !listing && !applied && !member && (facet?.open_roles?.length ?? 0) > 0;
   return (
     <IntentLink href={`/conferences/${conf.slug}`} className="gv-row focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#1B3828]" style={{ fontFamily: FONT }}>
-      <DateBlock start={conf.start_date} />
+      <DateBlock start={conf.start_date} end={conf.end_date} />
       <RowThumb conf={conf} />
       <div style={{ minWidth: 0 }}>
         <h3 className="flex items-center" style={{ margin: 0, gap: 6, fontSize: 18, fontWeight: 800, lineHeight: 1.2, color: INK, letterSpacing: '-0.005em' }}>
@@ -474,34 +506,42 @@ function FeedRow({
         {showFull && (
           <p style={{ margin: '2px 0 0', fontSize: 13.5, fontWeight: 500, lineHeight: 1.35, color: INK_SOFT, overflowWrap: 'anywhere' }}>{conf.full_name}</p>
         )}
-        <p className="flex items-center flex-wrap" style={{ margin: '8px 0 0', columnGap: 14, rowGap: 5, fontSize: 13.5, fontWeight: 500, color: '#4A4238' }}>
-          <span className="inline-flex items-center" style={{ gap: 7 }}>
-            {countryCode ? <CircleFlag code={countryCode} size={17} decorative /> : <DuoIcon icon={MapPin} size={15} tone="green" />}
-            <span style={{ overflowWrap: 'anywhere' }}>{placeLine(conf)}</span>
-          </span>
-          <span style={{ fontVariantNumeric: 'tabular-nums', color: INK_SOFT }}>{datesLine(conf.start_date, conf.end_date)}</span>
-        </p>
-        <p className="flex items-center flex-wrap" style={{ margin: '6px 0 0', columnGap: 14, rowGap: 5, fontSize: 13, fontWeight: 500, color: INK_SOFT }}>
-          {formatWord && (
-            <span className="inline-flex items-center" style={{ gap: 5 }}>
-              {FormatIcon && <DuoIcon icon={FormatIcon} size={15} tone="green" />}
-              {formatWord}
+        {/* Owner, 31 Oct 2026: the dates live in the date column (start, a dash, the
+            finish), so the facts are two columns: the place, bigger, and the
+            format and level beside it. Phones have no date column, so they keep
+            the dates line under the place. */}
+        <div className="flex flex-wrap items-start" style={{ marginTop: 9, columnGap: 28, rowGap: 6 }}>
+          <div className="flex flex-col" style={{ gap: 4, minWidth: 0 }}>
+            <span className="inline-flex items-center" style={{ gap: 8, fontSize: 15.5, fontWeight: 600, color: INK }}>
+              {countryCode ? <CircleFlag code={countryCode} size={20} decorative /> : <DuoIcon icon={MapPin} size={17} tone="green" />}
+              <span style={{ overflowWrap: 'anywhere' }}>{placeLine(conf)}</span>
             </span>
-          )}
-          {levelWord && (
-            <span className="inline-flex items-center" style={{ gap: 5 }}>
-              {LevelIcon && <DuoIcon icon={LevelIcon} size={15} tone="gold" />}
-              {levelWord}
+            <span className="gv-row-inline" style={{ display: 'block', fontSize: 13.5, fontWeight: 500, fontVariantNumeric: 'tabular-nums', color: INK_SOFT }}>
+              {datesLine(conf.start_date, conf.end_date)}
             </span>
-          )}
-          {!listing && <OpenRoles facet={facet} facetsLoaded={facetsLoaded} />}
-        </p>
+          </div>
+          <div className="flex flex-col" style={{ gap: 5, fontSize: 14, fontWeight: 500, color: '#4A4238' }}>
+            {formatWord && (
+              <span className="inline-flex items-center" style={{ gap: 6 }}>
+                {FormatIcon && <DuoIcon icon={FormatIcon} size={17} tone="green" />}
+                {formatWord}
+              </span>
+            )}
+            {levelWord && (
+              <span className="inline-flex items-center" style={{ gap: 6 }}>
+                {LevelIcon && <DuoIcon icon={LevelIcon} size={17} tone="gold" />}
+                {levelWord}
+              </span>
+            )}
+          </div>
+        </div>
         {/* Phones: the price rides under the facts */}
         <div className="gv-row-inline flex items-center flex-wrap" style={{ marginTop: 10, columnGap: 12, rowGap: 4 }}>
           {listing ? <NotOnGavellingMark size="xs" /> : <PriceLine price={conf.delegate_price} size={15} />}
           {creditSponsored && <CreditSponsoredMark size="xs" />}
           {showHiring && <HiringMark conferenceId={conf.id} />}
           <ViewerState applied={applied} member={member} />
+          {facetsLoaded && <span style={{ marginInlineStart: 'auto' }}><RowAction slug={conf.slug} canApply={canApply} compact /></span>}
         </div>
       </div>
       <div className="gv-row-side flex-col items-end" style={{ gap: 6, textAlign: 'right', paddingTop: 2 }}>
@@ -509,6 +549,7 @@ function FeedRow({
         {creditSponsored && <CreditSponsoredMark size="xs" />}
         {showHiring && <HiringMark conferenceId={conf.id} />}
         <ViewerState applied={applied} member={member} />
+        {facetsLoaded && <span style={{ marginTop: 4 }}><RowAction slug={conf.slug} canApply={canApply} /></span>}
       </div>
     </IntentLink>
   );

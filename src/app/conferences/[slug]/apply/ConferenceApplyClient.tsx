@@ -3759,39 +3759,10 @@ function ConferenceApplyInner() {
                 Delegation chosen and Independent locked, its explanation (and a
                 way to apply as a delegate) shown on hover, focus or a tap
                 (owner, 12 Oct 2026: the step without pictures "looks ugly"). ── */}
-            {isInvoicingRole && (
-              <TwoTabPick
-                value="society"
-                onChange={(key) => { if (key === 'society') { setIsIndependent(false); setSocietyError(''); } }}
-                options={[
-                  {
-                    key: 'independent',
-                    label: 'Independent',
-                    image: '/onboarding/podium-01.jpg',
-                    sub: 'Applying on your own',
-                    disabled: true,
-                    disabledHint: (
-                      <>
-                        {role === 'faculty-advisor' ? 'Faculty advisors' : 'Head delegates'} lead a delegation. To apply on your own,{' '}
-                        <a
-                          href={`/conferences/${slug}/apply?role=delegate`}
-                          style={{ fontWeight: 700, textDecoration: 'underline', color: NEU.forest }}
-                        >
-                          apply as a delegate instead
-                        </a>
-                      </>
-                    ),
-                  },
-                  {
-                    key: 'society',
-                    label: 'With a delegation',
-                    image: '/onboarding/handshake-01.jpg',
-                    sub: role === 'faculty-advisor' ? 'The society or school you advise' : 'The society or school you lead',
-                  },
-                ]}
-              />
-            )}
-            {isInvoicingRole && <div className="mb-6" />}
+            {/* Head delegates and faculty advisors always lead a delegation, so
+                there is no Independent / With a delegation choice for them
+                (owner, 31 Oct 2026): straight to the delegation's name, then its
+                picture, city and country in one column. */}
             {!isInvoicingRole && (
               <TwoTabPick
                 value={isIndependent ? 'independent' : 'society'}
@@ -4012,6 +3983,7 @@ function ConferenceApplyInner() {
                     userId={user?.id ?? null}
                     accessToken={session?.access_token ?? null}
                     previewing={previewing}
+                    vertical={isInvoicingRole}
                   />
                 )}
               </>

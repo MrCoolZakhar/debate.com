@@ -40,7 +40,7 @@ function monogram(name: string): string {
 }
 
 export function NewDelegationCard({
-  name, details, onChange, problems, conferenceId, userId, accessToken, previewing,
+  name, details, onChange, problems, conferenceId, userId, accessToken, previewing, vertical = false,
 }: {
   name: string;
   details: NewDelegationDetails;
@@ -52,6 +52,9 @@ export function NewDelegationCard({
   accessToken: string | null;
   /** Organiser preview: the picture button does nothing (nothing is written). */
   previewing: boolean;
+  /** One column: the picture on top, then the name, city and country beneath
+   *  (head delegates and faculty advisors, owner 31 Oct 2026). */
+  vertical?: boolean;
 }) {
   const cityId = useId();
   const countryId = useId();
@@ -108,9 +111,9 @@ export function NewDelegationCard({
       <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.16em', color: NEU.inkSoft, marginBottom: 10 }}>
         NEW DELEGATION
       </p>
-      <div className="grid gap-3.5 sm:gap-5" style={{ gridTemplateColumns: 'clamp(88px, 26vw, 132px) minmax(0, 1fr)' }}>
+      <div className="grid gap-3.5 sm:gap-5" style={{ gridTemplateColumns: vertical ? 'minmax(0, 1fr)' : 'clamp(88px, 26vw, 132px) minmax(0, 1fr)' }}>
         {/* ── Picture ───────────────────────────────────────────────────── */}
-        <div className="flex flex-col items-stretch gap-1.5">
+        <div className="flex flex-col items-stretch gap-1.5" style={vertical ? { width: 132, justifySelf: 'center' } : undefined}>
           <button
             type="button"
             onClick={() => { if (canUpload && !uploading) fileRef.current?.click(); }}
@@ -169,12 +172,12 @@ export function NewDelegationCard({
         <div className="min-w-0">
           <p
             className="min-w-0"
-            style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 18, lineHeight: 1.25, color: NEU.ink, overflowWrap: 'anywhere' }}
+            style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 18, lineHeight: 1.25, color: NEU.ink, overflowWrap: 'anywhere', textAlign: vertical ? 'center' : undefined }}
           >
             {name.trim()}
           </p>
           {(details.city.trim() || country) && (
-            <p className="mt-1 flex items-start gap-1.5 min-w-0" style={{ fontFamily: OUTFIT, fontWeight: 600, fontSize: 12.5, lineHeight: 1.3, color: NEU.inkSoft }}>
+            <p className={`mt-1 flex items-start gap-1.5 min-w-0${vertical ? ' justify-center' : ''}`} style={{ fontFamily: OUTFIT, fontWeight: 600, fontSize: 12.5, lineHeight: 1.3, color: NEU.inkSoft }}>
               {country ? <CircleFlag code={country.code} size={16} decorative /> : <MapPin size={14} strokeWidth={2.4} style={{ flexShrink: 0 }} />}
               <span className="min-w-0 [overflow-wrap:anywhere]">
                 {[details.city.trim(), country?.name].filter(Boolean).join(', ')}
