@@ -17,7 +17,7 @@
  */
 
 import { useId, useRef, useState } from 'react';
-import { ImagePlus, Loader2, MapPin, X } from 'lucide-react';
+import { ImagePlus, Loader2, MapPin, Users, X } from 'lucide-react';
 import { NEU, OUTFIT } from '@/components/neu';
 import { CountryField } from '@/components/CountryField';
 import { CircleFlag } from '@/components/CircleFlag';
@@ -231,6 +231,46 @@ export function NewDelegationCard({
       {cropFile && (
         <LogoCropModal file={cropFile} onCancel={() => setCropFile(null)} onSave={saveCropped} />
       )}
+    </section>
+  );
+}
+
+/** The left column before a delegation is found or started (head delegates and
+ *  faculty advisors, owner 31 Oct 2026), so the step never looks empty: the
+ *  same frame as the new delegation card, with the delegation-to-be. Writes
+ *  nothing. With an existing delegation chosen it names it. */
+export function DelegationPlaceholder({ name }: { name: string }) {
+  const chosen = name.trim();
+  return (
+    <section
+      aria-label="Your delegation"
+      className="rounded-2xl flex flex-col items-center justify-center text-center"
+      style={{
+        padding: 22,
+        minHeight: 320,
+        backgroundColor: 'color-mix(in srgb, var(--gv-main) 4%, var(--gv-surface))',
+        border: '1px solid color-mix(in srgb, var(--gv-main) 16%, transparent)',
+      }}
+    >
+      <span
+        aria-hidden
+        className="flex items-center justify-center rounded-2xl"
+        style={{
+          width: 112, height: 112,
+          backgroundColor: 'color-mix(in srgb, var(--gv-main) 6%, transparent)',
+          border: chosen ? '1px solid var(--gv-border)' : '1.5px dashed color-mix(in srgb, var(--gv-main) 26%, transparent)',
+          color: 'var(--gv-main)',
+          fontFamily: OUTFIT, fontWeight: 900, fontSize: 34,
+        }}
+      >
+        {chosen ? monogram(chosen) : <Users size={34} strokeWidth={1.5} />}
+      </span>
+      <p className="mt-4" style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 19, lineHeight: 1.25, color: NEU.ink, overflowWrap: 'anywhere' }}>
+        {chosen || 'Your delegation'}
+      </p>
+      <p className="mt-1.5" style={{ fontFamily: OUTFIT, fontWeight: 500, fontSize: 14, lineHeight: 1.45, color: NEU.inkSoft, maxWidth: 260 }}>
+        {chosen ? 'You will apply with this delegation' : 'Type its name above to find it or start a new one'}
+      </p>
     </section>
   );
 }

@@ -59,7 +59,7 @@ import {
   NoDelegationMatch, CreateDelegationButton, CreateDelegationRow, CreateDelegationDialog, RoleSwitchedNotice,
   type DelegationSwitchRole, useHeadDelegateAvailability,
 } from './CreateDelegationPrompt';
-import { NewDelegationCard } from './NewDelegationCard';
+import { NewDelegationCard, DelegationPlaceholder } from './NewDelegationCard';
 import {
   EMPTY_NEW_DELEGATION, hasNewDelegationProblems, newDelegationProblems, normalizeNewDelegation, societyInsertRow,
   type NewDelegationDetails,
@@ -3973,8 +3973,8 @@ function ConferenceApplyInner() {
                     ? <NoDelegationMatch name={typedName} onCreate={openCreate} blockedReason={createBlocked} />
                     : <CreateDelegationButton name={typedName} onCreate={openCreate} blockedReason={createBlocked} />
                 )}
-                {creatingDelegation && conference && (() => {
-                  const card = (
+                {conference && (creatingDelegation || isInvoicingRole) && (() => {
+                  const card = creatingDelegation ? (
                     <NewDelegationCard
                       name={typedName}
                       details={newDelegation}
@@ -3986,10 +3986,16 @@ function ConferenceApplyInner() {
                       previewing={previewing}
                       vertical={isInvoicingRole}
                     />
+                  ) : (
+                    // Before a delegation is picked or started the left column is
+                    // never empty (owner, 31 Oct 2026): the delegation-to-be.
+                    <DelegationPlaceholder
+                      name={selectedSocietyId ? (societies.find(x => x.id === selectedSocietyId)?.name ?? typedName) : ''}
+                    />
                   );
                   if (!isInvoicingRole) return card;
                   // Head delegates and faculty advisors (owner, 31 Oct 2026): two
-                  // columns, the new delegation where Independent used to be and
+                  // columns, the delegation where Independent used to be and
                   // the "With a delegation" picture beside it.
                   return (
                     <div className="grid items-stretch mt-4" style={{ gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
