@@ -3973,19 +3973,42 @@ function ConferenceApplyInner() {
                     ? <NoDelegationMatch name={typedName} onCreate={openCreate} blockedReason={createBlocked} />
                     : <CreateDelegationButton name={typedName} onCreate={openCreate} blockedReason={createBlocked} />
                 )}
-                {creatingDelegation && conference && (
-                  <NewDelegationCard
-                    name={typedName}
-                    details={newDelegation}
-                    onChange={setNewDelegation}
-                    problems={newDelegationShownProblems}
-                    conferenceId={conference.id}
-                    userId={user?.id ?? null}
-                    accessToken={session?.access_token ?? null}
-                    previewing={previewing}
-                    vertical={isInvoicingRole}
-                  />
-                )}
+                {creatingDelegation && conference && (() => {
+                  const card = (
+                    <NewDelegationCard
+                      name={typedName}
+                      details={newDelegation}
+                      onChange={setNewDelegation}
+                      problems={newDelegationShownProblems}
+                      conferenceId={conference.id}
+                      userId={user?.id ?? null}
+                      accessToken={session?.access_token ?? null}
+                      previewing={previewing}
+                      vertical={isInvoicingRole}
+                    />
+                  );
+                  if (!isInvoicingRole) return card;
+                  // Head delegates and faculty advisors (owner, 31 Oct 2026): two
+                  // columns, the new delegation where Independent used to be and
+                  // the "With a delegation" picture beside it.
+                  return (
+                    <div className="grid items-stretch mt-4" style={{ gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
+                      <div className="min-w-0 [&>section]:mt-0 [&>section]:h-full">{card}</div>
+                      <div className="min-w-0">
+                        <TwoTabPick
+                          value="society"
+                          onChange={() => {}}
+                          options={[{
+                            key: 'society',
+                            label: 'With a delegation',
+                            image: '/onboarding/handshake-01.jpg',
+                            sub: role === 'faculty-advisor' ? 'The society or school you advise' : 'The society or school you lead',
+                          }]}
+                        />
+                      </div>
+                    </div>
+                  );
+                })()}
               </>
             )}
           </>
