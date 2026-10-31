@@ -4991,21 +4991,9 @@ function ConferenceApplyInner() {
         extraChrome={wizardExtraChrome}
         onBack={step > 1 ? () => setStep(s => s - 1) : undefined}
         title="MUN Experience"
-        sub="The conferences you have chaired or staffed. Import them from your MUN CV or add them one by one."
+        sub="The conferences you have chaired or staffed. A conference you add here is saved to your MUN CV too."
       >
-        {sortedEntries.length > 0 && (
-          <div className="flex flex-col gap-3 mb-4">
-            {sortedEntries.map(entry => (
-              <CVSummaryRow
-                key={entry.id}
-                entry={{ ...entry, logo_url: entry.logo_url ?? null }}
-                onEdit={() => openEditEntry(entry)}
-                onRemove={() => removeEntry(entry.id)}
-              />
-            ))}
-          </div>
-        )}
-
+        {/* Owner, 31 Oct 2026: Add a conference sits at the very top of the step. */}
         <button
           type="button"
           onClick={openAddEntry}
@@ -5030,6 +5018,22 @@ function ConferenceApplyInner() {
           {sortedEntries.length > 0 ? 'Add another conference' : 'Add a conference'}
         </button>
 
+        {sortedEntries.length > 0 && (
+          <div className="flex flex-col gap-3 mt-4 mb-4">
+            {sortedEntries.map(entry => (
+              <CVSummaryRow
+                key={entry.id}
+                entry={{ ...entry, logo_url: entry.logo_url ?? null }}
+                onEdit={() => openEditEntry(entry)}
+                onRemove={() => removeEntry(entry.id)}
+              />
+            ))}
+          </div>
+        )}
+
+
+        {/* Owner, 31 Oct 2026: shown only when the CV has entries this application does not. */}
+        {munCvRows !== null && importableRows.length > 0 && (
         <div className="mt-4">
           <button
             type="button"
@@ -5060,8 +5064,11 @@ function ConferenceApplyInner() {
             </p>
           )}
         </div>
+        )}
 
-        {!previewing && (
+        {/* Shown only when this application holds conferences not yet on the MUN CV
+            (new ones save themselves; this catches a save that failed). */}
+        {!previewing && newEntries.length > 0 && (
         <div className="mt-3">
           <button
             type="button"
@@ -5132,12 +5139,44 @@ function ConferenceApplyInner() {
                 event_date: entry.event_date,
                 awards: entry.awards,
                 description: entry.description,
+                logo_url: entry.logo_url ?? munExpEditing?.logo_url ?? null,
               };
               setExperienceEntries(prev =>
                 munExpEditing
                   ? prev.map(e => (e.id === built.id ? built : e))
                   : [...prev, built]
               );
+              // Owner, 31 Oct 2026: a conference ADDED here also goes onto the applicant's
+              // MUN CV at once (edits stay on this application). Never from a preview.
+              if (!munExpEditing && !previewing && session && user) {
+                void (async () => {
+                  const supabase = getAuthedClient(session.access_token);
+                  const { data, error } = await supabase.from('mun_cv_entries').insert({
+                    user_id: user.id,
+                    source: 'manual',
+                    entry_type: entry.entry_type,
+                    conference_name: entry.conference_name,
+                    committee: entry.committee,
+                    allocation: entry.allocation,
+                    expertise_level: entry.expertise_level ?? null,
+                    event_date: entry.event_date,
+                    awards: entry.awards,
+                    award: entry.awards[0] ?? 'None',
+                    photos: entry.photos ?? [],
+                    description: entry.description,
+                    logo_url: entry.logo_url ?? null,
+                    conference_id: entry.conference_id ?? null,
+                  }).select('id').single();
+                  if (error || !data) {
+                    setCvSaveError('Added to this application, but it could not be saved to your MUN CV. Use the button below to try again.');
+                    return;
+                  }
+                  // Linked to its CV row, so it never counts as "new" or imports twice.
+                  setExperienceEntries(prev => prev.map(e => (e.id === built.id ? { ...e, source_cv_entry_id: data.id as string } : e)));
+                  await loadMunCvRows();
+                  await refreshCvCount();
+                })();
+              }
             }}
           />
         )}
