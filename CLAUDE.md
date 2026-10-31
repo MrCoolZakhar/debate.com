@@ -153,6 +153,8 @@ src/components/ neu.tsx (tokens), DatePicker, GSelect, Portal, CircleFlag, SeatN
 
 Deleting a conference committee removes its chat attachments through `chat_cleanup_queue`, never its submitted documents.
 
+**Performance (31 Oct 2026).** The project runs on Supabase Micro (60 connections, shared CPU) and was CPU-starved during live conferences. Applied that day: lookup indexes on `conference_chair_invites` (committee / conference / invitee / lower(email)), `profiles` (email, lower(email)), `subscriptions` and `email_outbox` (due time, created_at); cron `prereg-credit-campaign` paused (finished 1 Oct); `admin_conference_overview()` reads `conference_setup_snapshot` (written by `refresh_conference_verification`, so hourly and on every refresh) instead of running `conference_setup_status()` for every conference, falling back to live only when a conference has no snapshot. Any new admin list over all conferences reads the snapshot, never the live status per row.
+
 ---
 
 ## 6. Email
