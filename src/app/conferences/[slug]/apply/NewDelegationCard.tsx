@@ -16,7 +16,8 @@
  * by ConferenceApplyClient with societyInsertRow() from src/lib/delegationCreate.ts.
  */
 
-import { useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
+import { loadGeoCountryGuess } from '@/components/GeoCountryGuess';
 import { ImagePlus, Loader2, MapPin, Users, X } from 'lucide-react';
 import { NEU, OUTFIT } from '@/components/neu';
 import { CountryField } from '@/components/CountryField';
@@ -64,6 +65,22 @@ export function NewDelegationCard({
   const [cropFile, setCropFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [logoError, setLogoError] = useState('');
+
+  // The country starts as the visitor's IP country (/api/geo, Vercel's header,
+  // first party; owner 31 Oct 2026), only while the field is still empty and
+  // only once. It is a plain prefill: nothing is saved until Submit.
+  const detailsRef = useRef(details);
+  const onChangeRef = useRef(onChange);
+  useEffect(() => { detailsRef.current = details; onChangeRef.current = onChange; });
+  useEffect(() => {
+    if (previewing) return;
+    let cancelled = false;
+    loadGeoCountryGuess().then((c) => {
+      if (cancelled || !c || detailsRef.current.countryName.trim() !== '') return;
+      onChangeRef.current({ ...detailsRef.current, countryName: c.name });
+    });
+    return () => { cancelled = true; };
+  }, [previewing]);
 
   const country = getCountryByName(details.countryName);
   const canUpload = !previewing && !!userId && !!accessToken;
@@ -119,7 +136,7 @@ export function NewDelegationCard({
             onClick={() => { if (canUpload && !uploading) fileRef.current?.click(); }}
             disabled={!canUpload || uploading}
             aria-label={details.logoUrl ? 'Change the delegation picture' : 'Add a delegation picture'}
-            className={`relative w-full flex flex-col items-center justify-center rounded-2xl overflow-hidden ${FOCUS}`}
+            className={`relative w-full flex flex-col items-center justify-center rounded-full overflow-hidden ${FOCUS}`}
             style={{
               aspectRatio: '1 / 1',
               cursor: canUpload && !uploading ? 'pointer' : 'default',
@@ -130,7 +147,7 @@ export function NewDelegationCard({
           >
             {details.logoUrl ? (
               /* eslint-disable-next-line @next/next/no-img-element */
-              <img src={details.logoUrl} alt="" className="absolute inset-0 w-full h-full" style={{ objectFit: 'contain', padding: '4%' }} />
+              <img src={details.logoUrl} alt="" className="absolute inset-0 w-full h-full" style={{ objectFit: 'contain', padding: '14%' }} />
             ) : name.trim() ? (
               <span aria-hidden style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 26, color: 'color-mix(in srgb, var(--gv-main) 45%, transparent)' }}>
                 {monogram(name)}
@@ -141,7 +158,7 @@ export function NewDelegationCard({
                 <Loader2 size={20} className="animate-spin motion-reduce:animate-none" />
               </span>
             ) : !details.logoUrl && (
-              <span className="absolute bottom-2 flex flex-col items-center gap-0.5" style={{ fontFamily: OUTFIT }}>
+              <span className="absolute flex flex-col items-center gap-0.5" style={{ fontFamily: OUTFIT, bottom: "14%" }}>
                 <ImagePlus size={18} strokeWidth={2.2} />
               </span>
             )}
@@ -254,7 +271,7 @@ export function DelegationPlaceholder({ name }: { name: string }) {
     >
       <span
         aria-hidden
-        className="flex items-center justify-center rounded-2xl"
+        className="flex items-center justify-center rounded-full"
         style={{
           width: 112, height: 112,
           backgroundColor: 'color-mix(in srgb, var(--gv-main) 6%, transparent)',
