@@ -676,6 +676,10 @@ function HeroSearchBar({ conferences }: { conferences: LabConference[] }) {
         <Search size={20} strokeWidth={2.25} style={{ color: 'rgba(237,231,216,0.72)', flexShrink: 0 }} aria-hidden="true" />
         <input
           type="text"
+          name="gv-home-q"
+          autoComplete="off"
+          autoCorrect="off"
+          spellCheck={false}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}

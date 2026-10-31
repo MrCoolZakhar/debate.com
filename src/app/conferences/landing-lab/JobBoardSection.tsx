@@ -117,6 +117,10 @@ function RoleSearch() {
       <Search size={19} strokeWidth={2.25} style={{ color: INK_SOFT, flexShrink: 0 }} aria-hidden="true" />
       <input
         type="text"
+        name="gv-jobs-q"
+        autoComplete="off"
+        autoCorrect="off"
+        spellCheck={false}
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}

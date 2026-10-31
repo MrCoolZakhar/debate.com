@@ -327,6 +327,11 @@ export function SearchPill({
           ref={inputRef}
           id="gv-explore-where"
           type="text"
+          name="gv-explore-where-q"
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="off"
+          spellCheck={false}
           value={search}
           onChange={(e) => { onSearch(e.target.value); setOpen('where'); setCursor(-1); }}
           onFocus={() => setOpen('where')}
