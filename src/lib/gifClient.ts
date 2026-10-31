@@ -28,9 +28,18 @@ export function useGifsEnabled(): boolean {
   return enabled;
 }
 
+/** One spelling per search (lower case, single spaces), so every viewer asking the same thing
+ *  hits the same cached URL. A one-letter query is treated as trending. Trending carries no
+ *  language, so it is one shared URL for everyone. */
+export function normaliseGifQuery(q: string): string {
+  const n = q.trim().toLowerCase().replace(/\s+/g, ' ');
+  return n.length < 2 ? '' : n;
+}
+
 export async function fetchGifs(q: string, offset: number, lang: string, signal: AbortSignal): Promise<GifResponse> {
-  const p = new URLSearchParams({ offset: String(offset), lang });
-  if (q.trim()) p.set('q', q.trim());
+  const n = normaliseGifQuery(q);
+  const p = new URLSearchParams({ offset: String(offset) });
+  if (n) { p.set('q', n); p.set('lang', lang); }
   const r = await fetch(`/api/gifs?${p}`, { signal });
   const d = await r.json() as GifResponse;
   if (!r.ok && !d.error) d.error = 'provider';
