@@ -4,7 +4,7 @@
 // page, under a playful "New Cabinet Directive!" banner: Review (opens it the way a notification does), Allocate to someone else
 // (the second step replaces the pop-up's content, never a second pop-up) or X. What was handled or dismissed is remembered on this
 // device. The directive is drawn as design B (cabinetStamp.tsx): a card framed in its cabinet's colour with the seal and the number
-// on its top border, the name a small label, the title large with the big CABINET stamp inside the card beside it, and the sender's portrait and name. It waits while any dialog is open and never shows what was already waiting for more than 30 minutes when the page opened.
+// on its top border, the name a small label, the title large; the sender is only a small "From" fact beside "Sent" (owner, 1 Nov 2026), the text 15px. It waits while any dialog is open and never shows what was already waiting for more than 30 minutes when the page opened.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -16,13 +16,13 @@ import { dirNumber } from '@/lib/crisis/format';
 import { useCrisisLive } from '@/lib/crisis/live';
 import type { Directive } from '@/lib/crisis/types';
 import { serverNow } from '@/lib/serverClock';
-import { agoLabel, CK, useScrollLock } from '../../crisisKit';
+import { agoLabel, Avatar, CK, useScrollLock } from '../../crisisKit';
 import { crisisBase, useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { staffLoads } from '../command/commandData';
 import { responsibleMembers } from '../command/setupKit';
 import { authorName, buildNames } from './directiveKit';
 import { StaffPic } from './directiveParts';
-import { CabinetCrest, CabinetFoot, CabinetHead, CabinetName, SEAL_POP, SubmitterPortrait, cabinetColorOf, cabinetRing, cabinetWash, crestIndent, portraitRoom } from './cabinetStamp';
+import { CARD_GAP_BELOW, CabinetCrest, CabinetHead, CabinetName, SEAL_POP, cabinetColorOf, cabinetRing, cabinetWash, crestIndent } from './cabinetStamp';
 import { plainText } from './attachedImage';
 import PopBanner from './PopBanner';
 import { useNow } from './useNow';
@@ -254,16 +254,20 @@ export default function CabinetDirectivePrompt() {
 
           {!picking && (
             <div key={d.id} className={cursor > 0 ? 'cm-next' : undefined} style={{ flex: 'none', minHeight: 0 }}>
-              <div style={{ position: 'relative', overflow: 'visible', background: cabinetWash(cabinetColorOf(cabinet)), borderRadius: 20, padding: '22px 18px 4px', boxShadow: cabinetRing(cabinetColorOf(cabinet), 3, CK.shadow), margin: `${SEAL_POP / 2 + 6}px 6px ${portraitRoom(44)}px` }}>
-                {/* The seal, the number and the small stamp sit on the card's top border; the author's portrait hangs on its bottom border with their name small above it. */}
+              <div style={{ position: 'relative', overflow: 'visible', background: cabinetWash(cabinetColorOf(cabinet)), borderRadius: 20, padding: '22px 18px 16px', boxShadow: cabinetRing(cabinetColorOf(cabinet), 3, CK.shadow), margin: `${SEAL_POP / 2 + 6}px 6px ${CARD_GAP_BELOW}px` }}>
+                {/* The seal, the number and the small stamp sit on the card's top border; who sent it is only a small fact under the title. */}
                 <CabinetCrest cabinet={cabinet} n={dirNumber(d)} sealSize={SEAL_POP} left={18} stamp="pop" />
-                <SubmitterPortrait name={author} picture={character?.picture_url ?? null} color={cabinetColorOf(cabinet)} size={44} left={18} />
                 <CabinetName cabinet={cabinet} size={14.5} indent={crestIndent(SEAL_POP)} />
                 <b style={{ display: 'block', marginTop: 10, fontSize: 25, lineHeight: 1.2, overflowWrap: 'anywhere' }}>{d.title}</b>
-                <p key="body" className="cm-fade" style={{ margin: '12px 0 0', maxHeight: 'min(30dvh, 250px)', overflowY: 'auto', background: CK.well, borderRadius: 14, padding: '11px 14px', fontSize: 15, lineHeight: 1.6, color: CK.ink, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+                <p className="flex items-center flex-wrap" style={{ margin: '8px 0 0', gap: '2px 7px', fontSize: 13, fontWeight: 600, color: CK.inkSoft }}>
+                  <span style={{ color: CK.muted }}>From</span>
+                  <Avatar name={author} src={character?.picture_url ?? null} size={20} color={cabinetColorOf(cabinet)} />
+                  <b style={{ color: CK.ink, fontWeight: 800, overflowWrap: 'anywhere' }}>{author}</b>
+                  <span style={{ color: CK.muted }}>· Sent {arrived || 'just now'}</span>
+                </p>
+                <p key="body" className="cm-fade" style={{ margin: '10px 0 0', maxHeight: 'min(30dvh, 250px)', overflowY: 'auto', background: CK.well, borderRadius: 14, padding: '11px 14px', fontSize: 15, lineHeight: 1.6, color: CK.ink, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
                   {plainText(d.body)}
                 </p>
-                <CabinetFoot portrait={44} name={author} when={`Sent ${arrived || 'just now'}`} marginTop={12} />
               </div>
             </div>
           )}

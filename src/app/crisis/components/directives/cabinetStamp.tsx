@@ -2,11 +2,11 @@
 // cabinet's own colour with a very faint wash of that colour over the whole card. Everything that matters hangs OVER the card's border,
 // half outside, never clipped: the cabinet's SEAL (no border, no disc behind it, a soft drop shadow only) on the top left, the "No. 26"
 // badge beside it, the red CABINET stamp (small, tilted, on a white ground) on the top border after the badge, the assigned staff
-// person's avatar on the top right (Command only) and the SUBMITTER's round portrait on the BOTTOM border at the left, with their name
-// much smaller just above it (CabinetFoot + SubmitterPortrait). The icons and the wait sit on the bottom row to the right of the portrait.
+// person's avatar on the top right (Command only). The SUBMITTER is not drawn on a card at all (owner, 1 Nov 2026: no hanging portrait, no
+// name); the icons and the wait sit on the card's bottom row (CabinetFoot).
 //
-// The card that wears them must not clip (overflow visible) and the thing holding it leaves `sealSize / 2` of room above it and
-// `portrait / 2` below it. The stamp never takes a click.
+// The card that wears them must not clip (overflow visible) and the thing holding it leaves `sealSize / 2` of room above it and a normal
+// `CARD_GAP_BELOW` below it. The stamp never takes a click.
 
 import type { CSSProperties, ReactNode } from 'react';
 import { Landmark } from 'lucide-react';
@@ -162,58 +162,17 @@ export function SubmitterLine({ name, picture, color, when, size = 22, extra, ch
 }
 
 
-/** Who sent it, small and muted, just above the portrait that hangs on the card's bottom border ("Robert McNamara · Sent 4 min ago"). */
-export function SubmitterName({ name, characterId, when, extra, size = 11.5, style }: {
-  name: string; characterId?: string | null; when?: string; size?: number; extra?: ReactNode; style?: CSSProperties;
-}) {
-  return (
-    <span className="flex items-center flex-wrap" style={{ gap: '2px 7px', fontSize: size, fontWeight: 600, color: CK.muted, fontFamily: CK.font, lineHeight: 1.3, ...style }}>
-      <span style={{ overflowWrap: 'break-word', minWidth: 0 }}>
-        {characterId ? <CharacterName id={characterId}>{name}</CharacterName> : name}{when ? ` · ${when}` : ''}
-      </span>
-      {extra}
-    </span>
-  );
-}
+/** The room under a cabinet card: only normal spacing, so the cards sit close together. */
+export const CARD_GAP_BELOW = 4;
 
 /**
- * The submitter's round portrait HANGING ON THE CARD'S BOTTOM BORDER, half outside, with a white ring. Absolutely positioned: a child of
- * the card (position: relative, overflow: visible); `left` equals the card's side padding. With `characterId` it opens that character
- * (leave it out inside a button or a card that is itself one press). The thing holding the card leaves `size / 2 + 6` below it.
+ * The bottom of a cabinet card, in the flow: one row with `children` (theme icons, the wait) at the right. The submitter is NOT drawn on a
+ * card any more (owner, 1 Nov 2026); the directive's pop-up and reader carry it as a small "From" fact next to "Waiting since".
  */
-export function SubmitterPortrait({ name, picture, color, size = 34, left = 14, characterId }: {
-  name: string; picture?: string | null; color?: string; size?: number; left?: number; characterId?: string | null;
-}) {
-  const face = <Avatar name={name} src={picture} size={size} color={color ?? CK.red} style={{ border: 'none', boxShadow: 'none' }} />;
+export function CabinetFoot({ marginTop = 8, children }: { marginTop?: number; children?: ReactNode }) {
   return (
-    <span
-      style={{
-        position: 'absolute', zIndex: 4, left, bottom: -Math.round(size / 2), width: size, height: size, borderRadius: '50%', lineHeight: 0, background: '#FFFFFF',
-        boxShadow: '0 0 0 3px #FFFFFF, 0 3px 9px rgba(27,56,40,0.28)', pointerEvents: characterId ? 'auto' : 'none',
-      }}
-    >
-      {characterId ? <CharacterLink id={characterId} style={{ borderRadius: '50%', lineHeight: 0, display: 'block' }}>{face}</CharacterLink> : face}
-    </span>
-  );
-}
-
-/** The room under a card that wears a bottom portrait, so it never covers the next card. */
-export const portraitRoom = (size: number): number => Math.round(size / 2) + 8;
-
-/**
- * The bottom of a cabinet card, in the flow: the submitter's name small, then a row (as tall as the top half of the portrait that hangs
- * below it, `SubmitterPortrait`) holding `children` (theme icons, the wait) to the RIGHT of that portrait. The card gives it a small
- * bottom padding only: the portrait's top half fills this row.
- */
-export function CabinetFoot({ portrait = 34, name, characterId, when, extra, marginTop = 8, children }: {
-  portrait?: number; name: string; characterId?: string | null; when?: string; extra?: ReactNode; marginTop?: number; children?: ReactNode;
-}) {
-  return (
-    <div style={{ marginTop }}>
-      <SubmitterName name={name} characterId={characterId} when={when} extra={extra} />
-      <div className="flex flex-wrap items-center justify-end" style={{ minHeight: Math.round(portrait / 2) + 4, paddingLeft: portrait + 12, gap: '4px 9px', marginTop: 2 }}>
-        {children}
-      </div>
+    <div className="flex flex-wrap items-center justify-end" style={{ gap: '4px 9px', marginTop }}>
+      {children}
     </div>
   );
 }

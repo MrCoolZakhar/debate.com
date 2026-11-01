@@ -58,7 +58,7 @@ export function WaitingCard({ directives, base, now, onOpen, onChanged }: {
         <>
           {/* Every open directive nobody is writing to yet; the list scrolls inside the card, the footer stays. */}
           {waiting.length === 0 ? <EmptyLine>{writing > 0 ? 'Everything open is being written.' : 'Every directive has an answer.'}</EmptyLine> : (
-            <div className="cmd-scroll flex flex-col" style={{ gap: 6 }}>
+            <div className="cmd-scroll flex flex-col" style={{ gap: 2 }}>
               {waiting.map((d) => (
                 <div key={d.id} style={{ position: 'relative' }}>
                   <QueueRow d={d} names={names} sev={waitSeverity(d.waiting_since, now)} whenLabel={waitLabel(d.waiting_since, now)} onOpen={() => onOpen(d)} compact />

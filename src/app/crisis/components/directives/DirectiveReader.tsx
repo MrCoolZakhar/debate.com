@@ -8,8 +8,8 @@
 // pop-up to answer it. The left and right arrow keys move along. The lane and the filters above decide which
 // items are in the stack, in queue order. An item is a directive, or (backroom only) a meeting request or a delegate who
 // needs a new character: those are decided in place on their card (InboxExtraCards). A CABINET directive wears design B
-// (cabinetStamp.tsx): framed in its cabinet's colour, the seal and name first, the sender a small muted line, the big
-// CABINET stamp poking out of its top right corner. Presentation and choices only: nothing here writes. With `readOnly`
+// (cabinetStamp.tsx): framed in its cabinet's colour, the seal and name first, the big
+// CABINET stamp poking out of its top right corner (the sender is not on the card). Presentation and choices only: nothing here writes. With `readOnly`
 // (the chair's Directives page) the same reader shows each directive's state and its button only opens the directive.
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
@@ -20,7 +20,7 @@ import { Avatar, Btn, CK, agoLabel, cabinetTint, waitLabel, waitSeverity } from 
 import { CharacterLink } from '../character/CharacterProfileHost';
 import { CabinetLogo, NameStack, NumberBadge, StaffPic, ThemeTags, shortName } from './directiveParts';
 import { KIND_ICON, authorName, isBeingWritten, memberName, outcomeView, writingAge, writtenByOther, type Lane, type Names } from './directiveKit';
-import { CabinetCrest, CabinetFoot, CabinetName, SubmitterName, SubmitterPortrait, cabinetColorOf, cabinetWash, crestIndent, isCabinetDirective } from './cabinetStamp';
+import { CabinetCrest, CabinetFoot, CabinetName, cabinetColorOf, cabinetWash, crestIndent, isCabinetDirective } from './cabinetStamp';
 import { ExtraFront, ExtraNextBody } from './InboxExtraCards';
 import { isExtra, type ReaderItem } from './inboxItems';
 import { FrontShell, HIDDEN, MAX_STACK, NavControls, NextShell, STRIP } from './readerParts';
@@ -70,9 +70,6 @@ function Writing({ d, names, now, small }: { d: Directive; names: Names; now: nu
   );
 }
 
-/** "Sent 4 min ago" (the sender's line on a cabinet directive; just now reads "Sent just now"). */
-const sentWhen = (d: Directive, now: number) => `Sent ${agoLabel(d.created_at, now) || 'just now'}`;
-
 /**
  * A smaller copy of the front card, further back in the stack: badge, title, character, the start of the text.
  * A cabinet directive is framed in its cabinet's colour, wears its seal and number on its top border and has the small stamp inside, beside the name.
@@ -90,16 +87,15 @@ function DirectiveNext({ d, k, fw, names, lane, now, onPick, readOnly }: { d: Di
   return (
     <NextShell
       k={k} fw={fw} grey={grey} ring={isCab} color={color} onPick={onPick}
-      tint={isCab ? cabinetWash(color) : undefined} padBottom={isCab ? 2 : 14}
+      tint={isCab ? cabinetWash(color) : undefined}
       label={`Read directive No. ${dirNumber(d)}: ${d.title}`}
       badge={isCab
         ? <CabinetCrest cabinet={cab} n={dirNumber(d)} sealSize={40} left={HIDDEN + 14} stamp="xs" />
         : <NumberBadge n={dirNumber(d)} color={color} style={{ position: 'absolute', zIndex: 2, top: -9, left: HIDDEN + 14 }} />}
-      stamp={isCab ? <SubmitterPortrait name={who} picture={ch?.picture_url} color={color} size={34} left={HIDDEN + 14} /> : undefined}
     >
       {isCab ? (
         <>
-          {/* The name beside the seal, then the title, then the start of the text; the author's name small above the portrait that hangs on the card's bottom border, the kind and the wait to its right. */}
+          {/* The name beside the seal, then the title, then the start of the text; the kind and the wait on the bottom row (no submitter on the card). */}
           <CabinetName cabinet={cab} size={13.5} indent={crestIndent(40)} style={{ flex: 'none' }} />
           <span style={{ display: 'block', flex: 'none', marginTop: 6, fontSize: 18, fontWeight: 800, lineHeight: 1.22, overflowWrap: 'anywhere' }}>{d.title}</span>
         </>
@@ -130,7 +126,7 @@ function DirectiveNext({ d, k, fw, names, lane, now, onPick, readOnly }: { d: Di
       <span className="rd-fade" style={{ display: 'block', flex: 1, minHeight: 0, overflow: 'hidden', marginTop: 11, fontSize: 14, lineHeight: 1.55, fontWeight: 500, color: CK.inkSoft, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{plainText(d.body)}</span>
       {isCab && (
         <div style={{ flex: 'none' }}>
-          <CabinetFoot portrait={34} name={who} marginTop={6}>
+          <CabinetFoot marginTop={6}>
             <KindIcon size={14} strokeWidth={1.5} aria-label={KIND_LABEL[d.kind]} style={{ color: CK.red, flex: 'none' }} />
             <span className="inline-flex items-center" style={{ gap: 3, fontSize: 12, fontWeight: 800, color: when.sev ? WAIT_COLOR[when.sev] : CK.inkSoft, fontVariantNumeric: 'tabular-nums' }}>
               <Clock size={12} strokeWidth={1.6} aria-hidden />{when.text}
@@ -191,7 +187,6 @@ function FrontCard({ d, names, lane, now, index, total, onPrev, onNext, onRespon
   return (
     <FrontShell color={color} ring={isCab} tint={isCab ? cabinetWash(color) : undefined} label={`Directive No. ${dirNumber(d)}: ${d.title}`} onActivate={onRespond}>
       {isCab && <CabinetCrest cabinet={cab} n={dirNumber(d)} sealSize={56} left={30} stamp="card" />}
-      {isCab && <SubmitterPortrait name={who} picture={ch?.picture_url} color={color} size={44} left={30} characterId={ch?.id} />}
       {!isCab && <NumberBadge n={dirNumber(d)} color={color} style={{ position: 'absolute', zIndex: 2, top: -9, left: 26 }} />}
 
       <div style={{ flex: 'none', padding: isCab ? '30px 26px 0 30px' : '24px 26px 0 30px' }}>
@@ -253,9 +248,8 @@ function FrontCard({ d, names, lane, now, index, total, onPrev, onNext, onRespon
         <div style={{ flex: '1 1 260px', minWidth: 0 }}>
           {isCab ? (
             <>
-              {/* The author's name small, right above the portrait that hangs on the card's bottom border; the kind, themes, wait and state to its right. */}
-              <SubmitterName name={who} characterId={ch?.id} when={sentWhen(d, now)} />
-              <div className="flex items-center flex-wrap" style={{ minHeight: 26, paddingLeft: 56, marginTop: 2, gap: '4px 14px', fontSize: 12.5, fontWeight: 700, color: CK.inkSoft }}>
+              {/* The kind, themes, wait and state (no submitter on the card). */}
+              <div className="flex items-center flex-wrap" style={{ gap: '4px 14px', fontSize: 12.5, fontWeight: 700, color: CK.inkSoft }}>
                 <span className="inline-flex items-center" style={{ gap: 6 }}><KindIcon size={15} strokeWidth={1.5} aria-hidden style={{ color: CK.red }} />{KIND_LABEL[d.kind]}</span>
                 <ThemeTags themes={d.themes} />
                 {waitClock}

@@ -18,7 +18,7 @@ import { CharacterLink, CharacterName } from '../character/CharacterProfileHost'
 import { seatFitFontPx } from '@/lib/seatName';
 import { CabinetLogo, NumberBadge, shortName, StaffPic, ThemeTags } from './directiveParts';
 import { KIND_ICON, authorName, writerOf, writingAge, writtenByOther, type Names } from './directiveKit';
-import { CabinetCrest, CabinetFoot, CabinetName, SEAL_ROW, SubmitterPortrait, cabinetColorOf, cabinetRing, cabinetWash, crestIndent, isCabinetDirective, portraitRoom } from './cabinetStamp';
+import { CARD_GAP_BELOW, CabinetCrest, CabinetFoot, CabinetName, SEAL_ROW, cabinetColorOf, cabinetRing, cabinetWash, crestIndent, isCabinetDirective } from './cabinetStamp';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { useNow } from './useNow';
 
@@ -58,18 +58,16 @@ export default function QueueRow({ d, names, whenLabel, sev, selected, delegateN
     const cc = cabinetColorOf(cab);
     const ring = selected ? 3 : 2;
     const seal = compact ? 40 : SEAL_ROW;
-    const portrait = compact ? 30 : 34;
     const padX = compact ? 12 : 14;
     return (
       <div
         style={{
           position: 'relative', overflow: 'visible', background: cabinetWash(cc), borderRadius: compact ? 14 : 18, minWidth: 0,
-          margin: `${Math.round(seal / 2) + 4}px 3px ${portraitRoom(portrait)}px`, boxShadow: cabinetRing(cc, ring, CK.shadowSm), opacity: other ? 0.62 : 1, filter: other ? 'grayscale(0.7)' : undefined,
+          margin: `${Math.round(seal / 2) + 2}px 3px ${CARD_GAP_BELOW}px`, boxShadow: cabinetRing(cc, ring, CK.shadowSm), opacity: other ? 0.62 : 1, filter: other ? 'grayscale(0.7)' : undefined,
         }}
       >
-        {/* The seal, the number and the small stamp sit ON the card's top border; the submitter's portrait hangs on its bottom border. */}
+        {/* The seal, the number and the small stamp sit ON the card's top border; the submitter is not shown on the card. */}
         <CabinetCrest cabinet={cab} n={dirNumber(d)} sealSize={seal} left={padX} stamp={compact ? 'xs' : 'row'} />
-        <SubmitterPortrait name={who} picture={ch?.picture_url} color={cc} size={portrait} left={padX} characterId={ch?.id} />
         <button
           type="button"
           onClick={onOpen}
@@ -77,12 +75,12 @@ export default function QueueRow({ d, names, whenLabel, sev, selected, delegateN
           className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] transition-transform active:scale-[0.99]"
           style={{ position: 'absolute', inset: 0, zIndex: 1, width: '100%', border: 0, background: 'transparent', borderRadius: 'inherit', cursor: 'pointer', padding: 0 }}
         />
-        <div style={{ position: 'relative', fontFamily: CK.font, color: CK.ink, padding: compact ? `11px ${padX}px 4px` : `13px ${padX}px 4px`, pointerEvents: 'none' }}>
+        <div style={{ position: 'relative', fontFamily: CK.font, color: CK.ink, padding: compact ? `11px ${padX}px 9px` : `13px ${padX}px 11px`, pointerEvents: 'none' }}>
           {/* The name: one line beside the seal; Command hangs the assignee's avatar on the card's top right corner, so it keeps clear of it. */}
           <CabinetName cabinet={cab} size={compact ? 12.5 : 13.5} indent={crestIndent(seal)} style={{ paddingRight: compact ? 40 : 0 }} />
           <span style={{ display: 'block', marginTop: compact ? 5 : 7, fontSize: compact ? 15.5 : 18, fontWeight: 800, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{d.title}</span>
-          {/* The bottom line: the author's name small above the portrait that hangs below, the icons and the wait to its right. */}
-          <CabinetFoot portrait={portrait} name={who} marginTop={compact ? 6 : 8}>
+          {/* The bottom line: the icons and the wait. */}
+          <CabinetFoot marginTop={compact ? 6 : 8}>
             {delegateNote && <MessageCircle size={14} strokeWidth={1.5} aria-label="The delegate sent a note" style={{ color: '#3E6A9A' }} />}
             {d.themes.length > 0 && <ThemeTags themes={d.themes} maxChips={1} />}
             <span className="inline-flex items-center" style={{ gap: 3, fontSize: 12, fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: waitColor, flex: 'none' }}>

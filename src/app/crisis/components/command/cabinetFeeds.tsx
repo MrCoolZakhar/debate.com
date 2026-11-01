@@ -17,7 +17,7 @@ import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { verdictOf, whenLabel, whenTitle } from '../delegate/directiveUi';
 import { DirectiveBody } from '../directives/attachedImage';
 import { NumberBadge } from '../directives/directiveParts';
-import { CabinetCrest, CabinetFoot, CabinetName, SubmitterPortrait, cabinetColorOf, cabinetRing, cabinetWash, crestIndent, portraitRoom } from '../directives/cabinetStamp';
+import { CARD_GAP_BELOW, CabinetCrest, CabinetName, cabinetColorOf, cabinetRing, cabinetWash, crestIndent } from '../directives/cabinetStamp';
 import { dirNumber } from '@/lib/crisis/format';
 import NewsDetailDialog from '../news/NewsDetailDialog';
 import { audienceLabel, newsTime, newsTimeTitle } from '../news/NewsList';
@@ -68,8 +68,6 @@ function DirectiveRow({ d, onOpen }: { d: Directive; onOpen?: (d: Directive) => 
   const v = verdictOf(d);
   const note = d.status === 'changes_requested' ? (d.reply ?? '').trim() : '';
   const seal = 44;
-  const portrait = 30;
-  const hasAuthor = !!a.name;
   const head = (
     <span className="flex items-start" style={{ gap: 10 }}>
       <span style={{ flex: 1, minWidth: 0, display: 'block' }}>
@@ -82,24 +80,17 @@ function DirectiveRow({ d, onOpen }: { d: Directive; onOpen?: (d: Directive) => 
       </span>
     </span>
   );
-  // The author at the foot: their name small above the portrait that hangs on the card's bottom border.
-  const foot = hasAuthor
-    ? <span className="block" title={whenTitle(d.created_at)}><CabinetFoot portrait={portrait} name={a.name as string} when={`Sent ${whenLabel(d.created_at)}`} marginTop={6} /></span>
-    : <span title={whenTitle(d.created_at)} style={{ display: 'block', marginTop: 5, fontSize: 12.5, fontWeight: 600, color: CK.muted }}>{`Cabinet directive · Sent ${whenLabel(d.created_at)}`}</span>;
-  const crest = (
-    <>
-      <CabinetCrest cabinet={cabinet} n={dirNumber(d)} sealSize={seal} left={12} stamp="xs" />
-      {hasAuthor && <SubmitterPortrait name={a.name as string} picture={a.picture} color={a.color} size={portrait} left={12} />}
-    </>
-  );
-  // The card never clips its seal, number, stamp or portrait: they sit on its borders, with room above and below it.
+  // The foot says when it was sent; the submitter is not on the card (owner, 1 Nov 2026).
+  const foot = <span title={whenTitle(d.created_at)} style={{ display: 'block', marginTop: 5, fontSize: 12.5, fontWeight: 600, color: CK.muted, textAlign: 'right' }}>{`Sent ${whenLabel(d.created_at)}`}</span>;
+  const crest = <CabinetCrest cabinet={cabinet} n={dirNumber(d)} sealSize={seal} left={12} stamp="xs" />;
+  // The card never clips its seal, number or stamp: they sit on its top border, with room above it.
   const card: CSSProperties = {
     position: 'relative', overflow: 'visible', background: cabinetWash(color), borderRadius: 16, fontFamily: CK.font, color: CK.ink, textAlign: 'left',
-    margin: `${Math.round(seal / 2) + 4}px 2px ${hasAuthor ? portraitRoom(portrait) : 8}px`, width: 'calc(100% - 4px)', boxShadow: cabinetRing(color, 2, CK.shadowSm),
+    margin: `${Math.round(seal / 2) + 4}px 2px ${CARD_GAP_BELOW}px`, width: 'calc(100% - 4px)', boxShadow: cabinetRing(color, 2, CK.shadowSm),
   };
   if (onOpen) {
     return (
-      <button type="button" onClick={() => onOpen(d)} aria-label={`${d.title}, cabinet directive, ${v.word}`} className={focusCls} style={{ ...card, border: 0, padding: `11px 12px ${hasAuthor ? 4 : 10}px`, cursor: 'pointer' }}>
+      <button type="button" onClick={() => onOpen(d)} aria-label={`${d.title}, cabinet directive, ${v.word}`} className={focusCls} style={{ ...card, border: 0, padding: `11px 12px 10px`, cursor: 'pointer' }}>
         {crest}
         {head}
         {foot}
@@ -107,7 +98,7 @@ function DirectiveRow({ d, onOpen }: { d: Directive; onOpen?: (d: Directive) => 
     );
   }
   return (
-    <div style={{ ...card, padding: `11px 12px ${hasAuthor ? 4 : 10}px` }}>
+    <div style={{ ...card, padding: '11px 12px 10px' }}>
       {crest}
       <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className={focusCls} style={{ width: '100%', textAlign: 'left', border: 0, background: 'transparent', padding: 0, cursor: 'pointer', fontFamily: CK.font }}>{head}</button>
       {open && (

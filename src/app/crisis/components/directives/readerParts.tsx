@@ -54,7 +54,7 @@ export function FrontShell({ color, ring, tint, label, onActivate, children }: {
         onActivate();
       } : undefined}
       style={{
-        position: 'absolute', left: 0, top: ring ? 32 : 14, bottom: ring ? 30 : 6, width: 'var(--fw)', zIndex: 30, display: 'flex', flexDirection: 'column', cursor: onActivate ? 'pointer' : 'default',
+        position: 'absolute', left: 0, top: ring ? 32 : 14, bottom: ring ? 10 : 6, width: 'var(--fw)', zIndex: 30, display: 'flex', flexDirection: 'column', cursor: onActivate ? 'pointer' : 'default',
         background: tint ?? CK.card, borderRadius: 24, border: ring ? 'none' : '1px solid rgba(27,56,40,0.14)', fontFamily: CK.font, color: CK.ink,
         boxShadow: ring
           ? `0 0 0 3px ${color}, ${CK.shadow}, 0 22px 44px rgba(58,14,15,0.18)`
@@ -71,7 +71,7 @@ export function FrontShell({ color, ring, tint, label, onActivate, children }: {
  * starts there. `ring` frames it in `color` (a cabinet directive), `grey` mutes it. `badge` hangs on its top edge.
  */
 export function NextShell({ k, fw, grey, ring, tint, padBottom = 14, color, label, onPick, badge, stamp, children }: {
-  k: number; fw: number; grey?: boolean; ring?: boolean; /** A faint wash over the whole card (a cabinet directive). */ tint?: string; /** The button's bottom padding (a card with a portrait on its bottom border has none). */ padBottom?: number;
+  k: number; fw: number; grey?: boolean; ring?: boolean; /** A faint wash over the whole card (a cabinet directive). */ tint?: string; /** The button's bottom padding. */ padBottom?: number;
   color: string; label: string; onPick: () => void; badge?: ReactNode; stamp?: ReactNode; children: ReactNode;
 }) {
   const pct = HEIGHTS[k - 1];

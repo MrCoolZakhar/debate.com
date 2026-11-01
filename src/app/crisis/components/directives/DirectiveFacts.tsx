@@ -15,32 +15,35 @@ import Portal from '@/components/Portal';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { assignDirective, crisisError, loadSecrets } from '@/lib/crisis/api';
 import { ROLE_LABEL, type Directive } from '@/lib/crisis/types';
-import { Btn, CK, ThemeTag, agoLabel, cabinetTint, waitLabel, waitSeverity } from '../../crisisKit';
+import { Avatar, Btn, CK, ThemeTag, agoLabel, cabinetTint, waitLabel, waitSeverity } from '../../crisisKit';
+import { CharacterLink, CharacterName } from '../character/CharacterProfileHost';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { StaffPic, ThemeIcons } from './directiveParts';
-import { isBeingWritten, memberName, type Names } from './directiveKit';
+import { authorName, isBeingWritten, memberName, type Names } from './directiveKit';
 import { useNow } from './useNow';
 
 const SEV_COLOR = { ok: CK.ink, late: CK.goldDeep, very: CK.danger } as const;
 
 /** One cell of the grid: a small label over its value. */
-function Fact({ icon, label, children, span }: { icon: ReactNode; label: string; children: ReactNode; span?: number }) {
+function Fact({ icon, label, children, span, big }: { icon: ReactNode; label: string; children: ReactNode; span?: number; /** The compact row of a cabinet directive: 12.5px labels, 14px values. */ big?: boolean }) {
   return (
     <div style={{ minWidth: 0, gridColumn: span ? `span ${span}` : undefined }}>
-      <p className="flex items-center" style={{ margin: 0, gap: 5, fontSize: 11.5, fontWeight: 700, color: CK.muted }}>
+      <p className="flex items-center" style={{ margin: 0, gap: 5, fontSize: big ? 12.5 : 11.5, fontWeight: 700, color: CK.muted }}>
         <span aria-hidden style={{ lineHeight: 0, color: CK.red, flex: 'none' }}>{icon}</span>{label}
       </p>
-      <div style={{ marginTop: 2, fontSize: 13, fontWeight: 800, color: CK.ink, lineHeight: 1.3, overflowWrap: 'anywhere' }}>{children}</div>
+      <div style={{ marginTop: 2, fontSize: big ? 14 : 13, fontWeight: 800, color: CK.ink, lineHeight: 1.3, overflowWrap: 'anywhere' }}>{children}</div>
     </div>
   );
 }
 
-export default function DirectiveFacts({ d, names, editing, onChanged }: {
+export default function DirectiveFacts({ d, names, editing, onChanged, compact = false }: {
   d: Directive;
   names: Names;
   /** An answered directive being answered again counts as open for handing over. */
   editing: boolean;
   onChanged?: (what: 'claimed' | 'assigned' | 'answered') => void;
+  /** A cabinet directive (owner, 1 Nov 2026): no tall band; the facts are items of ONE tight row, led by "From" (the author is only a fact). */
+  compact?: boolean;
 }) {
   const { ref, core, memberId } = useCrisis();
   const character = d.author_character_id ? names.characters.get(d.author_character_id) : undefined;
@@ -85,6 +88,69 @@ export default function DirectiveFacts({ d, names, editing, onChanged }: {
     void doHand(to);
   };
 
+  const responsibleBody = confirmTo ? (
+    <div className="flex flex-col" role="alertdialog" aria-label="Move it anyway?" style={{ gap: 6 }}>
+      <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: CK.goldDeep, lineHeight: 1.35 }}>
+        {memberName(writer, names)} is writing a reply. Move it anyway?
+      </p>
+      <div className="flex flex-wrap" style={{ gap: 6 }}>
+        <Btn tone="green" size="sm" onClick={() => { void doHand(confirmTo); }}>Move it</Btn>
+        <Btn tone="ghost" size="sm" onClick={() => setConfirmTo(null)}>Keep it</Btn>
+      </div>
+    </div>
+  ) : open && staffOptions.length > 0 ? (
+    <GSelect size="sm" value={d.assigned_member_id ?? ''} onChange={(v) => hand(v)} options={staffOptions}
+      placeholder="Unclaimed, choose a person" aria-label="Responsible for this directive" disabled={handing} />
+  ) : (
+    <span className="inline-flex items-center" style={{ gap: 7 }}>
+      <StaffPic member={d.assigned_member_id ? names.members.get(d.assigned_member_id) : null} size={24} />
+      {memberName(d.assigned_member_id, names, 'Unassigned')}
+    </span>
+  );
+
+  if (compact) {
+    // ONE tight row of small facts (wraps on a narrow width): From, Waiting since, Length, Themes, Responsible.
+    const who = authorName(d, names);
+    const themeCount = d.themes.length + (covertShown ? 1 : 0);
+    return (
+      <>
+        <Fact big icon={<UserRound size={13} strokeWidth={1.6} />} label="From">
+          <span className="inline-flex items-center" style={{ gap: 6 }}>
+            <CharacterLink id={character?.id} style={{ borderRadius: '50%', lineHeight: 0, flex: 'none' }}>
+              <Avatar name={who} src={character?.picture_url} size={20} color={character?.cabinet_id ? names.cabinets.get(character.cabinet_id)?.color ?? CK.red : CK.red} />
+            </CharacterLink>
+            <span>{character ? <CharacterName id={character.id}>{who}</CharacterName> : who}</span>
+          </span>
+        </Fact>
+        <Fact big icon={<Clock size={13} strokeWidth={1.6} />} label={waitLabelText}><span style={{ color: SEV_COLOR[sev] }}>{waitValue}</span></Fact>
+        <Fact big icon={<FileText size={13} strokeWidth={1.6} />} label="Length">{d.word_count} words</Fact>
+        {themeCount > 0 && (
+          <Fact big icon={<VenetianMask size={13} strokeWidth={1.6} />} label={covertShown && d.themes.length === 0 ? 'Covert' : 'Themes'}>
+            {themeCount > 2 ? (
+              <ThemeIcons themes={covertShown ? [...d.themes, 'Covert'] : d.themes} size="md" />
+            ) : (
+              <span className="flex flex-wrap items-center" style={{ gap: 6 }}>
+                {d.themes.map((t) => <ThemeTag key={t} theme={t} size="md" />)}
+                {covertShown && <span style={{ fontSize: 12, fontWeight: 800, color: CK.redDeep, background: cabinetTint(CK.redDeep, 0.08), borderRadius: 8, padding: '2px 9px' }}>Covert</span>}
+              </span>
+            )}
+          </Fact>
+        )}
+        <div style={{ flex: '0 1 240px', minWidth: 190 }}>
+          <Fact big icon={<UserRound size={13} strokeWidth={1.6} />} label="Responsible for this directive">{responsibleBody}</Fact>
+          {writer && !confirmTo && (
+            <div style={{ marginTop: 4 }}>
+              <span className="inline-flex items-center" style={{ gap: 7, fontSize: 12.5, fontWeight: 800, color: CK.goldDeep }}>
+                <StaffPic member={names.members.get(writer)} size={20} />
+                {memberName(writer, names)} is writing a reply
+              </span>
+            </div>
+          )}
+        </div>
+      </>
+    );
+  }
+
   return (
     // Three pieces that sit in the pop-up's white band beside the character, on ONE row when there is room (owner,
     // 30 Oct 2026): the small facts in a grid, then who is responsible in its own column, then the secret goals full width.
@@ -111,25 +177,7 @@ export default function DirectiveFacts({ d, names, editing, onChanged }: {
 
     <div className="dp-resp flex flex-col" style={{ flex: '0 1 230px', gap: 8, minWidth: 180, paddingTop: 12, marginLeft: 'auto' }}>
       <Fact icon={<UserRound size={13} strokeWidth={1.6} />} label="Responsible for this directive">
-        {confirmTo ? (
-          <div className="flex flex-col" role="alertdialog" aria-label="Move it anyway?" style={{ gap: 6 }}>
-            <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: CK.goldDeep, lineHeight: 1.35 }}>
-              {memberName(writer, names)} is writing a reply. Move it anyway?
-            </p>
-            <div className="flex flex-wrap" style={{ gap: 6 }}>
-              <Btn tone="green" size="sm" onClick={() => { void doHand(confirmTo); }}>Move it</Btn>
-              <Btn tone="ghost" size="sm" onClick={() => setConfirmTo(null)}>Keep it</Btn>
-            </div>
-          </div>
-        ) : open && staffOptions.length > 0 ? (
-          <GSelect size="sm" value={d.assigned_member_id ?? ''} onChange={(v) => hand(v)} options={staffOptions}
-            placeholder="Unclaimed, choose a person" aria-label="Responsible for this directive" disabled={handing} />
-        ) : (
-          <span className="inline-flex items-center" style={{ gap: 7 }}>
-            <StaffPic member={d.assigned_member_id ? names.members.get(d.assigned_member_id) : null} size={24} />
-            {memberName(d.assigned_member_id, names, 'Unassigned')}
-          </span>
-        )}
+        {responsibleBody}
         {!confirmTo && ownerId && ownerId !== d.assigned_member_id && d.kind !== 'committee' && (
           <span className="inline-flex items-center" title="The backroomer for this character" style={{ gap: 6, marginTop: 4, fontSize: 12, fontWeight: 600, color: CK.inkSoft }}>
             <StaffPic member={names.members.get(ownerId)} size={18} />

@@ -16,7 +16,7 @@ import type { Directive, DirectiveNote } from '@/lib/crisis/types';
 import type { CrisisRef } from '@/lib/crisis/api';
 import { Avatar, Btn, Card, CK, Skeleton } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
-import { CabinetCrest, CabinetFoot, CabinetName, SEAL_ROW, SubmitterPortrait, cabinetColorOf, cabinetRing, cabinetWash, crestIndent, isCabinetDirective, portraitRoom } from '../directives/cabinetStamp';
+import { CARD_GAP_BELOW, CabinetCrest, CabinetFoot, CabinetName, SEAL_ROW, cabinetColorOf, cabinetRing, cabinetWash, crestIndent, isCabinetDirective } from '../directives/cabinetStamp';
 import DirectiveDialog from './DirectiveDialog';
 import DirectiveDeepLink from '../notifications/DirectiveDeepLink';
 import { KIND_WORD, kindIcon, verdictOf } from './directiveUi';
@@ -46,13 +46,12 @@ function DirectiveCard({ d, author, onOpen }: { d: Directive; author: PersonRef;
         aria-label={`Cabinet directive ${dirNumber(d)}: ${d.title}. ${tagWord}`}
         className="relative text-left w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] transition-transform active:scale-[0.99]"
         style={{
-          display: 'block', minHeight: CARD_HEIGHT, padding: '20px 16px 4px', margin: `${SEAL_ROW / 2 + 6}px 3px ${portraitRoom(34)}px`, width: 'calc(100% - 6px)', cursor: 'pointer', fontFamily: CK.font, color: CK.ink,
+          display: 'block', minHeight: CARD_HEIGHT, padding: '20px 16px 10px', margin: `${SEAL_ROW / 2 + 6}px 3px ${CARD_GAP_BELOW}px`, width: 'calc(100% - 6px)', cursor: 'pointer', fontFamily: CK.font, color: CK.ink,
           background: cabinetWash(color), borderRadius: 20, border: 0, overflow: 'visible',
           boxShadow: ask ? cabinetRing(color, 3, `${CK.shadow}, 0 0 0 5px rgba(47,95,143,0.35)`) : cabinetRing(color, 3, CK.shadow),
         }}
       >
         <CabinetCrest cabinet={cabinet} n={dirNumber(d)} sealSize={SEAL_ROW} left={16} stamp="row" />
-        <SubmitterPortrait name={author.name} picture={author.picture_url} color={author.color} size={34} left={16} />
         <span
           title={tagWord}
           className="inline-flex items-center"
@@ -72,11 +71,12 @@ function DirectiveCard({ d, author, onOpen }: { d: Directive; author: PersonRef;
         >
           {text}
         </span>
-        {/* The author's name small above the portrait that hangs on the card's bottom border. */}
-        <span className="block">
-          <CabinetFoot portrait={34} name={author.name} marginTop={6}
-            when={d.answered_at ? `${sentBack ? 'Sent back' : 'Reply'} ${timeAgo(d.answered_at)}` : `Sent ${timeAgo(d.created_at)}`} />
-        </span>
+        {/* When it was sent (no submitter on the card). */}
+        <CabinetFoot marginTop={6}>
+          <span style={{ fontSize: 12.5, fontWeight: 600, color: CK.muted }}>
+            {d.answered_at ? `${sentBack ? 'Sent back' : 'Reply'} ${timeAgo(d.answered_at)}` : `Sent ${timeAgo(d.created_at)}`}
+          </span>
+        </CabinetFoot>
       </button>
     );
   }

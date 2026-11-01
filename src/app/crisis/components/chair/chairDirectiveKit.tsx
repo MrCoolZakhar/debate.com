@@ -12,7 +12,7 @@ import { Avatar, CK } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { outcomeColor, outcomeIcon, statusColor, statusIcon, whenLabel, whenTitle } from '../delegate/directiveUi';
 import { NumberBadge, ThemeIcons } from '../directives/directiveParts';
-import { CabinetCrest, CabinetFoot, CabinetName, SubmitterPortrait, cabinetColorOf, cabinetRing, cabinetWash, crestIndent, isCabinetDirective, portraitRoom } from '../directives/cabinetStamp';
+import { CARD_GAP_BELOW, CabinetCrest, CabinetFoot, CabinetName, cabinetColorOf, cabinetRing, cabinetWash, crestIndent, isCabinetDirective } from '../directives/cabinetStamp';
 
 // ───────────── the store ─────────────
 
@@ -83,12 +83,10 @@ export function ChairDirectiveRow({ d, variant = 'list', muted = false }: { d: D
   const cabinet = d.cabinet_id ? core.cabinets.find((c) => c.id === d.cabinet_id) ?? null : null;
 
   // A cabinet directive (design B, owner 1 Nov 2026): its own framed card in the cabinet's colour, the seal and the number on its top
-  // border, the name a small label, the title big with the CABINET stamp inside the card beside it, and the sender's portrait and name
-  // on the bottom line.
+  // border, the name a small label, the title big, and the icons and the wait on the bottom line (no submitter on the card).
   if (isCabinetDirective(d)) {
     const color = cabinetColorOf(cabinet);
     const seal = card ? 48 : 40;
-    const portrait = card ? 34 : 30;
     return (
       <button
         type="button"
@@ -97,12 +95,11 @@ export function ChairDirectiveRow({ d, variant = 'list', muted = false }: { d: D
         className="cm-lift block text-left w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
         style={{
           position: 'relative', overflow: 'visible', border: 0, cursor: 'pointer', fontFamily: CK.font, color: CK.ink, background: cabinetWash(color), borderRadius: 16,
-          padding: '11px 12px 4px', margin: `${Math.round(seal / 2) + 4}px 2px ${portraitRoom(portrait)}px`, width: 'calc(100% - 4px)',
+          padding: '11px 12px 10px', margin: `${Math.round(seal / 2) + 4}px 2px ${CARD_GAP_BELOW}px`, width: 'calc(100% - 4px)',
           boxShadow: cabinetRing(color, 2, CK.shadowSm), opacity: muted ? 0.72 : 1,
         }}
       >
         <CabinetCrest cabinet={cabinet} n={dirNumber(d)} sealSize={seal} left={12} stamp={card ? 'row' : 'xs'} />
-        <SubmitterPortrait name={a.name} picture={a.picture_url} color={a.color} size={portrait} left={12} />
         <CabinetName cabinet={cabinet} size={13} indent={crestIndent(seal)} />
         {card && (
           <span className="flex items-center flex-wrap" style={{ gap: '2px 10px', marginTop: 5, fontSize: 12.5, fontWeight: 800 }}>
@@ -112,8 +109,9 @@ export function ChairDirectiveRow({ d, variant = 'list', muted = false }: { d: D
         )}
         <b style={{ display: 'block', marginTop: 6, fontSize: card ? 17 : 16, lineHeight: 1.25, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{d.title}</b>
         <span className="block" title={whenTitle(d.created_at)}>
-          <CabinetFoot portrait={portrait} name={a.name} when={`Sent ${whenLabel(d.created_at)}`} marginTop={6}>
+          <CabinetFoot marginTop={6}>
             {themes.length > 0 && <ThemeIcons themes={themes} />}
+            <span style={{ fontSize: 12, fontWeight: 600, color: CK.muted }}>{`Sent ${whenLabel(d.created_at)}`}</span>
           </CabinetFoot>
         </span>
       </button>
