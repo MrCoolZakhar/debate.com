@@ -2,7 +2,7 @@
 // Gavelling Crisis: the backroom inbox. The page is a ONE-BY-ONE reader (DirectiveReader): one directive large in
 // front, the next ones of the chosen lane stepping off to the right, each smaller; clicking one brings it forward and
 // pressing the front one (or Respond) opens it as a pop-up with the "What happens when you send" panel docked beside
-// it (DirectivePopup). The lanes (Mine, Unclaimed, All open, Waiting for delegate, Answered) and the filters stay as
+// it (DirectivePopup). The lanes (Mine, Unassigned, All open, Waiting for delegate, Answered) and the filters stay as
 // a compact bar above. A notification's ?d=<id> brings that directive forward and opens it. Used at /directives and
 // as the backroomer's home.
 
@@ -10,8 +10,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CircleCheck, Hourglass, Inbox, Landmark, ListChecks, Palette, Search, Tag, UserRound, UsersRound, type LucideIcon } from 'lucide-react';
 import GSelect from '@/components/GSelect';
 import { notifyErr } from '@/lib/appNotify';
-import { crisisError, listDirectives } from '@/lib/crisis/api';
-import { useCrisisLive } from '@/lib/crisis/live';
+import { CLOSED_DIRECTIVE_STATUSES, countDirectives, crisisError, listClosedDirectivesPage, listDirectives, markDrafting } from '@/lib/crisis/api';
+import { useCrisisLive, useSingleFlight } from '@/lib/crisis/live';
 import { KIND_LABEL, THEMES, type Directive } from '@/lib/crisis/types';
 import { Btn, Card, CK, Segmented, fieldStyle } from '../../crisisKit';
 import DirectiveReader from './DirectiveReader';
@@ -19,6 +19,7 @@ import MeetingRequestsStrip from '../meetings/MeetingRequestsStrip';
 import { useNow } from './useNow';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import DirectivePopup from './DirectivePopup';
+import { MyDraftsButton, MyDraftsPanel, useReplyDraftList } from './MyReplyDrafts';
 import RoomChatButton from '../command/RoomChatDialog';
 import DirectiveDeepLink from '../notifications/DirectiveDeepLink';
 import {
@@ -81,12 +82,25 @@ export default function BackroomInbox() {
   const now = useNow();
   const [notesVersion, setNotesVersion] = useState(0);
   const loadedOnce = useRef(false);
+  // Older finished directives, loaded a page at a time on "Show older"; and the database's counts for the finished ones.
+  const [older, setOlder] = useState<Directive[]>([]);
+  const [totals, setTotals] = useState<{ answered: number; closed: number } | null>(null);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  // "My drafts": the unsent replies kept on this device, one per directive.
+  const replyDrafts = useReplyDraftList(ref.id);
+  const [showDrafts, setShowDrafts] = useState(false);
 
-  const load = useCallback(async () => {
+  // A re-read asked for while one runs is queued once, never dropped.
+  const read = useCallback(async () => {
     try {
-      const rows = await listDirectives(ref);
+      const [rows, answered, closed] = await Promise.all([
+        listDirectives(ref),
+        countDirectives(ref, ['answered']).catch(() => null),
+        countDirectives(ref, CLOSED_DIRECTIVE_STATUSES).catch(() => null),
+      ]);
       loadedOnce.current = true;
       setDirectives(rows);
+      if (answered !== null && closed !== null) setTotals({ answered, closed });
       setLoadError(null);
     } catch (e) {
       // A failed re-read keeps what is on screen; only the first load shows the problem.
@@ -94,30 +108,46 @@ export default function BackroomInbox() {
       else notifyErr(crisisError(e, 'Could not refresh the directives.'), 'crisis-directives-refresh');
     }
   }, [ref]);
+  const load = useSingleFlight(read);
 
   useEffect(() => {
     if (!staff) return;
-    let cancelled = false;
-    listDirectives(ref).then((rows) => {
-      if (cancelled) return;
-      loadedOnce.current = true;
-      setDirectives(rows);
-    }).catch((e) => { if (!cancelled) setLoadError(crisisError(e, 'Could not load the directives.')); });
-    return () => { cancelled = true; };
-  }, [staff, ref]);
+    const t = window.setTimeout(() => { void load(); }, 0);
+    return () => window.clearTimeout(t);
+  }, [staff, load]);
   useCrisisLive(staff ? ref.id : null, ['crisis_directives', 'crisis_directive_notes'], (changed) => {
     void load();
     if (!changed || changed.has('crisis_directive_notes')) setNotesVersion((v) => v + 1);
   });
 
-  const all = useMemo(() => (directives ?? []).filter((d) => d.status !== 'withdrawn'), [directives]);
+  // The page's list plus any older pages; a fresh read of a directive wins over an older page's copy.
+  const merged = useMemo(() => {
+    if (!older.length) return directives ?? [];
+    const have = new Set((directives ?? []).map((d) => d.id));
+    return [...(directives ?? []), ...older.filter((d) => !have.has(d.id))];
+  }, [directives, older]);
+  const all = useMemo(() => merged.filter((d) => d.status !== 'withdrawn'), [merged]);
+  const closedLoaded = useMemo(() => merged.filter((d) => CLOSED_DIRECTIVE_STATUSES.includes(d.status)).length, [merged]);
+  const hasOlder = !!totals && closedLoaded < totals.closed;
+  const showOlder = async () => {
+    const oldest = merged.filter((d) => CLOSED_DIRECTIVE_STATUSES.includes(d.status)).reduce((m, d) => Math.min(m, d.no), Infinity);
+    if (!Number.isFinite(oldest) || loadingOlder) return;
+    setLoadingOlder(true);
+    try {
+      const page = await listClosedDirectivesPage(ref, oldest);
+      setOlder((o) => [...o, ...page]);
+    } catch (e) { notifyErr(crisisError(e, 'Could not load older directives.'), 'crisis-directives-older'); }
+    finally { setLoadingOlder(false); }
+  };
   const lastAnswered = useMemo(() => lastAnsweredByAuthor(all), [all]);
 
   const counts = useMemo(() => {
     const c: Record<Lane, number> = { mine: 0, unclaimed: 0, open: 0, waiting: 0, answered: 0 };
     for (const d of all) for (const l of Object.keys(c) as Lane[]) if (inLane(d, l, memberId)) c[l] += 1;
+    // The answered count is the database's, not the number loaded so far.
+    if (totals) c.answered = totals.answered;
     return c;
-  }, [all, memberId]);
+  }, [all, memberId, totals]);
 
   const queue = useMemo(
     () => sortDirectives(all.filter((d) => inLane(d, lane, memberId) && matchesFilters(d, filters, names)), order, lane, lastAnswered),
@@ -130,6 +160,11 @@ export default function BackroomInbox() {
   const [popupId, setPopupId] = useState<string | null>(null);
   const selected = useMemo(() => (popupOpen ? all.find((d) => d.id === popupId) ?? null : null), [all, popupOpen, popupId]);
   const openPopup = (d: Directive) => { setFocusId(d.id); setPopupId(d.id); setPopupOpen(true); };
+  // "Take over" on a directive a teammate was writing: the database moves the writing mark to you, then it opens.
+  const takeOver = (d: Directive) => {
+    void markDrafting(ref, d.id, true).then(() => load());
+    openPopup(d);
+  };
 
   // A notification link (?d=<id>): select that directive and switch to a lane that holds it.
   const [linkedId, setLinkedId] = useState<string | null>(null);
@@ -164,7 +199,7 @@ export default function BackroomInbox() {
   const staffMembers = core.members.filter((m) => m.role === 'director' || m.role === 'assistant_director' || m.role === 'backroomer');
   const cabinetOptions = [{ value: '', label: 'All cabinets' }, ...core.cabinets.map((c) => ({ value: c.id, label: c.name }))];
   const backroomerOptions = [
-    { value: '', label: 'All backroomers' }, { value: 'none', label: 'Unclaimed' },
+    { value: '', label: 'All backroomers' }, { value: 'none', label: 'Unassigned' },
     ...staffMembers.map((m) => ({ value: m.id, label: m.display_name })),
   ];
   const themeOptions = [{ value: '', label: 'All themes' }, ...THEMES.map((t) => ({ value: t, label: t }))];
@@ -177,7 +212,7 @@ export default function BackroomInbox() {
 
   const laneOptions: Array<{ value: Lane; label: string; count: number }> = [
     { value: 'mine', label: 'Mine', count: counts.mine },
-    { value: 'unclaimed', label: 'Unclaimed', count: counts.unclaimed },
+    { value: 'unclaimed', label: 'Unassigned', count: counts.unclaimed },
     { value: 'open', label: 'All open', count: counts.open },
     { value: 'waiting', label: 'Waiting for delegate', count: counts.waiting },
     { value: 'answered', label: 'Answered', count: counts.answered },
@@ -195,11 +230,30 @@ export default function BackroomInbox() {
         <h1 className="flex items-center" style={{ margin: 0, gap: 8, fontSize: 22, fontWeight: 800, color: CK.ink }}><ListChecks size={22} strokeWidth={1.5} aria-hidden style={{ color: CK.red }} />Directives</h1>
         <div className="flex items-center flex-wrap" style={{ gap: 8, maxWidth: '100%' }}>
           <RoomChatButton />
+          <MyDraftsButton count={replyDrafts.length} open={showDrafts} onToggle={() => setShowDrafts((v) => !v)} />
           <div style={{ maxWidth: '100%', overflowX: 'auto' }}>
             <LaneTabs value={lane} options={laneOptions} onChange={setLane} />
           </div>
         </div>
       </div>
+
+      {showDrafts && (
+        <MyDraftsPanel
+          crisisId={ref.id}
+          drafts={replyDrafts}
+          directives={merged}
+          names={names}
+          onOpen={(d) => {
+            // Bring the lane that holds it forward, then open it.
+            const lanes: Lane[] = ['mine', 'unclaimed', 'open', 'waiting', 'answered'];
+            const target = inLane(d, lane, memberId) ? lane : lanes.find((l) => inLane(d, l, memberId));
+            if (target && target !== lane) setLane(target);
+            setFilters(NO_FILTERS);
+            openPopup(d);
+            setShowDrafts(false);
+          }}
+        />
+      )}
 
       {/* Meeting requests first: a quick yes or no, ahead of directives. Renders nothing when none wait. */}
       <MeetingRequestsStrip compact />
@@ -241,9 +295,15 @@ export default function BackroomInbox() {
           </div>
         </Card>
       )}
+      {lane === 'answered' && hasOlder && directives !== null && (
+        <div className="flex items-center" style={{ gap: 10 }}>
+          <span style={{ fontSize: 13, color: CK.inkSoft }}>Showing the newest {closedLoaded} finished directives.</span>
+          <Btn tone="ghost" size="sm" disabled={loadingOlder} onClick={() => { void showOlder(); }}>{loadingOlder ? 'Loading' : 'Show older'}</Btn>
+        </div>
+      )}
       {directives !== null && queue.length > 0 && (
         <DirectiveReader
-          queue={queue} focusId={front?.id ?? null} onFocus={setFocusId} onOpen={openPopup} active={!popupOpen}
+          queue={queue} focusId={front?.id ?? null} onFocus={setFocusId} onOpen={openPopup} onTakeOver={takeOver} active={!popupOpen}
           names={names} lane={lane} now={now} all={all} onChanged={() => { void load(); }}
         />
       )}

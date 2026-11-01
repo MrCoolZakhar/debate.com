@@ -11,7 +11,7 @@ import {
   MEMBER_COLUMNS,
   type Cabinet, type Character, type CharacterSecret, type Crisis, type Directive, type DirectiveNote,
   type MapRegion, type MapShape, type MapUnit, type Member, type News, type Resource, type ResourceType,
-  type ResolvedCrisis, type RegionGeometry, type DirectiveOutcome, type DirectiveKind, type Meeting, type MeetingStatus, type CharacterStatus, type CrisisNotification,
+  type ResolvedCrisis, type RegionGeometry, type DirectiveOutcome, type DirectiveKind, type DirectiveStatus, type Meeting, type MeetingStatus, type CharacterStatus, type CrisisNotification,
 } from './types';
 
 export interface CrisisRef { conf: string; crisis: string; id: string }
@@ -60,8 +60,18 @@ export type CodeLoginResult =
   | { ok: false; reason: 'wrong' | 'locked'; wait_seconds?: number };
 
 /** Sign in with a personal code. On success the token is stored for that crisis on this device. */
+/** A random id for this browser, so wrong room-code guesses lock only this device (docs/crisis/sql/029). */
+function loginDeviceId(): string | null {
+  try {
+    const k = 'gavelling-crisis-device';
+    let v = window.localStorage.getItem(k);
+    if (!v) { v = crypto.randomUUID(); window.localStorage.setItem(k, v); }
+    return v;
+  } catch { return null; }
+}
+
 export async function codeLogin(code: string, password: string): Promise<CodeLoginResult> {
-  const res = await anonClient.rpc('crisis_code_login', { p_code: code, p_password: password });
+  const res = await anonClient.rpc('crisis_code_login', { p_code: code, p_password: password, p_device: loginDeviceId() });
   if (res.error) throw new UserFacingError(crisisError(res.error, 'Could not sign you in. Try again.'));
   const r = res.data as { ok: boolean; token?: string; conference_slug?: string; crisis_slug?: string; display_name?: string; role?: string; reason?: 'wrong' | 'locked'; wait_seconds?: number };
   if (!r.ok || !r.token || !r.conference_slug || !r.crisis_slug) return { ok: false, reason: r.reason ?? 'wrong', wait_seconds: r.wait_seconds };
@@ -127,12 +137,39 @@ export async function loadCore(ref: CrisisRef): Promise<CrisisCore> {
     client.from('crisis_members').select(MEMBER_COLUMNS).eq('crisis_id', ref.id).order('display_name'),
     client.from('crisis_characters').select('*').eq('crisis_id', ref.id).order('sort').order('name'),
   ]);
+  const members = must(mem, 'Could not load the people.') as unknown as Member[];
+  const characters = must(chars, 'Could not load the characters.') as Character[];
+  // Non-staff read only their own row and their own cabinet's characters (docs/crisis/sql/029a); everyone else comes from
+  // crisis_people (names and pictures, never an email or code) and crisis_world (what the crisis lets them see).
+  const [people, world] = await Promise.all([
+    client.rpc('crisis_people', { p_crisis: ref.id }),
+    client.rpc('crisis_world', { p_crisis: ref.id }),
+  ]);
+  const haveM = new Set(members.map((m) => m.id));
+  for (const m of ((people.data ?? []) as Member[])) if (!haveM.has(m.id)) members.push(m);
+  const haveC = new Set(characters.map((x) => x.id));
+  for (const w of ((world.data ?? []) as Array<Partial<Character> & { id: string }>)) {
+    if (haveC.has(w.id)) continue;
+    characters.push({
+      crisis_id: ref.id, title: null, bio: null, picture_url: null, powers: null, location: null, status: 'active', status_note: null,
+      owner_member_id: null, slot_id: null, sort: 0, guide_url: null, guide_name: null, location_lng: null, location_lat: null,
+      ...w,
+    } as unknown as Character);
+  }
   return {
     crisis: must(cr, 'Could not load this crisis.') as Crisis,
     cabinets: must(cabs, 'Could not load the cabinets.') as Cabinet[],
-    members: must(mem, 'Could not load the people.') as unknown as Member[],
-    characters: must(chars, 'Could not load the characters.') as Character[],
+    members,
+    characters,
   };
+}
+
+/** The delegate's own secret goals (staff notes are never sent to a delegate). */
+export async function loadMyGoals(ref: CrisisRef): Promise<string | null> {
+  const client = await c(ref);
+  const res = await client.rpc('crisis_my_goals', { p_crisis: ref.id });
+  if (res.error) throw new UserFacingError(crisisError(res.error, 'Could not load the goals.'));
+  return typeof res.data === 'string' && res.data.trim() ? res.data : null;
 }
 
 /** Characters of other cabinets as this viewer may see them (names only or full, per settings). */
@@ -226,10 +263,61 @@ export async function issueCode(ref: CrisisRef, memberId: string): Promise<{ cod
 
 // ─────────── Directives ───────────
 
+/** Directives still being worked on (everyone waits on someone): always loaded in full. */
+export const OPEN_DIRECTIVE_STATUSES: DirectiveStatus[] = ['awaiting_chair', 'changes_requested', 'queued', 'claimed', 'clarify'];
+/** Finished ones: loaded newest first, in pages. */
+export const CLOSED_DIRECTIVE_STATUSES: DirectiveStatus[] = ['answered', 'rejected', 'withdrawn'];
+export const DIRECTIVE_PAGE = 200;
+
+/** Reads every row of a query that may hold more than the server's 1,000-row answer, in order, 1,000 at a time. */
+async function readAllRows<T>(page: (from: number, to: number) => PromiseLike<{ data: unknown[] | null; error: unknown }>, fallback: string): Promise<T[]> {
+  const out: T[] = [];
+  for (let from = 0; ; from += 1000) {
+    const res = await page(from, from + 999);
+    if (res.error) throw new UserFacingError(crisisError(res.error, fallback));
+    const rows = (res.data ?? []) as T[];
+    out.push(...rows);
+    if (rows.length < 1000) break;
+  }
+  return out;
+}
+
+/** Every open directive plus the newest page of finished ones, newest first. For older finished ones use listClosedDirectivesPage. */
 export async function listDirectives(ref: CrisisRef): Promise<Directive[]> {
   const client = await c(ref);
-  const res = await client.from('crisis_directives').select('*').eq('crisis_id', ref.id).order('no', { ascending: false }).limit(2000);
-  return must(res, 'Could not load the directives.') as Directive[];
+  const [open, closed] = await Promise.all([
+    readAllRows<Directive>((from, to) => client.from('crisis_directives').select('*').eq('crisis_id', ref.id)
+      .in('status', OPEN_DIRECTIVE_STATUSES).order('no', { ascending: false }).range(from, to), 'Could not load the directives.'),
+    client.from('crisis_directives').select('*').eq('crisis_id', ref.id)
+      .in('status', CLOSED_DIRECTIVE_STATUSES).order('no', { ascending: false }).limit(DIRECTIVE_PAGE),
+  ]);
+  const rows = [...open, ...(must(closed, 'Could not load the directives.') as Directive[])];
+  return rows.sort((a, b) => b.no - a.no);
+}
+
+/** The next page of finished directives (answered, rejected, withdrawn) older than number `beforeNo`, newest first. */
+export async function listClosedDirectivesPage(ref: CrisisRef, beforeNo: number): Promise<Directive[]> {
+  const client = await c(ref);
+  const res = await client.from('crisis_directives').select('*').eq('crisis_id', ref.id)
+    .in('status', CLOSED_DIRECTIVE_STATUSES).lt('no', beforeNo).order('no', { ascending: false }).limit(DIRECTIVE_PAGE);
+  return must(res, 'Could not load older directives.') as Directive[];
+}
+
+/** How many directives there are in these statuses, counted in the database (what the lists show beside "Show older"). */
+export async function countDirectives(ref: CrisisRef, statuses: DirectiveStatus[]): Promise<number> {
+  const client = await c(ref);
+  const res = await client.from('crisis_directives').select('id', { count: 'exact', head: true }).eq('crisis_id', ref.id).in('status', statuses);
+  if (res.error || res.count === null) throw new UserFacingError(crisisError(res.error, 'Could not count the directives.'));
+  return res.count;
+}
+
+/** The few columns Statistics and the points need, for EVERY directive of the crisis (no cap, nothing long). */
+export type DirectiveStatRow = Pick<Directive, 'id' | 'kind' | 'status' | 'outcome' | 'author_character_id' | 'answered_by' | 'answered_at' | 'created_at'>;
+export async function loadDirectiveStatRows(ref: CrisisRef): Promise<DirectiveStatRow[]> {
+  const client = await c(ref);
+  return readAllRows<DirectiveStatRow>((from, to) => client.from('crisis_directives')
+    .select('id, kind, status, outcome, author_character_id, answered_by, answered_at, created_at')
+    .eq('crisis_id', ref.id).order('no', { ascending: false }).range(from, to), 'Could not load the statistics.');
 }
 
 /** The cabinet directives waiting in the backroom that are assigned to this member (the Crisis Director's prompt reads these). */
@@ -250,12 +338,15 @@ export async function listNotes(ref: CrisisRef, directiveId: string): Promise<Di
 export interface DirectiveDraft {
   kind: DirectiveKind; title: string; receiver?: string | null; body: string; themes: string[];
   resources_used?: string; goal?: string; affects?: string; covert?: boolean; coauthors?: string[];
+  /** The same id on a retry returns the directive already sent instead of a second one (docs/crisis/sql/029b). */
+  request_id?: string;
 }
 export type SubmitResult =
   | { ok: true; id: string; no: number; cabinet_no?: number | null; awaiting_chair?: boolean }
   | { ok: false; reason: 'paused'; note?: string | null }
   | { ok: false; reason: 'cooldown'; wait_seconds: number }
-  | { ok: false; reason: 'too_long'; limit: number };
+  | { ok: false; reason: 'too_long'; limit: number }
+  | { ok: false; reason: 'inactive'; status: 'dead' | 'arrested' | 'missing' };
 
 export async function submitDirective(ref: CrisisRef, d: DirectiveDraft): Promise<SubmitResult> {
   const client = await c(ref);
@@ -315,10 +406,39 @@ export interface AnswerEffects {
   map?: object;
 }
 
-export async function answerDirective(ref: CrisisRef, directiveId: string, outcome: DirectiveOutcome, reply: string, effects: AnswerEffects = {}): Promise<{ news_id: string | null; news_published?: boolean }> {
+export type AnswerResult =
+  | { ok: true; news_id: string | null; news_published?: boolean; repeat?: boolean; edited?: boolean }
+  | { ok: false; reason: 'already_answered' | 'not_open' };
+
+/** Sends a reply. Put a `request_id` in effects that stays the same across retries of the same reply (a repeat is a
+ *  no-op), and `edit: true` to change an answered directive's words and outcome (its effects never run again). */
+export async function answerDirective(ref: CrisisRef, directiveId: string, outcome: DirectiveOutcome, reply: string, effects: AnswerEffects & { request_id?: string; edit?: boolean } = {}): Promise<AnswerResult> {
   const client = await c(ref);
   const res = await client.rpc('crisis_answer_directive', { p_directive: directiveId, p_outcome: outcome, p_reply: reply, p_effects: effects });
-  return must(res, 'Could not send the reply. It is kept, try again.') as { news_id: string | null; news_published?: boolean };
+  return must(res, 'Could not send the reply. It is kept, try again.') as AnswerResult;
+}
+
+export type EditDirectiveResult = { ok: true } | { ok: false; reason: 'answered' | 'being_answered' } | { ok: false; reason: 'too_long'; limit: number };
+
+/** The author edits their directive until staff answer it (docs/crisis/sql/030). */
+export async function editDirective(ref: CrisisRef, directiveId: string, d: Partial<Pick<DirectiveDraft, 'title' | 'body' | 'themes' | 'receiver' | 'covert'>>): Promise<EditDirectiveResult> {
+  const client = await c(ref);
+  const res = await client.rpc('crisis_edit_directive', { p_directive: directiveId, p: d });
+  return must(res, 'Could not save your changes. Your text is kept, try again.') as EditDirectiveResult;
+}
+
+/** The author withdraws their directive until staff answer it. */
+export async function withdrawDirective(ref: CrisisRef, directiveId: string): Promise<{ ok: boolean; reason?: 'answered' }> {
+  const client = await c(ref);
+  const res = await client.rpc('crisis_withdraw_directive', { p_directive: directiveId });
+  return must(res, 'Could not withdraw the directive. Try again.') as { ok: boolean; reason?: 'answered' };
+}
+
+/** Gives a delegate whose character died or was arrested a spare character (docs/crisis/sql/029g). */
+export async function giveSpare(ref: CrisisRef, memberId: string, spareId: string): Promise<{ ok: boolean; reason?: 'taken'; seat_moved?: boolean }> {
+  const client = await c(ref);
+  const res = await client.rpc('crisis_give_spare', { p_member: memberId, p_spare: spareId });
+  return must(res, 'Could not give the spare character.') as { ok: boolean; reason?: 'taken'; seat_moved?: boolean };
 }
 
 /** Tells the crisis team a reply to this directive is being typed (on) or no longer is (off). Presence only, never an error to the person. */
@@ -471,10 +591,35 @@ export async function applyMapSet(ref: CrisisRef, set: Record<string, unknown>):
 
 /** The crisis team's shared unsent map draft (staff only); null when there is none. */
 export async function loadMapDraft(ref: CrisisRef): Promise<unknown | null> {
+  return (await loadMapDraftVersioned(ref)).payload;
+}
+
+/** The shared draft with its version (0 when there is none), for saveMapDraftVersioned. */
+export async function loadMapDraftVersioned(ref: CrisisRef): Promise<{ payload: unknown | null; version: number; updated_by: string | null }> {
   const client = await c(ref);
-  const res = await client.from('crisis_map_drafts').select('payload').eq('crisis_id', ref.id).maybeSingle();
+  const res = await client.from('crisis_map_drafts').select('payload, version, updated_by').eq('crisis_id', ref.id).maybeSingle();
   if (res.error) throw new UserFacingError(crisisError(res.error, 'Could not load the unsent map changes.'));
-  return (res.data as { payload?: unknown } | null)?.payload ?? null;
+  const row = res.data as { payload?: unknown; version?: number; updated_by?: string | null } | null;
+  return { payload: row?.payload ?? null, version: row?.version ?? 0, updated_by: row?.updated_by ?? null };
+}
+
+export type MapDraftSave =
+  | { ok: true; version: number }
+  | { ok: false; reason: 'newer'; version: number; payload: unknown; updated_by: string | null };
+
+/** Saves the shared draft only if nobody saved since `base` (docs/crisis/sql/029c). On 'newer' merge the returned
+ *  payload with yours and save again on its version. */
+export async function saveMapDraftVersioned(ref: CrisisRef, payload: Record<string, unknown>, base: number): Promise<MapDraftSave> {
+  const client = await c(ref);
+  const res = await client.rpc('crisis_save_map_draft', { p_crisis: ref.id, p_payload: payload, p_base: base });
+  return must(res, 'Could not save the unsent map changes.') as MapDraftSave;
+}
+
+/** After a send: clears the draft only if it is still the version that was sent; a newer one is kept. */
+export async function clearMapDraftVersioned(ref: CrisisRef, base: number): Promise<{ ok: boolean; kept?: boolean; version?: number }> {
+  const client = await c(ref);
+  const res = await client.rpc('crisis_clear_map_draft', { p_crisis: ref.id, p_base: base });
+  return must(res, 'Could not clear the unsent map changes.') as { ok: boolean; kept?: boolean; version?: number };
 }
 
 /** Writes the shared draft; a null payload throws it away. */
@@ -556,6 +701,35 @@ export async function listMeetings(ref: CrisisRef): Promise<Meeting[]> {
   const client = await c(ref);
   const res = await client.from('crisis_meetings').select('*').eq('crisis_id', ref.id).order('created_at', { ascending: false }).limit(1000);
   return must(res, 'Could not load the meetings.') as Meeting[];
+}
+
+/** An invited delegate accepts or declines a meeting request (docs/crisis/sql/029e). */
+export async function respondMeeting(ref: CrisisRef, meetingId: string, accept: boolean): Promise<{ ok: boolean; status?: MeetingStatus; reason?: 'decided' }> {
+  const client = await c(ref);
+  const res = await client.rpc('crisis_respond_meeting', { p_meeting: meetingId, p_accept: accept });
+  return must(res, 'Could not save your answer. Try again.') as { ok: boolean; status?: MeetingStatus; reason?: 'decided' };
+}
+
+/** Who answered an invitation so far. */
+export async function listMeetingResponses(ref: CrisisRef): Promise<Array<{ meeting_id: string; character_id: string; response: 'accepted' | 'declined'; responded_at: string }>> {
+  const client = await c(ref);
+  const res = await client.from('crisis_meeting_responses').select('meeting_id, character_id, response, responded_at').eq('crisis_id', ref.id);
+  return must(res, 'Could not load the answers.') as Array<{ meeting_id: string; character_id: string; response: 'accepted' | 'declined'; responded_at: string }>;
+}
+
+/** Pause or reopen directives for one cabinet (the crisis-wide switch still pauses every cabinet). */
+export async function setCabinetDirectivesOpen(ref: CrisisRef, cabinetId: string, open: boolean, note?: string | null): Promise<void> {
+  const client = await c(ref);
+  const res = await client.from('crisis_cabinets').update({ directives_open: open, directives_paused_note: open ? null : (note?.trim() || null) })
+    .eq('id', cabinetId).select('id');
+  if (res.error || !res.data?.length) throw new UserFacingError(crisisError(res.error, 'Could not change the pause.'));
+}
+
+/** The last change of each resource, read directly in the database (staff). */
+export async function loadResourceLastChanges(ref: CrisisRef): Promise<Array<{ resource_id: string; delta: number; amount_after: number; reason: string | null; created_at: string }>> {
+  const client = await c(ref);
+  const res = await client.rpc('crisis_resource_last_changes', { p_crisis: ref.id });
+  return must(res, 'Could not load the resources.') as Array<{ resource_id: string; delta: number; amount_after: number; reason: string | null; created_at: string }>;
 }
 
 export type RequestMeetingResult = { ok: true; id: string; status: MeetingStatus } | { ok: false; reason: 'nobody' };

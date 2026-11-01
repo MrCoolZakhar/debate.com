@@ -2,12 +2,12 @@
 // Gavelling Crisis shell: resolves the viewer, then draws the dark red rail and the top bar
 // around every page of one crisis. Pages read the shared state with useCrisis().
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard, ScrollText, Map as MapIcon, Newspaper, ContactRound, UsersRound, Settings, Presentation,
-  Home, LogOut, KeyRound, CalendarClock, Boxes, Ellipsis,
+  Home, LogOut, KeyRound, CalendarClock, Boxes, Ellipsis, Megaphone,
 } from 'lucide-react';
 import BrandLogo from '@/components/BrandLogo';
 import ProfileAvatarMenu from '@/components/ProfileAvatar';
@@ -16,17 +16,19 @@ import { openAuth } from '@/lib/authModal';
 import { clearCrisisToken, readCrisisToken } from '@/lib/crisis/client';
 import { codeLogout } from '@/lib/crisis/api';
 import { ROLE_LABEL, type CrisisRole } from '@/lib/crisis/types';
-import { CK, Btn } from '../../crisisKit';
+import { CK, Btn, MotionStyles } from '../../crisisKit';
 import { CrisisProvider, crisisBase, useCrisisGate, type CrisisContextValue } from './CrisisContext';
 import NewsPopup from '../../components/news/NewsPopup';
 import CabinetDirectivePrompt from '../../components/directives/CabinetDirectivePrompt';
 import ChairDirectivePrompt from '../../components/chair/ChairDirectivePrompt';
+import MeetingInvitePrompt from '../../components/meetings/MeetingInvitePrompt';
+import ViewingAsBanner from '../../components/command/ViewingAsBanner';
 import NotificationBell from '../../components/notifications/NotificationBell';
 import { CharacterProfileProvider } from '../../components/character/CharacterProfileHost';
 
-interface NavItem { href: string; label: string; icon: React.ReactNode; section?: string }
+interface NavItem { href: string; label: string; icon: React.ReactNode; section?: string; external?: boolean }
 
-function navFor(role: CrisisRole, base: string): NavItem[] {
+function navFor(role: CrisisRole, base: string, confSlug: string): NavItem[] {
   // The whole sidebar for every role, even pages still being built (Peter, 26 Oct 2026).
   const ic = (I: typeof Home) => <I size={19} strokeWidth={1.6} />;
   const map: NavItem = { href: `${base}/map`, label: 'Map', icon: ic(MapIcon) };
@@ -57,7 +59,8 @@ function navFor(role: CrisisRole, base: string): NavItem[] {
     return [{ href: base, label: 'Front room', icon: ic(Presentation) }, map, news(), meetings(), characters()];
   }
   if (role === 'press') {
-    return [{ href: base, label: 'News', icon: ic(Newspaper) }, map, characters()];
+    // The press writes its releases on the conference Press Desk (a new tab); the crisis staff approve them on the News page.
+    return [{ href: base, label: 'News', icon: ic(Newspaper) }, map, characters(), { href: `/conferences/${confSlug}/press`, label: 'Press Desk', icon: ic(Megaphone), external: true }];
   }
   // Delegates: "Cabinet" (Peter, 26 Oct 2026). History is a tab inside the Map page for everybody (27 Oct 2026).
   return [{ href: base, label: 'My crisis', icon: ic(Home) }, map, news(), meetings(), characters(undefined, 'Cabinet')];
@@ -77,6 +80,21 @@ function Rail({ v, items }: { v: CrisisContextValue; items: NavItem[] }) {
     document.addEventListener('pointerdown', away);
     return () => document.removeEventListener('pointerdown', away);
   }, [open]);
+  // The active page's highlight slides between items (one transform, set from the active link's position; no state, no tick).
+  const nav = useRef<HTMLElement>(null);
+  const pill = useRef<HTMLSpanElement>(null);
+  const armed = useRef(false);
+  useLayoutEffect(() => {
+    const el = nav.current?.querySelector<HTMLElement>('[data-rail-active="true"]');
+    const p = pill.current;
+    if (!p) return undefined;
+    if (!el) { p.style.opacity = '0'; return undefined; }
+    p.style.opacity = '1';
+    p.style.transform = `translateY(${el.offsetTop}px)`;
+    if (armed.current) return undefined;
+    const f = requestAnimationFrame(() => { armed.current = true; p.style.transition = 'transform 260ms cubic-bezier(0.22,1,0.36,1), opacity 160ms ease'; });
+    return () => cancelAnimationFrame(f);
+  }, [pathname, items]);
   return (
     <aside
       ref={rail}
@@ -105,9 +123,10 @@ function Rail({ v, items }: { v: CrisisContextValue; items: NavItem[] }) {
           </span>
         </div>
       </div>
-      <nav className="flex-1 overflow-y-auto overflow-x-hidden" style={{ padding: '8px 12px', scrollbarWidth: 'none' }}>
+      <nav ref={nav} className="flex-1 overflow-y-auto overflow-x-hidden" style={{ padding: '8px 12px', scrollbarWidth: 'none', position: 'relative' }}>
+        <span ref={pill} aria-hidden className="motion-reduce:!transition-none" style={{ position: 'absolute', left: 12, right: 12, top: 0, height: 42, borderRadius: 12, background: '#F8EFE5', boxShadow: '0 4px 14px rgba(20,4,4,0.3)', opacity: 0, pointerEvents: 'none' }} />
         {items.map((it, i) => {
-          const active = it.href === pathname || (it.href !== crisisBase(v.ref) && pathname?.startsWith(it.href + '/'));
+          const active = !it.external && (it.href === pathname || (it.href !== crisisBase(v.ref) && pathname?.startsWith(it.href + '/')));
           const header = it.section && it.section !== items[i - 1]?.section ? it.section : null;
           return (
             <div key={it.href}>
@@ -118,13 +137,15 @@ function Rail({ v, items }: { v: CrisisContextValue; items: NavItem[] }) {
               )}
               <Link
                 href={it.href}
+                target={it.external ? '_blank' : undefined}
+                rel={it.external ? 'noopener noreferrer' : undefined}
+                data-rail-active={active ? 'true' : undefined}
                 onClick={() => setOpen(false)}
                 title={open ? undefined : it.label}
                 className="flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]"
                 style={{
-                  gap: 12, height: 42, padding: '0 11px', margin: '2px 0', borderRadius: 12, textDecoration: 'none', fontWeight: 600, fontSize: 14.5,
-                  background: active ? '#F8EFE5' : 'transparent', color: active ? CK.red2 : 'rgba(255,232,214,0.78)',
-                  boxShadow: active ? '0 4px 14px rgba(20,4,4,0.3)' : 'none',
+                  position: 'relative', zIndex: 1, gap: 12, height: 42, padding: '0 11px', margin: '2px 0', borderRadius: 12, textDecoration: 'none', fontWeight: 600, fontSize: 14.5,
+                  background: 'transparent', color: active ? CK.red2 : 'rgba(255,232,214,0.78)', transition: 'color 200ms ease',
                 }}
               >
                 <span className="flex-shrink-0" style={{ lineHeight: 0 }}>{it.icon}</span>
@@ -202,7 +223,7 @@ function TopBar({ v, items }: { v: CrisisContextValue; items: NavItem[] }) {
             {rest.map((it) => {
               const active = it.href === pathname || (pathname?.startsWith(it.href + '/') ?? false);
               return (
-                <Link key={it.href} href={it.href} role="menuitem" className="flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]" style={{ gap: 12, height: 44, padding: '0 12px', borderRadius: 11, textDecoration: 'none', fontWeight: 600, fontSize: 14.5, background: active ? '#F8EFE5' : 'transparent', color: active ? CK.red2 : 'rgba(255,232,214,0.9)' }}>
+                <Link key={it.href} href={it.href} target={it.external ? '_blank' : undefined} rel={it.external ? 'noopener noreferrer' : undefined} role="menuitem" className="flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]" style={{ gap: 12, height: 44, padding: '0 12px', borderRadius: 11, textDecoration: 'none', fontWeight: 600, fontSize: 14.5, background: active ? '#F8EFE5' : 'transparent', color: active ? CK.red2 : 'rgba(255,232,214,0.9)' }}>
                   {it.icon}<span>{it.label}</span>
                 </Link>
               );
@@ -212,7 +233,7 @@ function TopBar({ v, items }: { v: CrisisContextValue; items: NavItem[] }) {
         {shown.map((it) => {
           const active = it.href === pathname;
           return (
-            <Link key={it.href} href={it.href} className="flex flex-col items-center focus:outline-none" style={{ gap: 2, fontSize: 10.5, fontWeight: 700, textDecoration: 'none', color: active ? CK.gold : 'rgba(255,232,214,0.78)', padding: '4px 6px' }}>
+            <Link key={it.href} href={it.href} target={it.external ? '_blank' : undefined} rel={it.external ? 'noopener noreferrer' : undefined} className="flex flex-col items-center focus:outline-none" style={{ gap: 2, fontSize: 10.5, fontWeight: 700, textDecoration: 'none', color: active ? CK.gold : 'rgba(255,232,214,0.78)', padding: '4px 6px' }}>
               {it.icon}
               <span>{it.label}</span>
             </Link>
@@ -253,7 +274,7 @@ export default function CrisisLayout({ children }: { children: React.ReactNode }
   const identityKey = `${loading ? 'loading' : user?.id ?? 'anon'}:${typeof window !== 'undefined' && readCrisisToken(conf, crisisSlug) ? 'code' : ''}`;
   const { gate, retry } = useCrisisGate(conf, crisisSlug, identityKey);
   const value = gate.state === 'ready' ? gate.value : null;
-  const items = useMemo(() => (value ? navFor(value.role, crisisBase(value.ref)) : []), [value]);
+  const items = useMemo(() => (value ? navFor(value.role, crisisBase(value.ref), value.conference.slug) : []), [value]);
 
   if (gate.state === 'loading' || loading) {
     return (
@@ -290,12 +311,15 @@ export default function CrisisLayout({ children }: { children: React.ReactNode }
         <TopBar v={v} items={items} />
         <Rail v={v} items={items} />
         <main className="crisis-main" style={{ padding: '4px 18px 90px', marginLeft: 0 }}>
+          <MotionStyles />
           <style>{'@media (min-width: 768px) { .crisis-main { padding-left: 98px !important; padding-bottom: 18px !important; } }'}</style>
+          <ViewingAsBanner />
           {children}
         </main>
         <NewsPopup />
         <CabinetDirectivePrompt />
         <ChairDirectivePrompt />
+        <MeetingInvitePrompt />
       </div>
       </CharacterProfileProvider>
     </CrisisProvider>

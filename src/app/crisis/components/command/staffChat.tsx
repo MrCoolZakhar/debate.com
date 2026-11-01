@@ -1,14 +1,13 @@
 'use client';
 // Gavelling Crisis: the crisis staff's access to a cabinet's committee-room chat. The Crisis Director, the assistants and the
-// backroomers read and write the room's chat as ONE chair-like name, "Crisis Team" (src/lib/crisis/staffChatName.ts). That name
-// is added to the room's chair_names through the existing addChairName path (the same atomic, idempotent RPC the chair page
-// uses, with the room's chair password as the x-chair-suffix header), so delegates' messages to the dais reach the staff and the
-// delegates see a chair called Crisis Team. The chat itself is the shared session chat (src/components/ChatPanel.tsx) mounted
-// the way the chair page mounts it (isChair, embedded, broadcasts merged in), and the room is loaded and kept live by the same
-// hook the delegate's chat uses (useRoom in delegate/useCrisisRoom.ts). Read state is kept per staff member, never shared.
-//
-// Messages are sent as "Crisis Team" for everyone; which staff member wrote one is not stored (that would need a column or a
-// marker in the message, which the session chat does not have).
+// backroomers read and write the room's chat as a chair-like name that starts with "Crisis Team" and ends with WHO is writing,
+// "Crisis Team · Lena" (src/lib/crisis/staffChatSender.ts). That name is added to the room's chair_names through the existing
+// addChairName path (the same atomic, idempotent RPC the chair page uses, with the room's chair password as the x-chair-suffix
+// header), so delegates' messages to the dais reach every staff member and every message shows which of them wrote it. The chat
+// itself is the shared session chat (src/components/ChatPanel.tsx) mounted the way the chair page mounts it (isChair, embedded,
+// broadcasts merged in), and the room is loaded and kept live by the same hook the delegate's chat uses (useRoom in
+// delegate/useCrisisRoom.ts). Read state is kept per staff member, never shared. The shared chat draws a chair as a round disc
+// with the name's initials, so the person shows as a name, not a picture.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import ChatPanel from '@/components/ChatPanel';
@@ -22,7 +21,7 @@ import { useBroadcastHistory } from '@/lib/broadcastHistory';
 import { withBroadcastMessages } from '@/lib/broadcastMessages';
 import { getCommitteeFlags } from '@/lib/committeeFlags';
 import { notifyErr } from '@/lib/appNotify';
-import { CRISIS_TEAM_NAME } from '@/lib/crisis/staffChatName';
+import { staffSenderName } from '@/lib/crisis/staffChatSender';
 import type { Committee } from '@/lib/types';
 import { Btn, CK } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
@@ -35,7 +34,7 @@ export interface StaffChat {
   reason: string | null;
   /** The room, with the staff's chair name in its chair_names. */
   committee: Committee | null;
-  /** The name the staff write under. */
+  /** The name this staff member writes under, "Crisis Team · Lena". */
   name: string;
   broadcasts: SessionBroadcast[];
   readCounts: Record<string, number>;
@@ -49,13 +48,15 @@ export interface StaffChat {
 /** Opens a room's chat for the signed-in staff member. Pass null to stay idle (nothing is loaded). The room is read from the start (for the
  *  unread count) but the staff name joins the room's dais only once `join` is true, so merely looking at a room never changes it. */
 export function useStaffChat(code: string | null, join = true): StaffChat {
-  const { memberId } = useCrisis();
+  const { memberId, displayName, core } = useCrisis();
   const room = useRoom(code);
+  // Who is writing: the signed-in staff member's name as the crisis knows it.
+  const person = (memberId ? core.members.find((m) => m.id === memberId)?.display_name : null) ?? displayName ?? '';
   const committee = room.committee;
   const committeeId = committee?.id ?? null;
   const suffix = committee?.dbChairJoinSuffix ?? undefined;
   const delegates = committee?.delegates;
-  const name = useMemo(() => safeChairName(CRISIS_TEAM_NAME, (delegates ?? []).map((d) => d.country)), [delegates]);
+  const name = useMemo(() => safeChairName(staffSenderName(person), (delegates ?? []).map((d) => d.country)), [delegates, person]);
   const present = !!committee?.chairNames.includes(name);
 
   // Join the room's dais under the staff name (once per room; the RPC is idempotent).

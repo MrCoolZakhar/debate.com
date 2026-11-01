@@ -50,7 +50,7 @@ export function MeetingClockReadout({ m }: { m: Meeting }) {
         )}
       </div>
       <div aria-hidden style={{ marginTop: 8, height: 5, borderRadius: 3, background: 'rgba(27,56,40,0.1)', overflow: 'hidden' }}>
-        <div style={{ width: `${share * 100}%`, height: '100%', background: color, borderRadius: 3, transition: 'width 300ms linear' }} />
+        <div className="cm-grow" style={{ width: '100%', height: '100%', background: color, borderRadius: 3, transform: `scaleX(${share})` }} />
       </div>
     </div>
   );

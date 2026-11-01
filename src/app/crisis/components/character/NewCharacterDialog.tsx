@@ -49,7 +49,8 @@ export default function NewCharacterDialog({ cabinetId, onClose, onCreated }: {
   onCreated?: (id: string) => void;
 }) {
   const { ref, core, reloadCore } = useCrisis();
-  const [d, setD] = useState({ name: '', title: '', powers: '', location: '', cabinet: cabinetId ?? '' });
+  // Every character belongs to a cabinet: the given one, or the only one there is.
+  const [d, setD] = useState(() => ({ name: '', title: '', powers: '', location: '', cabinet: cabinetId ?? (core.cabinets.length === 1 ? core.cabinets[0].id : '') }));
   const [status, setStatus] = useState<CharacterStatus>('active');
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -84,19 +85,20 @@ export default function NewCharacterDialog({ cabinetId, onClose, onCreated }: {
     return [...count.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([p]) => p);
   }, [core.characters]);
 
-  const cabinetOptions: GSelectOption[] = [{ value: '', label: 'No cabinet' }, ...core.cabinets.map((c) => ({ value: c.id, label: c.name }))];
+  const cabinetOptions: GSelectOption[] = core.cabinets.map((c) => ({ value: c.id, label: c.name }));
 
   const create = async () => {
     if (busy) return;
     const name = d.name.trim();
     if (!name) { notifyErr('Give the character a name.', KEY); return; }
+    if (!d.cabinet) { notifyErr('Pick a cabinet for the character.', KEY); return; }
     setBusy(true);
     try {
       let picture_url: string | null = null;
       if (file) picture_url = (await uploadCrisisFile(ref, file)).url;
-      const siblings = core.characters.filter((c) => c.cabinet_id === (d.cabinet || null));
+      const siblings = core.characters.filter((c) => c.cabinet_id === d.cabinet);
       const row: Partial<Character> = {
-        name, title: nul(d.title), powers: nul(d.powers), cabinet_id: d.cabinet || null, status, picture_url,
+        name, title: nul(d.title), powers: nul(d.powers), cabinet_id: d.cabinet, status, picture_url,
         location: nul(d.location) ?? spot?.country ?? null, sort: siblings.reduce((m, c) => Math.max(m, c.sort), 0) + 1,
       };
       if (spot) { row.location_lng = spot.lng; row.location_lat = spot.lat; }
@@ -177,7 +179,7 @@ export default function NewCharacterDialog({ cabinetId, onClose, onCreated }: {
           {core.cabinets.length > 1 && (
             <div>
               <FieldLabel>Cabinet</FieldLabel>
-              <GSelect value={d.cabinet} onChange={(c) => set('cabinet', c)} options={cabinetOptions} aria-label="Cabinet" />
+              <GSelect value={d.cabinet} onChange={(c) => set('cabinet', c)} options={cabinetOptions} placeholder="Pick a cabinet" aria-label="Cabinet" />
             </div>
           )}
 
@@ -216,7 +218,7 @@ export default function NewCharacterDialog({ cabinetId, onClose, onCreated }: {
               ) : (
                 <i aria-hidden style={{ width: 16, height: 16, borderRadius: 5, background: color, display: 'inline-block', flex: 'none' }} />
               )}
-              <b style={{ fontSize: 14.5, color: CK.ink, overflowWrap: 'anywhere' }}>{cab?.name ?? 'No cabinet'}</b>
+              <b style={{ fontSize: 14.5, color: CK.ink, overflowWrap: 'anywhere' }}>{cab?.name ?? 'Pick a cabinet'}</b>
             </div>
             <div style={{ padding: '22px 16px 16px' }}>
               <OverhangCard
@@ -246,7 +248,7 @@ export default function NewCharacterDialog({ cabinetId, onClose, onCreated }: {
 
       <div className="flex items-center justify-end flex-wrap" style={{ gap: 8, marginTop: 18, paddingTop: 14, borderTop: `1px solid ${CK.hair}` }}>
         <Btn tone="ghost" onClick={onClose} disabled={busy}>Cancel</Btn>
-        <Btn onClick={() => { void create(); }} disabled={busy || !d.name.trim()} icon={<UserRoundPlus size={15} strokeWidth={1.5} />}>{busy ? 'Adding' : 'Add character'}</Btn>
+        <Btn onClick={() => { void create(); }} disabled={busy || !d.name.trim() || !d.cabinet} icon={<UserRoundPlus size={15} strokeWidth={1.5} />}>{busy ? 'Adding' : 'Add character'}</Btn>
       </div>
     </CrisisDialog>
   );

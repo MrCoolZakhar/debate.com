@@ -22,6 +22,7 @@ export default function AskMeeting({ refx, people, cabinets, myCharacterId, onDo
   const [other, setOther] = useState('');
   const [busy, setBusy] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
+  const [sentNote, setSentNote] = useState<string | null>(null);
 
   // Own cabinet first, then the rest by cabinet order.
   const groups = useMemo(() => {
@@ -34,7 +35,7 @@ export default function AskMeeting({ refx, people, cabinets, myCharacterId, onDo
     return { out, loose };
   }, [people, cabinets, myCharacterId]);
 
-  const toggle = (id: string) => { setHint(null); setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id])); };
+  const toggle = (id: string) => { setHint(null); setSentNote(null); setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id])); };
 
   const send = async () => {
     if (!picked.length) { setHint('Pick at least one other character to meet.'); return; }
@@ -44,8 +45,9 @@ export default function AskMeeting({ refx, people, cabinets, myCharacterId, onDo
     try {
       const r = await requestMeeting(refx, { character_ids: picked, intention: intention.trim(), duration_minutes: Number(minutes), wanted_time: when || null });
       if (!r.ok) { setHint('Pick at least one other character to meet.'); return; }
-      notifyOk(r.status === 'pending' ? 'Meeting asked for' : 'Meeting set', 'crisis-meeting');
+      notifyOk(r.status === 'awaiting_delegates' || r.status === 'pending' ? 'Meeting asked for' : 'Meeting set', 'crisis-meeting');
       setPicked([]); setIntention(''); setOther(''); setHint(null);
+      setSentNote(r.status === 'awaiting_delegates' ? 'Sent to the others first. It goes to the crisis team once they answer, or in 5 minutes.' : null);
       onDone();
     } catch (e) {
       notifyErr(crisisError(e, 'Could not ask for the meeting. Try again.'), 'crisis-meeting');
@@ -99,6 +101,7 @@ export default function AskMeeting({ refx, people, cabinets, myCharacterId, onDo
 
       <div className="flex items-center flex-wrap" style={{ gap: 12, marginTop: 14 }}>
         <Btn tone="green" icon={<Send size={15} strokeWidth={1.5} aria-hidden />} onClick={send} disabled={busy}>{busy ? 'Sending' : 'Ask for the meeting'}</Btn>
+        {sentNote && <span role="status" style={{ fontSize: 13, fontWeight: 700, color: CK.ok, overflowWrap: 'anywhere' }}>{sentNote}</span>}
         {hint && <span role="alert" style={{ fontSize: 13, fontWeight: 700, color: CK.red }}>{hint}</span>}
       </div>
     </Card>

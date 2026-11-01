@@ -3,13 +3,14 @@
 // Staff write news, save drafts and publish. Everyone reads the published history (RLS decides what they see).
 
 import { useMemo, useState } from 'react';
-import { FileText, Newspaper, Paperclip, Pencil, Radio, Send } from 'lucide-react';
+import { ExternalLink, FileText, Megaphone, Newspaper, Paperclip, Pencil, Radio, Send } from 'lucide-react';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { crisisError, publishNews, saveNews } from '@/lib/crisis/api';
 import type { News } from '@/lib/crisis/types';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { Btn, Card, CardTitle, CK } from '../../crisisKit';
 import NewsComposer from './NewsComposer';
+import PressReleasesCard from './PressReleasesCard';
 import { audienceLabel, newsTime, newsTimeTitle, NewsHistory } from './NewsList';
 import { useCrisisNews } from './useCrisisNews';
 import { ALL_ROOMS, useNewsDraft } from './useNewsDraft';
@@ -159,10 +160,32 @@ export default function NewsPage() {
       <h1 className="flex items-center gap-2" style={{ margin: '0 0 12px', fontSize: 24, fontWeight: 800, color: CK.ink }}><Newspaper size={24} strokeWidth={1.5} aria-hidden style={{ color: CK.red }} />News</h1>
       {v.staff ? (
         <div className="grid gap-4 lg:grid-cols-2 items-start">
-          <div className="grid gap-4">{composer}{draftList}</div>
+          <div className="grid gap-4"><PressReleasesCard />{composer}{draftList}</div>
           {history}
         </div>
-      ) : history}
+      ) : (
+        <div className="grid gap-4">
+          {v.role === 'press' && (
+            <Card lift>
+              <a
+                href={`/conferences/${v.conference.slug}/press`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+                style={{ gap: 12, textDecoration: 'none', color: CK.ink, borderRadius: 14 }}
+              >
+                <Megaphone size={26} strokeWidth={1.5} aria-hidden style={{ color: CK.red, flex: 'none' }} />
+                <span style={{ minWidth: 0, flex: 1 }}>
+                  <b style={{ display: 'block', fontSize: 15 }}>Write press releases on the Press Desk</b>
+                  <span style={{ fontSize: 13, color: CK.inkSoft }}>The crisis staff approve them before they go out.</span>
+                </span>
+                <ExternalLink size={16} strokeWidth={1.5} aria-hidden style={{ color: CK.muted, flex: 'none' }} />
+              </a>
+            </Card>
+          )}
+          {history}
+        </div>
+      )}
     </div>
   );
 }

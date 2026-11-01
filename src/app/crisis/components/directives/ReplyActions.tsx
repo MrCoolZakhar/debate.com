@@ -8,7 +8,7 @@ import { isEmptySet } from '../map/mapEdits';
 import type { EffectsDraft } from './replyDraft';
 
 /** What the signed-in staffer may change from a reply (the director may change everything). */
-export interface ReplyPowers { resources: boolean; units: boolean; map: boolean }
+export interface ReplyPowers { resources: boolean; units: boolean; map: boolean; characters: boolean }
 
 /** Turns the staged changes into the effects of one answer. A section the staffer has no power over is left out. */
 export function effectsToAnswer(effects: EffectsDraft, powers: ReplyPowers): AnswerEffects {
@@ -32,7 +32,8 @@ export function effectsToAnswer(effects: EffectsDraft, powers: ReplyPowers): Ans
   }
   // Border changes and drawn territory ride in the answer as one edit set, applied in the same transaction.
   if (powers.map && !isEmptySet(effects.map)) out.map = effects.map as object;
-  const chars = Object.entries(effects.characters).map(([id, c]) => ({ id, status: c.status, status_note: c.note.trim() || null }));
+  // The database ignores character changes from a backroomer without the power, so they are not offered or sent.
+  const chars = !powers.characters ? [] : Object.entries(effects.characters).map(([id, c]) => ({ id, status: c.status, status_note: c.note.trim() || null }));
   if (chars.length) out.characters = chars;
   const n = effects.news;
   if (n && n.title.trim()) {

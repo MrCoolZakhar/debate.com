@@ -6,6 +6,8 @@
 // room (directives sent and how they were answered, cabinet and joint directives, meetings held; the values are the Crisis
 // Director's, in Settings > Points). One big number, one split bar, ONE breakdown that lists both parts, and the sentence
 // that says how points are given. The maths is src/lib/crisis/performance.ts; Statistics on Command ranks on the same total.
+// Points follow the PERSON (owner, 1 Nov 2026): when a delegate plays this character, the big number is that person's total over
+// every character they played (no cap); a line says what this character earned alone. A character nobody plays shows its own points.
 // Below it the SAME record a chair or organiser sees for a delegation in a regular session (the session scoreboard's
 // DelegateProfile: ratings and the timeline of speeches and events). Chair notes and ratings are private to staff and chairs.
 //
@@ -13,7 +15,7 @@
 // and then in the crisis's other rooms (a character can sit in another cabinet's room). Read only; the room is
 // re-read every 30 seconds while the tab is visible. Nothing here writes.
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ListChecks, Presentation } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { SeatArtProvider } from '@/components/SeatFlag';
@@ -29,13 +31,15 @@ import { rankByHeadline, speechesByCountryOf } from '@/app/manage/[slug]/live/Se
 import type { CrisisRef } from '@/lib/crisis/api';
 import { isChairSendBack, isRealDenial } from '@/lib/crisis/format';
 import { getCrisisClient } from '@/lib/crisis/client';
-import { blendPerformance, findSeat, fmtPts, pointsRules, type Blend } from '@/lib/crisis/performance';
-import { readPoints, type characterPoints } from '@/lib/crisis/points';
+import { blendPerformance, findSeat, fmtPts, loadRoomBoards, pointsRules, roomSlices, seatOf, type Blend } from '@/lib/crisis/performance';
+import { readPoints, type PointsResult, type PointsRow } from '@/lib/crisis/points';
+import type { PointSlice } from '@/lib/sessionScoreboard';
 import type { Cabinet, Character, Directive, Meeting } from '@/lib/crisis/types';
 import type { Committee } from '@/lib/types';
 import { BigCount, CK, Skeleton } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { OUT_COLOR, ROOM_COLOR, SplitBar, SplitLegend } from '../command/blendKit';
+import { mergeSlices } from '../command/commandBlend';
 
 type Room =
   | { kind: 'loading' }
@@ -102,6 +106,41 @@ function useCharacterRoom(ref: CrisisRef, char: Character, cabinets: Cabinet[], 
   }, [ref, orderKey, name, withNotes]);
 
   return state;
+}
+
+/**
+ * The committee-room points of the OTHER characters a person played. Reads every cabinet's room only when there is such a
+ * character (most people played one), and keeps it fresh like the main room. Each seat once, keyed by room and seat.
+ */
+function useOtherSeats(ref: CrisisRef, others: Character[], cabinets: Cabinet[]): Array<{ key: string; slices: PointSlice[] }> | null {
+  const [state, setState] = useState<Array<{ key: string; slices: PointSlice[] }> | null>(null);
+  const othersRef = useRef(others);
+  const cabinetsRef = useRef(cabinets);
+  useEffect(() => { othersRef.current = others; cabinetsRef.current = cabinets; });
+  const key = others.map((c) => `${c.id}:${c.name}:${c.cabinet_id ?? ''}`).join('|');
+  useEffect(() => {
+    if (!key) return;
+    let alive = true;
+    let inFlight = false;
+    const load = async () => {
+      if (inFlight || document.visibilityState !== 'visible') return;
+      inFlight = true;
+      try {
+        const boards = await loadRoomBoards(ref, cabinetsRef.current);
+        const out: Array<{ key: string; slices: PointSlice[] }> = [];
+        for (const c of othersRef.current) {
+          const seat = seatOf(boards, c);
+          if (seat) out.push({ key: `${seat.board.committee.id}:${seat.row.country}`, slices: roomSlices(seat.board, seat.row) });
+        }
+        if (alive) setState(out);
+      } catch { /* a failed re-read keeps what is on screen */ }
+      finally { inFlight = false; }
+    };
+    const first = window.setTimeout(() => { void load(); }, 0);
+    const poll = window.setInterval(() => { void load(); }, REFRESH_MS);
+    return () => { alive = false; window.clearTimeout(first); window.clearInterval(poll); };
+  }, [ref, key]);
+  return key ? state : null;
 }
 
 function span(ms: number): string {
@@ -250,13 +289,28 @@ function RoomStats({ committee, feedback, seat, everPresent, showPrivate }: { co
 
 // ─────────── The tab ───────────
 
-export default function CharacterPerformance({ crisisRef, char, cabinet, cabinets, points, directives, meetings, loading, staff, canSeeNotes }: {
+/** The delegate who plays this character, with everything they wrote (as any character): their points are the headline. */
+export interface PerformancePerson {
+  memberId: string;
+  name: string;
+  /** The other characters this person played (this one is not in the list). */
+  others: Character[];
+  /** What this character earned on its own, for the one line that says so. */
+  ownPoints: number;
+  /** Every directive this person wrote, as any character (complete, not capped). */
+  rows: PointsRow[];
+}
+
+export default function CharacterPerformance({ crisisRef, char, cabinet, cabinets, points, person, directives, meetings, loading, staff, canSeeNotes }: {
   crisisRef: CrisisRef;
   char: Character;
   cabinet: Cabinet | null;
   /** Every cabinet of the crisis, to look for the seat in the other rooms too. */
   cabinets?: Cabinet[];
-  points: ReturnType<typeof characterPoints>;
+  /** The headline points: the person's total when somebody plays this character, else this character's own. */
+  points: PointsResult;
+  /** Set when a delegate plays this character (points then follow them across every character they played). */
+  person?: PerformancePerson | null;
   /** What this character wrote or co-wrote. */
   directives: Directive[] | null;
   meetings: Meeting[];
@@ -270,6 +324,21 @@ export default function CharacterPerformance({ crisisRef, char, cabinet, cabinet
   const room = useCharacterRoom(crisisRef, char, cabinets ?? (cabinet ? [cabinet] : []), !!canSeeNotes);
 
   const back = useMemo(() => {
+    if (person) {
+      // The person's own record, complete: every directive they wrote as any character.
+      const wrote = person.rows.filter((d) => d.status !== 'withdrawn' && !isChairSendBack(d));
+      const answered = wrote.filter((d) => d.answered_at);
+      const replyMs = answered.length ? answered.reduce((a, d) => a + (new Date(d.answered_at as string).getTime() - new Date(d.created_at).getTime()), 0) / answered.length : null;
+      const own = (directives ?? []).filter((d) => d.author_character_id === char.id && !isChairSendBack(d));
+      return {
+        total: wrote.length, wrote: own.length, co: 0,
+        approved: wrote.filter((d) => d.outcome === 'approved').length,
+        partial: wrote.filter((d) => d.outcome === 'partial').length,
+        denied: wrote.filter(isRealDenial).length,
+        words: own.length ? Math.round(own.reduce((a, d) => a + d.word_count, 0) / own.length) : 0,
+        replyMs,
+      };
+    }
     // A directive the chair sent back is not a verdict and not a sent directive (same rule as the points).
     const all = (directives ?? []).filter((d) => !isChairSendBack(d));
     const split = (list: Directive[]) => ({
@@ -286,16 +355,23 @@ export default function CharacterPerformance({ crisisRef, char, cabinet, cabinet
       words: wrote.length ? Math.round(wrote.reduce((a, d) => a + d.word_count, 0) / wrote.length) : 0,
       replyMs,
     };
-  }, [directives, char.id]);
+  }, [directives, char.id, person]);
 
-  const held = meetings.filter((m) => m.status === 'held' && m.character_ids.includes(char.id)).length;
+  const held = points.lines.find((l) => l.label === 'Meetings held')?.count ?? meetings.filter((m) => m.status === 'held' && m.character_ids.includes(char.id)).length;
   // The seat's row and its point slices, from the same functions a regular session uses (roll-call history included).
   const live = useMemo(() => {
     if (room.kind !== 'ok') return null;
     const row = buildSessionScoreboardRows(room.committee, [], 'en', { everPresent: room.everPresent }).find((r) => r.country === room.seat) ?? null;
     return row ? { row, slices: sessionPointSlices(room.committee, row.ledger, 'en', 'Manual points') } : null;
   }, [room]);
-  const blend = useMemo(() => blendPerformance(live ? live.slices : null, points), [live, points]);
+  // The other characters this person played: their seats' room points join this character's.
+  const otherSeats = useOtherSeats(crisisRef, person?.others ?? [], cabinets ?? (cabinet ? [cabinet] : []));
+  const blend = useMemo(() => {
+    const thisKey = room.kind === 'ok' ? `${room.committee.id}:${room.seat}` : null;
+    const extra = (otherSeats ?? []).filter((x) => x.key !== thisKey).flatMap((x) => x.slices);
+    const slices = live ? (extra.length ? mergeSlices([...live.slices, ...extra]) : live.slices) : (extra.length ? mergeSlices(extra) : null);
+    return blendPerformance(slices, points);
+  }, [live, points, otherSeats, room]);
   const rules = useMemo(() => pointsRules(readPoints(core.crisis.settings)), [core.crisis.settings]);
 
   if (loading) return <div className="flex flex-col" style={{ gap: 8 }}><Skeleton h={90} /><Skeleton h={30} /><Skeleton h={30} /></div>;
@@ -308,24 +384,34 @@ export default function CharacterPerformance({ crisisRef, char, cabinet, cabinet
     : room.kind === 'none' ? 'This cabinet has no committee room yet'
     : null;
 
+  const spread = !!person && person.others.length > 0;
+  // This character may have no seat while another one the person played does: the room lines then still show.
+  const roomPartKnown = !roomNote || (spread && blend.roomLines.length > 0);
   return (
     <div className="flex flex-col" style={{ gap: 16 }}>
       <Hover
         label="Points in total"
         rows={[
-          { label: 'In the committee room', value: roomNote ? 'None' : fmtPts(blend.room), color: '#9ED3B0' },
+          { label: 'In the committee room', value: roomPartKnown ? fmtPts(blend.room) : 'None', color: '#9ED3B0' },
           { label: 'Out of the room', value: fmtPts(blend.out), color: '#F0A596' },
           { label: 'Total', value: fmtPts(blend.total), color: CK.gold },
         ]}
       >
-        <TotalCard blend={blend} roomKnown={!roomNote} note={roomNote ?? `${speeches} ${speeches === 1 ? 'speech' : 'speeches'}, ${formatSpeakingTime(speakingSeconds)} speaking time`} />
+        <TotalCard blend={blend} roomKnown={roomPartKnown} note={roomNote ?? `${speeches} ${speeches === 1 ? 'speech' : 'speeches'}, ${formatSpeakingTime(speakingSeconds)} speaking time`} />
       </Hover>
+      {person && (
+        <p style={{ margin: '-6px 0 0', fontSize: 13.5, lineHeight: 1.5, color: CK.inkSoft, overflowWrap: 'anywhere' }}>
+          {spread
+            ? <>Points follow <b style={{ color: CK.ink }}>{person.name}</b> across {person.others.length + 1} characters: {char.name}, {person.others.map((o) => o.name).join(', ')}. {char.name} on their own earned {fmtPts(person.ownPoints)} from directives and meetings.</>
+            : <>Points follow <b style={{ color: CK.ink }}>{person.name}</b>, whichever character they play. If they play someone else later, these points go with them.</>}
+        </p>
+      )}
 
       <section>
         <h3 className="flex items-center" style={{ margin: '0 0 8px', gap: 7, fontSize: 13, fontWeight: 800, color: CK.red }}>
           <ListChecks size={16} strokeWidth={1.5} aria-hidden />Where the Points Come From
         </h3>
-        <Breakdown blend={blend} roomNote={roomNote} />
+        <Breakdown blend={blend} roomNote={roomPartKnown ? null : roomNote} />
         <p style={{ margin: '8px 0 0', fontSize: 12.5, lineHeight: 1.5, color: CK.inkSoft }}>{rules} The Crisis Director sets the out of the room values in Settings. Points help judge awards.</p>
       </section>
 

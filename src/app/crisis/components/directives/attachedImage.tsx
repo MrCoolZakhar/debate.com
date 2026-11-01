@@ -11,8 +11,14 @@ import { ZoomableImage } from '../news/ImageLightbox';
 const MARKER = /(?:\r?\n){0,2}\[image\]\((https:\/\/[^\s()]+)\)\s*$/;
 const TRUSTED = '/storage/v1/object/public/crisis-media/';
 
+/** Only this project's own storage host and the crisis-media path: a typed address can never pull in a picture from anywhere else. */
 export const trustedImage = (url: string): boolean => {
-  try { const u = new URL(url); return u.protocol === 'https:' && u.pathname.includes(TRUSTED); } catch { return false; }
+  try {
+    const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    if (!base) return false;
+    const u = new URL(url);
+    return u.protocol === 'https:' && u.origin === new URL(base).origin && u.pathname.startsWith(TRUSTED);
+  } catch { return false; }
 };
 
 /** The text with a picture added as its last line. */

@@ -5,7 +5,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
-import { answerDirective, crisisError, markDrafting, type CrisisRef } from '@/lib/crisis/api';
+import { answerDirective, crisisError, markDrafting, type AnswerEffects, type CrisisRef } from '@/lib/crisis/api';
 import type { Directive, DirectiveOutcome } from '@/lib/crisis/types';
 import { effectsToAnswer, type ReplyPowers } from './ReplyActions';
 import { emptyEffects, readReplyDraft, writeReplyDraft, type EffectsDraft } from './replyDraft';
@@ -49,6 +49,9 @@ export function useDirectiveReply(ref: CrisisRef, d: Directive, who: string, pow
   useEffect(() => { latest.current = { outcome, reply, effects, d }; });
   /** When the "being written" mark was last sent (0 = not marked). */
   const markedAt = useRef(0);
+  /** Names THIS reply for the database: kept across retries of the same send (a failed or lost answer), so a repeat
+   *  is a no-op instead of a second write; dropped once it landed or when the reply is changed. */
+  const requestId = useRef<string | null>(null);
 
   // Closing the pop-up (or moving to another directive) with nothing written takes the mark off.
   useEffect(() => () => {
@@ -77,9 +80,9 @@ export function useDirectiveReply(ref: CrisisRef, d: Directive, who: string, pow
     return () => window.clearTimeout(t);
   }, [outcome, reply, effects, ref.id, d.id, d.status, d.reply, d.outcome]);
 
-  const toggleOutcome = (o: DirectiveOutcome) => { touched.current = true; setOutcome((cur) => (cur === o ? null : o)); setSaved(false); };
+  const toggleOutcome = (o: DirectiveOutcome) => { requestId.current = null; touched.current = true; setOutcome((cur) => (cur === o ? null : o)); setSaved(false); };
   const setReply = (v: string) => {
-    touched.current = true; setReplyText(v); setSaved(false);
+    requestId.current = null; touched.current = true; setReplyText(v); setSaved(false);
     // Say that a reply is being written: on the first keystroke, then at most once a minute.
     if (v.trim()) {
       const t = Date.now();
@@ -92,8 +95,8 @@ export function useDirectiveReply(ref: CrisisRef, d: Directive, who: string, pow
       markDrafting(ref, d.id, false).catch(() => { /* presence only */ });
     }
   };
-  const setEffects = (next: EffectsDraft | ((prev: EffectsDraft) => EffectsDraft)) => { touched.current = true; setEffectsState(next); setSaved(false); };
-  const startEditing = () => { touched.current = true; setOutcome(d.outcome); setReplyText(d.reply ?? ''); setSaved(false); setEditing(true); };
+  const setEffects = (next: EffectsDraft | ((prev: EffectsDraft) => EffectsDraft)) => { requestId.current = null; touched.current = true; setEffectsState(next); setSaved(false); };
+  const startEditing = () => { requestId.current = null; touched.current = true; setOutcome(d.outcome); setReplyText(d.reply ?? ''); setSaved(false); setEditing(true); };
 
   const canSend = !!outcome && !!reply.trim() && !busy;
 
@@ -101,19 +104,31 @@ export function useDirectiveReply(ref: CrisisRef, d: Directive, who: string, pow
     if (!outcome || !reply.trim() || busy) return;
     setBusy(true);
     try {
-      const staged = effectsToAnswer(effects, powers);
-      const res = await answerDirective(ref, d.id, outcome, reply.trim(), staged);
+      // Changing the words of an answered directive runs nothing again, so no staged change is sent with it.
+      const isEdit = editing && d.status === 'answered';
+      const staged: AnswerEffects = isEdit ? {} : effectsToAnswer(effects, powers);
+      if (!requestId.current) requestId.current = newRequestId();
+      const res = await answerDirective(ref, d.id, outcome, reply.trim(), { ...staged, request_id: requestId.current, ...(isEdit ? { edit: true } : {}) });
+      if (!res.ok) {
+        // Not a failure of the network: the directive is not in the state this reply was written for. Keep the text, refresh the view.
+        requestId.current = null;
+        notifyErr(res.reason === 'already_answered' ? 'Someone already answered this directive' : 'This directive is not open any more', 'crisis-directive');
+        onSent();
+        return;
+      }
       sent.current = true;
       markedAt.current = 0;
+      requestId.current = null;
       writeReplyDraft(ref.id, d.id, null);
-      // The database published the story itself when this person may; otherwise it waits for the director.
-      const notes = staged.news && res?.news_published === false ? 'The story waits for the director on the News page.' : '';
-      notifyOk(notes ? `Reply sent to ${who}. ${notes}` : `Reply sent to ${who}`, 'crisis-directive');
+      // A repeat is a success: the first send landed. The database published the story itself when this person may; otherwise it waits for the director.
+      const notes = !isEdit && !!staged.news && res.news_published === false ? 'The story waits for the director on the News page.' : '';
+      notifyOk(notes ? `Reply sent to ${who}. ${notes}` : isEdit ? 'Reply changed' : `Reply sent to ${who}`, 'crisis-directive');
       setEditing(false);
       setSaved(false);
       setEffectsState(emptyEffects());
       onSent();
     } catch (e) {
+      // The same request_id is kept: if the answer was lost on the way back, the next try is recognised as a repeat.
       notifyErr(crisisError(e, 'Could not send the reply. Your text and changes are kept, try again.'), 'crisis-directive');
     } finally { setBusy(false); }
   };
@@ -123,4 +138,9 @@ export function useDirectiveReply(ref: CrisisRef, d: Directive, who: string, pow
 
 function hasStaged(e: EffectsDraft): boolean {
   return Object.keys(e.resources).length + Object.keys(e.units).length + Object.keys(e.regions).length + Object.keys(e.characters).length > 0 || !!e.news || !!e.map || e.cards.length > 0;
+}
+
+function newRequestId(): string {
+  try { if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID(); } catch { /* fall through */ }
+  return `r-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
 }

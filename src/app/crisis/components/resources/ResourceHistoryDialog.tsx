@@ -46,6 +46,13 @@ const M = { l: 52, r: 16, t: 16, b: 30 };
 
 interface Pt { t: number; v: number; delta: number }
 
+/** The log's first row is the "Starting amount" (the database writes it when a resource is made: it goes from nothing to the
+ *  amount). Staff see its reason, everyone else only the numbers, so it is recognised by the numbers: it ends where it jumped to. */
+function startRowOf(rows: ResourceHistoryRow[]): ResourceHistoryRow | null {
+  const first = rows[0];
+  return first && first.delta === first.amount_after ? first : null;
+}
+
 function niceTicks(min: number, max: number): number[] {
   if (min === max) return [min];
   return [min, min + (max - min) / 2, max];
@@ -59,8 +66,12 @@ function HistoryChart({ rows, current, now, color }: { rows: ResourceHistoryRow[
     const end = Math.max(now, lastT);
     const span = Math.max(end - firstT, 60_000);
     const start = firstT - span * 0.08;
-    const pts: Pt[] = [{ t: start, v: first.amount_after - first.delta, delta: 0 }];
-    for (const r of rows) pts.push({ t: new Date(r.created_at).getTime(), v: r.amount_after, delta: r.delta });
+    // The graph starts at the starting amount; without such a row (older data) it starts from what the first change moved from.
+    const startRow = startRowOf(rows);
+    const pts: Pt[] = startRow
+      ? [{ t: firstT, v: startRow.amount_after, delta: 0 }]
+      : [{ t: start, v: first.amount_after - first.delta, delta: 0 }];
+    for (const r of startRow ? rows.slice(1) : rows) pts.push({ t: new Date(r.created_at).getTime(), v: r.amount_after, delta: r.delta });
     // The line ends at what it is now (a change the history has not caught up with yet shows as the last move).
     pts.push({ t: end + span * 0.02, v: current, delta: current - rows[rows.length - 1].amount_after });
     const vals = pts.map((p) => p.v);
@@ -132,8 +143,11 @@ export function ResourceHistoryBody({ resource, typeName, unit, color = CK.red }
     return () => window.clearTimeout(t);
   }, [load, resource.amount]);
 
-  const newestFirst = useMemo(() => (rows ? [...rows].reverse() : []), [rows]);
-  const net = rows && rows.length ? resource.amount - (rows[0].amount_after - rows[0].delta) : 0;
+  // The starting amount is where the graph begins, not a change: it stays out of the list and the count.
+  const startRow = useMemo(() => (rows ? startRowOf(rows) : null), [rows]);
+  const changes = useMemo(() => (rows ? (startRow ? rows.slice(1) : rows) : []), [rows, startRow]);
+  const newestFirst = useMemo(() => [...changes].reverse(), [changes]);
+  const net = rows && rows.length ? resource.amount - (startRow ? startRow.amount_after : rows[0].amount_after - rows[0].delta) : 0;
   const unitText = unit ? ` ${unit}` : '';
 
   return (
@@ -143,7 +157,7 @@ export function ResourceHistoryBody({ resource, typeName, unit, color = CK.red }
           <b style={{ fontSize: 34, fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: CK.ink }}>{fmtAmount(resource.amount)}</b>
           <span style={{ fontSize: 13.5, fontWeight: 600, color: CK.inkSoft }}>{unitText} now</span>
         </p>
-        {rows && rows.length > 0 && net !== 0 && (
+        {rows && changes.length > 0 && net !== 0 && (
           <span className="inline-flex items-center" style={{ gap: 6, fontSize: 13.5, fontWeight: 800, color: net > 0 ? CK.ok : CK.danger, fontVariantNumeric: 'tabular-nums' }}>
             {net > 0 ? <TrendingUp size={17} strokeWidth={1.6} aria-hidden /> : <TrendingDown size={17} strokeWidth={1.6} aria-hidden />}
             {signedText(net)} since the start
@@ -158,7 +172,7 @@ export function ResourceHistoryBody({ resource, typeName, unit, color = CK.red }
         </div>
       ) : rows === null ? (
         <div className="flex flex-col" style={{ gap: 10 }}><Skeleton h={210} r={16} /><Skeleton h={34} /><Skeleton h={34} /></div>
-      ) : rows.length === 0 ? (
+      ) : changes.length === 0 ? (
         <p style={{ margin: '14px 0 4px', fontSize: 14, color: CK.inkSoft }}>This has not changed yet. The graph appears after the first change.</p>
       ) : (
         <>
@@ -168,7 +182,7 @@ export function ResourceHistoryBody({ resource, typeName, unit, color = CK.red }
 
           <h3 className="flex items-baseline" style={{ margin: '16px 0 4px', gap: 8, fontSize: 13.5, fontWeight: 800, color: CK.ink }}>
             Changes
-            <span style={{ fontSize: 12, fontWeight: 600, color: CK.inkSoft }}><b style={{ fontVariantNumeric: 'tabular-nums' }}>{rows.length}</b> {rows.length === 1 ? 'change' : 'changes'}</span>
+            <span style={{ fontSize: 12, fontWeight: 600, color: CK.inkSoft }}><b style={{ fontVariantNumeric: 'tabular-nums' }}>{changes.length}</b> {changes.length === 1 ? 'change' : 'changes'}</span>
           </h3>
           <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
             {newestFirst.map((r, i) => {

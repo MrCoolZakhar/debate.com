@@ -107,7 +107,7 @@ function SettingsBody() {
           {full && <ToggleRow title="Change resources" checked={s.backroomPowers.resources} onChange={(on) => setPower('resources', on)} hint="Add or take away resources, with a reason." />}
           {full && <ToggleRow title="Units" checked={s.backroomPowers.units} onChange={(on) => setPower('units', on)} hint="Place and move units on the map." />}
           <ToggleRow title="Edit characters" checked={!!powers.characters} onChange={(on) => setPower('characters', on)} hint="Change a character's bio, picture, powers, status and guide. Off means a backroomer can only read them." />
-          <ToggleRow title="See all directives" checked={s.backroomPowers.seeAll} onChange={(on) => setPower('seeAll', on)} hint="Off means a backroomer sees only the directives of their own characters." />
+          <ToggleRow title="Backroomers see every directive" checked={s.backroomPowers.seeAll} onChange={(on) => setPower('seeAll', on)} hint="Off: a backroomer sees only the directives assigned to them and unassigned ones." />
         </Card>
 
         {full && (

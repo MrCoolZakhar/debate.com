@@ -18,7 +18,7 @@ import { SessionLoadState, SessionScoreboardBoard } from '@/app/manage/[slug]/li
 import { useSessionCommittee } from '@/app/manage/[slug]/live/useSessionCommittee';
 import { SOFT } from '@/app/manage/[slug]/live/tokens';
 import type { Directive, News } from '@/lib/crisis/types';
-import { CK } from '../../crisisKit';
+import { CK, Tick } from '../../crisisKit';
 import { CabinetDirectivesList, CrisisNewsList, cabinetDirectivesOf, cabinetNewsOf } from './cabinetFeeds';
 import StaffRoomChat, { type StaffChat } from './staffChat';
 
@@ -62,7 +62,7 @@ function CrisisRailTab({ side, icon: Icon, label, count, active, onClick, title 
 function Stat({ n, word }: { n: string | number; word: string }) {
   return (
     <div style={{ background: NEU.base, borderRadius: 14, padding: '11px 14px', boxShadow: NEU.inSm, fontFamily: OUTFIT }}>
-      <b style={{ display: 'block', fontSize: 24, lineHeight: 1, fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: NEU.ink }}>{n}</b>
+      <b style={{ display: 'block', fontSize: 24, lineHeight: 1, fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: NEU.ink }}><Tick value={n} /></b>
       <span style={{ display: 'block', marginTop: 4, fontSize: 12, fontWeight: 600, color: SOFT }}>{word}</span>
     </div>
   );

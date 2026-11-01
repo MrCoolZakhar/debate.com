@@ -14,7 +14,7 @@ import { crisisError, listNotifications, markNotificationsRead } from '@/lib/cri
 import { useCrisisLive } from '@/lib/crisis/live';
 import { crisisBase, useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { CK } from '../../crisisKit';
-import NotificationDetail, { hasMapDetail } from './NotificationDetail';
+import NotificationDetail, { changesStampOf, hasMapDetail } from './NotificationDetail';
 import { serverNow } from '@/lib/serverClock';
 
 const POPUP_MS = 6000;
@@ -155,6 +155,9 @@ export default function NotificationBell() {
       markLocal([n.id]);
       void markNotificationsRead(v.ref, [n.id]).catch(() => void load());
     }
+    // "N changes to the map" opens the map with a pop-up of exactly what happened (replay and breakdown).
+    const stamp = changesStampOf(n);
+    if (stamp !== null) { router.push(`${base}/map?changes=${stamp}`); return; }
     // A map change opens a picture of what changed first; "Open the map" is a button inside it.
     if (hasMapDetail(n)) { setDetail(n); return; }
     const link = (n.link ?? '').trim().replace(/^\/+/, '');
@@ -164,6 +167,7 @@ export default function NotificationBell() {
 
   return (
     <>
+      <style>{'@keyframes crisisBadgePop { 0% { transform: scale(0.6); opacity: 0.5; } 60% { transform: scale(1.22); opacity: 1; } 100% { transform: scale(1); } } .crisis-bell-badge { animation: crisisBadgePop 220ms cubic-bezier(0.22,1,0.36,1); } @media (prefers-reduced-motion: reduce) { .crisis-bell-badge { animation: none; } }'}</style>
       <button
         ref={btnRef}
         type="button"
@@ -175,7 +179,7 @@ export default function NotificationBell() {
       >
         <Bell size={20} strokeWidth={1.5} />
         {unread > 0 && (
-          <span aria-hidden style={{ position: 'absolute', top: -2, right: -2, minWidth: 18, height: 18, padding: '0 5px', borderRadius: 9, background: '#D63030', color: '#fff', fontSize: 11, fontWeight: 800, lineHeight: '18px', textAlign: 'center', boxShadow: '0 0 0 2px #EFE3DA', boxSizing: 'border-box' }}>
+          <span key={unread} aria-hidden className="crisis-bell-badge" style={{ position: 'absolute', top: -2, right: -2, minWidth: 18, height: 18, padding: '0 5px', borderRadius: 9, background: '#D63030', color: '#fff', fontSize: 11, fontWeight: 800, lineHeight: '18px', textAlign: 'center', boxShadow: '0 0 0 2px #EFE3DA', boxSizing: 'border-box' }}>
             {unread > 99 ? '99+' : unread}
           </span>
         )}
@@ -187,6 +191,7 @@ export default function NotificationBell() {
             ref={panelRef}
             role="dialog"
             aria-label="Notifications"
+            className="cm-drop"
             style={{ position: 'fixed', top: pos.top, right: pos.right, zIndex: 70, width: 'min(380px, calc(100vw - 16px))', maxHeight: 'min(70vh, 560px)', display: 'flex', flexDirection: 'column', background: CK.card, borderRadius: 20, boxShadow: CK.shadow, fontFamily: CK.font, overflow: 'hidden' }}
           >
             <div className="flex items-center justify-between" style={{ padding: '14px 16px 10px', gap: 10 }}>
@@ -201,13 +206,13 @@ export default function NotificationBell() {
               ) : items.length === 0 ? (
                 <p style={{ margin: 0, padding: 16, fontSize: 14, color: CK.inkSoft }}>Nothing yet. News about your crisis will appear here.</p>
               ) : (
-                items.map((n) => (
+                items.map((n, i) => (
                   <button
                     key={n.id}
                     type="button"
                     onClick={() => void go(n)}
-                    className="flex w-full text-left focus:outline-none focus-visible:bg-[rgba(142,36,36,0.1)]"
-                    style={{ gap: 12, padding: '12px 16px 12px 13px', border: 'none', borderLeft: `3px solid ${kindLook(n).color}`, borderBottom: `1px solid ${CK.hair}`, background: n.read_at ? 'transparent' : 'rgba(142,36,36,0.07)', cursor: 'pointer', font: 'inherit' }}
+                    className="cm-slide-in flex w-full text-left focus:outline-none focus-visible:bg-[rgba(142,36,36,0.1)]"
+                    style={{ ['--i' as string]: Math.min(i, 8), gap: 12, padding: '12px 16px 12px 13px', border: 'none', borderLeft: `3px solid ${kindLook(n).color}`, borderBottom: `1px solid ${CK.hair}`, background: n.read_at ? 'transparent' : 'rgba(142,36,36,0.07)', cursor: 'pointer', font: 'inherit' }}
                   >
                     <IconDisc n={n} />
                     <span className="min-w-0 flex-1">
@@ -230,7 +235,7 @@ export default function NotificationBell() {
         <Portal>
           <div aria-live="polite" style={{ position: 'fixed', top: 'calc(env(safe-area-inset-top, 0px) + 64px)', right: 12, zIndex: 250, width: 'min(340px, calc(100vw - 24px))', display: 'flex', flexDirection: 'column', gap: 8, fontFamily: CK.font }}>
             {popups.map((n) => (
-              <div key={n.id} className="flex items-start" style={{ gap: 10, padding: '10px 10px 10px 12px', background: CK.card, borderRadius: 16, boxShadow: CK.shadow, animation: 'crisisBellIn 260ms cubic-bezier(0.22,1,0.36,1)' }}>
+              <div key={n.id} className="crisis-bell-pop flex items-start" style={{ gap: 10, padding: '10px 10px 10px 12px', background: CK.card, borderRadius: 16, boxShadow: CK.shadow, animation: 'crisisBellIn 260ms cubic-bezier(0.22,1,0.36,1)' }}>
                 <button type="button" onClick={() => void go(n)} className="flex flex-1 min-w-0 text-left focus:outline-none" style={{ gap: 10, border: 'none', background: 'none', padding: 0, cursor: 'pointer', font: 'inherit' }}>
                   <IconDisc n={n} />
                   <span className="min-w-0 flex-1">
@@ -244,7 +249,7 @@ export default function NotificationBell() {
                 </button>
               </div>
             ))}
-            <style>{'@keyframes crisisBellIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: none; } }'}</style>
+            <style>{'@keyframes crisisBellIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: none; } } @media (prefers-reduced-motion: reduce) { .crisis-bell-pop { animation: none !important; } }'}</style>
           </div>
         </Portal>
       )}

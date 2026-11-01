@@ -207,6 +207,7 @@ function PopupBody({ directive: d, onClose, onChanged, notesVersion = 0, nav, on
     resources: director || settings.backroomPowers.resources,
     units: director || settings.backroomPowers.units,
     map: director || settings.backroomPowers.map,
+    characters: director || !!settings.backroomPowers.characters,
   }), [director, settings.backroomPowers]);
   const reply = useDirectiveReply(ref, d, who, powers, () => onChanged?.('answered'));
   const narrow = useNarrow();
@@ -254,9 +255,11 @@ function PopupBody({ directive: d, onClose, onChanged, notesVersion = 0, nav, on
         <>
           <InternalNote crisisRef={ref} directiveId={d.id} onAdded={() => setNoteTick((v) => v + 1)} />
           <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '14px 14px 18px' }}>
-            <EffectsPanel env={env} />
+            {d.status === 'answered' ? (
+              <p style={{ margin: 0, fontSize: 13.5, fontWeight: 600, color: CK.inkSoft, fontFamily: CK.font }}>Changing a sent reply changes its words only. Resources, units, borders, characters and news do not run again.</p>
+            ) : <EffectsPanel env={env} />}
           </div>
-          <EffectsRecap env={env} />
+          {d.status !== 'answered' && <EffectsRecap env={env} />}
         </>
       ) : (
         <InternalNote crisisRef={ref} directiveId={d.id} onAdded={() => setNoteTick((v) => v + 1)} fill />

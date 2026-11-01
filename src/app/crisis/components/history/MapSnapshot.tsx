@@ -21,23 +21,23 @@ export interface SnapshotSpec {
   shapes: SnapShape[];
 }
 
-const W = 640;
-const H = 340;
-const R = 15;
+export const W = 640;
+export const H = 340;
+export const R = 15;
 
-const mercY = (lat: number): number => {
+export const mercY = (lat: number): number => {
   const l = (Math.max(-80, Math.min(80, lat)) * Math.PI) / 180;
   return (Math.log(Math.tan(Math.PI / 4 + l / 2)) * 180) / Math.PI;
 };
-const latOf = (y: number): number => ((2 * Math.atan(Math.exp((y * Math.PI) / 180)) - Math.PI / 2) * 180) / Math.PI;
+export const latOf = (y: number): number => ((2 * Math.atan(Math.exp((y * Math.PI) / 180)) - Math.PI / 2) * 180) / Math.PI;
 
-function polysOf(g: Geometry): number[][][][] {
+export function polysOf(g: Geometry): number[][][][] {
   if (g.type === 'Polygon') return [(g as Polygon).coordinates];
   if (g.type === 'MultiPolygon') return (g as MultiPolygon).coordinates;
   return [];
 }
 
-function bboxOf(ring: number[][]): [number, number, number, number] {
+export function ringBbox(ring: number[][]): [number, number, number, number] {
   let x0 = Infinity; let x1 = -Infinity; let y0 = Infinity; let y1 = -Infinity;
   for (const p of ring) {
     if (p[0] < x0) x0 = p[0]; if (p[0] > x1) x1 = p[0];
@@ -47,18 +47,18 @@ function bboxOf(ring: number[][]): [number, number, number, number] {
 }
 
 /** Points of a stored shape geometry (a polygon's outer ring or a line). */
-function shapePts(g: { type: string; coordinates: unknown }): LngLat[] {
+export function shapePts(g: { type: string; coordinates: unknown }): LngLat[] {
   const raw = g.type === 'Polygon' ? ((g.coordinates as number[][][])[0] ?? []) : ((g.coordinates as number[][]) ?? []);
   return raw.filter((p) => Array.isArray(p) && Number.isFinite(p[0]) && Number.isFinite(p[1])).map((p) => [p[0], p[1]] as LngLat);
 }
 
 /** The bounding box of a country's biggest piece (so Russia's far-east islands do not zoom the picture out). */
-function mainBox(world: WorldData, key: string): [number, number, number, number] | null {
+export function mainBox(world: WorldData, key: string): [number, number, number, number] | null {
   const f = world.byKey.get(key);
   if (!f) return null;
   let best: [number, number, number, number] | null = null; let bestA = -1;
   for (const poly of polysOf(f.geometry)) {
-    const b = bboxOf(poly[0] ?? []);
+    const b = ringBbox(poly[0] ?? []);
     const a = (b[2] - b[0]) * (b[3] - b[1]);
     if (a > bestA) { bestA = a; best = b; }
   }
@@ -99,7 +99,7 @@ export default function MapSnapshot({ world, spec, label }: { world: WorldData |
       for (const poly of polysOf(g)) {
         const outer = poly[0];
         if (!outer || outer.length < 3) continue;
-        const b = bboxOf(outer);
+        const b = ringBbox(outer);
         if (b[2] < x0 || b[0] > x1 || b[3] < latLo || b[1] > latHi) continue;
         for (const ring of poly) {
           ring.forEach((p, i) => { d += `${i ? 'L' : 'M'}${X(p[0]).toFixed(1)} ${Y(p[1]).toFixed(1)}`; });

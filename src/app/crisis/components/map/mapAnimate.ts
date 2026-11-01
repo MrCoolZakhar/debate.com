@@ -13,6 +13,8 @@ type LL = [number, number];
 
 export interface MapDiff {
   moved: Array<{ id: string; from: LL; to: LL }>;
+  /** Units that stayed where they were but changed strength, owner or name: they pulse. */
+  changed: string[];
   added: string[];
   removed: string[];
   regions: Array<{ key: string; ownerFrom: string | null; ownerTo: string | null; geomFrom: unknown; geomTo: unknown; geomChanged: boolean }>;
@@ -20,7 +22,13 @@ export interface MapDiff {
 }
 
 /** Element clones of removed unit tokens, collected by the marker effect and faded out by the controller. */
-export interface PendingAnim { diff: MapDiff; ghosts: Array<{ el: HTMLElement; at: LL }>; /** Where each moved unit was DRAWN on this screen just before the new data landed. */ drawn: Map<string, LL> }
+export interface PendingAnim {
+  diff: MapDiff; ghosts: Array<{ el: HTMLElement; at: LL }>;
+  /** Where each moved unit was DRAWN on this screen just before the new data landed. */
+  drawn: Map<string, LL>;
+  /** The team's own screen was already showing the unsent changes: play every move from where the SENT map had the unit. */
+  fromSent?: boolean;
+}
 
 export function prefersReducedMotion(): boolean {
   try { return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; }
@@ -28,15 +36,38 @@ export function prefersReducedMotion(): boolean {
 
 const MAX_UNIT_ANIMS = 40;
 
+/** A short pulse on a unit's token (it received a change, or arrived). Transform and opacity only; nothing for reduced motion. */
+export function pulseToken(el: HTMLElement | null | undefined): void {
+  if (!el || prefersReducedMotion()) return;
+  const tok = (el.firstElementChild as HTMLElement | null) ?? el;
+  tok.animate?.([{ transform: 'scale(1)' }, { transform: 'scale(1.32)', offset: 0.4 }, { transform: 'scale(1)' }], { duration: 300, easing: 'ease-out' });
+}
+
+/** Mixes two #rrggbb colours (e = 0 is a, 1 is b); a colour that is not a plain hex stays as it is. */
+export function mixHex(a: string, b: string, e: number): string {
+  const rgb = (h: string): [number, number, number] | null => {
+    const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(h);
+    if (!m) return null;
+    const x = m[1].length === 3 ? m[1].split('').map((c) => c + c).join('') : m[1];
+    const n = parseInt(x, 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  };
+  const p = rgb(a); const q = rgb(b);
+  if (!p || !q) return e < 0.5 ? a : b;
+  const c = (i: number) => Math.round(p[i] + (q[i] - p[i]) * e).toString(16).padStart(2, '0');
+  return `#${c(0)}${c(1)}${c(2)}`;
+}
+
 /** What changed between two server reads of the map. Null when nothing worth animating changed. */
 export function diffMapData(prev: MapData, next: MapData): MapDiff | null {
-  const diff: MapDiff = { moved: [], added: [], removed: [], regions: [], shapes: [] };
+  const diff: MapDiff = { moved: [], changed: [], added: [], removed: [], regions: [], shapes: [] };
   const pu = new Map(prev.units.map((u) => [u.id, u]));
   const nu = new Map(next.units.map((u) => [u.id, u]));
   for (const [id, u] of nu) {
     const o = pu.get(id);
     if (!o) { diff.added.push(id); continue; }
     if (o.lng !== u.lng || o.lat !== u.lat) diff.moved.push({ id, from: [o.lng, o.lat], to: [u.lng, u.lat] });
+    else if (o.strength !== u.strength || o.owner_cabinet_id !== u.owner_cabinet_id || o.name !== u.name) diff.changed.push(id);
   }
   for (const id of pu.keys()) if (!nu.has(id)) diff.removed.push(id);
   diff.moved = diff.moved.slice(0, MAX_UNIT_ANIMS);
@@ -64,7 +95,7 @@ export function diffMapData(prev: MapData, next: MapData): MapDiff | null {
     });
   }
 
-  const any = diff.moved.length || diff.added.length || diff.removed.length || diff.regions.length || diff.shapes.length;
+  const any = diff.moved.length || diff.changed.length || diff.added.length || diff.removed.length || diff.regions.length || diff.shapes.length;
   return any ? diff : null;
 }
 
@@ -194,7 +225,7 @@ export function createMapAnimator(getMap: () => MLMap | null) {
     }, () => {
       for (const m of live) {
         const mk = markerOf(m.id); const fin = finalOf(m.id);
-        if (mk && fin && !m.still && !mk.el.dataset.drag) mk.marker.setLngLat(fin);
+        if (mk && fin && !m.still && !mk.el.dataset.drag) { mk.marker.setLngLat(fin); pulseToken(mk.el); }
       }
       setSrc(map, SRC_TRAILS, EMPTY);
       setPaint(map, L_TRAIL, 'line-opacity', 0);
@@ -203,6 +234,9 @@ export function createMapAnimator(getMap: () => MLMap | null) {
     // Frame 0 now, so the token is never seen at its new place for a frame.
     for (const m of live) if (!m.still) markerOf(m.id)?.marker.setLngLat(m.from);
   };
+
+  /** Units that changed strength, owner or name without moving: one short pulse each. */
+  const pulseUnits = (els: Array<HTMLElement | undefined>) => { for (const el of els.slice(0, MAX_UNIT_ANIMS)) pulseToken(el); };
 
   /** New units pop in; removed ones (their cloned token) shrink away. */
   const popUnits = (added: Array<HTMLElement | undefined>, ghosts: PendingAnim['ghosts']) => {
@@ -284,5 +318,5 @@ export function createMapAnimator(getMap: () => MLMap | null) {
     ghostMarkers.clear();
   };
 
-  return { moveUnits, popUnits, growAreas, tween, cancelAll };
+  return { moveUnits, popUnits, pulseUnits, growAreas, tween, cancelAll };
 }

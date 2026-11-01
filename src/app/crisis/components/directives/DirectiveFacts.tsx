@@ -126,7 +126,7 @@ export default function DirectiveFacts({ d, names, editing, onChanged }: {
         ) : (
           <span className="inline-flex items-center" style={{ gap: 7 }}>
             <StaffPic member={d.assigned_member_id ? names.members.get(d.assigned_member_id) : null} size={24} />
-            {memberName(d.assigned_member_id, names, 'Unclaimed')}
+            {memberName(d.assigned_member_id, names, 'Unassigned')}
           </span>
         )}
         {!confirmTo && ownerId && ownerId !== d.assigned_member_id && (

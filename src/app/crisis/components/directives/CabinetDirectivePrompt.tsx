@@ -207,7 +207,7 @@ export default function CabinetDirectivePrompt() {
           </button>
         </div>
 
-        <div className="flex items-start" style={{ gap: 10, marginTop: 10 }}>
+        <div key={d.id} className={cursor > 0 ? 'cm-next flex items-start' : 'flex items-start'} style={{ gap: 10, marginTop: 10 }}>
           <Avatar name={author} src={character?.picture_url ?? null} size={44} color={cabinet?.color ?? CK.red} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div className="flex items-center flex-wrap" style={{ gap: '2px 8px' }}>
@@ -222,7 +222,7 @@ export default function CabinetDirectivePrompt() {
         </div>
 
         {!picking && (
-          <>
+          <div key="main" className="cm-fade">
             <p style={{ margin: '10px 0 0', fontSize: 13.5, lineHeight: 1.45, color: CK.inkSoft, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
               {d.body}
             </p>
@@ -230,7 +230,7 @@ export default function CabinetDirectivePrompt() {
               <button
                 type="button"
                 onClick={() => review(d)}
-                className="inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] active:scale-[0.97] transition-transform"
+                className="inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] cm-btn"
                 style={{ border: 0, borderRadius: 11, padding: '8px 16px', fontSize: 13.5, fontWeight: 700, cursor: 'pointer', background: CK.redBtn, color: '#FFF4E6', boxShadow: CK.shadowSm, fontFamily: CK.font }}
               >
                 Review
@@ -238,19 +238,19 @@ export default function CabinetDirectivePrompt() {
               <button
                 type="button"
                 onClick={() => openAllocate(d)}
-                className="inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] active:scale-[0.97] transition-transform"
+                className="inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] cm-btn"
                 style={{ border: 0, borderRadius: 11, padding: '8px 14px', fontSize: 13.5, fontWeight: 700, cursor: 'pointer', background: CK.card, color: CK.forest, boxShadow: `inset 0 0 0 1px ${CK.hair}`, fontFamily: CK.font }}
               >
                 Allocate to someone else
               </button>
             </div>
-          </>
+          </div>
         )}
 
         {picking && (
-          <div role="listbox" aria-label="Staff" style={{ marginTop: 10, maxHeight: 'min(280px, 40dvh)', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <div role="listbox" aria-label="Staff" className="cm-fade" style={{ marginTop: 10, maxHeight: 'min(280px, 40dvh)', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
             {others.length === 0 && <p style={{ margin: 8, fontSize: 13, color: CK.inkSoft }}>There is nobody else on the staff yet</p>}
-            {others.map((m) => (
+            {others.map((m, i) => (
               <button
                 key={m.id}
                 type="button"
@@ -258,8 +258,8 @@ export default function CabinetDirectivePrompt() {
                 aria-selected={false}
                 disabled={busy}
                 onClick={() => void allocate(d, m)}
-                className="flex items-center w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] disabled:opacity-60"
-                style={{ gap: 10, border: 0, cursor: busy ? 'default' : 'pointer', padding: '6px 8px', borderRadius: 10, background: 'transparent', fontFamily: CK.font }}
+                className="cm-slide-in flex items-center w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] disabled:opacity-60"
+                style={{ ['--i' as string]: i, gap: 10, border: 0, cursor: busy ? 'default' : 'pointer', padding: '6px 8px', borderRadius: 10, background: 'transparent', fontFamily: CK.font }}
               >
                 <StaffPic member={m} size={30} />
                 <span style={{ flex: 1, minWidth: 0 }}>

@@ -20,6 +20,7 @@ import {
 } from '@/app/manage/[slug]/live/cardModel';
 import { CARD_BORDER_COLOR, CARD_SHADOW, CARD_SHADOW_HOVER } from '@/app/manage/[slug]/live/tokens';
 import { SeatPortrait, useRoomNow } from './commandRoomLive';
+import { useChangeGen } from '../../crisisKit';
 
 export const ROOM_LOGO = 44;
 /** How far the emblem hangs over the card's top edge. The slot reserves this above the card. */
@@ -77,6 +78,8 @@ function CardInner({ cab, live, placeholder, onOpen, onChat }: { cab: Cabinet; l
   const [from, to] = np ? toneFill(np.tone) : NEU_GRADIENTS.sage;
   const pct = Math.max(0, Math.min(100, np?.pct ?? 0));
   const started = !!np && np.kind !== 'not-started';
+  // The floor changed hands: the status dot rings once and the speaker's flag pops (nothing animates while the floor stays put).
+  const floorGen = useChangeGen(np?.flag ?? null);
 
   const label: CSSProperties = { fontFamily: OUTFIT, color: SOFT };
 
@@ -110,7 +113,10 @@ function CardInner({ cab, live, placeholder, onOpen, onChat }: { cab: Cabinet; l
           <span className="inline-flex items-center" style={{ gap: 8, flex: 'none' }}>
             {meta && (
               <span className="inline-flex items-center" style={{ gap: 6, paddingTop: 2 }} title="Whether this room has shown a sign of life recently">
-                <span className={meta.pulse ? 'animate-pulse' : undefined} style={{ width: 8, height: 8, borderRadius: '50%', background: meta.color, boxShadow: status === 'not-started' ? `inset 0 0 0 1px ${meta.color}` : undefined }} />
+                <span className="relative inline-flex" style={{ width: 8, height: 8, color: meta.color }}>
+                  {floorGen > 0 && <span key={floorGen} aria-hidden className="cm-ping" />}
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: meta.color, boxShadow: status === 'not-started' ? `inset 0 0 0 1px ${meta.color}` : undefined }} />
+                </span>
                 <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.09em', textTransform: 'uppercase', color: meta.ink }}>{meta.label}</span>
               </span>
             )}
@@ -143,8 +149,9 @@ function CardInner({ cab, live, placeholder, onOpen, onChat }: { cab: Cabinet; l
             <>
               <div className="flex items-start" style={{ gap: 10, minWidth: 0 }}>
                 <span
+                  key={floorGen}
                   aria-hidden
-                  className="flex items-center justify-center"
+                  className={floorGen > 0 ? 'cm-pop flex items-center justify-center' : 'flex items-center justify-center'}
                   style={{
                     width: 40, height: 40, borderRadius: '50%', flex: 'none', overflow: 'hidden',
                     background: np.flag ? 'transparent' : 'rgba(27,56,40,0.06)', boxShadow: '0 1px 2px rgba(27,56,40,0.10), 0 6px 14px -6px rgba(27,56,40,0.30)',
@@ -163,7 +170,7 @@ function CardInner({ cab, live, placeholder, onOpen, onChat }: { cab: Cabinet; l
 
               <div className="rm-scrub" style={{ flex: 'none' }}>
                 <div aria-hidden style={{ height: 6, borderRadius: 6, overflow: 'hidden', background: 'rgba(27,56,40,0.08)', boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.06)', opacity: np.pct !== null ? 1 : 0.55 }}>
-                  <div style={{ inlineSize: `${np.pct !== null ? pct : 0}%`, height: '100%', borderRadius: 6, background: `linear-gradient(90deg, ${from}, ${to})`, transition: 'inline-size 900ms linear' }} />
+                  <div className="cm-grow" style={{ inlineSize: '100%', height: '100%', borderRadius: 6, background: `linear-gradient(90deg, ${from}, ${to})`, transform: `scaleX(${(np.pct !== null ? pct : 0) / 100})` }} />
                 </div>
                 <div className="flex items-start justify-between" style={{ gap: 10, marginTop: 4 }}>
                   <span style={{ ...label, fontSize: 11, fontWeight: 600, lineHeight: 1.3, fontVariantNumeric: 'tabular-nums', overflowWrap: 'anywhere' }}>{started ? np.left : ''}</span>

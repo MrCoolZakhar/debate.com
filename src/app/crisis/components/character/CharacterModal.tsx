@@ -8,17 +8,19 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
-  ArrowLeft, BookOpen, Camera, ChevronRight, FileText, FileDown, MapPin, Trash2, Upload, X, UserRoundPlus,
+  ArrowLeft, BookOpen, Camera, ChevronRight, FileText, FileDown, MapPin, Trash2, Upload, X,
 } from 'lucide-react';
 import GSelect, { type GSelectOption } from '@/components/GSelect';
 import Portal from '@/components/Portal';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import {
-  crisisError, deleteCharacter, listDirectives, listMeetings, saveCharacter, saveMember, saveSecret, uploadCrisisFile,
+  crisisError, deleteCharacter, listDirectives, listMeetings, saveCharacter, saveSecret, uploadCrisisFile,
 } from '@/lib/crisis/api';
 import { getCrisisClient } from '@/lib/crisis/client';
 import { useCrisisLive } from '@/lib/crisis/live';
-import { characterPoints, readPoints } from '@/lib/crisis/points';
+import {
+  characterPoints, coauthorsByCharacter, loadDirectiveStatRowsWithAuthors, personCharacterIds, personPoints, readPoints, type PointsRow,
+} from '@/lib/crisis/points';
 import {
   KIND_LABEL, ROLE_LABEL, type Character, type CharacterSecret, type CharacterStatus, type Directive, type Meeting,
 } from '@/lib/crisis/types';
@@ -31,6 +33,7 @@ import { NumberBadge, StaffPic } from '../directives/directiveParts';
 import CharacterMapPicker, { type PickedSpot } from './CharacterMapPicker';
 import CharacterPerformance from './CharacterPerformance';
 import CharacterSpotSnippet from './CharacterSpotSnippet';
+import SpareOffer, { isGoneStatus } from './SpareOffer';
 import { STATUS_WORDS, statusColor as dirStatusColor, statusIcon } from '../delegate/directiveUi';
 import { STATUS_ORDER, STATUS_WORD, StatusIcon, mayEditCharacters, statusColor } from './characterStatus';
 import { DirectiveBody } from '../directives/attachedImage';
@@ -69,7 +72,11 @@ function ModalBody({ char, onClose, initialTab }: { char: Character; onClose: ()
   const canEdit = mayEditCharacters(v.role, settings);
   const cab = core.cabinets.find((c) => c.id === char.cabinet_id) ?? null;
   const color = cab?.color ?? CK.muted;
-  const gone = char.status === 'dead' || char.status === 'arrested';
+  const gone = isGoneStatus(char.status);
+  /** The delegates who play this character now (a spare can be given to each). */
+  const players = core.members.filter((m) => m.character_id === char.id && m.role === 'delegate');
+  /** Set when a status was just changed to dead, arrested or missing: the spare question is asked in place. */
+  const [offerSpare, setOfferSpare] = useState(false);
 
   // A delegate sees only the profile of any character who is not their own: never their directives or performance.
   const restricted = (v.role === 'delegate' || v.role === 'press') && v.characterId !== char.id;
@@ -102,7 +109,9 @@ function ModalBody({ char, onClose, initialTab }: { char: Character; onClose: ()
   // Directives and meetings, for the Directives and Performance tabs.
   const [dirs, setDirs] = useState<Directive[] | null>(null);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
-  const [co, setCo] = useState<Set<string>>(new Set());
+  // Points read EVERY directive of the crisis (complete, uncapped) with who wrote it, and every joint directive's co-authors.
+  const [statRows, setStatRows] = useState<PointsRow[] | null>(null);
+  const [coAll, setCoAll] = useState<Map<string, Set<string>>>(new Map());
   const seq = useRef(0);
 
   const readAll = useCallback(async () => {
@@ -110,17 +119,20 @@ function ModalBody({ char, onClose, initialTab }: { char: Character; onClose: ()
     const mine = ++seq.current;
     let client;
     try { client = await getCrisisClient(ref.conf, ref.crisis); } catch (e) { notifyErr(crisisError(e, 'Could not load the directives.'), `${KEY}-dirs`); return; }
-    const [dr, mr, cr, sr] = await Promise.allSettled([
+    const [dr, mr, cr, sr, pr] = await Promise.allSettled([
       listDirectives(ref),
       listMeetings(ref),
-      client.from('crisis_directive_coauthors').select('directive_id').eq('character_id', char.id),
+      client.from('crisis_directive_coauthors').select('directive_id, character_id'),
       v.staff ? client.from('crisis_character_secrets').select('*').eq('character_id', char.id).maybeSingle() : Promise.resolve(null),
+      loadDirectiveStatRowsWithAuthors(ref),
     ]);
     if (mine !== seq.current) return;
     if (dr.status === 'fulfilled') setDirs(dr.value);
     else { setDirs((p) => p ?? []); notifyErr(crisisError(dr.reason, 'Could not load the directives.'), `${KEY}-dirs`); }
     if (mr.status === 'fulfilled') setMeetings(mr.value);
-    if (cr.status === 'fulfilled' && cr.value && !cr.value.error) setCo(new Set(((cr.value.data ?? []) as Array<{ directive_id: string }>).map((r) => r.directive_id)));
+    if (cr.status === 'fulfilled' && cr.value && !cr.value.error) setCoAll(coauthorsByCharacter((cr.value.data ?? []) as Array<{ directive_id: string; character_id: string }>));
+    if (pr.status === 'fulfilled') setStatRows(pr.value);
+    else setStatRows((p) => p ?? []);
     if (sr.status === 'fulfilled' && sr.value && !sr.value.error) setSecret((sr.value.data as CharacterSecret | null) ?? null);
     else if (v.staff) setSecret((p) => (p === undefined ? null : p));
   }, [ref, char.id, v.staff, restricted]);
@@ -150,6 +162,7 @@ function ModalBody({ char, onClose, initialTab }: { char: Character; onClose: ()
     return () => { document.removeEventListener('keydown', onKey); before?.focus?.(); };
   }, []);
 
+  const co = useMemo(() => coAll.get(char.id) ?? new Set<string>(), [coAll, char.id]);
   const mine = useMemo(() => {
     if (!dirs) return null;
     return dirs
@@ -157,10 +170,24 @@ function ModalBody({ char, onClose, initialTab }: { char: Character; onClose: ()
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }, [dirs, char.id, co]);
 
-  const points = useMemo(
-    () => characterPoints(char.id, dirs ?? [], meetings, readPoints(core.crisis.settings), co),
-    [char.id, dirs, meetings, core.crisis.settings, co],
+  // Points follow the PERSON: the delegate who plays this character, over every character they played. A character nobody plays
+  // (a spare, an empty seat) shows its own points.
+  const player = useMemo(() => core.members.find((m) => m.role === 'delegate' && m.character_id === char.id) ?? null, [core.members, char.id]);
+  const rowsForPoints = useMemo(() => statRows ?? [], [statRows]);
+  const ownPoints = useMemo(
+    () => characterPoints(char.id, rowsForPoints, meetings, readPoints(core.crisis.settings), co),
+    [char.id, rowsForPoints, meetings, core.crisis.settings, co],
   );
+  const personIds = useMemo(() => (player ? personCharacterIds(player.id, rowsForPoints, char.id) : null), [player, rowsForPoints, char.id]);
+  const points = useMemo(
+    () => (player && personIds ? personPoints(player.id, rowsForPoints, meetings, readPoints(core.crisis.settings), coAll, personIds) : ownPoints),
+    [player, personIds, rowsForPoints, meetings, core.crisis.settings, coAll, ownPoints],
+  );
+  const person = useMemo(() => {
+    if (!player || !personIds) return null;
+    const others = [...personIds].filter((id) => id !== char.id).map((id) => core.characters.find((c) => c.id === id)).filter((c): c is Character => !!c);
+    return { memberId: player.id, name: player.display_name, others, ownPoints: ownPoints.total, rows: rowsForPoints.filter((d) => d.author_member_id === player.id) };
+  }, [player, personIds, core.characters, char.id, ownPoints, rowsForPoints]);
 
   // ───────── Saves ─────────
 
@@ -171,6 +198,13 @@ function ModalBody({ char, onClose, initialTab }: { char: Character; onClose: ()
       await reloadCore();
       return true;
     } catch (e) { notifyErr(crisisError(e, 'Could not save the character.'), KEY); return false; }
+  };
+
+  const changeStatus = async (status: CharacterStatus) => {
+    const ok = await patch({ status }, 'Status changed');
+    // A delegate whose character is gone is asked, in this same pop-up, whether to give them a spare.
+    if (ok && isGoneStatus(status) && players.length > 0) setOfferSpare(true);
+    else if (ok) setOfferSpare(false);
   };
 
   const changePicture = async (file: File | undefined) => {
@@ -224,12 +258,13 @@ function ModalBody({ char, onClose, initialTab }: { char: Character; onClose: ()
     if (busy || !dirty) return;
     const name = d.name.trim();
     if (!name) { notifyErr('Give the character a name.', KEY); return; }
+    if (v.director && !d.cabinet) { notifyErr('Pick a cabinet for the character.', KEY); return; }
     setBusy(true);
     try {
       const row: Partial<Character> = {
         name, title: nul(d.title), bio: nul(d.bio), powers: nul(d.powers), location: nul(d.location), status_note: nul(d.status_note),
       };
-      if (v.director) { row.cabinet_id = d.cabinet || null; row.owner_member_id = d.owner || null; }
+      if (v.director) { row.cabinet_id = d.cabinet; row.owner_member_id = d.owner || null; }
       await saveCharacter(ref, { ...row, id: char.id });
       const sp: Partial<Pick<CharacterSecret, 'goals' | 'staff_notes'>> = {};
       if (goals !== null && goals.trim() !== (secret?.goals ?? '').trim()) sp.goals = nul(goals);
@@ -262,7 +297,7 @@ function ModalBody({ char, onClose, initialTab }: { char: Character; onClose: ()
   } as const;
 
   const statusOptions: GSelectOption[] = STATUS_ORDER.map((s) => ({ value: s, label: STATUS_WORD[s], icon: <StatusIcon status={s} /> }));
-  const cabinetOptions: GSelectOption[] = [{ value: '', label: 'No cabinet' }, ...core.cabinets.map((c) => ({ value: c.id, label: c.name }))];
+  const cabinetOptions: GSelectOption[] = core.cabinets.map((c) => ({ value: c.id, label: c.name }));
   const ownerOptions: GSelectOption[] = [
     { value: '', label: 'Not set' },
     ...responsibleMembers(core.members).map((m) => ({ value: m.id, label: m.display_name, hint: ROLE_LABEL[m.role], icon: <StaffPic member={m} size={24} /> })),
@@ -353,7 +388,7 @@ function ModalBody({ char, onClose, initialTab }: { char: Character; onClose: ()
                   </span>
                   {canEdit ? (
                     <span style={{ minWidth: 150 }}>
-                      <GSelect size="sm" value={char.status} onChange={(s) => { void patch({ status: s as CharacterStatus }, 'Status changed'); }} options={statusOptions} aria-label="Status" />
+                      <GSelect size="sm" value={char.status} onChange={(s) => { void changeStatus(s as CharacterStatus); }} options={statusOptions} aria-label="Status" />
                     </span>
                   ) : restricted && !sameCabinet ? null : (
                     <span className="inline-flex items-center" style={{ gap: 5, fontSize: 13, fontWeight: 700, color: statusColor(char.status) }}>
@@ -404,6 +439,14 @@ function ModalBody({ char, onClose, initialTab }: { char: Character; onClose: ()
               {step.kind === 'guide' && <GuideStep char={char} canEdit={canEdit} uploading={uploading === 'guide'} onReplace={() => guideInput.current?.click()} />}
               {step.kind === 'map' && <CharacterMapPicker name={char.name} picture={char.picture_url} color={cab?.color ?? null} lng={char.location_lng} lat={char.location_lat} label={d.location} busy={busy} onSave={(sp) => { void saveSpot(sp); }} onClear={() => { void clearSpot(); }} />}
               {step.kind === 'directive' && !restricted && (openStep ? <DirectiveView d={openStep} /> : <p style={{ margin: 0, fontSize: 14, color: CK.inkSoft }}>That directive is no longer here.</p>)}
+
+              {step.kind === 'main' && canEdit && offerSpare && players.length > 0 && (
+                <div className="flex flex-col" style={{ gap: 10, marginBottom: 14 }}>
+                  {players.map((m) => (
+                    <SpareOffer key={m.id} delegate={m} char={char} onDone={() => setOfferSpare(false)} onNotNow={() => setOfferSpare(false)} />
+                  ))}
+                </div>
+              )}
 
               {step.kind === 'main' && tab === 'profile' && (
                 <div className="flex flex-col" style={{ gap: 14 }}>
@@ -502,7 +545,7 @@ function ModalBody({ char, onClose, initialTab }: { char: Character; onClose: ()
                     <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
                       <div>
                         <FieldLabel>Cabinet</FieldLabel>
-                        <GSelect value={d.cabinet} onChange={(c) => set('cabinet', c)} options={cabinetOptions} aria-label="Cabinet" />
+                        <GSelect value={d.cabinet} onChange={(c) => set('cabinet', c)} options={cabinetOptions} placeholder="Pick a cabinet" aria-label="Cabinet" />
                       </div>
                       <div>
                         <FieldLabel hint="Answers this character's directives by default">Responsible backroomer</FieldLabel>
@@ -525,7 +568,11 @@ function ModalBody({ char, onClose, initialTab }: { char: Character; onClose: ()
                     </div>
                   )}
 
-                  {v.director && gone && <SpareSwap char={char} onDone={onClose} />}
+                  {canEdit && gone && !offerSpare && players.length > 0 && (
+                    <div className="flex flex-col" style={{ gap: 10 }}>
+                      {players.map((m) => <SpareOffer key={m.id} delegate={m} char={char} />)}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -542,7 +589,7 @@ function ModalBody({ char, onClose, initialTab }: { char: Character; onClose: ()
               )}
 
               {step.kind === 'main' && !restricted && tab === 'performance' && (
-                <CharacterPerformance crisisRef={ref} char={char} cabinet={cab} cabinets={core.cabinets} canSeeNotes={canSeeNotes} points={points} directives={mine} meetings={meetings} loading={dirs === null} staff={v.staff} />
+                <CharacterPerformance crisisRef={ref} char={char} cabinet={cab} cabinets={core.cabinets} canSeeNotes={canSeeNotes} points={points} person={person} directives={mine} meetings={meetings} loading={dirs === null || statRows === null} staff={v.staff} />
               )}
             </div>
 
@@ -723,59 +770,5 @@ function DirectiveView({ d }: { d: Directive }) {
         {d.answered_at && <p title={dateTitle(d.answered_at)} style={{ margin: '6px 0 0', fontSize: 12, color: CK.muted }}>Answered {dateLabel(d.answered_at)}</p>}
       </div>
     </article>
-  );
-}
-
-// ─────────── Give a delegate a spare character ───────────
-
-function SpareSwap({ char, onDone }: { char: Character; onDone: () => void }) {
-  const { ref, core, reloadCore } = useCrisis();
-  const delegates = core.members.filter((m) => m.character_id === char.id);
-  const spares = core.characters.filter((c) => c.status === 'spare' && c.cabinet_id === char.cabinet_id);
-  const [pick, setPick] = useState<Record<string, string>>({});
-  const [busy, setBusy] = useState<string | null>(null);
-
-  const give = async (m: (typeof delegates)[number]) => {
-    const spare = spares.find((s) => s.id === pick[m.id]);
-    if (!spare || busy) return;
-    setBusy(m.id);
-    try {
-      await saveMember(ref, m.id, { character_id: spare.id });
-      await saveCharacter(ref, { id: spare.id, status: 'active', owner_member_id: spare.owner_member_id ?? char.owner_member_id });
-      notifyOk(`${m.display_name} now plays ${spare.name}`, KEY);
-      await reloadCore();
-      onDone();
-    } catch (e) { notifyErr(crisisError(e, 'Could not give the spare character.'), KEY); }
-    finally { setBusy(null); }
-  };
-
-  return (
-    <div style={{ background: 'rgba(163,65,47,0.07)', borderRadius: 16, padding: 14, boxShadow: 'inset 0 0 0 1px rgba(163,65,47,0.2)' }} className="flex flex-col gap-3">
-      <p className="flex items-center gap-2" style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: CK.ink }}>
-        <UserRoundPlus size={16} strokeWidth={1.5} aria-hidden style={{ color: CK.red }} />
-        Give this delegate a spare character
-      </p>
-      {delegates.length === 0 ? (
-        <p style={{ margin: 0, fontSize: 13, color: CK.inkSoft }}>Nobody plays {char.name} right now.</p>
-      ) : spares.length === 0 ? (
-        <p style={{ margin: 0, fontSize: 13, color: CK.inkSoft }}>This cabinet has no spare characters. Add one and set its status to Spare.</p>
-      ) : (
-        delegates.map((m) => (
-          <div key={m.id} className="flex items-end flex-wrap gap-2">
-            <div style={{ flex: '1 1 200px', minWidth: 0 }}>
-              <FieldLabel>{m.display_name}</FieldLabel>
-              <GSelect
-                value={pick[m.id] ?? ''}
-                onChange={(id) => setPick((p) => ({ ...p, [m.id]: id }))}
-                options={spares.map((s) => ({ value: s.id, label: s.name, hint: s.title ?? undefined }))}
-                placeholder="Pick a spare character"
-                aria-label={`Spare character for ${m.display_name}`}
-              />
-            </div>
-            <Btn size="sm" onClick={() => give(m)} disabled={!pick[m.id] || busy !== null}>Give spare character</Btn>
-          </div>
-        ))
-      )}
-    </div>
   );
 }

@@ -62,11 +62,11 @@ export function FrontRoomsCard({ cabinets, conferenceId, rooms, failed }: {
       <CardTitle icon={<Presentation size={17} strokeWidth={1.5} />}>Committee Rooms</CardTitle>
       {cabinets.length === 0 ? <EmptyLine>No cabinets yet.</EmptyLine> : (
         <div className="cmd-rooms-list flex flex-col" style={{ gap: 0 }}>
-          {cabinets.map((cab) => {
+          {cabinets.map((cab, i) => {
             const r = byCab.get(cab.id);
             const linked = !!r?.live;
             return (
-              <div key={cab.id} className="rm-slot" style={{ flex: '1 1 236px', paddingTop: ROOM_OVERHANG + 6, maxHeight: 290 + ROOM_OVERHANG }}>
+              <div key={cab.id} className="rm-slot cm-rise" style={{ ['--i' as string]: i, flex: '1 1 236px', paddingTop: ROOM_OVERHANG + 6, maxHeight: 290 + ROOM_OVERHANG }}>
                 <CrisisRoomCard
                   cab={cab}
                   live={r?.live ?? null}

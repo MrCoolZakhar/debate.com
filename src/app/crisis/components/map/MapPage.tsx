@@ -4,9 +4,11 @@
 // here. On a wide screen the map fills the window under the top bar; on a phone it takes a tall block and
 // the page scrolls to the legend and the panels underneath.
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { CK, Segmented } from '../../crisisKit';
 import HistoryPage from '../history/HistoryPage';
+import MapChangesDialog, { readChangesStamp } from './MapChangesDialog';
+import type { FocusRequest } from './mapFocusFly';
 import WarMap from './WarMap';
 
 type Tab = 'map' | 'history';
@@ -17,10 +19,24 @@ export default function MapPage() {
   const pathname = usePathname();
   const tab: Tab = params?.get('tab') === 'history' ? 'history' : 'map';
 
+  // "N changes to the map" (a notification's link carries the time of the send): a pop-up with the replay and the breakdown.
+  const changesStamp = tab === 'map' ? readChangesStamp(params?.get('changes')) : null;
+  const [focusReq, setFocusReq] = useState<FocusRequest | null>(null);
+  const closeChanges = useCallback(() => {
+    const q = new URLSearchParams(params?.toString() ?? '');
+    q.delete('changes');
+    const s = q.toString();
+    router.replace(`${pathname}${s ? `?${s}` : ''}`, { scroll: false });
+  }, [params, router, pathname]);
+  const pickChange = useCallback((req: Omit<FocusRequest, 'n'>) => {
+    setFocusReq((cur) => ({ ...req, n: (cur?.n ?? 0) + 1 }));
+    closeChanges();
+  }, [closeChanges]);
+
   const setTab = useCallback((t: Tab) => {
     const q = new URLSearchParams(params?.toString() ?? '');
     // A place to zoom to belongs to one visit of the map, not to switching tabs.
-    for (const k of ['unit', 'region', 'bbox']) q.delete(k);
+    for (const k of ['unit', 'region', 'bbox', 'changes']) q.delete(k);
     if (t === 'history') q.set('tab', 'history'); else q.delete('tab');
     const s = q.toString();
     router.replace(`${pathname}${s ? `?${s}` : ''}`, { scroll: false });
@@ -45,7 +61,8 @@ export default function MapPage() {
   return (
     <div className="crisis-map-page" style={{ marginTop: 4 }}>
       <style>{'@media (min-width: 768px) { .crisis-map-page { height: calc(100dvh - 82px); min-height: 520px; } }'}</style>
-      <WarMap title={header} />
+      <WarMap title={header} focusReq={focusReq} />
+      {changesStamp !== null && <MapChangesDialog stamp={changesStamp} onClose={closeChanges} onPick={pickChange} />}
     </div>
   );
 }

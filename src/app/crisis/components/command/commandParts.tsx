@@ -6,10 +6,11 @@ import Link from 'next/link';
 import { CalendarClock, ClipboardCheck, Newspaper, Pause, Pencil, Play, Users } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { DatePicker } from '@/components/DatePicker';
+import GSelect from '@/components/GSelect';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
-import { crisisError, patchCrisis, publishNews, type CrisisRef } from '@/lib/crisis/api';
+import { crisisError, patchCrisis, publishNews, setCabinetDirectivesOpen, type CrisisRef } from '@/lib/crisis/api';
 import type { Cabinet, Crisis, Member, News } from '@/lib/crisis/types';
-import { Btn, Card, CardTitle, CK, cabinetTint, Eyebrow, fieldStyle, scenarioLabel, Skeleton, agoLabel } from '../../crisisKit';
+import { Btn, Card, CardTitle, CK, cabinetTint, Eyebrow, fieldStyle, scenarioLabel, Segmented, Skeleton, agoLabel } from '../../crisisKit';
 import NewsComposerDialog from './NewsComposerDialog';
 import { TryAsButton } from './TryAsPanel';
 
@@ -106,8 +107,8 @@ function Popover({ anchor, onClose, width = 320, label, children }: { anchor: DO
   );
 }
 
-export function CommandHeader({ crisis, cref, acronym, logoUrl, members, now, onChanged, extra }: {
-  crisis: Crisis; cref: CrisisRef; acronym: string; logoUrl: string | null; members: Member[]; now: number; onChanged: () => void;
+export function CommandHeader({ crisis, cref, acronym, logoUrl, members, cabinets = [], now, onChanged, extra }: {
+  crisis: Crisis; cref: CrisisRef; acronym: string; logoUrl: string | null; members: Member[]; cabinets?: Cabinet[]; now: number; onChanged: () => void;
   /** Buttons after the status strip (Statistics). */
   extra?: ReactNode;
 }) {
@@ -115,6 +116,12 @@ export function CommandHeader({ crisis, cref, acronym, logoUrl, members, now, on
   const [draftAt, setDraftAt] = useState('');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState<'date' | 'open' | null>(null);
+  // Pausing: every cabinet (the default) or just one. The choice only exists when the crisis has more than one cabinet.
+  const [scope, setScope] = useState<'all' | 'one'>('all');
+  const [cabId, setCabId] = useState('');
+  const many = cabinets.length > 1;
+  const pausedCabs = cabinets.filter((c) => c.directives_open === false);
+  const openCabs = cabinets.filter((c) => c.directives_open !== false);
 
   // Online counts only people who can sign in at all (an account or a personal code), so the total is not padded with empty seats.
   const { online, canSignIn } = useMemo(() => {
@@ -128,7 +135,7 @@ export function CommandHeader({ crisis, cref, acronym, logoUrl, members, now, on
   const eyebrow = `${acronym.toUpperCase()} · ${crisis.kind === 'joint' ? 'JOINT CRISIS' : 'SINGLE CABINET'} · COMMAND`;
 
   const openDate = (el: HTMLElement) => { setDraftAt((crisis.scenario_at ?? '').slice(0, 16)); setPop({ kind: 'date', rect: el.getBoundingClientRect() }); };
-  const openPause = (el: HTMLElement) => { setNote(''); setPop({ kind: 'pause', rect: el.getBoundingClientRect() }); };
+  const openPause = (el: HTMLElement) => { setNote(''); setScope('all'); setCabId(openCabs[0]?.id ?? ''); setPop({ kind: 'pause', rect: el.getBoundingClientRect() }); };
 
   const saveDate = async () => {
     if (!draftAt || busy) return;
@@ -152,6 +159,27 @@ export function CommandHeader({ crisis, cref, acronym, logoUrl, members, now, on
       onChanged();
     } catch (e) { notifyErr(crisisError(e, 'Could not change that.'), 'crisis-command'); }
     finally { setBusy(null); }
+  };
+
+  /** Pauses or reopens ONE cabinet; the crisis-wide switch is not touched. */
+  const setCabinetOpen = async (cab: Cabinet, open: boolean) => {
+    if (busy) return;
+    setBusy('open');
+    try {
+      await setCabinetDirectivesOpen(cref, cab.id, open, note);
+      setPop(null); setNote('');
+      notifyOk(open ? `Directives are open for ${cab.name}` : `Directives are paused for ${cab.name}`, 'crisis-command');
+      onChanged();
+    } catch (e) { notifyErr(crisisError(e, 'Could not change that.'), 'crisis-command'); }
+    finally { setBusy(null); }
+  };
+  const pauseNow = () => {
+    if (scope === 'one' && many) {
+      const cab = cabinets.find((c) => c.id === cabId);
+      if (cab) void setCabinetOpen(cab, false);
+      return;
+    }
+    void setOpen(false);
   };
 
   return (
@@ -188,7 +216,7 @@ export function CommandHeader({ crisis, cref, acronym, logoUrl, members, now, on
           label="Directives"
         >
           <span style={{ fontSize: 14.5, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap' }}>
-            <span>{crisis.directives_open ? 'Open' : 'Paused'}</span>
+            <span>{crisis.directives_open ? (pausedCabs.length ? `Open, ${pausedCabs.length} paused` : 'Open') : 'Paused'}</span>
             {crisis.directives_open ? (
               <button type="button" style={STRIP_BTN} aria-haspopup="dialog" aria-expanded={pop?.kind === 'pause'} onClick={(e) => (pop?.kind === 'pause' ? setPop(null) : openPause(e.currentTarget))}><Pause size={11} strokeWidth={1.6} aria-hidden />Pause</button>
             ) : (
@@ -218,6 +246,23 @@ export function CommandHeader({ crisis, cref, acronym, logoUrl, members, now, on
       {pop?.kind === 'pause' && (
         <Popover anchor={pop.rect} onClose={() => setPop(null)} width={340} label="Pause directives">
           <p style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 800 }}>Pause directives</p>
+          {many && (
+            <div style={{ marginBottom: 10 }}>
+              <Segmented
+                ariaLabel="What to pause"
+                value={scope}
+                onChange={(x) => setScope(x as 'all' | 'one')}
+                options={[{ value: 'all', label: 'All cabinets' }, { value: 'one', label: 'One cabinet' }]}
+              />
+              {scope === 'one' && (
+                <div style={{ marginTop: 8 }}>
+                  {openCabs.length ? (
+                    <GSelect value={cabId} onChange={setCabId} options={openCabs.map((c) => ({ value: c.id, label: c.name }))} aria-label="Cabinet to pause" placeholder="Pick a cabinet" />
+                  ) : <p style={{ margin: 0, fontSize: 13, color: CK.inkSoft }}>Every cabinet is already paused.</p>}
+                </div>
+              )}
+            </div>
+          )}
           <input
             value={note}
             onChange={(e) => setNote(e.target.value.slice(0, 140))}
@@ -227,9 +272,22 @@ export function CommandHeader({ crisis, cref, acronym, logoUrl, members, now, on
             style={{ ...fieldStyle, padding: '7px 10px', fontSize: 13.5, borderRadius: 10 }}
           />
           <div className="flex gap-2" style={{ marginTop: 12 }}>
-            <Btn size="sm" tone="red" onClick={() => setOpen(false)} disabled={busy === 'open'}>Pause directives</Btn>
+            <Btn size="sm" tone="red" onClick={pauseNow} disabled={busy === 'open' || (scope === 'one' && many && !cabId)}>{scope === 'one' && many ? 'Pause this cabinet' : many ? 'Pause all cabinets' : 'Pause directives'}</Btn>
             <Btn size="sm" tone="ghost" onClick={() => setPop(null)}>Cancel</Btn>
           </div>
+          {pausedCabs.length > 0 && (
+            <div style={{ marginTop: 12, paddingTop: 10, boxShadow: `0 -1px 0 ${CK.hair}` }}>
+              <p style={{ margin: '0 0 6px', fontSize: 11.5, fontWeight: 800, color: CK.muted }}>Paused cabinets</p>
+              <div className="grid" style={{ gap: 6 }}>
+                {pausedCabs.map((c) => (
+                  <div key={c.id} className="flex items-center justify-between" style={{ gap: 8 }}>
+                    <span style={{ fontSize: 13.5, fontWeight: 700, color: c.color, overflowWrap: 'anywhere', minWidth: 0 }}>{c.name}</span>
+                    <Btn size="sm" tone="ghost" onClick={() => setCabinetOpen(c, true)} disabled={busy === 'open'}>Reopen</Btn>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </Popover>
       )}
     </div>

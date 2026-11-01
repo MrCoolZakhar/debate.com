@@ -3,12 +3,13 @@
 // the outcome (or status) as a coloured statement, who it was sent to, then the thread as chat bubbles:
 // the delegate on the right (the directive, then their clarifications), the backroom on the left (the
 // reply and its notes), oldest first. The author can ALWAYS write a clarification at the bottom, at any
-// status, even before the backroom has replied (addNote).
+// status, even before the backroom has replied (addNote). While nobody has answered it, the author can also
+// Edit it (the send form opens it in edit mode) or Withdraw it (asked in place, then withdrawDirective).
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Pencil, Send } from 'lucide-react';
+import { Pencil, Send, Undo2 } from 'lucide-react';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
-import { addNote, crisisError, type CrisisRef } from '@/lib/crisis/api';
+import { addNote, crisisError, withdrawDirective, type CrisisRef } from '@/lib/crisis/api';
 import { CHAIR_SEND_BACK_WORD, dirNumber, isChairSendBack } from '@/lib/crisis/format';
 import type { Directive, DirectiveNote } from '@/lib/crisis/types';
 import { Btn, cabinetTint, CK, fieldStyle, ThemeTag } from '../../crisisKit';
@@ -38,16 +39,48 @@ function BubbleView({ b, lead }: { b: Bubble; lead?: string }) {
 }
 
 export default function DirectiveDialog({
-  cref, d, notes, withNames, myMemberId, author, isAuthor, answeredBy, onChanged, onClose, onSendAgain,
+  cref, d, notes, withNames, myMemberId, author, isAuthor, answeredBy, onChanged, onClose, onSendAgain, onEdit,
 }: {
   cref: CrisisRef; d: Directive; notes: DirectiveNote[]; withNames: string[]; myMemberId: string | null;
   author: PersonRef; isAuthor: boolean; answeredBy: string | null; onChanged: () => void; onClose: () => void;
   /** A directive its chair sent back: copy it into a new directive and close this pop-up. */
   onSendAgain?: () => void;
+  /** Open this directive in the send form to change it (only while nobody has answered it). */
+  onEdit?: () => void;
 }) {
   const sentBack = isChairSendBack(d);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
+  const [confirmWithdraw, setConfirmWithdraw] = useState(false);
+  const [withdrawing, setWithdrawing] = useState(false);
+  // Until the crisis team answers it, its author can still change it or take it back.
+  const editable = isAuthor && (d.status === 'awaiting_chair' || d.status === 'queued' || d.status === 'claimed' || d.status === 'clarify');
+  const withdrawn = d.status === 'withdrawn';
+
+  const withdraw = async () => {
+    if (withdrawing) return;
+    setWithdrawing(true);
+    try {
+      const r = await withdrawDirective(cref, d.id);
+      if (r.ok) {
+        notifyOk(`Directive ${dirNumber(d)} withdrawn`);
+        onChanged();
+        onClose();
+      } else if (r.reason === 'answered') {
+        notifyErr('The crisis team already answered this directive, so it can\'t be withdrawn.');
+        setConfirmWithdraw(false);
+        onChanged();
+      } else {
+        notifyErr('This directive could not be withdrawn. Try again.');
+        setConfirmWithdraw(false);
+        onChanged();
+      }
+    } catch (e) {
+      notifyErr(crisisError(e, 'Could not withdraw the directive. Try again.'));
+    } finally {
+      setWithdrawing(false);
+    }
+  };
   const endRef = useRef<HTMLDivElement>(null);
   const attach = useImageAttach(cref);
 
@@ -134,7 +167,9 @@ export default function DirectiveDialog({
       <section aria-label="Conversation with the backroom" className="grid gap-2.5" style={{ padding: '14px 22px 16px' }}>
         {thread.map((b) => <BubbleView key={b.key} b={b} lead={b.key === 'directive' ? 'Directive' : b.key === 'reply' ? (sentBack ? CHAIR_SEND_BACK_WORD : 'Reply') : undefined} />)}
         {!d.reply && (
-          <p style={{ margin: '2px 0 0', fontSize: 13, color: CK.muted, textAlign: 'center' }}>No reply yet. It shows up here by itself.</p>
+          <p style={{ margin: '2px 0 0', fontSize: 13, color: CK.muted, textAlign: 'center' }}>
+            {withdrawn ? 'This directive was withdrawn. The crisis team will not answer it.' : 'No reply yet. It shows up here by itself.'}
+          </p>
         )}
         <div ref={endRef} style={{ scrollMarginBottom: 110 }} />
       </section>
@@ -144,8 +179,24 @@ export default function DirectiveDialog({
           <Btn tone="green" icon={<Pencil size={15} strokeWidth={1.5} />} onClick={onSendAgain}>Edit and send again</Btn>
         </div>
       )}
-      {isAuthor && !sentBack && (
+      {isAuthor && !sentBack && !withdrawn && (
         <div style={{ position: 'sticky', bottom: 0, background: CK.surface, boxShadow: `0 -1px 0 ${CK.hair}`, padding: '10px 22px 14px' }}>
+          {editable && (
+            <div className="flex items-center flex-wrap" style={{ gap: 8, marginBottom: 8 }}>
+              {confirmWithdraw ? (
+                <>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: CK.ink, overflowWrap: 'anywhere' }}>Withdraw this directive? The crisis team will not answer it.</span>
+                  <Btn tone="danger" size="sm" disabled={withdrawing} onClick={() => { void withdraw(); }}>{withdrawing ? 'Withdrawing' : 'Yes, withdraw it'}</Btn>
+                  <Btn tone="ghost" size="sm" disabled={withdrawing} onClick={() => setConfirmWithdraw(false)}>Keep it</Btn>
+                </>
+              ) : (
+                <>
+                  {onEdit && <Btn tone="ghost" size="sm" icon={<Pencil size={14} strokeWidth={1.5} />} onClick={onEdit}>Edit</Btn>}
+                  <Btn tone="danger" size="sm" icon={<Undo2 size={14} strokeWidth={1.5} />} onClick={() => setConfirmWithdraw(true)}>Withdraw</Btn>
+                </>
+              )}
+            </div>
+          )}
           {d.status === 'clarify' && (
             <p style={{ margin: '0 0 6px', fontSize: 13, fontWeight: 700, color: CK.red }}>The backroom needs more detail. Answer here and it goes back in the queue.</p>
           )}

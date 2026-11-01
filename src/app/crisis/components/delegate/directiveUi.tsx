@@ -14,6 +14,7 @@ import { KIND_ICON } from '../directives/directiveKit';
 export const STATUS_WORDS: Record<DirectiveStatus, string> = {
   awaiting_chair: 'With your chair',
   changes_requested: 'Changes asked for',
+  rejected: 'Rejected by your chair',
   queued: 'Waiting for the backroom',
   claimed: 'With a backroomer',
   clarify: 'More detail needed',

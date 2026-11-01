@@ -155,3 +155,16 @@ export function writerOf(d: Directive, n: Names, nowMs: number): Member | null {
   if (!isBeingWritten(d, nowMs) || !d.drafting_member) return null;
   return n.members.get(d.drafting_member) ?? null;
 }
+
+/** How long ago the writer last typed, in words: "under 1 min", "3 min". */
+export function writingAge(d: Pick<Directive, 'drafting_at'>, nowMs: number): string {
+  const t = d.drafting_at ? new Date(d.drafting_at).getTime() : NaN;
+  if (!Number.isFinite(t)) return '';
+  const min = Math.floor(Math.max(0, nowMs - t) / 60000);
+  return min < 1 ? 'under 1 min' : `${min} min`;
+}
+
+/** The mark that a teammate (not you) is writing this reply; the queue greys the directive and offers "Take over". */
+export function writtenByOther(d: Pick<Directive, 'drafting_member' | 'drafting_at'>, memberId: string | null, nowMs: number): boolean {
+  return isBeingWritten(d, nowMs) && !!d.drafting_member && d.drafting_member !== memberId;
+}

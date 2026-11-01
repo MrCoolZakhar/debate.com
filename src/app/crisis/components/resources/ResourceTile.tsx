@@ -2,7 +2,7 @@
 // Gavelling Crisis: one resource tile. Staff with the power change it inline: a stepper and a reason.
 
 import { useState } from 'react';
-import { Minus, Plus } from 'lucide-react';
+import { Minus, Plus, TriangleAlert } from 'lucide-react';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { amount } from '@/lib/crisis/format';
 import { adjustResource, createResource, crisisError, type CrisisRef } from '@/lib/crisis/api';
@@ -11,6 +11,9 @@ import { Avatar, Btn, CK, fieldStyle, resourceIcon } from '../../crisisKit';
 import ResourceHistoryDialog from './ResourceHistoryDialog';
 
 export interface LastChange { delta: number; reason: string | null }
+
+/** Reasons staff reach for most; a tap fills the reason box (they can still type their own). */
+const REASONS = ['Spent', 'Lost in action', 'Reinforcements', 'Trade', 'Correction'] as const;
 
 export function fmt(n: number): string {
   return amount(n);
@@ -53,6 +56,11 @@ export default function ResourceTile({ refx, type, resource, target, last, canEd
   };
 
   const step = (d: number) => { setHint(null); setDelta((v) => v + d); };
+  // Quick steps grow with the amount, so a big stockpile does not need a hundred taps. Going below zero is warned about, never blocked.
+  const now = resource?.amount ?? 0;
+  const steps = Math.abs(now) >= 1000 ? [10, 100, 1000] : [1, 10, 100];
+  const after = now + delta;
+  const belowZero = !!resource && delta !== 0 && after < 0;
 
   return (
     <div style={{ background: CK.card, borderRadius: 18, boxShadow: CK.shadow, padding: '12px 14px', minWidth: 0, border: '1px solid rgba(27,56,40,0.08)' }}>
@@ -95,12 +103,40 @@ export default function ResourceTile({ refx, type, resource, target, last, canEd
         <div className="flex flex-col" style={{ gap: 8, marginTop: 10 }}>
           {resource ? (
             <>
-              <div className="flex items-center gap-2">
-                <Btn tone="ghost" size="sm" aria-label="Take one off" onClick={() => step(-1)}><Minus size={15} strokeWidth={1.5} aria-hidden /></Btn>
-                <input type="number" value={delta} onChange={(e) => { setHint(null); setDelta(Number(e.target.value) || 0); }} aria-label="Change by" style={{ ...fieldStyle, textAlign: 'center', fontVariantNumeric: 'tabular-nums', padding: '6px 8px' }} />
-                <Btn tone="ghost" size="sm" aria-label="Add one" onClick={() => step(1)}><Plus size={15} strokeWidth={1.5} aria-hidden /></Btn>
+              <div className="flex flex-wrap items-center" style={{ gap: 4 }} role="group" aria-label="Quick steps">
+                {[...steps].reverse().map((n) => (
+                  <Btn key={`m${n}`} tone="ghost" size="sm" aria-label={`Take ${n} off`} onClick={() => step(-n)} style={{ padding: '4px 7px' }}><Minus size={12} strokeWidth={1.5} aria-hidden />{fmt(n)}</Btn>
+                ))}
+                {steps.map((n) => (
+                  <Btn key={`p${n}`} tone="ghost" size="sm" aria-label={`Add ${n}`} onClick={() => step(n)} style={{ padding: '4px 7px' }}><Plus size={12} strokeWidth={1.5} aria-hidden />{fmt(n)}</Btn>
+                ))}
               </div>
+              <input type="number" value={delta} onChange={(e) => { setHint(null); setDelta(Number(e.target.value) || 0); }} aria-label="Change by" style={{ ...fieldStyle, textAlign: 'center', fontVariantNumeric: 'tabular-nums', padding: '6px 8px' }} />
+              {delta !== 0 && (
+                <p style={{ margin: 0, fontSize: 12.5, color: CK.inkSoft, fontVariantNumeric: 'tabular-nums' }}>
+                  {fmt(now)} <span aria-hidden>to</span> <b style={{ color: belowZero ? CK.danger : CK.ink }}>{fmt(after)}</b>{unit}
+                </p>
+              )}
+              {belowZero && (
+                <p role="status" className="flex items-start" style={{ margin: 0, gap: 6, fontSize: 12.5, fontWeight: 700, color: CK.goldDeep }}>
+                  <TriangleAlert size={14} strokeWidth={1.5} aria-hidden style={{ flex: 'none', marginTop: 1 }} />
+                  This takes it below zero. You can still save it.
+                </p>
+              )}
               <input value={reason} onChange={(e) => { setReason(e.target.value); setHint(null); }} maxLength={300} aria-label="Reason" placeholder="Why it changed (required)" style={fieldStyle} />
+              <span className="flex flex-wrap" style={{ gap: 5 }}>
+                {REASONS.map((r) => (
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={() => { setHint(null); setReason(r); }}
+                    className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] active:scale-[0.97] transition-transform"
+                    style={{ border: 0, cursor: 'pointer', borderRadius: 8, padding: '3px 8px', fontSize: 11.5, fontWeight: 700, fontFamily: CK.font, background: reason === r ? CK.greenBtn : CK.well, color: reason === r ? '#fff' : CK.inkSoft }}
+                  >
+                    {r}
+                  </button>
+                ))}
+              </span>
             </>
           ) : (
             <input type="number" value={initial} onChange={(e) => setInitial(e.target.value)} aria-label="Starting amount" style={fieldStyle} />

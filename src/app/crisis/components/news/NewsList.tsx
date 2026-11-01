@@ -1,12 +1,12 @@
 'use client';
 // Gavelling Crisis: published news, newest first. Used by the news page and the chair home.
 
-import { useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { Clock, Landmark, Newspaper, Radio, Users } from 'lucide-react';
 import { timeAgo } from '@/lib/crisis/format';
 import type { Cabinet, News } from '@/lib/crisis/types';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
-import { CK, Card } from '../../crisisKit';
+import { CK, Card, Skeleton } from '../../crisisKit';
 import NewsDetailDialog from './NewsDetailDialog';
 import { ZoomableImage } from './ImageLightbox';
 
@@ -116,7 +116,28 @@ export function NewsMeta({ n, cabinets, size = 14 }: { n: News; cabinets: Cabine
   );
 }
 
-export function NewsCard({ n, cabinets, onOpen }: { n: News; cabinets: Cabinet[]; onOpen?: (n: News) => void }) {
+/** Ids that appeared AFTER the first load of the list: they get a soft gold wash for about 1.5 s (a story that just arrived). */
+function useFreshIds(ids: string[] | null): Set<string> {
+  const seen = useRef<Set<string> | null>(null);
+  const timers = useRef<number[]>([]);
+  const [fresh, setFresh] = useState<Set<string>>(() => new Set());
+  const key = ids ? ids.join('|') : null;
+  useEffect(() => {
+    if (!ids) return;
+    if (!seen.current) { seen.current = new Set(ids); return; }
+    const known = seen.current;
+    const added = ids.filter((id) => !known.has(id));
+    if (!added.length) return;
+    added.forEach((id) => known.add(id));
+    void Promise.resolve().then(() => setFresh((p) => new Set([...p, ...added])));
+    timers.current.push(window.setTimeout(() => setFresh((p) => { const x = new Set(p); added.forEach((id) => x.delete(id)); return x; }), 1800));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `key` stands for the id list
+  }, [key]);
+  useEffect(() => () => { timers.current.forEach((t) => window.clearTimeout(t)); }, []);
+  return fresh;
+}
+
+export function NewsCard({ n, cabinets, onOpen, fresh }: { n: News; cabinets: Cabinet[]; onOpen?: (n: News) => void; fresh?: boolean }) {
   const banner = <NewsPicture n={n} style={{ borderRadius: '22px 22px 0 0' }} />;
   const body = (
     <>
@@ -130,7 +151,8 @@ export function NewsCard({ n, cabinets, onOpen }: { n: News; cabinets: Cabinet[]
     </>
   );
   return (
-    <Card style={{ padding: 0 }}>
+    <Card lift={!!onOpen} className={fresh ? 'cm-rise' : undefined} style={{ padding: 0, position: 'relative' }}>
+      {fresh && <span aria-hidden className="cm-fresh" style={{ borderRadius: 22, zIndex: 1 }} />}
       {onOpen ? (
         <button
           type="button"
@@ -150,10 +172,11 @@ export function NewsCard({ n, cabinets, onOpen }: { n: News; cabinets: Cabinet[]
  *  without it a click opens the news dialog from this list. */
 export function NewsHistory({ items, cabinets, columns, onOpen }: { items: News[] | null; cabinets: Cabinet[]; columns?: boolean; onOpen?: (n: News) => void }) {
   const [openId, setOpenId] = useState<string | null>(null);
+  const fresh = useFreshIds(items ? items.filter((n) => n.status === 'published').map((n) => n.id) : null);
   if (items === null) {
     return (
       <div className="grid gap-3">
-        {[0, 1, 2].map((i) => <Card key={i}><div className="animate-pulse" style={{ height: 70, borderRadius: 10, background: 'rgba(110,30,30,0.08)' }} /></Card>)}
+        {[0, 1, 2].map((i) => <Card key={i}><Skeleton h={70} /></Card>)}
       </div>
     );
   }
@@ -166,7 +189,7 @@ export function NewsHistory({ items, cabinets, columns, onOpen }: { items: News[
   return (
     <>
       <div className={`grid gap-3 ${columns ? 'xl:grid-cols-2' : ''}`}>
-        {published.map((n) => <NewsCard key={n.id} n={n} cabinets={cabinets} onOpen={onOpen ?? ((x) => setOpenId(x.id))} />)}
+        {published.map((n) => <NewsCard key={n.id} n={n} cabinets={cabinets} fresh={fresh.has(n.id)} onOpen={onOpen ?? ((x) => setOpenId(x.id))} />)}
       </div>
       {!onOpen && openId && (() => {
         const n = published.find((x) => x.id === openId);

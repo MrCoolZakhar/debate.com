@@ -207,7 +207,13 @@ export const MAP_CSS = `
 .wm-topleft>*{pointer-events:auto}
 .wm-top-right{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:8px 16px;margin-left:auto;min-width:0}
 .wm-draftbar{display:inline-flex;flex-wrap:wrap;align-items:center;gap:6px 12px;box-sizing:border-box;max-width:100%;background:#fff;border-radius:14px;padding:5px 6px 5px 12px;box-shadow:0 0 0 1px rgba(142,36,36,0.22),0 2px 7px rgba(27,56,40,0.14);font-size:13px;color:#1C1410}
-.wm-draftbar b{font-weight:800}
+.wm-draftbar{animation:wmDraftIn 240ms cubic-bezier(0.22,1,0.36,1)}
+.wm-draftbar b{font-weight:800;display:inline-block;animation:wmCountPop 220ms cubic-bezier(0.22,1,0.36,1)}
+.wm-draftby{display:inline-flex;align-items:center;gap:5px;font-weight:700;color:#8E2424;animation:wmDraftBy 220ms ease-out}
+@keyframes wmDraftIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+@keyframes wmCountPop{0%{transform:scale(0.7);opacity:0.4}60%{transform:scale(1.18);opacity:1}100%{transform:scale(1)}}
+@keyframes wmDraftBy{from{opacity:0;transform:translateX(-6px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.wm-draftbar,.wm-draftbar b,.wm-draftby{animation:none}}
 .wm-draftbar-row{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center}
 .wm-root[data-compact] .wm-draftbar{padding:3px 10px;font-size:12px;box-shadow:0 0 0 1px rgba(142,36,36,0.2)}
 .wm-toolhint{flex-basis:100%;margin:0;font-size:12px;color:#4E463C;line-height:1.35}

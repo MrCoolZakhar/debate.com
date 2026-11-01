@@ -416,6 +416,7 @@ export function CharacterCard({ card, env, onTarget, onRemove }: CardProps) {
 
   return (
     <CardShell kind="character" onRemove={onRemove}>
+      {!env.powers.characters ? <Muted>You cannot change characters. The Crisis Director can allow it in Settings.</Muted> : <>
       <div><FieldLabel>Character</FieldLabel>
         <GSelect value={card.target} options={options} onChange={onTarget} placeholder="Pick a character" aria-label="Character" searchable />
       </div>
@@ -445,6 +446,7 @@ export function CharacterCard({ card, env, onTarget, onRemove }: CardProps) {
           )}
         </>
       )}
+      </>}
     </CardShell>
   );
 }

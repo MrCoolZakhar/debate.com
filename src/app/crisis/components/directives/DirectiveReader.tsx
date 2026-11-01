@@ -17,7 +17,8 @@ import { Avatar, Btn, CK, agoLabel, cabinetTint, waitLabel, waitSeverity } from 
 import { CharacterLink } from '../character/CharacterProfileHost';
 import CharacterBackroomer from './CharacterBackroomer';
 import { CabinetLogo, NameStack, NumberBadge, StaffPic, ThemeTags, shortName } from './directiveParts';
-import { KIND_ICON, authorName, isBeingWritten, memberName, outcomeView, type Lane, type Names } from './directiveKit';
+import { KIND_ICON, authorName, isBeingWritten, memberName, outcomeView, writingAge, writtenByOther, type Lane, type Names } from './directiveKit';
+import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { DirectiveBody, plainText } from './attachedImage';
 
 const WAIT_COLOR = { ok: CK.ink, late: CK.goldDeep, very: CK.danger } as const;
@@ -56,7 +57,7 @@ function Writing({ d, names, now, small }: { d: Directive; names: Names; now: nu
     <span className="inline-flex items-center" style={{ gap: 6, fontSize: small ? 11.5 : 13, fontWeight: 800, color: CK.goldDeep, lineHeight: 1.25 }}>
       <StaffPic member={m ?? null} size={small ? 18 : 22} />
       <Pencil size={small ? 11 : 13} strokeWidth={1.6} aria-hidden style={{ flex: 'none' }} />
-      <span style={{ overflowWrap: 'anywhere' }}>Being written by {m?.display_name ?? 'a teammate'}</span>
+      <span style={{ overflowWrap: 'anywhere' }}>Being written by {m?.display_name ?? 'a teammate'}, {writingAge(d, now)}</span>
     </span>
   );
 }
@@ -66,6 +67,8 @@ function Writing({ d, names, now, small }: { d: Directive; names: Names; now: nu
  * It sits BEHIND the card before it; only its right part shows (STRIP wide), and its content starts there.
  */
 function NextCard({ d, k, fw, names, lane, now, onPick }: { d: Directive; k: number; fw: number; names: Names; lane: Lane; now: number; onPick: () => void }) {
+  const { memberId } = useCrisis();
+  const grey = writtenByOther(d, memberId, now);
   const cab = d.cabinet_id ? names.cabinets.get(d.cabinet_id) : undefined;
   const ch = d.author_character_id ? names.characters.get(d.author_character_id) : undefined;
   const who = authorName(d, names);
@@ -80,7 +83,7 @@ function NextCard({ d, k, fw, names, lane, now, onPick }: { d: Directive; k: num
   };
   return (
     <div className="rd-next" style={style}>
-      <div style={{ position: 'relative', height: '100%', background: CK.card, borderRadius: 22, boxShadow: `${CK.shadowSm}, 0 16px 34px rgba(58,14,15,0.18)`, border: '1px solid rgba(27,56,40,0.14)', overflow: 'visible' }}>
+      <div style={{ position: 'relative', height: '100%', background: CK.card, borderRadius: 22, boxShadow: `${CK.shadowSm}, 0 16px 34px rgba(58,14,15,0.18)`, border: '1px solid rgba(27,56,40,0.14)', overflow: 'visible', opacity: grey ? 0.62 : 1, filter: grey ? 'grayscale(0.7)' : undefined }}>
         <NumberBadge n={dirNumber(d)} color={color} style={{ position: 'absolute', zIndex: 2, top: -9, left: HIDDEN + 14 }} />
         <button type="button" onClick={onPick} aria-label={`Read directive No. ${dirNumber(d)}: ${d.title}`}
           className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] transition-transform hover:-translate-y-0.5"
@@ -110,10 +113,12 @@ function NextCard({ d, k, fw, names, lane, now, onPick }: { d: Directive; k: num
 }
 
 /** The directive in front: large, with its text, a few facts, who looks after the character, and Respond. */
-function FrontCard({ d, names, lane, now, all, index, total, onPrev, onNext, onRespond, onChanged }: {
+function FrontCard({ d, names, lane, now, all, index, total, onPrev, onNext, onRespond, onTakeOver, onChanged }: {
   d: Directive; names: Names; lane: Lane; now: number; all: Directive[]; index: number; total: number;
-  onPrev: () => void; onNext: () => void; onRespond: () => void; onChanged: () => void;
+  onPrev: () => void; onNext: () => void; onRespond: () => void; onTakeOver: () => void; onChanged: () => void;
 }) {
+  const { memberId } = useCrisis();
+  const takeable = writtenByOther(d, memberId, now) && (d.status === 'queued' || d.status === 'claimed');
   const cab = d.cabinet_id ? names.cabinets.get(d.cabinet_id) : undefined;
   const ch = d.author_character_id ? names.characters.get(d.author_character_id) : undefined;
   const who = authorName(d, names);
@@ -171,7 +176,12 @@ function FrontCard({ d, names, lane, now, all, index, total, onPrev, onNext, onR
             <b style={{ fontSize: 13.5, color, overflowWrap: 'anywhere' }}>{cab?.name ?? 'No cabinet'}</b>
           </span>
         </div>
-        <div style={{ marginTop: 8 }}><Writing d={d} names={names} now={now} /></div>
+        <div className="flex items-center flex-wrap" style={{ marginTop: 8, gap: '4px 12px' }}>
+          <Writing d={d} names={names} now={now} />
+          {takeable && (
+            <Btn tone="ghost" size="sm" onClick={onTakeOver}>Take over</Btn>
+          )}
+        </div>
       </div>
 
       {/* The text of the directive (scrolls when it is long), then the answer when there is one. */}
@@ -216,13 +226,15 @@ function FrontCard({ d, names, lane, now, all, index, total, onPrev, onNext, onR
   );
 }
 
-export default function DirectiveReader({ queue, focusId, onFocus, onOpen, active, names, lane, now, all, onChanged }: {
+export default function DirectiveReader({ queue, focusId, onFocus, onOpen, onTakeOver, active, names, lane, now, all, onChanged }: {
   /** The lane, filtered and in queue order. */
   queue: Directive[];
   focusId: string | null;
   onFocus: (id: string) => void;
   /** Open the directive pop-up on this directive. */
   onOpen: (d: Directive) => void;
+  /** "Take over" on a directive a teammate was writing: moves the mark to you (markDrafting), then opens it. */
+  onTakeOver: (d: Directive) => void;
   /** False while the pop-up is open, so the keys belong to it. */
   active: boolean;
   names: Names;
@@ -290,7 +302,7 @@ export default function DirectiveReader({ queue, focusId, onFocus, onOpen, activ
       `}</style>
       <FrontCard
         key={front.id} d={front} names={names} lane={lane} now={now} all={all} index={at} total={total}
-        onPrev={() => move(-1)} onNext={() => move(1)} onRespond={() => onOpen(front)} onChanged={onChanged}
+        onPrev={() => move(-1)} onNext={() => move(1)} onRespond={() => onOpen(front)} onTakeOver={() => onTakeOver(front)} onChanged={onChanged}
       />
       {stack.map((d, i) => (
         <NextCard key={d.id} d={d} k={i + 1} fw={fw} names={names} lane={lane} now={now} onPick={() => onFocus(d.id)} />

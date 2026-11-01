@@ -83,7 +83,7 @@ function DirectiveCard({ d, author, onOpen }: { d: Directive; author: PersonRef;
 }
 
 export default function MyDirectives({
-  cref, directives, notes, coauthors, personOf, memberName, myMemberId, onChanged, onSendAgain, onEditReturned,
+  cref, directives, notes, coauthors, personOf, memberName, myMemberId, onChanged, onSendAgain, onEditReturned, onEditOwn,
 }: {
   cref: CrisisRef;
   directives: Directive[] | null;
@@ -97,6 +97,8 @@ export default function MyDirectives({
   onSendAgain?: (d: Directive) => void;
   /** Open a directive the chair asked changes for in the send form, in edit mode. */
   onEditReturned?: (d: Directive) => void;
+  /** Open a directive nobody has answered yet in the send form, to change it. */
+  onEditOwn?: (d: Directive) => void;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
   const returned = (directives ?? []).filter((d) => d.status === 'changes_requested' && d.author_member_id === myMemberId && !!myMemberId);
@@ -150,6 +152,7 @@ export default function MyDirectives({
           onChanged={onChanged}
           onClose={() => setOpenId(null)}
           onSendAgain={onSendAgain ? () => { setOpenId(null); onSendAgain(openOne); } : undefined}
+          onEdit={onEditOwn ? () => { setOpenId(null); onEditOwn(openOne); } : undefined}
         />
       )}
     </section>

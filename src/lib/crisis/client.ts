@@ -10,14 +10,50 @@ import { getFreshAuthedClient, supabaseAuthClient } from '@/lib/supabase-auth';
 
 const tokenKey = (conferenceSlug: string, crisisSlug: string) => `gavelling-crisis-token:${conferenceSlug}/${crisisSlug}`;
 
+// "Try it as" token: the director's two-hour test token lives in THIS TAB only (sessionStorage), so the director's
+// other tabs and devices stay themselves and closing the tab ends it. A personal-code token (a real person signing in)
+// stays in localStorage for the device. The view token wins over the stored one, in its tab only.
+const viewKey = (conferenceSlug: string, crisisSlug: string) => `gavelling-crisis-view-token:${conferenceSlug}/${crisisSlug}`;
+
 export function readCrisisToken(conferenceSlug: string, crisisSlug: string): string | null {
+  try {
+    const view = window.sessionStorage.getItem(viewKey(conferenceSlug, crisisSlug));
+    if (view) return view;
+  } catch { /* no session storage */ }
   try { return window.localStorage.getItem(tokenKey(conferenceSlug, crisisSlug)); } catch { return null; }
 }
 export function saveCrisisToken(conferenceSlug: string, crisisSlug: string, token: string) {
   try { window.localStorage.setItem(tokenKey(conferenceSlug, crisisSlug), token); } catch { /* private window */ }
 }
+/** Clears both: the device's personal-code token and this tab's "Try it as" token. */
 export function clearCrisisToken(conferenceSlug: string, crisisSlug: string) {
   try { window.localStorage.removeItem(tokenKey(conferenceSlug, crisisSlug)); } catch { /* ignore */ }
+  clearViewToken(conferenceSlug, crisisSlug);
+}
+export function clearViewToken(conferenceSlug: string, crisisSlug: string) {
+  try { window.sessionStorage.removeItem(viewKey(conferenceSlug, crisisSlug)); } catch { /* ignore */ }
+}
+/** True when THIS TAB is trying the crisis as someone else. */
+export function isViewingAs(conferenceSlug: string, crisisSlug: string): boolean {
+  try { return !!window.sessionStorage.getItem(viewKey(conferenceSlug, crisisSlug)); } catch { return false; }
+}
+/** Reads what is stored on the device for a crisis, to put it back after a "Try it as" call wrote over it. */
+export function peekDeviceToken(conferenceSlug: string, crisisSlug: string): string | null {
+  try { return window.localStorage.getItem(tokenKey(conferenceSlug, crisisSlug)); } catch { return null; }
+}
+/**
+ * viewAs() stores the new token for the device. Call this right after it: the token moves into THIS TAB only and
+ * the device's own token (if a person signed in with a code here) is put back. Nothing else is signed out.
+ */
+export function keepViewTokenInThisTab(conferenceSlug: string, crisisSlug: string, previousDeviceToken: string | null): boolean {
+  let token: string | null = null;
+  try {
+    token = window.localStorage.getItem(tokenKey(conferenceSlug, crisisSlug));
+    if (previousDeviceToken) window.localStorage.setItem(tokenKey(conferenceSlug, crisisSlug), previousDeviceToken);
+    else window.localStorage.removeItem(tokenKey(conferenceSlug, crisisSlug));
+  } catch { /* ignore */ }
+  if (!token || token === previousDeviceToken) return false;
+  try { window.sessionStorage.setItem(viewKey(conferenceSlug, crisisSlug), token); return true; } catch { return false; }
 }
 
 const tokenClients = new Map<string, SupabaseClient>();

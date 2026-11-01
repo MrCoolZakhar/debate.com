@@ -1,15 +1,15 @@
 'use client';
 // "Try it as": one click into the crisis as any person in it, or into the live room as a chair,
 // a delegate's room view or the faculty advisor board. For directors and organisers (through
-// their own account). "View as" adds a token for this device only; "Back to my account" in the
-// top bar removes it. Used on /crisis and on the Command page.
+// their own account). "View as" adds a test token (2 hours) for THIS TAB only; "Back to my account" in the
+// top bar (or the Trying-as banner) removes it. Nobody is signed out by it. Used on /crisis and on the Command page.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Eye, Gavel, GraduationCap, X } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { useAuth } from '@/components/AuthProvider';
 import { notifyErr } from '@/lib/appNotify';
-import { clearCrisisToken, getCrisisClient } from '@/lib/crisis/client';
+import { clearCrisisToken, getCrisisClient, keepViewTokenInThisTab, peekDeviceToken } from '@/lib/crisis/client';
 import { crisisError, viewAs, type CrisisRef } from '@/lib/crisis/api';
 import { MEMBER_COLUMNS, ROLE_LABEL, type Cabinet, type Character, type Member } from '@/lib/crisis/types';
 import { Avatar, Btn, CK, Card, CardTitle, Skeleton, useScrollLock } from '../../crisisKit';
@@ -92,7 +92,11 @@ export default function TryAsPanel({ cref, compact }: { cref: CrisisRef; compact
         window.location.assign(`/crisis/${cref.conf}/${cref.crisis}`);
         return;
       }
+      // The test token belongs to THIS TAB only: the director's own session, their other tabs and any code sign-in
+      // on this device are untouched, and closing the tab or "Back to my account" ends it.
+      const before = peekDeviceToken(cref.conf, cref.crisis);
       await viewAs(cref, m.id);
+      if (!keepViewTokenInThisTab(cref.conf, cref.crisis, before)) throw new Error('view token not kept');
       // A full load so every part of the page re-reads as the new person.
       window.location.assign(`/crisis/${cref.conf}/${cref.crisis}`);
     } catch (e) {
@@ -115,7 +119,7 @@ export default function TryAsPanel({ cref, compact }: { cref: CrisisRef; compact
 
   return (
     <Card>
-      <CardTitle icon={<Eye size={17} strokeWidth={1.5} />} sub="Open the crisis as someone else on this device. Use Back to my account at the top to return.">
+      <CardTitle icon={<Eye size={17} strokeWidth={1.5} />} sub="Look around as someone else in this tab, for testing. Nothing you do signs them out. Use Back to my account at the top to return.">
         Try It As
       </CardTitle>
       {noAccount && <p style={{ margin: 0, fontSize: 14, color: CK.inkSoft }}>Try it as works when you are signed in with your Gavelling account.</p>}

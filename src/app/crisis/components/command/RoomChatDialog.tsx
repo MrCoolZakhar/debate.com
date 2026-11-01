@@ -2,7 +2,7 @@
 // Gavelling Crisis: "Room chat", the crisis staff's way into a cabinet's committee-room chat from where they work (the Directives
 // page header, so backroomers, the Crisis Director and the assistants all have it). One pop-up with two steps: the list of cabinets,
 // then that room's chat, which REPLACES the list (a back button returns to it). The chat is staffChat.tsx: the staff write as
-// the Crisis Team. Command's room cards and room pop-up open the same chat from there.
+// "Crisis Team" followed by their own name. Command's room cards and room pop-up open the same chat from there.
 
 import { useEffect, useMemo, useState } from 'react';
 import { MessageCircle } from 'lucide-react';
@@ -33,7 +33,7 @@ async function loadRoomCodes(ref: CrisisRef, cabinets: Cabinet[]): Promise<Map<s
 function RoomChatStep({ cab, code, onBack, onClose }: { cab: Cabinet; code: string; onBack: () => void; onClose: () => void }) {
   const chat = useStaffChat(code, true);
   return (
-    <CrisisDialog title={`${cab.name} Chat`} eyebrow="Writing as the Crisis Team" onBack={onBack} onClose={onClose} width={860} step={`chat:${cab.id}`}>
+    <CrisisDialog title={`${cab.name} Chat`} eyebrow={`Writing as ${chat.name}`} onBack={onBack} onClose={onClose} width={860} step={`chat:${cab.id}`}>
       <StaffRoomChat chat={chat} height="min(560px, calc(100dvh - 230px))" />
     </CrisisDialog>
   );

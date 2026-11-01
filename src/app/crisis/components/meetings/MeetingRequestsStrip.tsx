@@ -5,21 +5,21 @@
 // with Approve and Decline, and draws NOTHING when none are pending. Approving is a plain yes or no; declining opens a small
 // optional note inside the row, never a pop-up.
 //
-// Who may decide: staff (director, assistant director, organiser, backroomer) decide any request. A CHAIR may approve or decline
-// a request that involves a character of the chair's own cabinet (crisis_decide_meeting allows role 'chair' for approved and
-// declined only in that case); every other request is shown to the chair read only, with one line saying a backroomer decides.
+// Who may decide: staff (director, assistant director, organiser, backroomer) decide any request. A CHAIR only sees them, read
+// only (owner, 1 Nov 2026: chairs see meeting requests, they do not decide), with one line saying a backroomer decides.
 // A delegate or press member sees nothing.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Check, Hourglass, X } from 'lucide-react';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
-import { crisisError, decideMeeting, listMeetings, loadWorld, type CrisisRef } from '@/lib/crisis/api';
+import { crisisError, listMeetings, loadWorld, type CrisisRef } from '@/lib/crisis/api';
 import { useCrisisLive } from '@/lib/crisis/live';
 import type { Cabinet, Meeting, Member } from '@/lib/crisis/types';
 import { Btn, CK, fieldStyle, agoLabel } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { CharacterName } from '../character/CharacterProfileHost';
 import { AvatarStack, NameList, requesterName, usePeople, whenText, type Person } from './meetingKit';
+import { decideMeetingChecked, MEETING_ALREADY_DECIDED } from './decide';
 import { serverNow } from '@/lib/serverClock';
 
 /** The pending requests (newest asked last, so the longest wait is first), live. null while the first read runs. */
@@ -66,8 +66,9 @@ function Row({ m, refx, people, cabinets, members, canDecide, compact, now, onDe
     if (busy) return;
     setBusy(true);
     try {
-      await decideMeeting(refx, m.id, status, status === 'declined' ? note : null, null);
-      notifyOk(status === 'approved' ? 'Meeting approved' : 'Meeting declined', 'crisis-meeting');
+      const landed = await decideMeetingChecked(refx, m.id, status, status === 'declined' ? note : null, null);
+      if (landed) notifyOk(status === 'approved' ? 'Meeting approved' : 'Meeting declined', 'crisis-meeting');
+      else notifyErr(MEETING_ALREADY_DECIDED, 'crisis-meeting');
       setDeclining(false); setNote('');
       onDecided();
     } catch (e) {
@@ -116,15 +117,10 @@ function Row({ m, refx, people, cabinets, members, canDecide, compact, now, onDe
   );
 }
 
-/** May this viewer approve or decline this request? Staff always; a chair when it involves a character of their own cabinet. */
+/** May this viewer approve or decline a request? Staff only; chairs and everyone else see them read only. */
 export function useCanDecideMeeting(): (m: Meeting) => boolean {
-  const { staff, role, cabinetId, core } = useCrisis();
-  return useCallback((m: Meeting) => {
-    if (staff) return true;
-    if (role !== 'chair' || !cabinetId) return false;
-    const ids = [...m.character_ids, ...(m.requested_by_character ? [m.requested_by_character] : [])];
-    return ids.some((id) => core.characters.find((c) => c.id === id)?.cabinet_id === cabinetId);
-  }, [staff, role, cabinetId, core.characters]);
+  const { staff } = useCrisis();
+  return useCallback(() => staff, [staff]);
 }
 
 /** The rows only (no frame, no title), for a card that already has its own heading. Nothing when empty. */

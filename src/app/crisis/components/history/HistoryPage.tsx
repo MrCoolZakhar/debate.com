@@ -12,7 +12,7 @@ import { History as HistoryIcon } from 'lucide-react';
 import GSelect from '@/components/GSelect';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { UserFacingError } from '@/lib/friendlyError';
-import { crisisError, loadMap, saveMapDraft } from '@/lib/crisis/api';
+import { crisisError, loadMap, loadMapDraftVersioned, saveMapDraftVersioned } from '@/lib/crisis/api';
 import { crisisHistory, groupBatches, parseChange, type ChangeFilter, type HistoryBatch, type HistoryChange } from '@/lib/crisis/history';
 import { useCrisisLive } from '@/lib/crisis/live';
 import { Btn, Card, CK, Segmented, Skeleton } from '../../crisisKit';
@@ -97,7 +97,14 @@ export default function HistoryPage({ embedded = false }: { embedded?: boolean }
       if (isEmptySet(plan.set)) { notifyOk('The map already looks like it did then', 'crisis-map'); return; }
       const skipped = plan.skipped ? ` ${plan.skipped} older ${plan.skipped === 1 ? 'change' : 'changes'} had no earlier state and stay as they are.` : '';
       if (settings.mapChangesWait) {
-        await saveMapDraft(ref, plan.set as unknown as Record<string, unknown>);
+        // Bringing a point back replaces the team's unsent changes on purpose; the version only keeps two saves from interleaving.
+        let base = (await loadMapDraftVersioned(ref)).version;
+        for (let tries = 0; ; tries++) {
+          const saved = await saveMapDraftVersioned(ref, plan.set as unknown as Record<string, unknown>, base);
+          if (saved.ok) break;
+          if (tries >= 2) throw new UserFacingError('The team is changing the unsent map right now. Try that again.');
+          base = saved.version;
+        }
         notifyOk(`Brought back as unsent changes. Look at the map, then send them.${skipped}`, 'crisis-map');
         const q = new URLSearchParams(window.location.search);
         q.delete('tab');

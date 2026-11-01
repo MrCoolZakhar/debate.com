@@ -59,6 +59,9 @@ export function countChanges(e: EffectsDraft): number {
 
 const OUTCOMES = ['approved', 'partial', 'denied', 'clarify', 'later'] as const;
 const keyOf = (crisisId: string, directiveId: string) => `gavelling-crisis-reply-draft:${crisisId}:${directiveId}`;
+const prefixOf = (crisisId: string) => `gavelling-crisis-reply-draft:${crisisId}:`;
+/** Fired on this window whenever a reply draft is saved or removed, so a list of drafts can refresh at once. */
+export const REPLY_DRAFTS_EVENT = 'gavelling-crisis-reply-drafts';
 
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const num = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
@@ -134,6 +137,14 @@ export function readReplyDraft(crisisId: string, directiveId: string): ReplyDraf
   try {
     const raw = window.localStorage.getItem(keyOf(crisisId, directiveId));
     if (!raw) return null;
+    return parseStored(raw);
+  } catch {
+    return null;
+  }
+}
+
+function parseStored(raw: string): ReplyDraft | null {
+  try {
     const v = JSON.parse(raw) as Partial<ReplyDraft> & { effects?: unknown };
     const reply = typeof v.reply === 'string' ? v.reply : '';
     const outcome = OUTCOMES.find((o) => o === v.outcome) ?? null;
@@ -150,11 +161,41 @@ export function writeReplyDraft(crisisId: string, directiveId: string, draft: Re
     const empty = !draft || (!draft.reply.trim() && !draft.outcome && countChanges(draft.effects) === 0 && !draft.effects.news && draft.effects.cards.length === 0);
     if (empty) {
       window.localStorage.removeItem(keyOf(crisisId, directiveId));
+      announce();
       return false;
     }
-    window.localStorage.setItem(keyOf(crisisId, directiveId), JSON.stringify(draft));
+    // When it was saved is stored beside the draft, so "My drafts" can list the newest first.
+    window.localStorage.setItem(keyOf(crisisId, directiveId), JSON.stringify({ ...draft, savedAt: Date.now() }));
+    announce();
     return true;
   } catch {
     return false;
   }
+}
+
+function announce() {
+  try { window.dispatchEvent(new Event(REPLY_DRAFTS_EVENT)); } catch { /* no window: nothing to tell */ }
+}
+
+export interface StoredReplyDraft { directiveId: string; draft: ReplyDraft; savedAt: number }
+
+/** Every unsent reply draft of this crisis kept on this device, newest first (drafts saved before the time was stored come last). */
+export function listReplyDrafts(crisisId: string): StoredReplyDraft[] {
+  const out: StoredReplyDraft[] = [];
+  try {
+    const prefix = prefixOf(crisisId);
+    const ls = window.localStorage;
+    for (let i = 0; i < ls.length; i += 1) {
+      const key = ls.key(i);
+      if (!key || !key.startsWith(prefix)) continue;
+      const raw = ls.getItem(key);
+      if (!raw) continue;
+      const draft = parseStored(raw);
+      if (!draft) continue;
+      let savedAt = 0;
+      try { const t = (JSON.parse(raw) as { savedAt?: unknown }).savedAt; if (typeof t === 'number' && Number.isFinite(t)) savedAt = t; } catch { /* keep 0 */ }
+      out.push({ directiveId: key.slice(prefix.length), draft, savedAt });
+    }
+  } catch { /* storage blocked: no list */ }
+  return out.sort((a, b) => b.savedAt - a.savedAt);
 }

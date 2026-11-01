@@ -138,6 +138,7 @@ export default function CommandPage() {
         acronym={v.conference.acronym}
         logoUrl={v.conference.logo_url}
         members={core.members}
+        cabinets={core.cabinets}
         now={now}
         onChanged={() => { void reloadCore(); }}
         extra={<StatsButton onClick={() => setStats(true)} />}

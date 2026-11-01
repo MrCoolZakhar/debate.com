@@ -1,0 +1,51 @@
+-- Gavelling Crisis, SQL part 29 (applied 1 Nov 2026 as six migrations). Bodies: read with pg_get_functiondef.
+-- 29a crisis_privacy_tighten
+--   secrets: staff only; a delegate reads their own goals with crisis_my_goals(p_crisis) (never staff notes).
+--   characters: full rows for staff and your own cabinet only (chairs and press included); other cabinets only through
+--     crisis_world (names + pictures for 'names', + title and bio for 'profiles'; default 'hidden').
+--   members: staff read every column; others read their own row, the rest through crisis_people (no email, code, login).
+--   resources: chairs read their own cabinet's (and its characters'), never another cabinet's.
+--   news: chairs and press no longer read other cabinets' news.
+--   storage crisis-media: the listing (SELECT) policy is gone (files still open by exact link); uploads need a member
+--     of that crisis (checked live 1 Nov 2026: storage forwards x-crisis-token, a member's upload landed, an outsider's was refused).
+-- 29b crisis_directives_once_and_status
+--   crisis_word_count(text): one count, the attached picture line never counts; word_count generated from it.
+--   client_request_id (unique per author) makes a repeated send return the first directive; answer_request_id makes a
+--     repeated reply a no-op; an answered directive is changed only with effects.edit = true and then NO effects run.
+--   status 'rejected' (chair's rejection), backfilled from the old reply wording; staff (not the Director) never see
+--     awaiting_chair / changes_requested / rejected.
+--   crisis_cabinets.directives_open / directives_paused_note: pause one cabinet. Dead, arrested or missing characters
+--     cannot send (reason 'inactive'). Reply effects on characters need the 'characters' power.
+--   crisis_fallback_staff(crisis, character): the character's backroomer, else the Director; new directives with nobody
+--     assigned and clarifications on unclaimed directives notify them.
+-- 29c crisis_pings_batches_shared_draft
+--   crisis_ping: one ping per table and cabinet per transaction, payload { t, op, id, cab }.
+--   map sends (crisis_apply_map_set_v2 and reply effects) set crisis.batch: per-row unit/border/area notifications are
+--     held back and crisis_notify_map_batch writes ONE per cabinet, "N changes to the map", link 'map?changes=<epoch ms>'
+--     (every map log row of that send has created_at = that moment; crisis_history filters what a cabinet may see).
+--   crisis_map_drafts.version + crisis_save_map_draft(p_crisis, p_payload, p_base) (refuses with the newer draft when
+--     someone saved in between) + crisis_clear_map_draft(p_crisis, p_base) (keeps a draft changed during a send).
+-- 29d crisis_login_viewas_seats_resources
+--   crisis_code_login(p_code, p_password, p_device): room-code misses count per device for 10 minutes (8; 60 without a
+--     device id); personal codes restart their count once a lock has run out.
+--   crisis_view_tokens: "Try it as" tokens (2 hours), checked by crisis_me, never evicting a real device's token.
+--   crisis_characters.cabinet_id NOT NULL; a member's cabinet always follows their character (triggers both ways).
+--   every non-spare character gets (and keeps on rename) a seat in its cabinet's room (trigger crisis_character_seat,
+--     plus a backfill).
+--   resources: 'Starting amount' log row on insert (and backfilled); crisis_resource_last_changes(p_crisis).
+-- 29e crisis_meetings_delegates_first
+--   status 'awaiting_delegates': invited characters' delegates answer with crisis_respond_meeting(p_meeting, p_accept)
+--     (crisis_meeting_responses); all accepted, or 5 minutes passed (cron crisis-meetings-forward, every minute), it
+--     goes to the backroom ('pending', or 'approved' when meetings need no approval); any decline declines it.
+--   crisis_decide_meeting only moves from the right state (approve/decline pending, hold approved, ...).
+-- 29f crisis_chairs_see_meetings_only (owner, 1 Nov 2026): chairs read only meetings with their cabinet's characters
+--   and no longer decide them; meeting requests notify staff only.
+-- 29g crisis_give_spare(p_member, p_spare): staff give a delegate a spare character; the delegate's room seat is renamed
+--   to the spare (picture too), their directives stay with them; seats are created only for 'active' characters.
+-- 29h crisis_code_logout also deletes a "Try it as" token.
+-- 30a crisis_edit_directive(p_directive, p) / crisis_withdraw_directive(p_directive): the author, until staff answer;
+--   never while a reply is being written (reason 'being_answered').
+--   Client: the delegate's directive pop-up has Edit (the send form in edit mode, Save changes) and Withdraw (asked in place); an
+--   edited or withdrawn directive needs no claim step because directives are assigned automatically.
+--   Points follow the person (no SQL): src/lib/crisis/points.ts sums by crisis_directives.author_member_id across every character.
+-- 30b _press_can_review: crisis staff with an account can approve press releases of their conference.

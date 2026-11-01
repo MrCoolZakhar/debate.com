@@ -4,11 +4,12 @@
 // bigger surfaces and some buttons, keep the green accents). Design reference:
 // docs/crisis/design/crisis-dashboard.src.html. Use these pieces on every /crisis page.
 
-import { useEffect, type CSSProperties, type ReactNode, type ButtonHTMLAttributes } from 'react';
+import { useEffect, useState, type CSSProperties, type ReactNode, type ButtonHTMLAttributes } from 'react';
 import {
   Swords, Eye, Handshake, Coins, Newspaper, User, Landmark, VenetianMask, CircleDot,
   Ship, Plane, Rocket, Shield, Fuel, ThumbsUp, Users, Package, Banknote, Radio, Wheat, Factory, Flame,
 } from 'lucide-react';
+import { CRISIS_MOTION_CSS } from './motion';
 
 export const CK = {
   page: '#EFE3DA',
@@ -40,6 +41,28 @@ export const CK = {
   font: 'var(--font-brand), Inter, system-ui, sans-serif',
   pageBg: 'radial-gradient(1100px 620px at 100% -10%, rgba(142,36,36,0.13), transparent 62%), radial-gradient(900px 520px at -10% 110%, rgba(142,36,36,0.08), transparent 60%), #EFE3DA',
 } as const;
+
+// ─────────── Motion ───────────
+// One shared block of keyframes (src/app/crisis/motion.ts), mounted once by the crisis layout.
+
+export function MotionStyles() {
+  return <style>{CRISIS_MOTION_CSS}</style>;
+}
+
+/** 0 until `value` changes, then counts up on every change. Use it as a React key (or to switch a class on) so a one-off
+ *  animation plays when something changed on screen, never on the first paint and never on a timer. */
+export function useChangeGen(value: unknown): number {
+  const [seen, setSeen] = useState(value);
+  const [gen, setGen] = useState(0);
+  if (seen !== value) { setSeen(value); setGen(gen + 1); }
+  return gen;
+}
+
+/** A number that rolls up into place when it changes (and sits still on first paint). */
+export function Tick({ value }: { value: string | number }) {
+  const gen = useChangeGen(value);
+  return <span key={gen} className={gen > 0 ? 'cm-tick' : undefined} style={gen > 0 ? undefined : { display: 'inline-block' }}>{value}</span>;
+}
 
 // ─────────── Scroll lock for pop-ups ───────────
 // The page behind a pop-up must not scroll (owner, 30 Oct 2026). Every pop-up shell calls useScrollLock().
@@ -88,10 +111,10 @@ export function cabinetTint(hex: string, alpha = 0.22): string {
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
 }
 
-export function Card({ children, warm, style, className }: { children: ReactNode; warm?: boolean; style?: CSSProperties; className?: string }) {
+export function Card({ children, warm, style, className, lift }: { children: ReactNode; warm?: boolean; style?: CSSProperties; className?: string; lift?: boolean }) {
   return (
     <section
-      className={className}
+      className={[className, lift ? 'cm-lift' : ''].filter(Boolean).join(' ') || undefined}
       style={{ background: warm ? CK.redWash : CK.card, borderRadius: 22, boxShadow: CK.shadow, padding: '14px 16px', minWidth: 0, ...style }}
     >
       {children}
@@ -130,7 +153,7 @@ export function Btn({ tone = 'green', size = 'md', icon, children, style, ...res
   return (
     <button
       {...rest}
-      className={`inline-flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] active:scale-[0.97] transition-transform disabled:opacity-50 disabled:cursor-not-allowed ${rest.className ?? ''}`}
+      className={`inline-flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] cm-btn disabled:opacity-50 disabled:cursor-not-allowed ${rest.className ?? ''}`}
       style={{
         border: 0, borderRadius: size === 'sm' ? 9 : 11, padding: size === 'sm' ? '5px 10px' : '8px 14px',
         fontSize: size === 'sm' ? 12 : 13.5, fontWeight: 700, whiteSpace: 'nowrap', cursor: 'pointer',
@@ -147,7 +170,7 @@ export function Btn({ tone = 'green', size = 'md', icon, children, style, ...res
 export function BigCount({ n, word, color }: { n: number | string; word: string; color?: string }) {
   return (
     <span className="inline-flex items-baseline gap-2">
-      <b style={{ fontSize: 30, fontWeight: 800, lineHeight: 1, fontVariantNumeric: 'tabular-nums', color: color ?? CK.ink }}>{n}</b>
+      <b style={{ fontSize: 30, fontWeight: 800, lineHeight: 1, fontVariantNumeric: 'tabular-nums', color: color ?? CK.ink }}><Tick value={n} /></b>
       <span style={{ fontSize: 13, fontWeight: 600, color: CK.inkSoft }}>{word}</span>
     </span>
   );
@@ -168,6 +191,7 @@ export function Segmented<T extends string>({ value, options, onChange, ariaLabe
             style={{
               border: 0, padding: '5px 10px', borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: 'pointer',
               background: on ? CK.card : 'transparent', color: on ? CK.forest : CK.inkSoft, boxShadow: on ? CK.shadowSm : 'none', fontFamily: CK.font,
+              transition: 'background-color 160ms ease, color 160ms ease, box-shadow 160ms ease',
             }}
           >
             {o.label}
@@ -227,7 +251,7 @@ export function scenarioLabel(iso: string | null | undefined): string {
 }
 
 export function Skeleton({ h = 18, w = '100%', r = 10 }: { h?: number; w?: number | string; r?: number }) {
-  return <span className="animate-pulse" style={{ display: 'block', height: h, width: w, borderRadius: r, background: 'rgba(110,30,30,0.08)' }} />;
+  return <span className="cm-skel" style={{ display: 'block', height: h, width: w, borderRadius: r, background: 'rgba(110,30,30,0.08)' }} />;
 }
 
 // ─────────── Signature detail: the overlapping avatar ───────────
@@ -292,7 +316,7 @@ export function OverhangCard({ name, src, color, size = 56, place = 'corner', ch
   };
   if (onClick) {
     return (
-      <button type="button" onClick={onClick} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] text-left w-full transition-transform active:scale-[0.99]" style={{ ...common, cursor: 'pointer', fontFamily: CK.font, color: CK.ink }}>
+      <button type="button" onClick={onClick} className="cm-lift focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] text-left w-full" style={{ ...common, cursor: 'pointer', fontFamily: CK.font, color: CK.ink }}>
         {body}
       </button>
     );

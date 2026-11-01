@@ -97,6 +97,8 @@ export interface Cabinet {
   color: string;
   sort: number;
   logo_url: string | null;      // the cabinet's logo or seal (docs/crisis/sql/010)
+  directives_open?: boolean;    // false = directives paused for this cabinet only (docs/crisis/sql/029b)
+  directives_paused_note?: string | null;
 }
 
 export interface Member {
@@ -146,7 +148,7 @@ export interface CharacterSecret {
 }
 
 export type DirectiveKind = 'personal' | 'joint' | 'committee' | 'press_release' | 'communique';
-export type DirectiveStatus = 'awaiting_chair' | 'changes_requested' | 'queued' | 'claimed' | 'clarify' | 'answered' | 'withdrawn';
+export type DirectiveStatus = 'awaiting_chair' | 'changes_requested' | 'rejected' | 'queued' | 'claimed' | 'clarify' | 'answered' | 'withdrawn';
 export type DirectiveOutcome = 'approved' | 'partial' | 'denied' | 'clarify' | 'later';
 
 export const KIND_LABEL: Record<DirectiveKind, string> = {
@@ -307,7 +309,7 @@ export interface ResolvedCrisis {
 }
 
 /** A meeting between characters (docs/crisis/sql/010). Happens in person; the app holds the request. */
-export type MeetingStatus = 'pending' | 'approved' | 'declined' | 'held' | 'cancelled';
+export type MeetingStatus = 'awaiting_delegates' | 'pending' | 'approved' | 'declined' | 'held' | 'cancelled';
 export interface Meeting {
   id: string;
   crisis_id: string;
@@ -330,7 +332,7 @@ export interface Meeting {
   updated_at: string;
 }
 export const MEETING_STATUS_LABEL: Record<MeetingStatus, string> = {
-  pending: 'Waiting for approval', approved: 'Approved', declined: 'Declined', held: 'Held', cancelled: 'Cancelled',
+  awaiting_delegates: 'Waiting for the others to answer', pending: 'Waiting for approval', approved: 'Approved', declined: 'Declined', held: 'Held', cancelled: 'Cancelled',
 };
 
 /** A bell notification for one member, written by database triggers (docs/crisis/sql/011). */

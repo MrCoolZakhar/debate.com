@@ -10,7 +10,7 @@
 // ChairDirectiveCard is the one card, also drawn inline by the Front Room (chair/ChairApproval.tsx).
 
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
-import { ArrowLeft, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Gavel, PencilLine, X, XCircle } from 'lucide-react';
+import { ArrowLeft, Check, ChevronDown, ChevronLeft, ChevronRight, Gavel, PencilLine, X, XCircle } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { crisisError, listDirectives, requestDirectiveChanges, reviewDirectiveAsChair, type CrisisRef } from '@/lib/crisis/api';
@@ -147,7 +147,7 @@ export function ChairDirectiveCard({ d, author, cref, cabinetName, variant, focu
         {header}
 
         {!asking ? (
-          <>
+          <div key="view" className="cm-fade">
             <h3 style={{ margin: '12px 0 0', fontSize: popup ? 20 : 18, lineHeight: 1.28, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{d.title}</h3>
             {(d.themes ?? []).length > 0 && (
               <div className="flex flex-wrap" style={{ gap: 6, marginTop: 8 }}>
@@ -175,7 +175,7 @@ export function ChairDirectiveCard({ d, author, cref, cabinetName, variant, focu
                     className="inline-flex items-center gap-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
                     style={{ marginTop: 4, border: 0, background: 'transparent', padding: 0, cursor: 'pointer', fontFamily: CK.font, fontSize: 13, fontWeight: 800, color: CK.forest, textDecoration: 'underline' }}
                   >
-                    {open ? <ChevronUp size={14} strokeWidth={1.6} aria-hidden /> : <ChevronDown size={14} strokeWidth={1.6} aria-hidden />}
+                    <ChevronDown size={14} strokeWidth={1.6} aria-hidden className="cm-chev" />
                     {open ? 'Show less' : 'Read all'}
                   </button>
                 )}
@@ -188,9 +188,9 @@ export function ChairDirectiveCard({ d, author, cref, cabinetName, variant, focu
               <Btn tone="ghost" icon={<PencilLine size={16} strokeWidth={1.5} aria-hidden />} disabled={!!busy} onClick={() => setMode('changes')}>Request changes</Btn>
               <Btn tone="danger" icon={<XCircle size={16} strokeWidth={1.5} aria-hidden />} disabled={!!busy} onClick={() => setMode('reject')}>Reject</Btn>
             </div>
-          </>
+          </div>
         ) : (
-          <div style={{ marginTop: 12 }}>
+          <div key={mode} className="cm-fade" style={{ marginTop: 12 }}>
             <button
               type="button"
               onClick={back}
@@ -266,6 +266,7 @@ export default function ChairDirectivePrompt() {
   const [blocked, setBlocked] = useState(false);
   const [viewing, setViewing] = useState<string | null>(null);
   const [cursor, setCursor] = useState(0);
+  const [dir, setDir] = useState<'next' | 'prev'>('next'); // which way the "1 of N" card arrives from
   const panel = useRef<HTMLDivElement>(null);
 
   // This device's list of closed directives, read again whenever it changes (or the person does).
@@ -344,7 +345,7 @@ export default function ChairDirectivePrompt() {
   const author = directiveAuthor(d, core.characters, core.members, core.cabinets);
   const cabinetName = d.cabinet_id ? core.cabinets.find((c) => c.id === d.cabinet_id)?.name ?? null : null;
   const at = cursor % pending.length;
-  const step = (by: number) => setCursor((at + by + pending.length) % pending.length);
+  const step = (by: number) => { setDir(by < 0 ? 'prev' : 'next'); setCursor((at + by + pending.length) % pending.length); };
   const navBtn = { border: 0, background: CK.well, color: CK.inkSoft, borderRadius: 999, width: 30, height: 30, cursor: 'pointer', flex: 'none' } as const;
 
   const topBar = (
@@ -375,7 +376,7 @@ export default function ChairDirectivePrompt() {
           .chair-pop { animation: chair-pop-in 220ms cubic-bezier(0.22,1,0.36,1); }
           @media (prefers-reduced-motion: reduce) { .chair-pop { animation: none; } }
         `}</style>
-        <div aria-hidden onMouseDown={() => dismiss(d)} style={{ position: 'absolute', inset: 0, background: 'rgba(58,14,15,0.5)' }} />
+        <div aria-hidden className="cm-fade" onMouseDown={() => dismiss(d)} style={{ position: 'absolute', inset: 0, background: 'rgba(58,14,15,0.5)' }} />
         <div
           ref={panel}
           data-chair-prompt=""
@@ -386,16 +387,17 @@ export default function ChairDirectivePrompt() {
           className="chair-pop focus:outline-none"
           style={{ position: 'relative', width: 'min(580px, 100%)', maxHeight: 'calc(100dvh - 56px)' }}
         >
-          <ChairDirectiveCard
-            key={stamp(d)}
-            d={d}
-            author={author}
-            cref={ref}
-            cabinetName={cabinetName}
-            variant="popup"
-            topBar={topBar}
-            onDone={() => { void load(); }}
-          />
+          <div key={stamp(d)} className={cursor > 0 || pending.length > 1 ? (dir === 'prev' ? 'cm-prev' : 'cm-next') : undefined}>
+            <ChairDirectiveCard
+              d={d}
+              author={author}
+              cref={ref}
+              cabinetName={cabinetName}
+              variant="popup"
+              topBar={topBar}
+              onDone={() => { void load(); }}
+            />
+          </div>
         </div>
       </div>
     </Portal>

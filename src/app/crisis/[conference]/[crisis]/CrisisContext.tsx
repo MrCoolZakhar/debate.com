@@ -6,7 +6,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { crisisError, heartbeat, loadCore, readPresence, resolveCrisis, type CrisisCore, type CrisisRef } from '@/lib/crisis/api';
 import { ensureServerClock } from '@/lib/serverClock';
-import { useCrisisLive } from '@/lib/crisis/live';
+import { createFlight, setLiveViewerCabinet, useCrisisLive } from '@/lib/crisis/live';
 import { readSettings, isDirector, isStaff, type CrisisRole, type CrisisSettings, type ResolvedCrisis } from '@/lib/crisis/types';
 
 export interface CrisisContextValue {
@@ -56,7 +56,6 @@ export function useCrisisGate(conf: string, crisis: string, identityKey: string)
   const [core, setCore] = useState<CrisisCore | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
-  const loading = useRef(false);
 
   useEffect(() => { ensureServerClock(); }, []);
 
@@ -82,16 +81,34 @@ export function useCrisisGate(conf: string, crisis: string, identityKey: string)
   const crisisId = resolved?.allowed ? resolved.crisis_id ?? null : null;
   const ref = useMemo<CrisisRef | null>(() => (crisisId ? { conf, crisis, id: crisisId } : null), [conf, crisis, crisisId]);
 
-  const reloadCore = useCallback(async () => {
-    if (!ref || loading.current) return;
-    loading.current = true;
+  // A reload asked for while one runs is queued once, never dropped (createFlight).
+  const readCore = useCallback(async () => {
+    if (!ref) return;
     try {
       const c = await loadCore(ref);
       setCore(c);
     } catch { /* keep what we have; the next ping or poll retries */ } finally {
-      loading.current = false;
+      // Kept on purpose: with a plain try/catch the React compiler lint starts analysing this hook and reports the presence refs
+      // below (a false alarm that the old try/finally here also hid).
     }
   }, [ref]);
+  const [flight] = useState(createFlight);
+  const reloadCore = useCallback(() => flight(readCore), [flight, readCore]);
+
+  // The viewer's own cabinet and character follow their row in the live people list (staff can give a delegate a spare character or
+  // move them); until the core has loaded, what the page resolved on entry stands.
+  const memberId = resolved?.member_id ?? null;
+  const ownRow = memberId && core ? core.members.find((m) => m.id === memberId) : undefined;
+  const cabinetId = ownRow ? ownRow.cabinet_id : resolved?.cabinet_id ?? null;
+  const characterId = ownRow ? ownRow.character_id : resolved?.character_id ?? null;
+
+  // Pings about another cabinet's directives, resources and news are not for this viewer: drop them before any page reads again.
+  const viewerRole = resolved?.role ?? null;
+  useEffect(() => {
+    if (!crisisId || !viewerRole) return;
+    setLiveViewerCabinet(crisisId, isStaff(viewerRole) ? null : cabinetId);
+    return () => setLiveViewerCabinet(crisisId, null);
+  }, [crisisId, viewerRole, cabinetId]);
 
   const live = useCrisisLive(crisisId, ['crises', 'crisis_cabinets', 'crisis_members', 'crisis_characters'], () => { void reloadCore(); });
 
@@ -145,9 +162,7 @@ export function useCrisisGate(conf: string, crisis: string, identityKey: string)
     const role = resolved.role;
     return {
       ref, role,
-      memberId: resolved.member_id ?? null,
-      cabinetId: resolved.cabinet_id ?? null,
-      characterId: resolved.character_id ?? null,
+      memberId, cabinetId, characterId,
       displayName: resolved.display_name ?? null,
       conference: resolved.conference,
       core,
@@ -158,7 +173,7 @@ export function useCrisisGate(conf: string, crisis: string, identityKey: string)
       reloadCore,
       watchPresence,
     };
-  }, [ref, resolved, core, live, reloadCore, watchPresence]);
+  }, [ref, resolved, core, live, reloadCore, watchPresence, memberId, cabinetId, characterId]);
 
   let gate: CrisisGate;
   if (error && !value) gate = { state: 'error', message: error };

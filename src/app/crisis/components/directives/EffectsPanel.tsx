@@ -50,7 +50,7 @@ export default function EffectsPanel({ env }: { env: CardEnv }) {
     { kind: 'resources', label: 'Resources', Icon: CARD_META.resources.Icon, blocked: powers.resources ? null : 'Not allowed' },
     { kind: 'unit', label: 'Move a unit', Icon: CARD_META.unit.Icon, blocked: powers.units ? null : 'Not allowed' },
     { kind: 'border', label: 'Change a border', Icon: CARD_META.border.Icon, blocked: !powers.map ? 'Not allowed' : hasBorder ? 'One per reply' : null },
-    { kind: 'character', label: 'A character', Icon: CARD_META.character.Icon, blocked: null },
+    { kind: 'character', label: 'A character', Icon: CARD_META.character.Icon, blocked: powers.characters ? null : 'Not allowed' },
     { kind: 'news', label: 'Newsflash', Icon: CARD_META.news.Icon, blocked: hasNews ? 'One per reply' : null },
   ];
   const empty = effects.cards.length === 0;

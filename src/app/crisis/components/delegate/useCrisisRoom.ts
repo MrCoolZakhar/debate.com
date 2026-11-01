@@ -46,7 +46,10 @@ export interface CrisisRoom {
 
 /** The cabinet's room code. Read again each minute while there is none. */
 function useRoomCode() {
-  const { ref, cabinetId, core } = useCrisis();
+  const { ref, core, memberId, cabinetId: ctxCabinet } = useCrisis();
+  // The page's own member row is live, so a new cabinet (a new character) switches the room without a reload.
+  const liveMember = core.members.find((m) => m.id === memberId);
+  const cabinetId = liveMember ? liveMember.cabinet_id : ctxCabinet;
   const ccId = core.cabinets.find((c) => c.id === cabinetId)?.conference_committee_id ?? null;
   const [read, setRead] = useState<{ ccId: string; code: string | null } | null>(null);
   const haveCode = useRef(false);
@@ -137,7 +140,9 @@ export function useRoom(code: string | null) {
 }
 
 export function useCrisisRoom(): CrisisRoom {
-  const { characterId, core } = useCrisis();
+  const { memberId, characterId: ctxCharacter, core } = useCrisis();
+  const liveMember = core.members.find((m) => m.id === memberId);
+  const characterId = liveMember ? liveMember.character_id : ctxCharacter;
   const { ready, code } = useRoomCode();
   const room = useRoom(code);
   const character = useMemo(() => core.characters.find((c) => c.id === characterId) ?? null, [core.characters, characterId]);

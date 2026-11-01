@@ -13,12 +13,13 @@ import { Avatar, CK } from '../../crisisKit';
 import { CharacterLink, CharacterName } from '../character/CharacterProfileHost';
 import { seatFitFontPx } from '@/lib/seatName';
 import { CabinetLogo, NumberBadge, shortName, StaffPic, ThemeTags } from './directiveParts';
-import { KIND_ICON, authorName, writerOf, type Names } from './directiveKit';
+import { KIND_ICON, authorName, writerOf, writingAge, writtenByOther, type Names } from './directiveKit';
+import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { useNow } from './useNow';
 
 export const WAIT_COLOR = { ok: CK.ink, late: CK.goldDeep, very: CK.danger } as const;
 
-export default function QueueRow({ d, names, whenLabel, sev, selected, delegateNote, onOpen, compact }: {
+export default function QueueRow({ d, names, whenLabel, sev, selected, delegateNote, onOpen, onTakeOver, compact }: {
   d: Directive;
   names: Names;
   /** "14 min", "Answered 3 min ago". */
@@ -29,11 +30,15 @@ export default function QueueRow({ d, names, whenLabel, sev, selected, delegateN
   /** The delegate wrote back after a request for detail. */
   delegateNote?: boolean;
   onOpen: () => void;
+  /** When a teammate is writing the reply: the row is greyed and offers "Take over" (moves the mark to you, then opens it). */
+  onTakeOver?: () => void;
   /** Command's one-screen card: smaller portrait and title, no backroomer name. */
   compact?: boolean;
 }) {
   const now = useNow(60_000);
+  const { memberId } = useCrisis();
   const writer = writerOf(d, names, now);
+  const other = writtenByOther(d, memberId, now);
   const cab = d.cabinet_id ? names.cabinets.get(d.cabinet_id) : undefined;
   const ch = d.author_character_id ? names.characters.get(d.author_character_id) : undefined;
   const who = authorName(d, names);
@@ -57,7 +62,7 @@ export default function QueueRow({ d, names, whenLabel, sev, selected, delegateN
     <div
       style={{
         position: 'relative', overflow: 'visible', background: CK.card, borderRadius: compact ? 14 : 18, border: '1px solid rgba(27,56,40,0.14)', minWidth: 0,
-        marginTop: 14, boxShadow: shadow,
+        marginTop: 14, boxShadow: shadow, opacity: other ? 0.62 : 1, filter: other ? 'grayscale(0.7)' : undefined,
       }}
     >
       <NumberBadge n={dirNumber(d)} color={color} style={{ position: 'absolute', zIndex: 2, top: -9, left: 12 }} />
@@ -99,7 +104,7 @@ export default function QueueRow({ d, names, whenLabel, sev, selected, delegateN
             </span>
             {!compact && (
               <span title="Responsible" style={{ fontSize: 11.5, fontWeight: 700, color: backroomer ? CK.inkSoft : CK.muted, overflowWrap: 'anywhere' }}>
-                {backroomer ? backroomer.display_name : 'Unclaimed'}
+                {backroomer ? backroomer.display_name : 'Unassigned'}
               </span>
             )}
           </span>
@@ -108,7 +113,13 @@ export default function QueueRow({ d, names, whenLabel, sev, selected, delegateN
           <span className="flex items-center" style={{ gap: 6, marginTop: compact ? 7 : 9, fontSize: compact ? 11.5 : 12, fontWeight: 800, color: CK.goldDeep, lineHeight: 1.25 }}>
             <StaffPic member={writer} size={compact ? 16 : 18} />
             <Pencil size={12} strokeWidth={1.6} aria-hidden style={{ flex: 'none' }} />
-            <span style={{ overflowWrap: 'anywhere' }}>Being written by {writer.display_name}</span>
+            <span style={{ overflowWrap: 'anywhere' }}>Being written by {writer.display_name}, {writingAge(d, now)}</span>
+            {other && onTakeOver && (
+              <button type="button" onClick={onTakeOver} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+                style={{ position: 'relative', zIndex: 2, pointerEvents: 'auto', marginLeft: 'auto', border: 0, borderRadius: 10, padding: '3px 9px', fontSize: 11.5, fontWeight: 800, cursor: 'pointer', background: CK.card, color: CK.forest, boxShadow: CK.shadowSm, fontFamily: CK.font }}>
+                Take over
+              </button>
+            )}
           </span>
         )}
       </div>

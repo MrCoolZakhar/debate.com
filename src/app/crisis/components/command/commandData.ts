@@ -5,7 +5,8 @@ import { getCrisisClient } from '@/lib/crisis/client';
 import { amount, isChairSendBack } from '@/lib/crisis/format';
 import { isCrisisTeamName } from '@/lib/crisis/staffChatName';
 import type { Cabinet, Character, Directive, Member, Resource } from '@/lib/crisis/types';
-import type { CrisisRef } from '@/lib/crisis/api';
+import { loadResourceLastChanges, type CrisisRef, type DirectiveStatRow } from '@/lib/crisis/api';
+import { startOfDayMs } from '@/lib/crisis/conferenceZone';
 import type { CaucusJson, LiveCommittee } from '@/app/manage/[slug]/live/LiveModals';
 import { isBeingWritten, isOpenStatus } from '../directives/directiveKit';
 
@@ -105,16 +106,13 @@ export async function loadRoomStates(ref: CrisisRef, cabinets: Cabinet[]): Promi
 
 // ─────────── Resource log ───────────
 
-/** The newest change per resource: { resource_id -> delta }. */
+/** The newest change per resource: { resource_id -> delta }, read in the database (every resource, however long the log is). */
 export async function loadLastChanges(ref: CrisisRef): Promise<Map<string, number>> {
-  const client = await getCrisisClient(ref.conf, ref.crisis);
-  const res = await client.from('crisis_resource_log').select('resource_id, delta, created_at')
-    .eq('crisis_id', ref.id).order('created_at', { ascending: false }).limit(200);
   const out = new Map<string, number>();
-  if (res.error) return out;
-  for (const row of (res.data ?? []) as Array<{ resource_id: string; delta: number }>) {
-    if (!out.has(row.resource_id)) out.set(row.resource_id, Number(row.delta));
-  }
+  try {
+    // The starting amount is where a resource began, not a change.
+    for (const row of await loadResourceLastChanges(ref)) if (row.reason !== 'Starting amount') out.set(row.resource_id, Number(row.delta));
+  } catch { /* no last-change figures this time */ }
   return out;
 }
 
@@ -142,8 +140,8 @@ export const isLoadStatus = isOpenStatus;
 export const beingWritten = (d: Directive, nowMs: number): boolean => isOpenStatus(d) && isBeingWritten(d, nowMs);
 
 export function staffLoads(members: Member[], directives: Directive[], nowMs: number): StaffLoad[] {
-  const startOfDay = new Date(nowMs); startOfDay.setHours(0, 0, 0, 0);
-  const since = startOfDay.getTime();
+  // "Today" is the conference's day (its time zone), not the browser's midnight.
+  const since = startOfDayMs(nowMs);
   return members.filter(isStaffRow).map((member) => {
     // A directive being written is being dealt with: it is not open load.
     const open = directives.filter((d) => d.assigned_member_id === member.id && isLoadStatus(d) && !beingWritten(d, nowMs));
@@ -176,6 +174,8 @@ export interface BackroomStat {
   member: Member;
   open: number;
   answered: number;
+  /** Answered since midnight in the conference's time zone. */
+  answeredToday: number;
   /** Average minutes from created to answered, over everything this person answered. null = none yet. */
   avgReplyMin: number | null;
   /** Directives this person is writing a reply to right now (counted apart from open). */
@@ -184,17 +184,21 @@ export interface BackroomStat {
   oldestWaiting: string | null;
 }
 
-export function backroomStats(members: Member[], directives: Directive[], nowMs: number): BackroomStat[] {
+/** `directives` holds every open directive (listDirectives always loads them all); `rows` is every directive of the crisis, light
+ *  columns only (loadDirectiveStatRows), so answered counts and averages never depend on how many finished ones are on screen. */
+export function backroomStats(members: Member[], directives: Directive[], rows: DirectiveStatRow[], nowMs: number): BackroomStat[] {
+  const since = startOfDayMs(nowMs);
   return members.filter(isStaffRow).map((member) => {
     const mine = directives.filter((d) => d.assigned_member_id === member.id && isLoadStatus(d));
     const writing = mine.filter((d) => beingWritten(d, nowMs)).length;
     const open = mine.filter((d) => !beingWritten(d, nowMs));
-    const done = directives.filter((d) => d.answered_by === member.id && d.answered_at);
+    const done = rows.filter((d) => d.answered_by === member.id && d.answered_at);
+    const today = done.filter((d) => new Date(d.answered_at as string).getTime() >= since).length;
     const avg = done.length
-      ? done.reduce((s, d) => s + (new Date(d.answered_at as string).getTime() - new Date(d.created_at).getTime()), 0) / done.length / 60000
+      ? done.reduce((sum, d) => sum + (new Date(d.answered_at as string).getTime() - new Date(d.created_at).getTime()), 0) / done.length / 60000
       : null;
     const oldest = open.reduce<string | null>((o, d) => (o === null || new Date(d.waiting_since) < new Date(o) ? d.waiting_since : o), null);
-    return { member, open: open.length, answered: done.length, avgReplyMin: avg, writing, oldestWaiting: oldest };
+    return { member, open: open.length, answered: done.length, answeredToday: today, avgReplyMin: avg, writing, oldestWaiting: oldest };
   }).sort((a, b) => b.open - a.open || b.answered - a.answered || a.member.display_name.localeCompare(b.member.display_name));
 }
 
@@ -207,12 +211,13 @@ export interface DelegateStat {
   waiting: number;
 }
 
-/** The Delegates ranking: only characters somebody plays (a delegate member holds them), never a spare or an empty seat. */
-export function delegateStats(characters: Character[], directives: Directive[], members: Member[]): DelegateStat[] {
+/** The Delegates ranking: only characters somebody plays (a delegate member holds them), never a spare or an empty seat.
+ *  `rows` is every directive of the crisis (loadDirectiveStatRows). */
+export function delegateStats(characters: Character[], rows: DirectiveStatRow[], members: Member[]): DelegateStat[] {
   const played = new Set(members.filter((m) => m.role === 'delegate' && m.character_id).map((m) => m.character_id as string));
   return characters.filter((c) => c.status !== 'spare' && played.has(c.id)).map((character) => {
     // A directive the chair sent back never reached the backroom: it is not sent, not denied and not waiting (same as the points).
-    const mine = directives.filter((d) => d.author_character_id === character.id && d.status !== 'withdrawn' && !isChairSendBack(d));
+    const mine = rows.filter((d) => d.author_character_id === character.id && d.status !== 'withdrawn' && !isChairSendBack(d));
     return {
       character,
       sent: mine.length,

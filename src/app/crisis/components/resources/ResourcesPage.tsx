@@ -3,18 +3,23 @@
 // Staff and chairs see everything; delegates see what the database lets them (their cabinet and themselves).
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { History, Plus, Ruler } from 'lucide-react';
+import { CopyPlus, History, LayoutTemplate, Plus, Ruler } from 'lucide-react';
 import { notifyErr } from '@/lib/appNotify';
-import { crisisError, loadResources } from '@/lib/crisis/api';
+import { crisisError, loadResourceLastChanges, loadResources } from '@/lib/crisis/api';
 import { getCrisisClient } from '@/lib/crisis/client';
 import { useCrisisLive } from '@/lib/crisis/live';
 import type { Resource, ResourceType } from '@/lib/crisis/types';
-import { Btn, Card, CardTitle, CK, Skeleton, waitLabel } from '../../crisisKit';
+import { Btn, Card, CardTitle, CK, Skeleton, cabinetTint, waitLabel } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import AddResourceType from './AddResourceType';
+import CopyCabinetResources from './CopyCabinetResources';
 import EditResourceTypes from './EditResourceTypes';
+import ResourceTemplates from './ResourceTemplates';
 import ResourceTile, { signed, type LastChange } from './ResourceTile';
 import { serverNow } from '@/lib/serverClock';
+
+/** The reason the database writes on a resource's first log row. */
+const STARTING = 'Starting amount';
 
 interface LogRow { id: string; resource_id: string; delta: number; amount_after: number; reason: string | null; member_id: string | null; created_at: string }
 
@@ -22,8 +27,12 @@ export default function ResourcesPage() {
   const { ref, role, staff, director, settings, core } = useCrisis();
   const [data, setData] = useState<{ types: ResourceType[]; resources: Resource[] } | null>(null);
   const [log, setLog] = useState<LogRow[]>([]);
+  // The last change of every resource, read in the database (the 300-row log below can miss resources that changed long ago).
+  const [lastChanges, setLastChanges] = useState<Map<string, LastChange>>(new Map());
   const [error, setError] = useState<string | null>(null);
-  const [mode, setMode] = useState<null | 'add' | 'edit'>(null);
+  const [mode, setMode] = useState<null | 'add' | 'edit' | 'templates' | 'copy'>(null);
+  // A cabinet's own "Add from a template" button opens the templates already aimed at that cabinet.
+  const [templateCabinet, setTemplateCabinet] = useState<string | null>(null);
   const [now, setNow] = useState(() => serverNow());
   const canEdit = director || (role === 'backroomer' && settings.backroomPowers.resources);
 
@@ -32,15 +41,20 @@ export default function ResourcesPage() {
   const read = useCallback(async () => {
     const d = await loadResources(ref);
     let rows: LogRow[] = [];
+    const last = new Map<string, LastChange>();
     if (staff) {
+      try {
+        // The starting amount is where a resource began, not a change.
+        for (const l of await loadResourceLastChanges(ref)) if (l.reason !== STARTING) last.set(l.resource_id, { delta: Number(l.delta), reason: l.reason });
+      } catch { /* the tiles simply show no last change */ }
       const client = await getCrisisClient(ref.conf, ref.crisis);
       const res = await client.from('crisis_resource_log').select('id, resource_id, delta, amount_after, reason, member_id, created_at').eq('crisis_id', ref.id).order('created_at', { ascending: false }).limit(300);
       if (!res.error) rows = res.data as LogRow[];
     }
-    return { d, rows };
+    return { d, rows, last };
   }, [ref, staff]);
 
-  const apply = useCallback((r: { d: { types: ResourceType[]; resources: Resource[] }; rows: LogRow[] }) => { setData(r.d); setLog(r.rows); setError(null); }, []);
+  const apply = useCallback((r: { d: { types: ResourceType[]; resources: Resource[] }; rows: LogRow[]; last: Map<string, LastChange> }) => { setData(r.d); setLog(r.rows); setLastChanges(r.last); setError(null); }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -51,16 +65,14 @@ export default function ResourcesPage() {
     read().then(apply).catch((e) => notifyErr(crisisError(e, 'Could not refresh the resources.'), 'crisis-resources-refresh'));
   });
 
+  const refresh = useCallback(() => { read().then(apply).catch((e) => notifyErr(crisisError(e, 'Could not refresh the resources.'), 'crisis-resources-refresh')); }, [read, apply]);
+
   const byKey = useMemo(() => {
     const m = new Map<string, Resource>();
     for (const r of data?.resources ?? []) m.set(`${r.type_id}:${r.cabinet_id ?? ''}:${r.character_id ?? ''}`, r);
     return m;
   }, [data]);
-  const lastByResource = useMemo(() => {
-    const m = new Map<string, LastChange>();
-    for (const l of log) if (!m.has(l.resource_id)) m.set(l.resource_id, { delta: Number(l.delta), reason: l.reason });
-    return m;
-  }, [log]);
+  const lastByResource = lastChanges;
 
   if (error && !data) return <Card style={{ marginTop: 8 }}><p role="alert" style={{ margin: 0, color: CK.red, fontWeight: 700 }}>{error}</p></Card>;
   if (!data) return <div className="flex flex-col" style={{ gap: 12, marginTop: 8 }}><Skeleton h={28} w={220} /><Skeleton h={130} r={22} /><Skeleton h={130} r={22} /></div>;
@@ -89,30 +101,70 @@ export default function ResourcesPage() {
         </div>
         {canEdit && !mode && (
           <div className="flex items-center gap-2 flex-wrap">
+            <Btn tone="green" icon={<LayoutTemplate size={15} strokeWidth={1.5} aria-hidden />} onClick={() => { setTemplateCabinet(null); setMode('templates'); }}>Add from a template</Btn>
+            {cabinetTypes.length > 0 && core.cabinets.length > 1 && <Btn tone="ghost" icon={<CopyPlus size={15} strokeWidth={1.5} aria-hidden />} onClick={() => setMode('copy')}>Copy a cabinet</Btn>}
+            <Btn tone="ghost" icon={<Plus size={15} strokeWidth={1.5} aria-hidden />} onClick={() => setMode('add')}>Add a resource type</Btn>
             {data.types.length > 0 && <Btn tone="ghost" icon={<Ruler size={15} strokeWidth={1.5} aria-hidden />} onClick={() => setMode('edit')}>Names and measures</Btn>}
-            <Btn tone="green" icon={<Plus size={15} strokeWidth={1.5} aria-hidden />} onClick={() => setMode('add')}>Add a resource type</Btn>
           </div>
         )}
       </div>
 
-      {mode === 'add' && <AddResourceType refx={ref} onClose={() => setMode(null)} />}
-      {mode === 'edit' && <EditResourceTypes refx={ref} types={data.types} onClose={() => setMode(null)} />}
+      {staff && data.types.length > 0 && (
+        <div className="flex items-center flex-wrap" style={{ gap: '6px 26px', margin: '0 0 16px' }}>
+          <span className="inline-flex items-baseline gap-2"><b style={{ fontSize: 28, fontWeight: 800, lineHeight: 1, fontVariantNumeric: 'tabular-nums', color: CK.red }}>{data.types.length}</b><span style={{ fontSize: 13, fontWeight: 600, color: CK.inkSoft }}>{data.types.length === 1 ? 'resource type' : 'resource types'}</span></span>
+          <span className="inline-flex items-baseline gap-2"><b style={{ fontSize: 28, fontWeight: 800, lineHeight: 1, fontVariantNumeric: 'tabular-nums', color: CK.red }}>{data.resources.length}</b><span style={{ fontSize: 13, fontWeight: 600, color: CK.inkSoft }}>{data.resources.length === 1 ? 'amount held' : 'amounts held'}</span></span>
+          <span className="inline-flex items-baseline gap-2"><b style={{ fontSize: 28, fontWeight: 800, lineHeight: 1, fontVariantNumeric: 'tabular-nums', color: CK.red }}>{core.cabinets.length}</b><span style={{ fontSize: 13, fontWeight: 600, color: CK.inkSoft }}>{core.cabinets.length === 1 ? 'cabinet' : 'cabinets'}</span></span>
+        </div>
+      )}
 
-      {!data.types.length && <Card><p style={{ margin: 0, fontSize: 13.5, color: CK.inkSoft }}>{canEdit ? 'No resources yet. Add the first type to start.' : 'No resources have been set up yet.'}</p></Card>}
+      {mode === 'add' && <AddResourceType refx={ref} onClose={() => { setMode(null); refresh(); }} />}
+      {mode === 'edit' && <EditResourceTypes refx={ref} types={data.types} resources={data.resources} onClose={() => setMode(null)} onChanged={refresh} />}
+      {mode === 'templates' && (
+        <ResourceTemplates
+          refx={ref} types={data.types} resources={data.resources} cabinets={core.cabinets} characters={core.characters}
+          presetCabinet={templateCabinet}
+          onCustom={() => setMode('add')}
+          onClose={() => setMode(null)}
+          onChanged={refresh}
+        />
+      )}
+      {mode === 'copy' && <CopyCabinetResources refx={ref} types={data.types} resources={data.resources} cabinets={core.cabinets} onClose={() => setMode(null)} onChanged={refresh} />}
+
+      {!data.types.length && mode !== 'templates' && mode !== 'add' && (
+        <Card warm>
+          <div className="flex items-center flex-wrap" style={{ gap: 14 }}>
+            <span aria-hidden style={{ width: 46, height: 46, borderRadius: '50%', display: 'grid', placeItems: 'center', color: CK.red, background: cabinetTint(CK.red, 0.1), flex: 'none' }}><LayoutTemplate size={22} strokeWidth={1.5} /></span>
+            <div style={{ flex: '1 1 240px', minWidth: 0 }}>
+              <b style={{ display: 'block', fontSize: 16, fontWeight: 800, color: CK.ink }}>{canEdit ? 'No resources yet' : 'Nothing here yet'}</b>
+              <p style={{ margin: '2px 0 0', fontSize: 13.5, color: CK.inkSoft }}>{canEdit ? 'Start from a template, such as Military or Economy, or add your own type.' : 'No resources have been set up yet.'}</p>
+            </div>
+            {canEdit && <Btn tone="green" icon={<LayoutTemplate size={15} strokeWidth={1.5} aria-hidden />} onClick={() => { setTemplateCabinet(null); setMode('templates'); }}>Add from a template</Btn>}
+          </div>
+        </Card>
+      )}
 
       <div className="flex flex-col" style={{ gap: 18 }}>
         {visibleCabinets.map((cab) => {
           const chars = core.characters.filter((c) => c.cabinet_id === cab.id && c.status !== 'spare');
           const hasAny = cabinetTypes.length > 0 || characterTypes.length > 0;
           if (!hasAny) return null;
+          const charIds = new Set(chars.map((ch) => ch.id));
+          const held = data.resources.filter((r) => r.cabinet_id === cab.id || (r.character_id !== null && charIds.has(r.character_id))).length;
           return (
             <Card key={cab.id}>
-              <div className="flex items-center gap-3" style={{ marginBottom: 12 }}>
+              <div className="flex items-center gap-3 flex-wrap" style={{ marginBottom: 12, padding: '8px 10px', borderRadius: 16, background: cabinetTint(cab.color, 0.08) }}>
                 {cab.logo_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={cab.logo_url} alt="" width={40} height={40} style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', background: '#FDFCF9', boxShadow: '0 2px 8px rgba(27,56,40,0.18)' }} />
                 ) : <span aria-hidden style={{ width: 40, height: 40, borderRadius: '50%', background: cab.color, boxShadow: '0 2px 8px rgba(27,56,40,0.18)', flex: 'none' }} />}
-                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{cab.name}</h2>
+                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere', flex: '1 1 160px', minWidth: 0 }}>{cab.name}</h2>
+                <span className="inline-flex items-baseline gap-1.5">
+                  <b style={{ fontSize: 24, fontWeight: 800, lineHeight: 1, fontVariantNumeric: 'tabular-nums', color: cab.color }}>{held}</b>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: CK.inkSoft }}>{held === 1 ? 'amount' : 'amounts'}</span>
+                </span>
+                {canEdit && !mode && (
+                  <Btn tone="ghost" size="sm" icon={<LayoutTemplate size={13} strokeWidth={1.5} aria-hidden />} onClick={() => { setTemplateCabinet(cab.id); setMode('templates'); }}>Add from a template</Btn>
+                )}
               </div>
               {cabinetTypes.length > 0 && (
                 <div className="grid" style={{ gap: 12, gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))' }}>
@@ -145,7 +197,7 @@ export default function ResourcesPage() {
 
       {staff && (
         <Card style={{ marginTop: 18 }}>
-          <CardTitle icon={<History size={17} strokeWidth={1.5} aria-hidden />} right={<span><b style={{ fontSize: 22, fontVariantNumeric: 'tabular-nums' }}>{log.length}</b> <span style={{ fontSize: 13, color: CK.inkSoft, fontWeight: 600 }}>changes</span></span>}>Change Log</CardTitle>
+          <CardTitle icon={<History size={17} strokeWidth={1.5} aria-hidden />} right={<span><b style={{ fontSize: 22, fontVariantNumeric: 'tabular-nums' }}>{log.filter((l) => l.reason !== STARTING).length}</b> <span style={{ fontSize: 13, color: CK.inkSoft, fontWeight: 600 }}>changes</span></span>}>Change Log</CardTitle>
           {!log.length && <p style={{ margin: 0, fontSize: 13.5, color: CK.inkSoft }}>No changes yet.</p>}
           <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
             {log.map((l) => {

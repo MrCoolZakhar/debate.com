@@ -21,6 +21,7 @@ import { CharacterName } from '../character/CharacterProfileHost';
 import MeetingHistory from '../meetings/MeetingHistory';
 import MeetingRequestsStrip, { useMeetingPeople } from '../meetings/MeetingRequestsStrip';
 import StaffMeetingCard from '../meetings/StaffMeetingCard';
+import { useMeetingResponses } from '../meetings/useMeetingResponses';
 import { useCrisisNews } from '../news/useCrisisNews';
 import { plainText } from '../directives/attachedImage';
 import { CabinetDirectivesList, CrisisNewsList } from '../command/cabinetFeeds';
@@ -53,8 +54,9 @@ async function loadRooms(ref: CrisisRef, cabinets: Array<{ id: string; name: str
   });
 }
 
-/** The cabinet's meetings on the Front Room: approved ones (the one running first, with its clock) and, collapsed, what was held.
- *  Requests still waiting for a yes or no are the strip above. A chair sees these and may run the clock; the backroom decides. */
+/** The cabinet's meetings on the Front Room, read only: those still asking the others, approved ones (the one running first, with
+ *  its clock) and, collapsed, what was held. Requests waiting for a yes or no are the strip above. A chair sees these and may run
+ *  the clock; only the backroom decides (owner, 1 Nov 2026). */
 function ChairMeetings() {
   const { ref, core, cabinetId } = useCrisis();
   const people = useMeetingPeople(ref, true);
@@ -85,14 +87,16 @@ function ChairMeetings() {
     () => mine.filter((m) => m.status === 'approved').sort((x, y) => Number(meetingInProgress(y)) - Number(meetingInProgress(x)) || new Date(y.decided_at ?? y.created_at).getTime() - new Date(x.decided_at ?? x.created_at).getTime()),
     [mine],
   );
-  const past = useMemo(() => mine.filter((m) => m.status !== 'pending' && m.status !== 'approved'), [mine]);
+  const asking = useMemo(() => mine.filter((m) => m.status === 'awaiting_delegates'), [mine]);
+  const { responses } = useMeetingResponses(ref, true, asking.length > 0);
+  const past = useMemo(() => mine.filter((m) => m.status !== 'awaiting_delegates' && m.status !== 'pending' && m.status !== 'approved'), [mine]);
   const running = approved.filter(meetingInProgress).length;
 
   return (
     <Card warm>
       <CardTitle
         icon={<CalendarCheck size={18} strokeWidth={1.5} />}
-        sub="Approved meetings, and what was held."
+        sub="Approved meetings, those still asking the others, and what was held."
         right={
           <Link
             href={`${crisisBase(ref)}/meetings`}
@@ -114,6 +118,9 @@ function ChairMeetings() {
             </p>
           )}
           {approved.length === 0 && <p style={{ margin: 0, fontSize: 13.5, color: CK.inkSoft }}>No meetings are approved yet.</p>}
+          {asking.map((m) => (
+            <StaffMeetingCard key={m.id} m={m} refx={ref} people={people} cabinets={core.cabinets} members={core.members} canAct={false} onChanged={() => void load()} now={now} responses={responses} />
+          ))}
           {approved.map((m) => (
             <StaffMeetingCard key={m.id} m={m} refx={ref} people={people} cabinets={core.cabinets} members={core.members} canAct={false} canClock onChanged={() => void load()} now={now} />
           ))}

@@ -1,15 +1,32 @@
 'use client';
 // Gavelling Crisis: shared pieces of the Meetings page (status look, people lookup, avatar stack).
 
-import { useMemo, type ReactNode } from 'react';
-import { Ban, CalendarCheck, CircleCheck, Hourglass, XCircle, type LucideIcon } from 'lucide-react';
+import { useMemo, useState, type ReactNode } from 'react';
+import { Ban, CalendarCheck, Check, CircleCheck, Hourglass, Users, X, XCircle, type LucideIcon } from 'lucide-react';
+import { notifyErr, notifyOk } from '@/lib/appNotify';
+import { crisisError, respondMeeting, type CrisisRef } from '@/lib/crisis/api';
 import type { Cabinet, Character, Meeting, MeetingStatus, Member } from '@/lib/crisis/types';
-import { Avatar, CK } from '../../crisisKit';
+import { Avatar, Btn, CK } from '../../crisisKit';
+import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { CharacterName } from '../character/CharacterProfileHost';
+
+/** A meeting row as the database now sends it: while the others are asked first it also carries the time it moves on by itself. */
+export type MeetingX = Meeting & { delegates_due_at?: string | null };
+/** One invited character's answer. */
+export interface MeetingResponse { meeting_id: string; character_id: string; response: 'accepted' | 'declined'; responded_at: string }
+
+/** The character this delegate plays right now. The member row is kept live by the core, so a new character (a spare given by
+ *  the crisis team) shows without a reload. */
+export function useMyCharacterId(): string | null {
+  const { memberId, characterId, core } = useCrisis();
+  const member = core.members.find((m) => m.id === memberId);
+  return member ? member.character_id : characterId;
+}
 
 export interface Person { id: string; name: string; picture_url: string | null; cabinet_id: string | null; status?: string }
 
 export const STATUS_LOOK: Record<MeetingStatus, { Icon: LucideIcon; color: string }> = {
+  awaiting_delegates: { Icon: Users, color: CK.warn },
   pending: { Icon: Hourglass, color: CK.warn },
   approved: { Icon: CalendarCheck, color: CK.ok },
   held: { Icon: CircleCheck, color: CK.forest },
@@ -65,7 +82,7 @@ export function AvatarStack({ ids, people, cabinets, size = 46 }: { ids: string[
 
 export function StatusLine({ status }: { status: MeetingStatus }) {
   const { Icon, color } = STATUS_LOOK[status];
-  const label = { pending: 'Waiting for approval', approved: 'Approved', held: 'Held', declined: 'Declined', cancelled: 'Cancelled' }[status];
+  const label = { awaiting_delegates: 'Asking the others', pending: 'Waiting for approval', approved: 'Approved', held: 'Held', declined: 'Declined', cancelled: 'Cancelled' }[status];
   return (
     <span className="inline-flex items-center gap-1.5" style={{ color, fontSize: 12.5, fontWeight: 800 }}>
       <Icon size={15} strokeWidth={1.5} aria-hidden />{label}
@@ -89,5 +106,61 @@ export function NameList({ ids, people }: { ids: string[]; people: Map<string, P
         <span key={id}>{i > 0 ? ', ' : ''}<CharacterName id={id} name={people.get(id)?.name ?? 'Unknown'} /></span>
       ))}
     </>
+  );
+}
+
+/** The time a meeting still asking the others moves on by itself, as a clock time (empty when unknown). */
+export function dueClock(m: MeetingX): string {
+  if (!m.delegates_due_at) return '';
+  const d = new Date(m.delegates_due_at);
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+}
+
+/** Accept and Decline for one invitation. The database refuses an answer to a meeting that was already decided. */
+export function InviteButtons({ refx, meetingId, onAnswered, size = 'sm' }: { refx: CrisisRef; meetingId: string; onAnswered: () => void; size?: 'sm' | 'md' }) {
+  const [busy, setBusy] = useState<null | 'accept' | 'decline'>(null);
+  const answer = async (accept: boolean) => {
+    if (busy) return;
+    setBusy(accept ? 'accept' : 'decline');
+    try {
+      const r = await respondMeeting(refx, meetingId, accept);
+      if (!r.ok) notifyErr('This meeting was already decided', 'crisis-meeting');
+      else notifyOk(accept ? 'You accepted the meeting' : 'You declined the meeting', 'crisis-meeting');
+      onAnswered();
+    } catch (e) {
+      notifyErr(crisisError(e, 'Could not save your answer. Try again.'), 'crisis-meeting');
+    } finally { setBusy(null); }
+  };
+  return (
+    <div className="flex flex-wrap" style={{ gap: 8 }}>
+      <Btn tone="green" size={size} icon={<Check size={size === 'sm' ? 14 : 16} strokeWidth={1.6} aria-hidden />} disabled={!!busy} onClick={() => answer(true)}>{busy === 'accept' ? 'Accepting' : 'Accept'}</Btn>
+      <Btn tone="danger" size={size} icon={<X size={size === 'sm' ? 14 : 16} strokeWidth={1.6} aria-hidden />} disabled={!!busy} onClick={() => answer(false)}>{busy === 'decline' ? 'Declining' : 'Decline'}</Btn>
+    </div>
+  );
+}
+
+/** For a meeting still asking the others: who accepted, who has not answered yet, and when it moves on by itself. */
+export function AnswerList({ m, responses, people, cabinets }: { m: MeetingX; responses: MeetingResponse[] | null; people: Map<string, Person>; cabinets: Cabinet[] }) {
+  const due = dueClock(m);
+  return (
+    <div style={{ marginTop: 12, background: CK.well, borderRadius: 14, padding: '10px 12px' }}>
+      <p style={{ margin: 0, fontSize: 12, fontWeight: 800, color: CK.inkSoft }}>Answers so far</p>
+      <ul style={{ margin: '6px 0 0', padding: 0 }}>
+        {m.character_ids.map((id) => {
+          const r = responses?.find((x) => x.meeting_id === m.id && x.character_id === id)?.response ?? null;
+          const look = r === 'accepted' ? { Icon: Check, color: CK.ok, word: 'Accepted' } : r === 'declined' ? { Icon: X, color: CK.danger, word: 'Declined' } : { Icon: Hourglass, color: CK.warn, word: responses === null ? 'Loading' : 'Has not answered yet' };
+          return (
+            <li key={id} className="flex items-center flex-wrap" style={{ listStyle: 'none', gap: 8, padding: '3px 0' }}>
+              <AvatarStack ids={[id]} people={people} cabinets={cabinets} size={26} />
+              <span style={{ fontSize: 13, fontWeight: 700, color: CK.ink, overflowWrap: 'anywhere', flex: '1 1 120px', minWidth: 0 }}><CharacterName id={id} name={people.get(id)?.name ?? 'Unknown'} /></span>
+              <span className="inline-flex items-center" style={{ gap: 5, fontSize: 12.5, fontWeight: 800, color: look.color }}><look.Icon size={14} strokeWidth={1.6} aria-hidden />{look.word}</span>
+            </li>
+          );
+        })}
+      </ul>
+      <p style={{ margin: '8px 0 0', fontSize: 12.5, color: CK.inkSoft }}>
+        {due ? `It goes to the crisis team on its own at ${due}.` : 'It goes to the crisis team on its own after 5 minutes.'}
+      </p>
+    </div>
   );
 }

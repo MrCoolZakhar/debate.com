@@ -5,13 +5,14 @@
 import { useState } from 'react';
 import { Ban, ChevronDown, CircleCheck, ClipboardCheck, History, XCircle } from 'lucide-react';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
-import { crisisError, decideMeeting, type CrisisRef } from '@/lib/crisis/api';
+import { crisisError, type CrisisRef } from '@/lib/crisis/api';
 import type { Meeting, MeetingStatus } from '@/lib/crisis/types';
 import { clockText, meetingSeconds } from '@/lib/crisis/meetings';
 import { Btn, CK, fieldStyle } from '../../crisisKit';
 import { NameList, STATUS_LOOK, type Person } from './meetingKit';
+import { decideMeetingChecked, MEETING_ALREADY_DECIDED } from './decide';
 
-const WORD: Record<MeetingStatus, string> = { pending: 'Waiting', approved: 'Approved', held: 'Held', declined: 'Declined', cancelled: 'Cancelled' };
+const WORD: Record<MeetingStatus, string> = { awaiting_delegates: 'Asking the others', pending: 'Waiting', approved: 'Approved', held: 'Held', declined: 'Declined', cancelled: 'Cancelled' };
 
 function stamp(iso: string | null | undefined): string {
   if (!iso) return '';
@@ -45,8 +46,9 @@ export default function MeetingHistory({ meetings, people, now, noteRef, onChang
     if (!noteRef || busy) return;
     setBusy(true);
     try {
-      await decideMeeting(noteRef, m.id, 'held', null, text.trim());
-      notifyOk('Saved', 'crisis-meeting');
+      const landed = await decideMeetingChecked(noteRef, m.id, 'held', null, text.trim());
+      if (landed) notifyOk('Saved', 'crisis-meeting');
+      else notifyErr(MEETING_ALREADY_DECIDED, 'crisis-meeting');
       setEditing(null);
       onChanged?.();
     } catch (e) {

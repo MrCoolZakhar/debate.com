@@ -10,13 +10,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  crisisError, listDirectives, loadResources, loadSecrets, loadWorld, type CrisisRef,
+  crisisError, listDirectives, loadMyGoals, loadResources, loadWorld, type CrisisRef,
 } from '@/lib/crisis/api';
 import { useCrisisLive } from '@/lib/crisis/live';
-import type { CharacterSecret, Directive, DirectiveNote, News, Resource, ResourceType } from '@/lib/crisis/types';
+import type { Directive, DirectiveNote, News, Resource, ResourceType } from '@/lib/crisis/types';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
+import { UserX } from 'lucide-react';
 import { Card, CK } from '../../crisisKit';
-import DirectiveForm, { type DirectivePrefill, type DirectiveResend, type WorldCharacter } from './DirectiveForm';
+import DirectiveForm, { inactiveBanner, type DirectivePrefill, type DirectiveResend, type WorldCharacter } from './DirectiveForm';
 import { splitAttached } from '../directives/attachedImage';
 import { dirNumber } from '@/lib/crisis/format';
 import MyDirectives, { type PersonRef } from './MyDirectives';
@@ -34,7 +35,12 @@ import { listAllNotes, listCoauthors } from './delegateData';
 
 export default function DelegateHome() {
   const v = useCrisis();
-  const { ref, characterId, cabinetId, memberId, core, settings } = v;
+  const { ref, memberId, core, settings } = v;
+  // Who I play right now. The page's own member row is kept live by the core, so when staff give me another character
+  // (or move me to another cabinet) the page switches to it without a reload.
+  const liveMember = core.members.find((m) => m.id === memberId) ?? null;
+  const characterId = liveMember ? liveMember.character_id : v.characterId;
+  const cabinetId = liveMember ? liveMember.cabinet_id : v.cabinetId;
   const crisis = core.crisis;
   const room = useCrisisRoom();
 
@@ -45,7 +51,7 @@ export default function DelegateHome() {
   const [notes, setNotes] = useState<DirectiveNote[]>([]);
   const [coauthors, setCoauthors] = useState<Array<{ directive_id: string; character_id: string }>>([]);
   const [res, setRes] = useState<{ types: ResourceType[]; resources: Resource[] } | null>(null);
-  const [secrets, setSecrets] = useState<CharacterSecret[] | null>(null);
+  const [goalsRead, setGoalsRead] = useState<{ forCharacter: string | null; text: string } | null>(null);
   const [world, setWorld] = useState<WorldCharacter[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [dialog, setDialog] = useState<'character' | 'news' | 'chat' | null>(null);
@@ -71,23 +77,29 @@ export default function DelegateHome() {
     return { d, n, c };
   }, ({ d, n, c }) => { setDirectives(d); setNotes(n); setCoauthors(c); }), [slice]);
   const readResources = useCallback((r: CrisisRef) => slice('resources', () => loadResources(r), setRes), [slice]);
-  const readSecrets = useCallback((r: CrisisRef) => slice('secrets', () => loadSecrets(r), setSecrets), [slice]);
+  // The delegate's own goals only (crisis_my_goals); the answer remembers which character it was read for.
+  const readGoals = useCallback((r: CrisisRef, forCharacter: string | null) => slice('goals', () => loadMyGoals(r), (text) => setGoalsRead({ forCharacter, text: text ?? '' })), [slice]);
   const readWorld = useCallback((r: CrisisRef) => slice('world', () => loadWorld(r), setWorld), [slice]);
 
   useEffect(() => {
     // Deferred one tick so the first read never sets state inside the effect body.
-    const t = window.setTimeout(() => { void readDirectives(ref); void readResources(ref); void readSecrets(ref); void readWorld(ref); }, 0);
+    const t = window.setTimeout(() => { void readDirectives(ref); void readResources(ref); void readWorld(ref); }, 0);
     return () => window.clearTimeout(t);
-  }, [ref, readDirectives, readResources, readSecrets, readWorld]);
+  }, [ref, readDirectives, readResources, readWorld]);
+  // Goals are read again whenever I play someone else.
+  useEffect(() => {
+    const t = window.setTimeout(() => { void readGoals(ref, characterId); }, 0);
+    return () => window.clearTimeout(t);
+  }, [ref, characterId, readGoals]);
 
   useCrisisLive(
     ref.id,
-    ['crisis_directives', 'crisis_directive_notes', 'crisis_news', 'crisis_resources', 'crisis_resource_types', 'crisis_character_secrets', 'crisis_characters', 'crises'],
+    ['crisis_directives', 'crisis_directive_notes', 'crisis_news', 'crisis_resources', 'crisis_resource_types', 'crisis_character_secrets', 'crisis_characters', 'crisis_members', 'crises'],
     (changed) => {
       const all = changed === null;
       if (all || changed.has('crisis_directives') || changed.has('crisis_directive_notes')) void readDirectives(ref);
       if (all || changed.has('crisis_resources') || changed.has('crisis_resource_types')) void readResources(ref);
-      if (all || changed.has('crisis_character_secrets')) void readSecrets(ref);
+      if (all || changed.has('crisis_character_secrets') || changed.has('crisis_members')) void readGoals(ref, characterId);
       if (all || changed.has('crisis_characters')) void readWorld(ref);
     },
   );
@@ -131,15 +143,45 @@ export default function DelegateHome() {
     document.getElementById('crisis-send-directive')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, []);
 
-  const goals = secrets?.find((s) => s.character_id === characterId)?.goals?.trim() || '';
-  const myResources = (res?.resources ?? []).filter((r) => (cabinetId && r.cabinet_id === cabinetId) || (characterId && r.character_id === characterId));
-  const open = crisis.directives_open;
+  // "Edit" on a directive nobody has answered yet: the form opens it in edit mode (Save changes).
+  const editOwn = useCallback((d: Directive) => {
+    const { text, image } = splitAttached(d.body);
+    setResend({
+      token: Date.now(), directiveId: d.id, label: String(dirNumber(d)), note: null, title: d.title, body: text, image: image ?? null,
+      themes: d.themes, receiver: d.receiver, covert: d.covert, mode: 'edit', kind: d.kind,
+    });
+    document.getElementById('crisis-send-directive')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, []);
 
+  const goalsFresh = goalsRead !== null && goalsRead.forCharacter === characterId;
+  const goals = goalsFresh ? goalsRead.text.trim() : '';
+  const myResources = (res?.resources ?? []).filter((r) => (cabinetId && r.cabinet_id === cabinetId) || (characterId && r.character_id === characterId));
   const cabinet = cabinetId ? core.cabinets.find((c) => c.id === cabinetId) ?? null : null;
+  // Paused for everyone, or for my cabinet only (the crisis-wide note wins when both are paused).
+  const open = crisis.directives_open && cabinet?.directives_open !== false;
+  const pausedNote = !crisis.directives_open ? crisis.directives_paused_note : cabinet?.directives_paused_note ?? null;
+  // A dead, arrested or missing character cannot send; the page says so and the form is locked.
+  const inactive = me && (me.status === 'dead' || me.status === 'arrested' || me.status === 'missing') ? inactiveBanner(me.status, me.status_note) : null;
 
   return (
     <div style={{ paddingTop: 4 }}>
       {loadError && <p role="status" style={{ margin: '0 0 10px', fontSize: 13, color: CK.danger }}>{loadError}</p>}
+
+      {inactive && (
+        <section
+          role="status"
+          aria-label="Your character"
+          className="flex items-start"
+          style={{ gap: 12, background: CK.redGrad, color: '#FFF4E6', borderRadius: 20, boxShadow: CK.shadow, padding: '14px 18px', margin: '0 0 16px' }}
+        >
+          <span aria-hidden style={{ lineHeight: 0, paddingTop: 2 }}><UserX size={22} strokeWidth={1.5} /></span>
+          <div style={{ minWidth: 0 }}>
+            <b style={{ display: 'block', fontSize: 16, fontWeight: 800 }}>{inactive.title}</b>
+            {inactive.note && <p style={{ margin: '3px 0 0', fontSize: 14, fontWeight: 600, opacity: 0.95, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{inactive.note}</p>}
+            <p style={{ margin: '3px 0 0', fontSize: 13.5, opacity: 0.9 }}>The crisis team will give you a new character. You cannot send directives until then.</p>
+          </div>
+        </section>
+      )}
 
       <div className="flex flex-col gap-6 xl:grid xl:items-start xl:gap-5 xl:grid-cols-[280px_minmax(0,6fr)_minmax(0,5fr)]">
         {/* Left: the character, the buttons, the speakers list; the facts and resources come last on a phone. */}
@@ -163,7 +205,7 @@ export default function DelegateHome() {
             </div>
           </div>
           <div className="order-6 xl:order-none min-w-0">
-            <FactsCard crisis={crisis} types={res?.types ?? null} resources={myResources} characterId={characterId} color={myColor} />
+            <FactsCard crisis={{ scenario_at: crisis.scenario_at, directives_open: open, directives_paused_note: pausedNote }} types={res?.types ?? null} resources={myResources} characterId={characterId} color={myColor} />
           </div>
         </div>
 
@@ -178,7 +220,8 @@ export default function DelegateHome() {
             cabinetNames={cabinetNames}
             wordLimit={settings.wordLimit}
             open={open}
-            pausedNote={crisis.directives_paused_note}
+            pausedNote={pausedNote}
+            blockedReason={inactive ? inactive.title : null}
             onSent={() => { void readDirectives(ref); }}
             prefill={prefill}
             cabinet={cabinet ? { name: cabinet.name, logo_url: cabinet.logo_url, color: cabinet.color } : null}
@@ -209,13 +252,14 @@ export default function DelegateHome() {
               onChanged={() => { void readDirectives(ref); }}
               onSendAgain={sendAgain}
               onEditReturned={editReturned}
+              onEditOwn={editOwn}
             />
           </div>
         </div>
       </div>
 
       {dialog === 'character' && me && (
-        <CharacterDialog me={me} color={myColor} goals={goals} goalsLoaded={secrets !== null} onClose={() => setDialog(null)} />
+        <CharacterDialog me={me} color={myColor} goals={goals} goalsLoaded={goalsFresh} onClose={() => setDialog(null)} />
       )}
       {dialog === 'news' && <NewsDialog items={news.items} error={news.error} initial={story} onClose={() => setDialog(null)} />}
       {dialog === 'chat' && <ChatDialog room={room} onClose={() => setDialog(null)} />}

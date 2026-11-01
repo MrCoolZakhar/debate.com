@@ -14,15 +14,16 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import type { GeoJSONSource, Map as MLMap, MapMouseEvent, Marker as MLMarker } from 'maplibre-gl';
 import type { Feature, FeatureCollection, Geometry } from 'geojson';
-import { Building2, Cloud, Droplets, Eye, Flag, Hexagon, Layers, Maximize2, MousePointer2, Pencil, Plus, Send, Ship, SquareDashed, Undo2, UserRound } from 'lucide-react';
+import { Building2, Cloud, Droplets, Eye, Flag, Hexagon, Layers, Maximize2, MousePointer2, Pencil, Plus, Send, Ship, SquareDashed, Undo2, UserRound, Users } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import GSelect from '@/components/GSelect';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { amount as fmtAmount } from '@/lib/crisis/format';
 import { readMapFocus, type MapFocus } from '@/lib/crisis/mapFocus';
 import {
-  crisisError, loadMap, loadMapDraft, saveCharacter, saveMapDraft, saveUnit,
+  clearMapDraftVersioned, crisisError, loadMap, loadMapDraftVersioned, saveCharacter, saveMapDraftVersioned, saveUnit,
 } from '@/lib/crisis/api';
+import { UserFacingError } from '@/lib/friendlyError';
 import { deleteUnitChecked } from '@/lib/crisis/mapApi';
 import {
   AREA_EPS, HANDLE_LIMIT, applyTent, areaOf, bboxOf, clean, differenceM, kmBetween, labelPoint, nearestEdge, ownersTouching, pickClaimTarget,
@@ -40,7 +41,9 @@ import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { Btn, CK, Segmented, cabinetTint } from '../../crisisKit';
 import { mayEditCharacters } from '../character/characterStatus';
 import { drawFog, type FogHoles } from './fog';
-import { createMapAnimator, diffMapData, prefersReducedMotion, type GrowItem, type PendingAnim } from './mapAnimate';
+import { createMapAnimator, diffMapData, mixHex, prefersReducedMotion, pulseToken, type GrowItem, type PendingAnim } from './mapAnimate';
+import { mergeDrafts } from './draftMerge';
+import { FLY_MS, type FocusRequest } from './mapFocusFly';
 import { freehandCorners, type FreePt } from './freehand';
 import { SIGHT_MAX_KM, kmFromPointer, kmText, sightHandleAt, sightKmOf, sightRing } from './sight';
 import {
@@ -254,7 +257,7 @@ const localUnitId = () => `new-u-${new Date().getTime().toString(36)}${Math.rand
  * database, every change is handed back to the reply (stage.onData / stage.onUnitMove) and is only written when
  * the reply is sent.
  */
-export default function WarMap({ compact = false, title, actions, stage }: { compact?: boolean; title?: ReactNode; actions?: ReactNode; stage?: StageOptions }) {
+export default function WarMap({ compact = false, title, actions, stage, focusReq }: { compact?: boolean; title?: ReactNode; actions?: ReactNode; stage?: StageOptions; focusReq?: FocusRequest | null }) {
   const v = useCrisis();
   const { ref, cabinetId, staff, director, settings, core } = v;
   const canMap = stage ? stage.canMap : staff && (director || settings.backroomPowers.map);
@@ -275,6 +278,11 @@ export default function WarMap({ compact = false, title, actions, stage }: { com
   const [rawData, setData] = useState<MapData | null>(() => stage?.data ?? null);
   const [draftSet, setDraftSet] = useState<EditSet | null>(null);
   const draftRef = useRef<EditSet | null>(null);
+  // The shared draft is versioned: the version this screen last saw, the draft as the database held it then (the base
+  // that this screen's own edits are measured against), and who changed it last when that was somebody else.
+  const draftVersion = useRef(0);
+  const draftBase = useRef<EditSet | null>(null);
+  const [draftBy, setDraftBy] = useState<string | null>(null);
   const rawRef = useRef<MapData | null>(null);
   const dataRef = useRef<MapData | null>(null);
   // In a reply, units already moved by it show at their new place (the unit's real place stays in rawData).
@@ -307,12 +315,23 @@ export default function WarMap({ compact = false, title, actions, stage }: { com
   // Changes that arrive from the server (a send, a reply's map effects, a live change) are animated; the team's own
   // optimistic edits and the first load are not. The diff waits here for the marker and layer effects to run.
   const pendingAnim = useRef<PendingAnim | null>(null);
-  const queueAnim = useCallback((prev: MapData | null, next: MapData) => {
+  const queueAnim = useCallback((prev: MapData | null, next: MapData, opts: { fromSent?: boolean } = {}) => {
     if (!prev || isStage || prefersReducedMotion() || (typeof document !== 'undefined' && document.hidden)) return;
     const diff = diffMapData(prev, next);
-    if (diff) pendingAnim.current = { diff, ghosts: [], drawn: new Map() };
+    if (diff) pendingAnim.current = { diff, ghosts: [], drawn: new Map(), fromSent: opts.fromSent };
   }, [isStage]);
 
+  /** A name for whoever saved the shared draft last; null when that was this person (or nobody). */
+  const members = core.members;
+  const myMemberId = v.memberId;
+  const whoSaved = useCallback((by: string | null): string | null => {
+    if (!by) return null;
+    const m = members.find((x) => x.id === by || x.user_id === by);
+    if (m) return m.id === myMemberId ? null : m.display_name;
+    return 'A team member';
+  }, [members, myMemberId]);
+
+  const adoptDraftRef = useRef<(l: { payload: unknown; version: number; updated_by: string | null }) => void>(() => undefined);
   const reload = useCallback(async () => {
     if (isStage) return;   // a reply's map is only what the reply stages
     const mine = ++seq.current;
@@ -320,17 +339,16 @@ export default function WarMap({ compact = false, title, actions, stage }: { com
     try {
       const [d, dr] = await Promise.all([
         loadMap(ref),
-        staff ? loadMapDraft(ref).catch(() => undefined) : Promise.resolve(null),
+        staff ? loadMapDraftVersioned(ref).catch(() => undefined) : Promise.resolve(null),
       ]);
       // Never show a read that is older than what is on screen: a newer read is on its way, we are writing, or the
       // read began before our last write finished (it may not include it).
       if (mine !== seq.current || writes.current > 0 || startedAt < lastWriteEnd.current) return;
-      queueAnim(rawRef.current, d);
+      // Our screen showed the unsent changes; they are gone and the sent map moved: someone sent them. Play it from the sent positions.
+      const hadDraft = !!draftRef.current && !isEmptySet(draftRef.current);
+      queueAnim(rawRef.current, d, { fromSent: !!dr && hadDraft && !parseSet(dr.payload) });
       setData((prev) => shareData(prev, d));
-      if (dr !== undefined) {
-        const next = parseSet(dr);
-        setDraftSet((prev) => (sameJson(prev, next) ? prev : next));
-      }
+      if (dr) adoptDraftRef.current(dr);
       setLoadError(null);
     } catch (e) {
       if (mine === seq.current) setLoadError(crisisError(e, 'Could not load the map.'));
@@ -656,11 +674,50 @@ export default function WarMap({ compact = false, title, actions, stage }: { com
 
   /** The shared draft is written one request at a time, in order, so the last change is the one that stays. */
   const draftChain = useRef<Promise<void>>(Promise.resolve());
-  const persistDraft = useCallback((set: EditSet | null): Promise<void> => {
-    const job = draftChain.current.then(() => saveMapDraft(ref, set && !isEmptySet(set) ? (set as unknown as Record<string, unknown>) : null));
+  /**
+   * Saves this screen's draft on the version it last saw. When the database answers that someone saved in between, their
+   * draft is merged with ours (what we changed since our base wins, everything else comes from theirs) and saved again.
+   */
+  const flushDraft = useCallback(async (): Promise<void> => {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const cur = draftRef.current;
+      const mine = cur && !isEmptySet(cur) ? cur : null;
+      const res = await saveMapDraftVersioned(ref, (mine ?? emptySet()) as unknown as Record<string, unknown>, draftVersion.current);
+      if (res.ok) { draftVersion.current = res.version; draftBase.current = mine; setDraftBy(null); return; }
+      const theirs = parseSet(res.payload);
+      const merged = mergeDrafts(draftBase.current, mine, theirs);
+      draftBase.current = theirs; draftVersion.current = res.version;
+      draftRef.current = merged; setDraftSet(merged);
+      const by = whoSaved(res.updated_by);
+      if (by) { setDraftBy(by); setLast({ at: new Date().getTime(), text: `${by} changed the unsent map` }); }
+    }
+    throw new UserFacingError('The team is changing the unsent map right now. Try that again.');
+  }, [ref, whoSaved]);
+  const persistDraft = useCallback((): Promise<void> => {
+    const job = draftChain.current.then(flushDraft);
     draftChain.current = job.catch(() => undefined);
     return job;
-  }, [ref]);
+  }, [flushDraft]);
+
+  const persistDraftRef = useRef<() => Promise<void>>(() => Promise.resolve());
+  /** A newer draft from the database (a live ping, a re-read): shown at once, with this screen's unsaved edits kept on top. */
+  const adoptDraft = useCallback((l: { payload: unknown; version: number; updated_by: string | null }) => {
+    const theirs = parseSet(l.payload);
+    const cur = draftRef.current;
+    const mine = cur && !isEmptySet(cur) ? cur : null;
+    const dirty = !sameJson(draftBase.current, mine);
+    if (!dirty && l.version === draftVersion.current && sameJson(draftBase.current, theirs)) return;
+    const next = dirty ? mergeDrafts(draftBase.current, mine, theirs) : theirs;
+    draftBase.current = theirs; draftVersion.current = l.version;
+    draftRef.current = next;
+    setDraftSet((prev) => (sameJson(prev, next) ? prev : next));
+    const by = whoSaved(l.updated_by);
+    if (!theirs) setDraftBy(null);
+    else if (by) { setDraftBy(by); setLast({ at: new Date().getTime(), text: `${by} changed the unsent map` }); }
+    // Our own unsaved edits are not in the database yet: share them.
+    if (dirty && !sameJson(next, theirs)) void persistDraftRef.current().catch(() => undefined);
+  }, [whoSaved]);
+  useEffect(() => { adoptDraftRef.current = adoptDraft; persistDraftRef.current = persistDraft; });
 
   /**
    * Shows a set of map changes at once, then keeps them: in the shared draft (when changes wait until sent), in the
@@ -693,7 +750,7 @@ export default function WarMap({ compact = false, title, actions, stage }: { com
       setDraftSet(draftRef.current);
       await run(async () => {
         try {
-          await persistDraft(draftRef.current);
+          await persistDraft();
           record(set.addShapes.map((a) => a.id));
         } catch (e) {
           draftRef.current = prev;
@@ -1209,9 +1266,11 @@ export default function WarMap({ compact = false, title, actions, stage }: { com
     await run(async () => {
       try {
         // Send what the team shares now (another member may have added to it), once.
-        const fresh = parseSet(await loadMapDraft(ref));
+        const loaded = await loadMapDraftVersioned(ref);
+        const fresh = parseSet(loaded.payload);
+        draftBase.current = fresh; draftVersion.current = loaded.version;
         if (!fresh) {
-          draftRef.current = null; setDraftSet(null); clearHistory();
+          draftRef.current = null; setDraftSet(null); setDraftBy(null); clearHistory();
           notifyOk('Those changes were already sent', 'crisis-map');
           return;
         }
@@ -1222,7 +1281,7 @@ export default function WarMap({ compact = false, title, actions, stage }: { com
           const partial = !!left && !sameJson(left, tidySet(fresh));
           if (partial) {
             draftRef.current = left; setDraftSet(left);
-            try { await persistDraft(left); } catch { /* the next read shows what the team holds */ }
+            try { await persistDraft(); } catch { /* the next read shows what the team holds */ }
           }
           notifyErr(`${crisisError(res.error, 'Could not send the changes.')}${partial ? ' Some changes went through; the rest are still unsent.' : ''}`, 'crisis-map');
           return;
@@ -1233,18 +1292,45 @@ export default function WarMap({ compact = false, title, actions, stage }: { com
         fresh.addShapes.forEach((a, i) => { if (res.added[i]) shapeIds.set(a.id, res.added[i]); });
         const unitIds = new Map<string, string>();
         (fresh.unitAdds ?? []).forEach((a, i) => { if (res.addedUnits[i]) unitIds.set(a.id, res.addedUnits[i]); });
+        // What a draft still adds once `fresh` is sent: it is measured against the map as sent, so a copy of the same
+        // changes (the team's newer draft, or edits made while this was sending) shrinks to what is really new.
+        let residualOf: (s: EditSet | null) => EditSet | null = (s) => s;
         if (sentRaw) {
           const next = renameLocalIds(applyLocal(sentRaw, fresh, ref.id), shapeIds, unitIds);
-          queueAnim(sentRaw, next);
+          // The unsent copy was already on screen: the units go back to where the sent map had them, then glide.
+          queueAnim(sentRaw, next, { fromSent: true });
           rawRef.current = next;
           setData(next);
+          residualOf = (s) => {
+            if (!s) return null;
+            const r = diffData(next, renameLocalIds(applyLocal(sentRaw, s, ref.id), shapeIds, unitIds));
+            r.chars = (s.chars ?? []).filter((c) => !(fresh.chars ?? []).some((f) => f.id === c.id && Math.abs(f.lng - c.lng) < 1e-6 && Math.abs(f.lat - c.lat) < 1e-6));
+            return isEmptySet(r) ? null : r;
+          };
         }
         setSelUnit((cur) => (cur && unitIds.get(cur)) || cur);
         setSelTerr((cur) => (cur && cur.kind === 'area' && shapeIds.has(cur.id) ? { kind: 'area', id: shapeIds.get(cur.id) as string } : cur));
         for (const c of fresh.chars ?? []) charOverride.current.set(c.id, [c.lng, c.lat]);
-        draftRef.current = null; setDraftSet(null); clearHistory();
+        // Edits made on this screen while the send ran stay as the unsent changes.
+        const mineLeft = residualOf(draftRef.current);
+        draftRef.current = mineLeft; setDraftSet(mineLeft); clearHistory(); setDraftBy(null);
         setLast({ at: new Date().getTime(), text: 'You sent the map changes to delegates' });
-        try { await persistDraft(null); } catch { notifyErr('Sent, but the unsent copy could not be cleared. Press Back to what delegates see.', 'crisis-map'); return; }
+        try {
+          const cleared = await clearMapDraftVersioned(ref, loaded.version);
+          const now = await loadMapDraftVersioned(ref);
+          if (cleared.kept) {
+            // The team changed the draft while it was sending: keep that, minus what has just gone out.
+            const merged = mergeDrafts(null, mineLeft, residualOf(parseSet(now.payload)));
+            draftBase.current = parseSet(now.payload); draftVersion.current = now.version;
+            draftRef.current = merged; setDraftSet(merged);
+            const by = whoSaved(now.updated_by);
+            if (by) setDraftBy(by);
+            if (!sameJson(merged, draftBase.current)) await persistDraft();
+          } else {
+            draftBase.current = null; draftVersion.current = 0;
+            adoptDraftRef.current(now);
+          }
+        } catch { notifyErr('Sent, but the unsent copy could not be cleared. Press Back to what delegates see.', 'crisis-map'); return; }
         if (fresh.chars?.length) {
           try { await v.reloadCore(); } finally { for (const c of fresh.chars) charOverride.current.delete(c.id); }
         }
@@ -1254,7 +1340,7 @@ export default function WarMap({ compact = false, title, actions, stage }: { com
       }
     });
     setSending(false);
-  }, [ref, run, sending, canMap, canUnits, canChars, clearHistory, persistDraft, v, queueAnim]);
+  }, [ref, run, sending, canMap, canUnits, canChars, clearHistory, persistDraft, v, queueAnim, whoSaved]);
 
   /** Throws the unsent changes away. Go back brings them back (with the steps Go back had before). */
   const discardDraft = useCallback(async () => {
@@ -1266,8 +1352,9 @@ export default function WarMap({ compact = false, title, actions, stage }: { com
     setSelUnit(null); setSelTerr(null);
     await run(async () => {
       try {
-        await persistDraft(null);
-        notifyOk('Back to what delegates see', 'crisis-map');
+        await persistDraft();
+        const teamLeft = draftRef.current && !isEmptySet(draftRef.current);
+        notifyOk(teamLeft ? 'Your changes are thrown away. Changes the team added meanwhile are still unsent' : 'Back to what delegates see', 'crisis-map');
         if (!prev || isEmptySet(prev)) return;
         const n = setSize(prev);
         pushHistory({
@@ -1285,7 +1372,7 @@ export default function WarMap({ compact = false, title, actions, stage }: { com
             historyRef.current = prevSteps; setHistoryN(prevSteps.length);
             await run(async () => {
               try {
-                await persistDraft(target);
+                await persistDraft();
                 setLast({ at: new Date().getTime(), text: 'You brought back the unsent changes' });
                 notifyOk('Your unsent changes are back', 'crisis-map');
               } catch (e) {
@@ -2334,6 +2421,8 @@ export default function WarMap({ compact = false, title, actions, stage }: { com
     // Decide per unit from what THIS screen was drawing: already at the new spot (the sender, or anyone looking at the
     // same draft) keeps its place and only plays the trail; a screen still showing the old spot glides.
     const moves = diff.moved.map((m) => {
+      // The sender's and the team's screens showed the unsent changes already: they snap back to the sent spot and glide too.
+      if (pa.fromSent) return { ...m, still: false };
       const d = pa.drawn.get(m.id);
       const still = !!d && Math.abs(d[0] - m.to[0]) < 1e-6 && Math.abs(d[1] - m.to[1]) < 1e-6;
       return { ...m, from: still || !d ? m.from : d, still };
@@ -2345,6 +2434,7 @@ export default function WarMap({ compact = false, title, actions, stage }: { com
       (id) => { const o = unitNow(id)?.owner_cabinet_id; return safeColor(o ? cabById.get(o)?.color ?? NOBODY : NOBODY); },
     );
     animator.popUnits(diff.added.map((id) => unitMarkers.current.get(id)?.el), pa.ghosts);
+    animator.pulseUnits(diff.changed.map((id) => unitMarkers.current.get(id)?.el));
 
     const grow: GrowItem[] = [];
     // Countries that changed hands: the tint grows in (or fades out when the land was lost).
@@ -2359,8 +2449,11 @@ export default function WarMap({ compact = false, title, actions, stage }: { com
       };
       animator.tween(1500, (e) => {
         for (const r of tinted) {
-          const to = colorOfCab(r.ownerTo);
-          if (to) setState(r.key, to, e); else setState(r.key, colorOfCab(r.ownerFrom), 1 - e);
+          const to = colorOfCab(r.ownerTo); const from = colorOfCab(r.ownerFrom);
+          // Hands changing from one holder to another cross-fade their colours; land taken or given blends in or out.
+          if (to && from) setState(r.key, mixHex(safeColor(from), safeColor(to), e), 1);
+          else if (to) setState(r.key, to, e);
+          else setState(r.key, from, 1 - e);
         }
       }, () => {
         // Always end on the real colours (the owner effect keeps them in `applied`).
@@ -2389,6 +2482,49 @@ export default function WarMap({ compact = false, title, actions, stage }: { com
     }
     animator.growAreas(grow.slice(0, 60));
   }, [data, world, animator, cabById, baseShapes, viewer, shownShapes, zonesOn]);
+
+  // ── a row of the "N changes to the map" pop-up: fly the real map to that item and pulse it ──
+  const lastFocusN = useRef(0);
+  const focusTimer = useRef<number | null>(null);
+  useEffect(() => () => { if (focusTimer.current !== null) window.clearTimeout(focusTimer.current); }, []);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!focusReq || !world || !map || !data || focusReq.n === lastFocusN.current) return;
+    lastFocusN.current = focusReq.n;
+    const dur = prefersReducedMotion() ? 0 : FLY_MS;
+    const later = (fn: () => void) => {
+      if (focusTimer.current !== null) window.clearTimeout(focusTimer.current);
+      focusTimer.current = window.setTimeout(fn, Math.round(dur * 0.85));
+    };
+    const fitTo = (b: Bbox) => {
+      if (b[0] === b[2] && b[1] === b[3]) map.flyTo({ center: [b[0], b[1]], zoom: 6, duration: dur });
+      else map.fitBounds([[b[0], b[1]], [b[2], b[3]]], { padding: 110, maxZoom: 6, duration: dur });
+    };
+    const unit = focusReq.unit ? shownUnits.find((u) => u.id === focusReq.unit) : undefined;
+    if (unit) {
+      map.flyTo({ center: [unit.lng, unit.lat], zoom: Math.max(map.getZoom(), 6), duration: dur });
+      setSelUnit(unit.id);
+      later(() => pulseToken(unitMarkers.current.get(unit.id)?.el));
+      return;
+    }
+    if (focusReq.region) {
+      const multi = countryMulti(focusReq.region);
+      const b = bboxOf(multi);
+      if (b) fitTo(b);
+      const owner = ownerOf.get(focusReq.region);
+      later(() => animator.growAreas([{ from: multi, to: multi, color: safeColor(owner ? cabById.get(owner)?.color ?? DRAFT : DRAFT) }]));
+      return;
+    }
+    const shape = focusReq.shape ? shownShapes.find((x) => x.id === focusReq.shape) : undefined;
+    if (shape) {
+      const multi = shape.kind === 'line' ? null : toMulti(shape.geometry as { type: string; coordinates: unknown });
+      const b = multi ? bboxOf(multi) : (focusReq.bbox ?? null);
+      if (b) fitTo(b);
+      if (multi) later(() => animator.growAreas([{ from: multi, to: multi, color: safeColor(shape.kind === 'zone' ? shape.color ?? DRAFT : (shape.owner_cabinet_id && cabById.get(shape.owner_cabinet_id)?.color) || shape.color || DRAFT) }]));
+      return;
+    }
+    if (focusReq.bbox) fitTo(focusReq.bbox);
+  }, [focusReq, world, data, shownUnits, shownShapes, countryMulti, ownerOf, cabById, animator]);
 
   // ── planned moves: a dashed trajectory from where each unit is now (a reply's moves, or the team's unsent moves),
   // and a ring where it is until the move is sent ──
@@ -2871,7 +3007,8 @@ export default function WarMap({ compact = false, title, actions, stage }: { com
   // The unsent changes: in the header, outside the map, so they never cover it.
   const draftBar = draftCount > 0 && staff && !isStage ? (
     <div className="wm-draftbar" role="status" style={{ fontFamily: CK.font }}>
-      <span><b>{draftCount} {draftCount === 1 ? 'change' : 'changes'}</b> not sent yet</span>
+      <span><b key={draftCount}>{draftCount} {draftCount === 1 ? 'change' : 'changes'}</b> not sent yet</span>
+      {draftBy && <span key={draftBy} className="wm-draftby"><Users size={14} strokeWidth={1.5} aria-hidden />{draftBy} changed the unsent map</span>}
       {compact ? null : confirmDiscard ? (
         <>
           <span>Throw away these changes?</span>
