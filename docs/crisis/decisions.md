@@ -153,3 +153,20 @@ Design rule (standing): **no random white space.** Every card fills its slot, co
 
 - Cabinet directives are assigned to the Crisis Director first (the database does it, SQL part 27; after the chair's approval when the chair must approve). Personal and joint directives still go to the character's backroomer. Setting: Settings > Directives > "Cabinet directives go to the Crisis Director first" (`cabinetDirectivesToDirector`, default on).
 - The Director gets a prompt on any staff page when one is waiting (`CabinetDirectivePrompt`, mounted in the crisis layout): Review opens it like a notification link, Allocate to someone else replaces the card with the staff list, X closes it. Handled ones are remembered per device; on page load only the last 30 minutes pop up; it waits while another dialog is open.
+
+## Round 11 (1 Nov 2026): audit fixes and the owner's answers
+
+Owner decisions (Peter, 1 Nov 2026):
+- Chairs see their own cabinet only (enforced in the database), and only SEE meeting requests; staff decide them.
+- Press uses the Front Room and the Press Desk; press releases are approved by the crisis staff (the press chair, if any, still sees them).
+- A character who dies or is arrested: staff are prompted to give a spare; the delegate keeps their directives and points, and in the room only the seat's name and picture change. Spare delegates (people without a character) can be added and given a character quickly.
+- Cabinet directives always go to the Crisis Director; there is no "on duty". Max cabinets today is 2.
+- Backroomers see every directive by default (a Director setting can turn it off).
+- Points follow the person (all their characters together), no cap.
+- A delegate can edit or withdraw a directive until it is answered. There is no claiming: directives are assigned automatically.
+- Meetings: invited delegates accept or decline first (pop-up and tab); once all answered, or after 5 minutes, it goes to the backroom.
+- Map sends are one notification ("N changes to the map") that opens a replay and a clickable breakdown.
+- Several drafts for delegates and staff. Resource templates and more resource tools.
+- Room chat shows which staff member wrote ("Crisis Team · Name").
+- Not now: set-up and codes, security and logging in, packages, access expiry (archive will be premium).
+SQL: docs/crisis/sql/028_chair_request_changes.sql, 029_audit_fixes.sql (parts 29a to 29h, 30a, 30b).
