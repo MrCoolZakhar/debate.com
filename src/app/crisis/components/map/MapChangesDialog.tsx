@@ -9,18 +9,18 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { LocateFixed, Pause, Play, RotateCcw } from 'lucide-react';
 import { crisisError } from '@/lib/crisis/api';
-import { crisisHistory, parseChange, type ChangeFilter, type HistoryChange } from '@/lib/crisis/history';
+import { crisisHistory } from '@/lib/crisis/history';
 import { timeAgo } from '@/lib/crisis/format';
-import { focusForChange } from '@/lib/crisis/mapFocus';
 import { Btn, CK, Segmented, Skeleton } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import CrisisDialog from '../delegate/CrisisDialog';
 import ChangesReplay, { progressOf, startOf } from '../history/ChangesReplay';
+import { focusForAny, parseAnyChange, type AnyChange, type AnyFilter } from '../history/charChange';
 import { ChangeDisc, PieceLine, describe, useChangeCtx, type ChangeCtx, type Described } from '../history/changeKit';
 import { prefersReducedMotion } from './mapAnimate';
 import type { FocusRequest } from './mapFocusFly';
 
-type Filter = 'all' | ChangeFilter;
+type Filter = 'all' | AnyFilter;
 /** Rows made by one send share its time; a second either way covers rounding. */
 const SAME_SEND_MS = 1000;
 
@@ -34,7 +34,7 @@ const countText = (n: number) => `${n} ${n === 1 ? 'Change' : 'Changes'} to the 
 
 /** The breakdown. Memoised: the video above changes every frame, this does not. */
 const ChangeList = memo(function ChangeList({ rows, ctx, onPick, onHot }: {
-  rows: Array<{ c: HistoryChange; d: Described }>; ctx: ChangeCtx; onPick: (c: HistoryChange) => void; onHot: (id: string | null) => void;
+  rows: Array<{ c: AnyChange; d: Described }>; ctx: ChangeCtx; onPick: (c: AnyChange) => void; onHot: (id: string | null) => void;
 }) {
   return (
     <div>
@@ -62,7 +62,7 @@ const ChangeList = memo(function ChangeList({ rows, ctx, onPick, onHot }: {
 export default function MapChangesDialog({ stamp, onClose, onPick }: { stamp: number; onClose: () => void; onPick: (req: Omit<FocusRequest, 'n'>) => void }) {
   const { ref, staff } = useCrisis();
   const ctx = useChangeCtx();
-  const [changes, setChanges] = useState<HistoryChange[] | null>(null);
+  const [changes, setChanges] = useState<AnyChange[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
   const [hot, setHot] = useState<string | null>(null);
@@ -74,8 +74,8 @@ export default function MapChangesDialog({ stamp, onClose, onPick }: { stamp: nu
         if (cancelled) return;
         const mine = rows
           .filter((r) => Math.abs(new Date(r.created_at).getTime() - stamp) <= SAME_SEND_MS)
-          .map(parseChange)
-          .filter((c): c is HistoryChange => !!c)
+          .map(parseAnyChange)
+          .filter((c): c is AnyChange => !!c)
           .reverse();   // oldest first: the order they play in
         setChanges(mine);
       })
@@ -136,12 +136,13 @@ export default function MapChangesDialog({ stamp, onClose, onPick }: { stamp: nu
     if (kinds.has('troops')) all.push({ value: 'troops', label: 'Troops' });
     if (kinds.has('borders')) all.push({ value: 'borders', label: 'Borders' });
     if (kinds.has('areas')) all.push({ value: 'areas', label: 'Areas' });
+    if (kinds.has('characters')) all.push({ value: 'characters', label: 'Characters' });
     return all;
   }, [kinds]);
 
-  const pick = useCallback((c: HistoryChange) => {
-    const f = focusForChange(c);
-    onPick({ ...f, shape: c.type === 'shape' ? c.shapeId : undefined });
+  const pick = useCallback((c: AnyChange) => {
+    const f = focusForAny(c);
+    onPick({ ...f, shape: c.type === 'shape' ? c.shapeId : undefined, char: c.type === 'character' ? c.charId : undefined });
   }, [onPick]);
 
   const by = staff ? changes?.find((c) => c.by)?.by ?? null : null;

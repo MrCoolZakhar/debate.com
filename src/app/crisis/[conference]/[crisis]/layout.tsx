@@ -56,7 +56,7 @@ function navFor(role: CrisisRole, base: string, confSlug: string): NavItem[] {
     ];
   }
   if (role === 'chair') {
-    return [{ href: base, label: 'Front room', icon: ic(Presentation) }, map, news(), meetings(), characters()];
+    return [{ href: base, label: 'Front room', icon: ic(Presentation) }, { href: `${base}/directives`, label: 'Directives', icon: ic(ScrollText) }, map, news(), meetings(), characters()];
   }
   if (role === 'press') {
     // The press writes its releases on the conference Press Desk (a new tab); the crisis staff approve them on the News page.

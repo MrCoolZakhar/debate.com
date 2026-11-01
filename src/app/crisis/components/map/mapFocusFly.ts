@@ -4,6 +4,8 @@
 export interface FocusRequest {
   n: number;
   unit?: string;
+  /** A character: fly to where it stands and pulse it. */
+  char?: string;
   region?: string;
   /** A drawn area or line. */
   shape?: string;

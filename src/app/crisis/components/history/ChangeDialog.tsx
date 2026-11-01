@@ -7,22 +7,22 @@
 import { useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Eye, Map as MapIcon } from 'lucide-react';
-import type { HistoryChange } from '@/lib/crisis/history';
 import { timeAgo } from '@/lib/crisis/format';
-import { focusForChange, mapHref } from '@/lib/crisis/mapFocus';
+import { mapHref } from '@/lib/crisis/mapFocus';
 import { Btn, CK } from '../../crisisKit';
 import { crisisBase, useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import CrisisDialog from '../delegate/CrisisDialog';
 import MapSnapshot from './MapSnapshot';
+import { focusForAny, type AnyChange } from './charChange';
 import { ChangeDisc, PieceLine, describe, snapshotSpec, useChangeCtx, type ChangeCtx } from './changeKit';
 
 /** Titles for a change pop-up (the notification pop-up uses it too, so the header does not jump when the data arrives). */
-export function changeHeading(change: HistoryChange, ctx: ChangeCtx, reveal?: boolean): { title: string; eyebrow: string } {
+export function changeHeading(change: AnyChange, ctx: ChangeCtx, reveal?: boolean): { title: string; eyebrow: string } {
   const d = describe(change, ctx);
   return { title: reveal && change.type === 'unit' ? `Revealed: ${change.name}` : d.title, eyebrow: reveal ? 'Revealed' : d.kindLabel };
 }
 
-export function ChangeBody({ change, reveal, onClose, ctx }: { change: HistoryChange; reveal?: boolean; onClose: () => void; ctx: ChangeCtx }) {
+export function ChangeBody({ change, reveal, onClose, ctx }: { change: AnyChange; reveal?: boolean; onClose: () => void; ctx: ChangeCtx }) {
   const { ref, staff } = useCrisis();
   const router = useRouter();
   const d = useMemo(() => describe(change, ctx), [change, ctx]);
@@ -49,14 +49,14 @@ export function ChangeBody({ change, reveal, onClose, ctx }: { change: HistoryCh
         </div>
       </div>
       <div className="flex flex-wrap" style={{ gap: 8, marginTop: 18 }}>
-        <Btn tone="red" icon={<MapIcon size={16} strokeWidth={1.6} aria-hidden />} onClick={() => { onClose(); router.push(mapHref(crisisBase(ref), focusForChange(change))); }}>Open the map</Btn>
+        <Btn tone="red" icon={<MapIcon size={16} strokeWidth={1.6} aria-hidden />} onClick={() => { onClose(); router.push(mapHref(crisisBase(ref), focusForAny(change))); }}>Open the map</Btn>
         <Btn tone="ghost" onClick={onClose}>Close</Btn>
       </div>
     </div>
   );
 }
 
-export default function ChangeDialog({ change, eyebrow, reveal, onClose }: { change: HistoryChange; eyebrow?: string; reveal?: boolean; onClose: () => void }) {
+export default function ChangeDialog({ change, eyebrow, reveal, onClose }: { change: AnyChange; eyebrow?: string; reveal?: boolean; onClose: () => void }) {
   const ctx = useChangeCtx();
   const h = changeHeading(change, ctx, reveal);
   return (

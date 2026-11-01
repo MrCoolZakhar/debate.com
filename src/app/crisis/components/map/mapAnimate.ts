@@ -152,19 +152,24 @@ function scaleMulti(m: Multi, about: Pt, k: number): Multi {
 export interface GrowItem { from: Multi | null; to: Multi | null; color: string }
 
 const SRC_TRAILS = 'anim-trails';
+/** Characters glide on their own trail, so a character and a unit moving at once never share (and overwrite) one. */
+const SRC_TRAILS_C = 'anim-trails-chars';
 const SRC_GROW = 'anim-grow';
 const L_TRAIL = 'anim-trail';
+const L_TRAIL_C = 'anim-trail-chars';
 const L_GROW_FILL = 'anim-grow-fill';
 const L_GROW_LINE = 'anim-grow-line';
 const EMPTY: FeatureCollection = { type: 'FeatureCollection', features: [] };
-const MOVE_MS = 1500;
-const TRAIL_FADE_MS = 700;
+export const MOVE_MS = 1500;
+export const TRAIL_FADE_MS = 700;
 const GROW_MS = 1700;
 const MORPH_VERTEX_LIMIT = 12000;
 
 /** Owns every running animation of one map. `cancelAll` jumps each to its real final state. */
 export function createMapAnimator(getMap: () => MLMap | null) {
   const cancels = new Set<() => void>();
+  /** Character glides: a map change arriving for units does not cut them short (cancelAll(false) leaves them running). */
+  const charCancels = new Set<() => void>();
   const ghostMarkers = new Set<MLMarker>();
 
   const ensureLayers = (map: MLMap) => {
@@ -175,6 +180,8 @@ export function createMapAnimator(getMap: () => MLMap | null) {
     map.addLayer({ id: L_GROW_FILL, type: 'fill', source: SRC_GROW, paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0 } }, before);
     map.addLayer({ id: L_GROW_LINE, type: 'line', source: SRC_GROW, layout: { 'line-join': 'round' }, paint: { 'line-color': ['get', 'color'], 'line-width': 3.2, 'line-opacity': 0 } }, before);
     map.addLayer({ id: L_TRAIL, type: 'line', source: SRC_TRAILS, layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': ['get', 'color'], 'line-width': 3, 'line-opacity': 0 } }, before);
+    map.addSource(SRC_TRAILS_C, { type: 'geojson', data: EMPTY });
+    map.addLayer({ id: L_TRAIL_C, type: 'line', source: SRC_TRAILS_C, layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': ['get', 'color'], 'line-width': 3, 'line-opacity': 0 } }, before);
   };
   const setSrc = (map: MLMap, id: string, fc: FeatureCollection) => {
     try { (map.getSource(id) as GeoJSONSource | undefined)?.setData(fc); } catch { /* style still loading */ }
@@ -187,13 +194,19 @@ export function createMapAnimator(getMap: () => MLMap | null) {
     cancels.add(wrapped);
   };
 
-  /** Units glide from the old spot to the new one, with a trail that fades. `finalOf` is the real position now. */
+  /**
+   * Units glide from the old spot to the new one, with a trail that fades. `finalOf` is the real position now.
+   * Characters use the same call with `channel: 'chars'` (their own trail) and `onDone`, run when the glide has ended.
+   */
   const moveUnits = (
     moves: Array<MapDiff['moved'][number] & { still?: boolean }>,
     markerOf: (id: string) => { marker: MLMarker; el: HTMLElement } | undefined,
     finalOf: (id: string) => LL | undefined,
     colorOf: (id: string) => string,
+    opts: { channel?: 'chars'; onDone?: () => void } = {},
   ) => {
+    const trailSrc = opts.channel === 'chars' ? SRC_TRAILS_C : SRC_TRAILS;
+    const trailLayer = opts.channel === 'chars' ? L_TRAIL_C : L_TRAIL;
     const map = getMap();
     const live = moves.filter((m) => markerOf(m.id));
     if (!map || !live.length) return;
@@ -220,17 +233,21 @@ export function createMapAnimator(getMap: () => MLMap | null) {
         mk.marker.setLngLat(to);
       }
       const moving = t * total < MOVE_MS;
-      setSrc(map, SRC_TRAILS, t >= 1 ? EMPTY : fc(t));
-      setPaint(map, L_TRAIL, 'line-opacity', t >= 1 ? 0 : moving ? 0.75 : 0.75 * (1 - (t * total - MOVE_MS) / TRAIL_FADE_MS));
+      setSrc(map, trailSrc, t >= 1 ? EMPTY : fc(t));
+      setPaint(map, trailLayer, 'line-opacity', t >= 1 ? 0 : moving ? 0.75 : 0.75 * (1 - (t * total - MOVE_MS) / TRAIL_FADE_MS));
     }, () => {
       for (const m of live) {
         const mk = markerOf(m.id); const fin = finalOf(m.id);
         if (mk && fin && !m.still && !mk.el.dataset.drag) { mk.marker.setLngLat(fin); pulseToken(mk.el); }
       }
-      setSrc(map, SRC_TRAILS, EMPTY);
-      setPaint(map, L_TRAIL, 'line-opacity', 0);
+      setSrc(map, trailSrc, EMPTY);
+      setPaint(map, trailLayer, 'line-opacity', 0);
+      opts.onDone?.();
     });
-    track(cancel);
+    if (opts.channel === 'chars') {
+      const wrapped = () => { charCancels.delete(wrapped); cancel(); };
+      charCancels.add(wrapped);
+    } else track(cancel);
     // Frame 0 now, so the token is never seen at its new place for a frame.
     for (const m of live) if (!m.still) markerOf(m.id)?.marker.setLngLat(m.from);
   };
@@ -311,9 +328,13 @@ export function createMapAnimator(getMap: () => MLMap | null) {
     track(runFrames(ms, (t) => frame(easeInOut(t)), done));
   };
 
-  const cancelAll = () => {
+  const cancelAll = (includeChars = true) => {
     for (const c of [...cancels]) { try { c(); } catch { /* map already gone */ } }
     cancels.clear();
+    if (includeChars) {
+      for (const c of [...charCancels]) { try { c(); } catch { /* map already gone */ } }
+      charCancels.clear();
+    }
     for (const mk of ghostMarkers) mk.remove();
     ghostMarkers.clear();
   };

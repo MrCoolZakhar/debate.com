@@ -49,3 +49,6 @@
 --   edited or withdrawn directive needs no claim step because directives are assigned automatically.
 --   Points follow the person (no SQL): src/lib/crisis/points.ts sums by crisis_directives.author_member_id across every character.
 -- 30b _press_can_review: crisis staff with an account can approve press releases of their conference.
+-- 31 crisis_log_character_move (trigger on crisis_characters location): every character move is a map history row,
+--   action 'crisis_characters:update', payload/before { id, name, kind 'character', lng, lat, owner_cabinet_id, picture_url },
+--   seen by the character's cabinet, so History and the "N changes" replay can animate it.

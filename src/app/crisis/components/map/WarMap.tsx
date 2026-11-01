@@ -42,6 +42,8 @@ import { Btn, CK, Segmented, cabinetTint } from '../../crisisKit';
 import { mayEditCharacters } from '../character/characterStatus';
 import { drawFog, type FogHoles } from './fog';
 import { createMapAnimator, diffMapData, mixHex, prefersReducedMotion, pulseToken, type GrowItem, type PendingAnim } from './mapAnimate';
+import { createCharGlider, useCharGlide } from './charGlide';
+import { charAsMover, type MoveLook } from './charMoveArrow';
 import { mergeDrafts } from './draftMerge';
 import { FLY_MS, type FocusRequest } from './mapFocusFly';
 import { freehandCorners, type FreePt } from './freehand';
@@ -129,6 +131,7 @@ interface Live {
   onUnitMoved: (id: string, lng: number, lat: number) => void;
   onUnitDrag: (id: string, lng: number, lat: number) => void;
   onCharMoved: (id: string, lng: number, lat: number) => void;
+  onCharDrag: (id: string, lng: number, lat: number) => void;
   redrawFog: () => void;
   regroupChars: () => void;
   /** Backs out of whatever is open; answers whether it did anything. */
@@ -603,7 +606,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
   // the move waits for a yes). It is drawn as a small SVG laid over the map and moved in the same frame as the
   // token, so the line always reaches the arrowhead. The tip beside it says what is being moved and how far;
   // it only shows while the unit is being dragged (the confirm card says the same afterwards).
-  const showMove = useCallback((u: MapUnit | null, to: LngLat | null, withTip = true) => {
+  const showMove = useCallback((u: MapUnit | null, to: LngLat | null, withTip = true, look?: MoveLook) => {
     const map = mapRef.current;
     const svg = arrowSvg.current;
     const tip = dragTip.current;
@@ -637,12 +640,15 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
       }
       const origin = part('from');
       origin?.setAttribute('cx', String(a.x)); origin?.setAttribute('cy', String(a.y));
+      // A character's arrow is in its cabinet's colour; a unit's keeps the draft colour.
+      const tint = look?.color ?? DRAFT;
+      part('line')?.setAttribute('stroke', tint); head?.setAttribute('fill', tint); origin?.setAttribute('stroke', tint);
     }
     if (tip) {
       if (!withTip) { tip.style.display = 'none'; return; }
       const owner = u.owner_cabinet_id ? cabById.get(u.owner_cabinet_id)?.name ?? 'A cabinet' : 'Nobody';
       const name = document.createElement('b'); name.textContent = u.name;
-      const what = document.createElement('div'); what.textContent = `${KIND_META[u.kind].label} · ${fmtAmount(u.strength)} · ${owner}`;
+      const what = document.createElement('div'); what.textContent = look ? look.what : `${KIND_META[u.kind].label} · ${fmtAmount(u.strength)} · ${owner}`;
       const dist = document.createElement('div');
       dist.append('Distance so far: ');
       const km = document.createElement('i'); km.textContent = kmText(kmBetween(from, to)); dist.append(km);
@@ -1251,6 +1257,8 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
   useEffect(() => { if (!draftCount) setConfirmDiscard(false); }, [draftCount]);
   /** Characters just sent keep their new spot on screen until the saved positions are read back. */
   const charOverride = useRef(new Map<string, LngLat>());
+  /** Plays a character's glide when its saved spot changes (charGlide.ts). */
+  const charGlider = useMemo(() => createCharGlider(), []);
   const sendDraft = useCallback(async () => {
     const local = draftRef.current;
     if (!local || isEmptySet(local) || sending) return;
@@ -1310,7 +1318,16 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
         }
         setSelUnit((cur) => (cur && unitIds.get(cur)) || cur);
         setSelTerr((cur) => (cur && cur.kind === 'area' && shapeIds.has(cur.id) ? { kind: 'area', id: shapeIds.get(cur.id) as string } : cur));
-        for (const c of fresh.chars ?? []) charOverride.current.set(c.id, [c.lng, c.lat]);
+        for (const c of fresh.chars ?? []) {
+          charOverride.current.set(c.id, [c.lng, c.lat]);
+          // The marker goes back to the sent spot and glides to the new one, the way the units do.
+          const was = sentCharAt(c.id);
+          if (was) {
+            charGlider.targets.set(c.id, [c.lng, c.lat]);
+            charGlider.expect(c.id, [c.lng, c.lat], 'ran');
+            charGlider.start([{ id: c.id, from: was, to: [c.lng, c.lat] }]);
+          }
+        }
         // Edits made on this screen while the send ran stay as the unsent changes.
         const mineLeft = residualOf(draftRef.current);
         draftRef.current = mineLeft; setDraftSet(mineLeft); clearHistory(); setDraftBy(null);
@@ -1340,7 +1357,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
       }
     });
     setSending(false);
-  }, [ref, run, sending, canMap, canUnits, canChars, clearHistory, persistDraft, v, queueAnim, whoSaved]);
+  }, [ref, run, sending, canMap, canUnits, canChars, clearHistory, persistDraft, v, queueAnim, whoSaved, sentCharAt, charGlider]);
 
   /** Throws the unsent changes away. Go back brings them back (with the steps Go back had before). */
   const discardDraft = useCallback(async () => {
@@ -1406,6 +1423,8 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
       return;
     }
     charOverride.current.set(id, [nl, nt]);
+    // This screen shows the move already; when the saved spot catches up only the trail is drawn.
+    charGlider.expect(id, [nl, nt], 'still');
     try {
       await saveCharacter(ref, { id, location_lng: nl, location_lat: nt });
       setLast({ at: new Date().getTime(), text: `You moved ${c.name}` });
@@ -1417,7 +1436,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
       if (mk && prev) mk.marker.setLngLat(prev);
       notifyErr(crisisError(e, 'Could not move the character.'), 'crisis-map');
     }
-  }, [core.characters, ref, v, isStage, applyEdits, sentCharAt]);
+  }, [core.characters, ref, v, isStage, applyEdits, sentCharAt, charGlider]);
 
   /** The unit was dragged: ask in place before saving. */
   const askMove = useCallback((id: string, lng: number, lat: number) => {
@@ -1769,7 +1788,15 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
         const u = rawRef.current?.units.find((x) => x.id === id) ?? dataRef.current?.units.find((x) => x.id === id);
         if (u) showMove(u, [lng, lat]);
       },
-      onCharMoved: (id, lng, lat) => { void moveChar(id, lng, lat); },
+      onCharDrag: (id, lng, lat) => {
+        // The line follows the pointer from where the character is saved, like a dragged unit's.
+        const c = charsRef.current.find((x) => x.id === id);
+        const from = sentCharAt(id);
+        if (!c || !from) return;
+        const { unit, look } = charAsMover(c, from, c.cabinet_id ? cabById.get(c.cabinet_id) : undefined);
+        showMove(unit, [lng, lat], true, look);
+      },
+      onCharMoved: (id, lng, lat) => { showMove(null, null); void moveChar(id, lng, lat); },
       redrawFog,
       regroupChars,
       escape: () => {
@@ -2416,7 +2443,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
     const map = mapRef.current;
     if (!world || !map || !data || prefersReducedMotion()) return;
     const { diff } = pa;
-    animator.cancelAll();
+    animator.cancelAll(false);   // a character still gliding keeps going
     const unitNow = (id: string) => dataRef.current?.units.find((x) => x.id === id);
     // Decide per unit from what THIS screen was drawing: already at the new spot (the sender, or anyone looking at the
     // same draft) keeps its place and only plays the trail; a screen still showing the old spot glides.
@@ -2507,6 +2534,15 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
       later(() => pulseToken(unitMarkers.current.get(unit.id)?.el));
       return;
     }
+    // A character (a row of "N changes to the map"): fly to where it stands and pulse it.
+    const charMk = focusReq.char ? charMarkers.current.get(focusReq.char) : undefined;
+    if (charMk) {
+      const at = charMk.marker.getLngLat();
+      map.flyTo({ center: [at.lng, at.lat], zoom: Math.max(map.getZoom(), 6), duration: dur });
+      if (!compact) { setSelUnit(null); setSelTerr(null); setSelZone(null); setSelChar(focusReq.char as string); }
+      later(() => pulseToken(charMarkers.current.get(focusReq.char as string)?.el));
+      return;
+    }
     if (focusReq.region) {
       const multi = countryMulti(focusReq.region);
       const b = bboxOf(multi);
@@ -2524,7 +2560,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
       return;
     }
     if (focusReq.bbox) fitTo(focusReq.bbox);
-  }, [focusReq, world, data, shownUnits, shownShapes, countryMulti, ownerOf, cabById, animator]);
+  }, [focusReq, world, data, shownUnits, shownShapes, countryMulti, ownerOf, cabById, animator, compact]);
 
   // ── planned moves: a dashed trajectory from where each unit is now (a reply's moves, or the team's unsent moves),
   // and a ring where it is until the move is sent ──
@@ -2539,7 +2575,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
   // Where each planned move starts and ends: units (a reply's moves, or the team's unsent moves) and the characters
   // the team has moved but not sent.
   const plans = useMemo(() => {
-    const out: Array<{ key: string; from: LngLat; to: LngLat }> = [];
+    const out: Array<{ key: string; from: LngLat; to: LngLat; color?: string }> = [];
     for (const [id, to] of Object.entries(planMoves ?? {})) {
       const u = rawData?.units.find((x) => x.id === id);
       if (u) out.push({ key: id, from: [u.lng, u.lat], to: [to.lng, to.lat] });
@@ -2547,11 +2583,13 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
     if (!isStage) {
       for (const [id, to] of draftCharAt) {
         const c = core.characters.find((x) => x.id === id);
-        if (c && typeof c.location_lng === 'number' && typeof c.location_lat === 'number') out.push({ key: `char:${id}`, from: [c.location_lng, c.location_lat], to });
+        if (c && typeof c.location_lng === 'number' && typeof c.location_lat === 'number') {
+          out.push({ key: `char:${id}`, from: [c.location_lng, c.location_lat], to, color: safeColor(c.cabinet_id ? cabById.get(c.cabinet_id)?.color ?? NOBODY : NOBODY) });
+        }
       }
     }
     return out;
-  }, [planMoves, rawData, isStage, draftCharAt, core.characters]);
+  }, [planMoves, rawData, isStage, draftCharAt, core.characters, cabById]);
   useEffect(() => {
     const map = mapRef.current; const ml = mlRef.current;
     if (!world || !map || !ml) return;
@@ -2560,7 +2598,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
     const keep = new Set<string>();
     for (const p of plans) {
       keep.add(p.key);
-      lines.push({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [p.from, p.to] } });
+      lines.push({ type: 'Feature', properties: p.color ? { color: p.color } : {}, geometry: { type: 'LineString', coordinates: [p.from, p.to] } });
       const g = ghosts.get(p.key);
       if (g) g.setLngLat(p.from);
       else ghosts.set(p.key, new ml.Marker({ element: makeGhost(), anchor: 'center' }).setLngLat(p.from).addTo(map));
@@ -2597,6 +2635,13 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
   );
   const showChars = !isStage && (compact || charsOn) && (staff || !!cabinetId);
   const canMoveChars = staff && !compact && tool === 'select' && mayEditCharacters(v.role, settings);
+  // A character whose saved spot changes (sent, saved live, brought back) glides from the old spot to the new one.
+  useCharGlide({
+    glider: charGlider, characters: core.characters, animator, markers: charMarkers,
+    colorOf: (c) => safeColor(c?.cabinet_id ? cabById.get(c.cabinet_id)?.color ?? NOBODY : NOBODY),
+    draftAt: (id) => draftCharRef.current.get(id),
+    onDone: regroupChars,
+  });
   useEffect(() => {
     const map = mapRef.current; const ml = mlRef.current;
     if (!world || !map || !ml) return;
@@ -2605,7 +2650,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
     const size = compact ? 24 : 34;
     const wanted = new Set(list.map((c) => c.id));
     for (const [id, m] of [...markers]) {
-      if (!wanted.has(id)) { m.marker.remove(); markers.delete(id); }
+      if (!wanted.has(id)) { m.marker.remove(); markers.delete(id); charGlider.targets.delete(id); }
     }
     for (const c of list) {
       const at: LngLat = charOverride.current.get(c.id) ?? draftCharAt.get(c.id) ?? [c.location_lng as number, c.location_lat as number];
@@ -2615,6 +2660,11 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
         const marker = new ml.Marker({ element: el, draggable: canMoveChars, anchor: 'center' }).setLngLat(at).addTo(map);
         const id = c.id;
         marker.on('dragstart', () => { el.dataset.drag = '1'; });
+        // The line follows the character at once, like a unit's arrow.
+        marker.on('drag', () => {
+          const at = marker.getLngLat();
+          liveRef.current?.onCharDrag(id, at.lng, at.lat);
+        });
         marker.on('dragend', () => {
           delete el.dataset.drag;
           el.dataset.dragged = '1';
@@ -2628,7 +2678,8 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
         el.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); press(ev); } });
         m = { marker, el, sig: '' };
         markers.set(c.id, m);
-      } else if (!m.el.dataset.drag) m.marker.setLngLat(at);
+      } else if (!m.el.dataset.drag && !charGlider.isActive(c.id)) m.marker.setLngLat(at);
+      charGlider.targets.set(c.id, at);
       m.marker.setDraggable(canMoveChars);
       const color = c.cabinet_id ? cabById.get(c.cabinet_id)?.color ?? NOBODY : NOBODY;
       const selected = c.id === selChar;
@@ -2639,7 +2690,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
       }
     }
     regroupChars();
-  }, [world, visibleChars, showChars, cabById, selChar, compact, canMoveChars, regroupChars, draftCharAt]);
+  }, [world, visibleChars, showChars, cabById, selChar, compact, canMoveChars, regroupChars, draftCharAt, charGlider]);
 
   useEffect(() => {
     const markers = unitMarkers.current;
@@ -2757,6 +2808,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
       if (p && u) { showMove(u, [p.lng, p.lat], false); return; }
       // Nothing waits for a yes: clear the arrow, unless a unit is being dragged right now.
       for (const m of unitMarkers.current.values()) if (m.el.dataset.drag) return;
+      for (const m of charMarkers.current.values()) if (m.el.dataset.drag) return;
       showMove(null, null);
     };
     draw();

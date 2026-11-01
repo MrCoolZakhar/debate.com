@@ -4,14 +4,18 @@
 // (faint, "Before") and where it IS (solid, "Now") with an arrow between them, a country in its new owner's
 // colour, or a drawn area. Read only and non-interactive.
 
-import { useMemo } from 'react';
+import { useId, useMemo } from 'react';
 import type { Geometry, MultiPolygon, Polygon } from 'geojson';
 import type { UnitKind } from '@/lib/crisis/types';
 import { GLYPH_MARKUP } from '../map/glyphs';
 import { LAND, LAND_LINE, SEA, type LngLat, type WorldData } from '../map/mapData';
 import { CK, Skeleton } from '../../crisisKit';
 
-export interface SnapToken { kind: UnitKind; color: string; at: LngLat; ghost?: boolean; label?: string }
+export interface SnapToken {
+  kind: UnitKind; color: string; at: LngLat; ghost?: boolean; label?: string;
+  /** A character: the portrait is drawn in the disc (initials on the colour when it has no picture). */
+  portrait?: { src: string | null; name: string };
+}
 export interface SnapCountry { key: string; fill: string; stroke: string; label?: string }
 export interface SnapShape { geometry: { type: string; coordinates: unknown }; color: string; ghost?: boolean }
 export interface SnapshotSpec {
@@ -63,6 +67,22 @@ export function mainBox(world: WorldData, key: string): [number, number, number,
     if (a > bestA) { bestA = a; best = b; }
   }
   return best;
+}
+
+/** A character's round portrait at the origin of its parent group, in a ring of its cabinet's colour. */
+export function PortraitDisc({ r, color, src, name, ghost }: { r: number; color: string; src: string | null; name: string; ghost?: boolean }) {
+  const cid = `pd${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
+  const ini = name.trim().split(/\s+/).map((w) => w[0] ?? '').slice(0, 2).join('').toUpperCase();
+  return (
+    <g>
+      <clipPath id={cid}><circle r={r - 1.5} /></clipPath>
+      <circle r={r} fill={src || ghost ? '#fff' : color} />
+      {src
+        ? <image href={src} x={-r} y={-r} width={2 * r} height={2 * r} preserveAspectRatio="xMidYMid slice" clipPath={`url(#${cid})`} />
+        : <text y={r * 0.34} textAnchor="middle" fontSize={r * 0.95} fontWeight={800} fill={ghost ? color : '#fff'}>{ini}</text>}
+      <circle r={r - 1.5} fill="none" stroke={color} strokeWidth={3} strokeDasharray={ghost ? '4 3' : undefined} />
+    </g>
+  );
 }
 
 export default function MapSnapshot({ world, spec, label }: { world: WorldData | null; spec: SnapshotSpec; label: string }) {
@@ -166,6 +186,14 @@ export default function MapSnapshot({ world, spec, label }: { world: WorldData |
       {spec.tokens.map((t, i) => {
         const [x, y] = px(t.at);
         const glyph = GLYPH_MARKUP[t.kind] ?? GLYPH_MARKUP.custom;
+        if (t.portrait) {
+          return (
+            <g key={i} transform={`translate(${x} ${y})`} opacity={t.ghost ? 0.6 : 1}>
+              <PortraitDisc r={R + 2} color={t.color} src={t.portrait.src} name={t.portrait.name} ghost={t.ghost} />
+              {t.label && <text y={R + 17} textAnchor="middle" fontSize={11.5} fontWeight={800} fill={CK.ink} {...halo}>{t.label}</text>}
+            </g>
+          );
+        }
         return (
           <g key={i} opacity={t.ghost ? 0.55 : 1}>
             <circle cx={x} cy={y} r={R} fill={t.ghost ? '#fff' : t.color} stroke={t.ghost ? t.color : '#fff'} strokeWidth={t.ghost ? 2.2 : 2.5} strokeDasharray={t.ghost ? '4 3' : undefined} />

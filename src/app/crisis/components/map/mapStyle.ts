@@ -146,7 +146,7 @@ export function editLayers(): AddLayerObject[] {
     { id: 'sight-line', type: 'line', source: SRC_SIGHT, layout: { 'line-join': 'round' }, paint: { 'line-color': DRAFT, 'line-width': 1.8, 'line-dasharray': [3, 2] } },
     // Where a reply plans to move units: a dashed trajectory from where each one is now.
     { id: 'plan-halo', type: 'line', source: SRC_PLANS, layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#FFFFFF', 'line-width': 6, 'line-opacity': 0.85 } },
-    { id: 'plan-line', type: 'line', source: SRC_PLANS, layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': DRAFT, 'line-width': 2.6, 'line-dasharray': [2, 1.4] } },
+    { id: 'plan-line', type: 'line', source: SRC_PLANS, layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': ['coalesce', ['get', 'color'], DRAFT], 'line-width': 2.6, 'line-dasharray': [2, 1.4] } },
     {
       id: 'hover-pt', type: 'circle', source: SRC_HOVER,
       paint: { 'circle-radius': 6, 'circle-color': '#FFFFFF', 'circle-stroke-color': DRAFT, 'circle-stroke-width': 2.5 },

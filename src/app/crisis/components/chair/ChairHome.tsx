@@ -1,8 +1,9 @@
 'use client';
-// Gavelling Crisis: the chair's home, "Front Room". First the cabinet directives waiting for the chair's decision, then
-// the meeting requests, then the live chair console, the cabinet's meetings, resources, the news and the directive list.
+// Gavelling Crisis: the chair's home, "Front Room": ONE dashboard that fits a screen (1280x800 and up, no page scrolling; each
+// card scrolls inside itself). Left: the chair console, resources and the cabinet's meetings. Middle: Crisis News. Right: the
+// cabinet's directives and, bottom right, "Waiting for You". Cabinet directives are read and decided in the pop-up
+// (ChairDirectivePrompt.tsx), never inline. Below 1024px the cards stack, Waiting for You first.
 
-import { dirNumber } from '@/lib/crisis/format';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Boxes, CalendarCheck, CalendarClock, ChevronRight, MonitorPlay, Newspaper, ScrollText } from 'lucide-react';
@@ -11,20 +12,19 @@ import { getCrisisClient } from '@/lib/crisis/client';
 import { useCrisisLive } from '@/lib/crisis/live';
 import { meetingInProgress } from '@/lib/crisis/meetings';
 import { useClockOverlay } from '@/lib/crisis/meetingClockStore';
-import { KIND_LABEL, type Directive, type Meeting, type Resource, type ResourceType } from '@/lib/crisis/types';
+import type { Directive, Meeting, Resource, ResourceType } from '@/lib/crisis/types';
 import { serverNow } from '@/lib/serverClock';
 import { crisisBase, useCrisis } from '../../[conference]/[crisis]/CrisisContext';
-import { BigCount, Card, CardTitle, CK, scenarioLabel, Skeleton } from '../../crisisKit';
-import { StatusLine, whenLabel } from '../delegate/directiveUi';
-import ChairApproval from './ChairApproval';
-import { CharacterName } from '../character/CharacterProfileHost';
+import { Card, CardTitle, CK, resourceIcon, scenarioLabel, Skeleton, Tick } from '../../crisisKit';
+import DirectiveDeepLink from '../notifications/DirectiveDeepLink';
 import MeetingHistory from '../meetings/MeetingHistory';
 import MeetingRequestsStrip, { useMeetingPeople } from '../meetings/MeetingRequestsStrip';
 import StaffMeetingCard from '../meetings/StaffMeetingCard';
 import { useMeetingResponses } from '../meetings/useMeetingResponses';
 import { useCrisisNews } from '../news/useCrisisNews';
-import { plainText } from '../directives/attachedImage';
-import { CabinetDirectivesList, CrisisNewsList } from '../command/cabinetFeeds';
+import { cabinetDirectivesOf, CrisisNewsList } from '../command/cabinetFeeds';
+import { ChairDirectiveRow, openChairDirective } from './chairDirectiveKit';
+import ChairWaitingCard from './ChairWaitingCard';
 
 interface Room { cabinetId: string; name: string; code: string | null; chairPassword: string | null }
 
@@ -93,10 +93,9 @@ function ChairMeetings() {
   const running = approved.filter(meetingInProgress).length;
 
   return (
-    <Card warm>
+    <Card warm className="fr-pane fr-grow">
       <CardTitle
         icon={<CalendarCheck size={18} strokeWidth={1.5} />}
-        sub="Approved meetings, those still asking the others, and what was held."
         right={
           <Link
             href={`${crisisBase(ref)}/meetings`}
@@ -109,6 +108,7 @@ function ChairMeetings() {
       >
         Meetings
       </CardTitle>
+      <div className="fr-body">
       {meetings === null ? <Skeleton h={90} r={18} /> : (
         <>
           {approved.length > 0 && (
@@ -127,9 +127,29 @@ function ChairMeetings() {
           <MeetingHistory meetings={past} people={people} now={now} />
         </>
       )}
+      </div>
     </Card>
   );
 }
+
+const DASH_CSS = `
+.fr-wrap { display: flex; flex-direction: column; gap: 12px; padding-top: 6px; }
+.fr-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+.fr-col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.fr-strip:empty { display: none; }
+@media (max-width: 1023px) { .fr-col-c { order: -1; } }
+@media (min-width: 1024px) and (min-height: 620px) {
+  .fr-wrap { height: calc(100dvh - 78px); }
+  .fr-grid { flex: 1; min-height: 0; grid-template-columns: minmax(0, 1fr) minmax(0, 1.12fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+  .fr-col { min-height: 0; }
+  .fr-strip { flex: none; max-height: 28dvh; overflow-y: auto; }
+  .fr-pane { display: flex; flex-direction: column; min-height: 0; }
+  .fr-grow { flex: 1 1 0; }
+  .fr-fixed { flex: none; }
+  .fr-body { flex: 1; min-height: 0; overflow-y: auto; }
+  .fr-body-cap { max-height: 24dvh; overflow-y: auto; }
+}
+`;
 
 export default function ChairHome() {
   const v = useCrisis();
@@ -140,7 +160,9 @@ export default function ChairHome() {
   const [directives, setDirectives] = useState<Directive[] | null>(null);
   const [res, setRes] = useState<{ types: ResourceType[]; resources: Resource[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [deepTick, setDeepTick] = useState(0);
   const seq = useRef({ d: 0, r: 0 });
+  const deepId = useRef<string | null>(null);
 
   const myCabinets = useMemo(() => (cabinetId ? core.cabinets.filter((c) => c.id === cabinetId) : core.cabinets), [core.cabinets, cabinetId]);
 
@@ -172,42 +194,41 @@ export default function ChairHome() {
     if (changed === null || changed.has('crisis_resources') || changed.has('crisis_resource_types')) void readResources();
   });
 
+  // A notification link (?d=<directive id>) opens that directive in the pop-up once the list is read.
+  const onDeepId = useCallback((id: string) => { deepId.current = id; setDeepTick((x) => x + 1); }, []);
+  useEffect(() => {
+    void deepTick;
+    const id = deepId.current;
+    if (!id || !directives) return;
+    deepId.current = null;
+    const hit = directives.find((d) => d.id === id);
+    if (hit) openChairDirective(hit);
+  }, [deepTick, directives]);
+
   const crisis = core.crisis;
   const typeById = useMemo(() => new Map((res?.types ?? []).map((t) => [t.id, t])), [res]);
   const cabinetRes = (res?.resources ?? []).filter((r) => r.cabinet_id && (cabinetId ? r.cabinet_id === cabinetId : true));
-  // Cabinet directives (waiting or sent on) live in the approval card above; the rest is listed here.
-  const otherDirectives = useMemo(() => (directives ?? []).filter((d) => d.kind !== 'committee'), [directives]);
-  const charName = useCallback((id: string | null) => core.characters.find((c) => c.id === id)?.name ?? null, [core.characters]);
+  const cabinetList = useMemo(() => cabinetDirectivesOf(directives, cabinetId), [directives, cabinetId]);
 
   return (
-    <div style={{ paddingTop: 8 }}>
-      <header style={{ marginBottom: 14 }}>
+    <div className="fr-wrap">
+      <style>{DASH_CSS}</style>
+      <DirectiveDeepLink onId={onDeepId} />
+      <header className="flex items-center justify-between flex-wrap" style={{ gap: '4px 16px' }}>
         <h1 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: CK.ink }}>Front Room</h1>
-        <span className="inline-flex items-center gap-1.5" style={{ marginTop: 6, fontSize: 14, fontWeight: 700, color: CK.inkSoft }}>
-          <CalendarClock size={16} strokeWidth={1.5} aria-hidden />
+        <span className="inline-flex items-center gap-1.5" style={{ fontSize: 14, fontWeight: 700, color: CK.inkSoft }}>
+          <CalendarClock size={16} strokeWidth={1.5} aria-hidden style={{ color: CK.red }} />
           {scenarioLabel(crisis.scenario_at)}
         </span>
-        {error && <p role="status" style={{ margin: '6px 0 0', fontSize: 13, color: CK.danger }}>{error}</p>}
+        {error && <p role="status" style={{ flexBasis: '100%', margin: 0, fontSize: 13, color: CK.danger }}>{error}</p>}
       </header>
 
-      <div style={{ marginBottom: 16 }}>
-        <ChairApproval
-          cref={ref}
-          directives={directives}
-          cabinetId={cabinetId}
-          characters={core.characters}
-          members={core.members}
-          cabinets={core.cabinets}
-          onChanged={() => { void readDirectives(); }}
-        />
-      </div>
+      <div className="fr-strip"><MeetingRequestsStrip compact /></div>
 
-      <MeetingRequestsStrip bottomGap={16} />
-
-      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3 items-start">
-        <div className="grid gap-4">
-          <Card warm>
-            <CardTitle icon={<MonitorPlay size={18} strokeWidth={1.5} />} sub="The committee room where your committee debates.">Chair Console</CardTitle>
+      <div className="fr-grid">
+        <div className="fr-col">
+          <Card warm className="fr-fixed">
+            <CardTitle icon={<MonitorPlay size={18} strokeWidth={1.5} />}>Chair Console</CardTitle>
             {rooms === null ? <Skeleton h={40} r={12} /> : (
               <div className="grid gap-2">
                 {rooms.map((r) => (
@@ -234,55 +255,70 @@ export default function ChairHome() {
             )}
           </Card>
 
-          <ChairMeetings />
-
-          <Card>
+          <Card className="fr-pane fr-fixed">
             <CardTitle icon={<Boxes size={18} strokeWidth={1.5} />}>Cabinet Resources</CardTitle>
-            {res === null ? <Skeleton h={30} /> : cabinetRes.length === 0 ? (
-              <p style={{ margin: 0, fontSize: 13.5, color: CK.inkSoft }}>No resources yet.</p>
-            ) : (
-              <div className="grid gap-3">
-                {cabinetRes.map((r) => {
-                  const t = typeById.get(r.type_id);
-                  const cab = !cabinetId && core.cabinets.length > 1 ? core.cabinets.find((c) => c.id === r.cabinet_id)?.name : null;
-                  return (
-                    <div key={r.id}>
-                      <BigCount n={Number(r.amount).toLocaleString()} word={`${t?.name ?? 'Resource'}${t?.unit ? ` (${t.unit})` : ''}`} />
-                      {cab && <span style={{ display: 'block', fontSize: 12, color: CK.muted, marginTop: 2 }}>{cab}</span>}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+            <div className="fr-body-cap">
+              {res === null ? <Skeleton h={30} /> : cabinetRes.length === 0 ? (
+                <p style={{ margin: 0, fontSize: 13.5, color: CK.inkSoft }}>No resources yet.</p>
+              ) : (
+                <div className="grid gap-x-4 gap-y-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(132px, 1fr))' }}>
+                  {cabinetRes.map((r) => {
+                    const t = typeById.get(r.type_id);
+                    const cab = !cabinetId && core.cabinets.length > 1 ? core.cabinets.find((c) => c.id === r.cabinet_id)?.name : null;
+                    return (
+                      <div key={r.id} className="flex items-start" style={{ gap: 8, minWidth: 0 }}>
+                        <span style={{ color: CK.red, lineHeight: 0, paddingTop: 3 }}>{resourceIcon(t?.name ?? '', 18)}</span>
+                        <span style={{ minWidth: 0 }}>
+                          <b style={{ display: 'block', fontSize: 22, lineHeight: 1.05, fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: CK.ink }}><Tick value={Number(r.amount).toLocaleString()} /></b>
+                          <span style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: CK.inkSoft, overflowWrap: 'anywhere' }}>{`${t?.name ?? 'Resource'}${t?.unit ? ` (${t.unit})` : ''}`}</span>
+                          {cab && <span style={{ display: 'block', fontSize: 11.5, color: CK.muted, overflowWrap: 'anywhere' }}>{cab}</span>}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </Card>
+
+          <ChairMeetings />
+        </div>
+
+        <div className="fr-col">
+          <Card warm className="fr-pane fr-grow" >
+            <CardTitle icon={<Newspaper size={18} strokeWidth={1.5} />}>Crisis News</CardTitle>
+            <div className="fr-body"><CrisisNewsList news={news} cabinetId={cabinetId} /></div>
           </Card>
         </div>
 
-        <section aria-label="Crisis News" className="min-w-0">
-          <Card warm>
-            <CardTitle icon={<Newspaper size={18} strokeWidth={1.5} />} sub="What your cabinet and every room has been told.">Crisis News</CardTitle>
-            <CrisisNewsList news={news} cabinetId={cabinetId} />
+        <div className="fr-col fr-col-c">
+          <Card warm className="fr-pane fr-grow">
+            <CardTitle
+              icon={<ScrollText size={18} strokeWidth={1.5} />}
+              right={cabinetList !== null && (
+                <span className="inline-flex items-baseline" style={{ gap: 6 }}>
+                  <b style={{ fontSize: 28, fontWeight: 800, lineHeight: 1, fontVariantNumeric: 'tabular-nums', color: CK.ink }}><Tick value={cabinetList.length} /></b>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: CK.inkSoft }}>sent</span>
+                </span>
+              )}
+            >
+              Cabinet Directives
+            </CardTitle>
+            <div className="fr-body">
+              {cabinetList === null ? <div className="grid gap-2"><Skeleton h={46} r={12} /><Skeleton h={46} r={12} /></div>
+                : cabinetList.length === 0 ? <p style={{ margin: 0, fontSize: 14, color: CK.inkSoft }}>No cabinet directives yet.</p>
+                : cabinetList.slice(0, 8).map((d) => <ChairDirectiveRow key={d.id} d={d} />)}
+              <Link
+                href={`${crisisBase(ref)}/directives`}
+                className="inline-flex items-center gap-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+                style={{ marginTop: 8, fontSize: 13, fontWeight: 800, color: CK.forest, textDecoration: 'underline' }}
+              >
+                All directives<ChevronRight size={14} strokeWidth={1.6} aria-hidden />
+              </Link>
+            </div>
           </Card>
-        </section>
-
-        <section aria-label="Directives" className="min-w-0 lg:col-span-2 xl:col-span-1">
-          {/* The same list the Crisis Director sees in this cabinet's room pop-up on Command (command/cabinetFeeds.tsx). */}
-          <Card warm style={{ marginBottom: otherDirectives.length ? 12 : 0 }}>
-            <CardTitle icon={<ScrollText size={18} strokeWidth={1.5} />} sub="Sent in your cabinet's name, with where each one stands.">Cabinet Directives</CardTitle>
-            <CabinetDirectivesList directives={directives} cabinetId={cabinetId} />
-          </Card>
-          {otherDirectives.length > 0 && <h2 style={{ margin: '0 0 8px', fontSize: 15, fontWeight: 800, color: CK.ink }}>Other Directives</h2>}
-          <div className="grid gap-3">
-            {otherDirectives.map((d) => (
-              <Card key={d.id}>
-                <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: CK.muted }}>Directive {dirNumber(d)} · {KIND_LABEL[d.kind]} · {whenLabel(d.created_at)}</p>
-                <h3 style={{ margin: '2px 0 4px', fontSize: 15, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{d.title}</h3>
-                <StatusLine s={d.status} />
-                {charName(d.author_character_id) && <p style={{ margin: '4px 0 0', fontSize: 12.5, color: CK.inkSoft, overflowWrap: 'anywhere' }}>From <CharacterName id={d.author_character_id} name={charName(d.author_character_id)} /></p>}
-                <p style={{ margin: '6px 0 0', fontSize: 13.5, lineHeight: 1.5, color: CK.inkSoft, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{plainText(d.body)}</p>
-              </Card>
-            ))}
-          </div>
-        </section>
+          <ChairWaitingCard directives={directives} />
+        </div>
       </div>
     </div>
   );

@@ -13,20 +13,22 @@ import GSelect from '@/components/GSelect';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { UserFacingError } from '@/lib/friendlyError';
 import { crisisError, loadMap, loadMapDraftVersioned, saveMapDraftVersioned } from '@/lib/crisis/api';
-import { crisisHistory, groupBatches, parseChange, type ChangeFilter, type HistoryBatch, type HistoryChange } from '@/lib/crisis/history';
+import { crisisHistory, groupBatches, type HistoryBatch } from '@/lib/crisis/history';
 import { useCrisisLive } from '@/lib/crisis/live';
 import { Btn, Card, CK, Segmented, Skeleton } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
+import { mayEditCharacters } from '../character/characterStatus';
 import { isEmptySet, sendSet } from '../map/mapEdits';
 import { buildRestoreSet } from '../map/mapRestore';
 import BatchEntry from './BatchEntry';
 import ChangeDialog from './ChangeDialog';
+import { parseAnyChange, type AnyChange, type AnyFilter } from './charChange';
 import { useChangeCtx } from './changeKit';
 
 const PAGE = 200;
 /** How far back a restore reads the history. */
 const RESTORE_ROWS = 3000;
-type Filter = 'all' | ChangeFilter;
+type Filter = 'all' | AnyFilter;
 
 function dayKey(iso: string): string {
   const d = new Date(iso);
@@ -42,11 +44,11 @@ function dayLabel(iso: string): string {
 }
 const timeOf = (iso: string) => new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 
-interface Entry { batch: HistoryBatch; changes: HistoryChange[] }
+interface Entry { batch: HistoryBatch; changes: AnyChange[] }
 
 /** `embedded`: shown as the History tab of the Map page, which carries the page title. */
 export default function HistoryPage({ embedded = false }: { embedded?: boolean } = {}) {
-  const { ref, staff, director, settings } = useCrisis();
+  const { ref, staff, director, settings, role, core } = useCrisis();
   const ctx = useChangeCtx();
   const router = useRouter();
   const pathname = usePathname();
@@ -57,7 +59,7 @@ export default function HistoryPage({ embedded = false }: { embedded?: boolean }
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
   const [who, setWho] = useState('all');
-  const [open, setOpen] = useState<HistoryChange | null>(null);
+  const [open, setOpen] = useState<AnyChange | null>(null);
 
   const load = useCallback(async () => {
     try { setRows(await crisisHistory(ref, { limit })); setError(null); } catch (e) { setError(crisisError(e, 'Could not load the history.')); }
@@ -67,7 +69,7 @@ export default function HistoryPage({ embedded = false }: { embedded?: boolean }
 
   // Everything sent together is one entry; the filters then keep the changes that match.
   const entries = useMemo<Entry[]>(
-    () => groupBatches(rows ?? []).map((batch) => ({ batch, changes: batch.rows.map(parseChange).filter((c): c is HistoryChange => !!c) })).filter((e) => e.changes.length > 0),
+    () => groupBatches(rows ?? []).map((batch) => ({ batch, changes: batch.rows.map(parseAnyChange).filter((c): c is AnyChange => !!c) })).filter((e) => e.changes.length > 0),
     [rows],
   );
   const people = useMemo(() => [...new Set(entries.flatMap((e) => e.changes.map((c) => c.by)).filter((x): x is string => !!x))].sort((a, b) => a.localeCompare(b)), [entries]);
@@ -92,7 +94,11 @@ export default function HistoryPage({ embedded = false }: { embedded?: boolean }
   const restore = useCallback(async (b: HistoryBatch) => {
     try {
       const [current, full] = await Promise.all([loadMap(ref), crisisHistory(ref, { limit: RESTORE_ROWS })]);
-      const plan = buildRestoreSet(current, full, b.id, ref.id);
+      // Characters go back too, for whoever may move them.
+      const chars = mayEditCharacters(role, settings)
+        ? core.characters.filter((c) => typeof c.location_lng === 'number' && typeof c.location_lat === 'number').map((c) => ({ id: c.id, lng: c.location_lng as number, lat: c.location_lat as number }))
+        : undefined;
+      const plan = buildRestoreSet(current, full, b.id, ref.id, chars);
       if (!plan) throw new UserFacingError('That point is too far back to bring the map back to.');
       if (isEmptySet(plan.set)) { notifyOk('The map already looks like it did then', 'crisis-map'); return; }
       const skipped = plan.skipped ? ` ${plan.skipped} older ${plan.skipped === 1 ? 'change' : 'changes'} had no earlier state and stay as they are.` : '';
@@ -120,8 +126,9 @@ export default function HistoryPage({ embedded = false }: { embedded?: boolean }
       notifyErr(crisisError(e, 'Could not bring the map back.'), 'crisis-map');
       throw e;
     }
-  }, [ref, settings.mapChangesWait, router, pathname, load]);
+  }, [ref, settings, role, core.characters, router, pathname, load]);
 
+  const hasChars = useMemo(() => entries.some((e) => e.changes.some((c) => c.type === 'character')), [entries]);
   const whoOptions = useMemo(() => [{ value: 'all', label: 'Everyone' }, ...people.map((p) => ({ value: p, label: p }))], [people]);
 
   return (
@@ -138,6 +145,7 @@ export default function HistoryPage({ embedded = false }: { embedded?: boolean }
         <div className="flex items-center flex-wrap" style={{ gap: 10 }}>
           <Segmented<Filter> ariaLabel="Show" value={filter} onChange={setFilter} options={[
             { value: 'all', label: 'All' }, { value: 'troops', label: 'Troops' }, { value: 'borders', label: 'Borders' }, { value: 'areas', label: 'Areas' },
+            ...(hasChars || filter === 'characters' ? [{ value: 'characters' as const, label: 'Characters' }] : []),
           ]} />
           {staff && people.length > 0 && (
             <div style={{ width: 200 }}>

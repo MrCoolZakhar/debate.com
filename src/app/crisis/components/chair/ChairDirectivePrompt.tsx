@@ -1,46 +1,34 @@
 'use client';
-// Gavelling Crisis: the chair's pop-up for a cabinet directive waiting for their decision (Round 10).
+// Gavelling Crisis: the chair's pop-up for a cabinet directive. The ONE place a chair reads and decides a directive.
 // Whenever a cabinet directive of the chair's cabinet is waiting (kind committee, status awaiting_chair) this centred card
 // opens on any chair page: Approve (to the backroom), Request changes (back to the author as a draft, with a note) or Reject
 // (final). Both of the last two ask for an optional note IN PLACE: the card's content is replaced by the note field with a
-// Back button, never a second pop-up. X, a click outside or Escape just closes it: the directive stays in "Cabinet Directives
-// For You" on the Front Room, and this device remembers it was closed so it does not come back on a reload (a new directive,
-// or the same one sent again, does pop up). It waits while any other dialog is open (and hides, keeping what was typed).
+// Back button, never a second pop-up. X, a click outside or Escape just closes it: the directive stays in "Waiting for You"
+// on the Front Room (and in the Directives tab), and this device remembers it was closed so it does not come back on a reload
+// (a new directive, or the same one sent again, does pop up). It waits while any other dialog is open (and hides, keeping what
+// was typed).
 //
-// ChairDirectiveCard is the one card, also drawn inline by the Front Room (chair/ChairApproval.tsx).
+// The Front Room's "Waiting for You" card and the Directives tab open ONE given directive here through openChairDirective()
+// (chairDirectiveKit.tsx): a waiting one shows the decision card even if it was closed on this device, any other the same card
+// read only.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
-import { ArrowLeft, Check, ChevronDown, ChevronLeft, ChevronRight, Gavel, PencilLine, X, XCircle } from 'lucide-react';
+import { ArrowLeft, Check, ChevronLeft, ChevronRight, Gavel, PencilLine, X, XCircle } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { crisisError, listDirectives, requestDirectiveChanges, reviewDirectiveAsChair, type CrisisRef } from '@/lib/crisis/api';
 import { dirNumber } from '@/lib/crisis/format';
 import { useCrisisLive } from '@/lib/crisis/live';
-import type { Cabinet, Character, Directive, Member } from '@/lib/crisis/types';
-import { Btn, CK, fieldStyle, OverhangCard, ThemeTag, useScrollLock } from '../../crisisKit';
+import type { Cabinet, Directive } from '@/lib/crisis/types';
+import { Btn, CK, fieldStyle, OverhangCard, useScrollLock } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { whenLabel, whenTitle } from '../delegate/directiveUi';
-import { DirectiveBody, splitAttached } from '../directives/attachedImage';
-import { NumberBadge } from '../directives/directiveParts';
-import { ZoomableImage } from '../news/ImageLightbox';
+import { DirectiveBody } from '../directives/attachedImage';
+import { CabinetLogo, NumberBadge, ThemeTags } from '../directives/directiveParts';
+import { chairGroup, chairVerdict, closeChairDirective, directiveAuthor, useRequestedChairDirective, type DirectiveAuthor } from './chairDirectiveKit';
 
 const WATCH_MS = 1500;
 const KEEP_HANDLED = 300;
-const LONG = 260; // characters; a longer text starts folded in the list
-
-// ───────────── who wrote it ─────────────
-
-export interface DirectiveAuthor { name: string; picture_url: string | null; color: string }
-
-/** The author's character (else their own name), with their cabinet's colour. */
-export function directiveAuthor(d: Directive, characters: Character[], members: Member[], cabinets: Cabinet[]): DirectiveAuthor {
-  const ch = d.author_character_id ? characters.find((c) => c.id === d.author_character_id) : undefined;
-  const cab = cabinets.find((c) => c.id === (ch?.cabinet_id ?? d.cabinet_id));
-  const color = cab?.color ?? CK.red;
-  if (ch) return { name: ch.name, picture_url: ch.picture_url, color };
-  const m = d.author_member_id ? members.find((x) => x.id === d.author_member_id) : undefined;
-  return { name: m?.display_name ?? 'A delegate', picture_url: m?.picture_url ?? null, color };
-}
 
 // ───────────── the card ─────────────
 
@@ -58,28 +46,23 @@ const COPY: Record<Exclude<Mode, 'view'>, { heading: string; line: string; label
   },
 };
 
+const AVATAR = 56;
+
 /**
- * One cabinet directive waiting for the chair, with the three ways to deal with it. `popup` shows the whole text in a scroll
- * area; `inline` (the Front Room) folds a long text. `topBar` sits at the card's top right (the pop-up's navigation and X).
+ * One cabinet directive, read in full. Waiting for the chair: the three ways to deal with it. Anything else (`readOnly`): the
+ * same card with its state on top and no buttons. `topBar` sits at the card's top right (the pop-up's navigation and X).
  */
-export function ChairDirectiveCard({ d, author, cref, cabinetName, variant, focused = false, topBar, onDone }: {
-  d: Directive; author: DirectiveAuthor; cref: CrisisRef; cabinetName: string | null; variant: 'popup' | 'inline';
-  focused?: boolean; topBar?: ReactNode; onDone: () => void;
+export function ChairDirectiveCard({ d, author, cabinet, cref, readOnly = false, topBar, onDone }: {
+  d: Directive; author: DirectiveAuthor; cref: CrisisRef; cabinet: Cabinet | null; readOnly?: boolean; topBar?: ReactNode; onDone: () => void;
 }) {
   const [mode, setMode] = useState<Mode>('view');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState<Doing | null>(null);
-  const [open, setOpen] = useState(focused);
-  const root = useRef<HTMLDivElement>(null);
-  const popup = variant === 'popup';
-  const size = popup ? 60 : 48;
-  const overhang = Math.round(size / 3);
-  const { text, image } = splitAttached(d.body);
-  const long = !popup && (text.length > LONG || text.split('\n').length > 4);
-
-  useEffect(() => {
-    if (focused) root.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
-  }, [focused]);
+  const overhang = Math.round(AVATAR / 3);
+  const verdict = chairVerdict(d);
+  const group = chairGroup(d);
+  const reply = (d.reply ?? '').trim();
+  const replyLabel = group === 'changes' || group === 'rejected' ? 'Your note' : group === 'answered' ? 'Backroom reply' : '';
 
   const run = async (kind: Doing) => {
     if (busy) return;
@@ -112,15 +95,23 @@ export function ChairDirectiveCard({ d, author, cref, cabinetName, variant, focu
 
   const back = () => { setMode('view'); setNote(''); };
   const header = (
-    <div className="flex items-start justify-between" style={{ gap: 8, paddingLeft: overhang + size + 12 - 18, minHeight: Math.round((size * 2) / 3) - 4 }}>
+    <div className="flex items-start justify-between" style={{ gap: 8, paddingLeft: overhang + AVATAR + 12 - 18, minHeight: Math.round((AVATAR * 2) / 3) - 4 }}>
       <div style={{ minWidth: 0, flex: 1 }}>
-        <span className="inline-flex items-center" style={{ gap: 5, fontSize: 11.5, fontWeight: 800, color: CK.red, letterSpacing: '0.03em' }}>
-          <Gavel size={14} strokeWidth={1.5} aria-hidden />Needs your decision
-        </span>
-        <b style={{ display: 'block', marginTop: 2, fontSize: popup ? 16 : 15, lineHeight: 1.25, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{author.name}</b>
-        <span className="flex items-center flex-wrap" style={{ gap: '2px 8px', marginTop: 3, fontSize: 12.5, fontWeight: 600, color: CK.inkSoft }}>
+        {readOnly ? (
+          <span className="inline-flex items-center" style={{ gap: 5, fontSize: 12, fontWeight: 800, color: verdict.color }}>{verdict.icon}{verdict.word}</span>
+        ) : (
+          <span className="inline-flex items-center" style={{ gap: 5, fontSize: 12, fontWeight: 800, color: CK.red }}>
+            <Gavel size={15} strokeWidth={1.5} aria-hidden />Needs your decision
+          </span>
+        )}
+        <b style={{ display: 'block', marginTop: 2, fontSize: 16, lineHeight: 1.25, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{author.name}</b>
+        <span className="flex items-center flex-wrap" style={{ gap: '3px 10px', marginTop: 4, fontSize: 12.5, fontWeight: 600, color: CK.inkSoft }}>
           <NumberBadge n={dirNumber(d)} />
-          {cabinetName && <span style={{ overflowWrap: 'anywhere' }}>{cabinetName}</span>}
+          {cabinet && (
+            <span className="inline-flex items-center" style={{ gap: 5, overflowWrap: 'anywhere' }}>
+              <CabinetLogo cabinet={cabinet} size={16} />{cabinet.name}
+            </span>
+          )}
           <span title={whenTitle(d.created_at)} style={{ color: CK.muted }}>Sent {whenLabel(d.created_at)}</span>
         </span>
       </div>
@@ -131,63 +122,44 @@ export function ChairDirectiveCard({ d, author, cref, cabinetName, variant, focu
   const asking = mode !== 'view' ? COPY[mode] : null;
 
   return (
-    <div ref={root} onKeyDown={onKeyDown}>
+    <div onKeyDown={onKeyDown}>
       <OverhangCard
         name={author.name}
         src={author.picture_url}
         color={author.color}
-        size={size}
+        size={AVATAR}
         warm
         style={{
-          padding: '12px 18px 18px',
-          borderTop: `4px solid ${CK.red}`,
-          boxShadow: popup ? `${CK.shadow}, 0 24px 60px rgba(58,14,15,0.4)` : focused ? `${CK.shadow}, 0 0 0 2px ${CK.red}` : CK.shadow,
+          padding: '12px 18px 16px',
+          borderTop: `4px solid ${readOnly ? verdict.color : CK.red}`,
+          boxShadow: `${CK.shadow}, 0 24px 60px rgba(58,14,15,0.4)`,
         }}
       >
         {header}
 
         {!asking ? (
           <div key="view" className="cm-fade">
-            <h3 style={{ margin: '12px 0 0', fontSize: popup ? 20 : 18, lineHeight: 1.28, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{d.title}</h3>
+            <h3 style={{ margin: '12px 0 0', fontSize: 19, lineHeight: 1.28, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{d.title}</h3>
             {(d.themes ?? []).length > 0 && (
-              <div className="flex flex-wrap" style={{ gap: 6, marginTop: 8 }}>
-                {(d.themes ?? []).map((t) => <ThemeTag key={t} theme={t} />)}
+              <div className="flex flex-wrap items-center" style={{ gap: 6, marginTop: 8 }}>
+                <ThemeTags themes={d.themes ?? []} />
               </div>
             )}
-            {popup ? (
-              <div style={{ marginTop: 10, maxHeight: 'min(44dvh, 420px)', overflowY: 'auto', paddingRight: 2 }}>
-                <DirectiveBody body={d.body} thumb={360} style={{ margin: 0, fontSize: 14.5, lineHeight: 1.6, color: CK.ink, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }} />
-              </div>
-            ) : (
-              <>
-                <p
-                  className={long && !open ? 'line-clamp-3' : undefined}
-                  style={{ margin: '8px 0 0', fontSize: 14, lineHeight: 1.55, color: CK.ink, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}
-                >
-                  {text}
-                </p>
-                {image && <ZoomableImage src={image} alt="Attached image" style={{ width: 'min(100%, 240px)', height: 160, borderRadius: 14, marginTop: 8 }} />}
-                {long && (
-                  <button
-                    type="button"
-                    onClick={() => setOpen((o) => !o)}
-                    aria-expanded={open}
-                    className="inline-flex items-center gap-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
-                    style={{ marginTop: 4, border: 0, background: 'transparent', padding: 0, cursor: 'pointer', fontFamily: CK.font, fontSize: 13, fontWeight: 800, color: CK.forest, textDecoration: 'underline' }}
-                  >
-                    <ChevronDown size={14} strokeWidth={1.6} aria-hidden className="cm-chev" />
-                    {open ? 'Show less' : 'Read all'}
-                  </button>
-                )}
-              </>
-            )}
-            <div className="flex flex-wrap" style={{ gap: 8, marginTop: 14 }}>
-              <Btn tone="green" icon={<Check size={16} strokeWidth={1.6} aria-hidden />} disabled={!!busy} onClick={() => run('approve')} title="Sends it to the backroom">
-                {busy === 'approve' ? 'Approving' : 'Approve'}
-              </Btn>
-              <Btn tone="ghost" icon={<PencilLine size={16} strokeWidth={1.5} aria-hidden />} disabled={!!busy} onClick={() => setMode('changes')}>Request changes</Btn>
-              <Btn tone="danger" icon={<XCircle size={16} strokeWidth={1.5} aria-hidden />} disabled={!!busy} onClick={() => setMode('reject')}>Reject</Btn>
+            <div style={{ marginTop: 10, maxHeight: 'min(42dvh, 380px)', overflowY: 'auto', background: CK.well, borderRadius: 14, padding: '10px 12px' }}>
+              <DirectiveBody body={d.body} thumb={360} style={{ margin: 0, fontSize: 14.5, lineHeight: 1.6, color: CK.ink, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }} />
             </div>
+            {readOnly && replyLabel && reply && (
+              <p style={{ margin: '10px 0 0', fontSize: 13.5, lineHeight: 1.5, color: CK.inkSoft, overflowWrap: 'anywhere' }}><b>{replyLabel}: </b>{reply}</p>
+            )}
+            {!readOnly && (
+              <div className="flex flex-wrap items-center" style={{ gap: 8, marginTop: 14, paddingTop: 12, borderTop: `1px solid ${CK.hair}` }}>
+                <Btn tone="green" icon={<Check size={16} strokeWidth={1.6} aria-hidden />} disabled={!!busy} onClick={() => run('approve')} title="Sends it to the backroom">
+                  {busy === 'approve' ? 'Approving' : 'Approve'}
+                </Btn>
+                <Btn tone="ghost" icon={<PencilLine size={16} strokeWidth={1.5} aria-hidden />} disabled={!!busy} onClick={() => setMode('changes')}>Request changes</Btn>
+                <Btn tone="danger" style={{ marginLeft: 'auto' }} icon={<XCircle size={16} strokeWidth={1.5} aria-hidden />} disabled={!!busy} onClick={() => setMode('reject')}>Reject</Btn>
+              </div>
+            )}
           </div>
         ) : (
           <div key={mode} className="cm-fade" style={{ marginTop: 12 }}>
@@ -260,11 +232,11 @@ export default function ChairDirectivePrompt() {
   const { ref, core, memberId, cabinetId } = v;
   const enabled = v.role === 'chair';
   const key = enabled ? storageKey(ref.id, memberId ?? 'chair') : '';
+  const requested = useRequestedChairDirective();
 
   const [rows, setRows] = useState<Directive[]>([]);
   const [version, setVersion] = useState(0);
   const [blocked, setBlocked] = useState(false);
-  const [viewing, setViewing] = useState<string | null>(null);
   const [cursor, setCursor] = useState(0);
   const [dir, setDir] = useState<'next' | 'prev'>('next'); // which way the "1 of N" card arrives from
   const panel = useRef<HTMLDivElement>(null);
@@ -282,11 +254,7 @@ export default function ChairDirectivePrompt() {
 
   useEffect(() => { void Promise.resolve().then(load); }, [load]);
 
-  const watch = useCallback(() => {
-    setBlocked(otherDialogOpen());
-    // The Front Room opened on one directive (?d=<id>): that one is already in front of the chair.
-    setViewing(new URLSearchParams(window.location.search).get('d'));
-  }, []);
+  const watch = useCallback(() => { setBlocked(otherDialogOpen()); }, []);
   useCrisisLive(enabled ? ref.id : null, ['crisis_directives'], () => { void load(); watch(); });
   useEffect(() => {
     if (!enabled) return;
@@ -298,11 +266,16 @@ export default function ChairDirectivePrompt() {
   // Longest waiting first.
   const pending = useMemo(
     () => rows
-      .filter((d) => d.kind === 'committee' && d.status === 'awaiting_chair' && (!cabinetId || d.cabinet_id === cabinetId) && !handled.has(stamp(d)) && d.id !== viewing)
+      .filter((d) => d.kind === 'committee' && d.status === 'awaiting_chair' && (!cabinetId || d.cabinet_id === cabinetId) && !handled.has(stamp(d)))
       .sort((a, b) => a.created_at.localeCompare(b.created_at)),
-    [rows, cabinetId, handled, viewing],
+    [rows, cabinetId, handled],
   );
-  const current = pending.length ? pending[cursor % pending.length] : null;
+
+  // A directive a page asked for wins over the waiting queue; its row is read fresh when this pop-up has it.
+  const forced = enabled ? requested : null;
+  const forcedNow = useMemo(() => (forced ? rows.find((r) => r.id === forced.id) ?? forced : null), [forced, rows]);
+  const auto = pending.length ? pending[cursor % pending.length] : null;
+  const current = forcedNow ?? auto;
   const shown = !!current && !blocked;
   useScrollLock(shown);
 
@@ -313,9 +286,15 @@ export default function ChairDirectivePrompt() {
     setVersion((x) => x + 1);
   }, [key]);
 
+  /** Close: a page's request just ends; a waiting directive is also remembered as closed here, so it stays on the list. */
+  const close = useCallback((d: Directive) => {
+    if (d.kind === 'committee' && d.status === 'awaiting_chair') dismiss(d);
+    if (forced) closeChairDirective();
+  }, [dismiss, forced]);
+
   // Escape and a click outside close it (the directive stays on the Front Room); Tab stays inside the card.
-  const currentRef = useRef<Directive | null>(null);
-  useEffect(() => { currentRef.current = current; });
+  const closeRef = useRef<(() => void) | null>(null);
+  useEffect(() => { closeRef.current = current ? () => close(current) : null; });
   useEffect(() => {
     if (!shown) return undefined;
     const el = panel.current;
@@ -324,7 +303,7 @@ export default function ChairDirectivePrompt() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         if (e.defaultPrevented || document.querySelector('[data-crisis-popover]')) return;
-        if (currentRef.current) dismiss(currentRef.current);
+        closeRef.current?.();
         return;
       }
       if (e.key !== 'Tab' || !el) return;
@@ -337,31 +316,33 @@ export default function ChairDirectivePrompt() {
     };
     document.addEventListener('keydown', onKey);
     return () => { document.removeEventListener('keydown', onKey); before?.focus?.(); };
-  }, [shown, dismiss]);
+  }, [shown]);
 
   if (!enabled || !current) return null;
 
   const d = current;
+  const readOnly = d.status !== 'awaiting_chair';
   const author = directiveAuthor(d, core.characters, core.members, core.cabinets);
-  const cabinetName = d.cabinet_id ? core.cabinets.find((c) => c.id === d.cabinet_id)?.name ?? null : null;
-  const at = cursor % pending.length;
-  const step = (by: number) => { setDir(by < 0 ? 'prev' : 'next'); setCursor((at + by + pending.length) % pending.length); };
+  const cabinet = d.cabinet_id ? core.cabinets.find((c) => c.id === d.cabinet_id) ?? null : null;
+  const queue = forcedNow ? 1 : pending.length;
+  const at = queue > 1 ? cursor % queue : 0;
+  const step = (by: number) => { setDir(by < 0 ? 'prev' : 'next'); setCursor((at + by + queue) % queue); };
   const navBtn = { border: 0, background: CK.well, color: CK.inkSoft, borderRadius: 999, width: 30, height: 30, cursor: 'pointer', flex: 'none' } as const;
 
   const topBar = (
     <div className="flex items-center" style={{ gap: 4, flex: 'none' }}>
-      {pending.length > 1 && (
+      {queue > 1 && (
         <>
           <button type="button" onClick={() => step(-1)} aria-label="Show the previous waiting directive" className="grid place-items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]" style={navBtn}>
             <ChevronLeft size={16} strokeWidth={1.5} aria-hidden />
           </button>
-          <span style={{ fontSize: 12.5, fontWeight: 700, color: CK.inkSoft, fontVariantNumeric: 'tabular-nums', padding: '0 2px' }}>{at + 1} of {pending.length}</span>
+          <span style={{ fontSize: 12.5, fontWeight: 700, color: CK.inkSoft, fontVariantNumeric: 'tabular-nums', padding: '0 2px' }}>{at + 1} of {queue}</span>
           <button type="button" onClick={() => step(1)} aria-label="Show the next waiting directive" className="grid place-items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]" style={navBtn}>
             <ChevronRight size={16} strokeWidth={1.5} aria-hidden />
           </button>
         </>
       )}
-      <button type="button" onClick={() => dismiss(d)} aria-label="Close, it stays in your list" title="Close, it stays in your list" className="grid place-items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]" style={{ ...navBtn, marginLeft: 4 }}>
+      <button type="button" onClick={() => close(d)} aria-label={readOnly ? 'Close' : 'Close, it stays in your list'} title={readOnly ? 'Close' : 'Close, it stays in your list'} className="grid place-items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]" style={{ ...navBtn, marginLeft: 4 }}>
         <X size={16} strokeWidth={1.5} aria-hidden />
       </button>
     </div>
@@ -376,26 +357,26 @@ export default function ChairDirectivePrompt() {
           .chair-pop { animation: chair-pop-in 220ms cubic-bezier(0.22,1,0.36,1); }
           @media (prefers-reduced-motion: reduce) { .chair-pop { animation: none; } }
         `}</style>
-        <div aria-hidden className="cm-fade" onMouseDown={() => dismiss(d)} style={{ position: 'absolute', inset: 0, background: 'rgba(58,14,15,0.5)' }} />
+        <div aria-hidden className="cm-fade" onMouseDown={() => close(d)} style={{ position: 'absolute', inset: 0, background: 'rgba(58,14,15,0.5)' }} />
         <div
           ref={panel}
           data-chair-prompt=""
           role="dialog"
           aria-modal="true"
-          aria-label="Cabinet directive for your decision"
+          aria-label={readOnly ? 'Cabinet directive' : 'Cabinet directive for your decision'}
           tabIndex={-1}
           className="chair-pop focus:outline-none"
-          style={{ position: 'relative', width: 'min(580px, 100%)', maxHeight: 'calc(100dvh - 56px)' }}
+          style={{ position: 'relative', width: 'min(620px, 100%)', maxHeight: 'calc(100dvh - 56px)' }}
         >
-          <div key={stamp(d)} className={cursor > 0 || pending.length > 1 ? (dir === 'prev' ? 'cm-prev' : 'cm-next') : undefined}>
+          <div key={stamp(d)} className={queue > 1 ? (dir === 'prev' ? 'cm-prev' : 'cm-next') : undefined}>
             <ChairDirectiveCard
               d={d}
               author={author}
               cref={ref}
-              cabinetName={cabinetName}
-              variant="popup"
+              cabinet={cabinet}
+              readOnly={readOnly}
               topBar={topBar}
-              onDone={() => { void load(); }}
+              onDone={() => { void load(); if (forced) closeChairDirective(); }}
             />
           </div>
         </div>

@@ -6,17 +6,17 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
-  ArrowDown, ArrowRight, ArrowUp, Flag, MapPinOff, MapPinPlus, MoveUpRight, PenTool, TrendingDown, TrendingUp,
+  ArrowDown, ArrowRight, ArrowUp, Flag, MapPinOff, MapPinPlus, MoveUpRight, PenTool, TrendingDown, TrendingUp, UserRound,
   type LucideIcon,
 } from 'lucide-react';
-import type { Cabinet } from '@/lib/crisis/types';
-import type { HistoryChange } from '@/lib/crisis/history';
+import type { Cabinet, Character } from '@/lib/crisis/types';
 import { amount } from '@/lib/crisis/format';
 import { CK, cabinetTint } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { loadWorldData, type WorldData } from '../map/mapData';
 import { safeColor } from '../map/tokens';
 import type { SnapshotSpec } from './MapSnapshot';
+import type { AnyChange, CharChange } from './charChange';
 
 const NOBODY = '#6B6256';
 const AREA_BLUE = '#2F6690';
@@ -31,20 +31,30 @@ export function useWorld(): WorldData | null {
   return w;
 }
 
-export interface ChangeCtx { cabinets: Map<string, Cabinet>; world: WorldData | null }
+export interface ChangeCtx { cabinets: Map<string, Cabinet>; world: WorldData | null; characters: Map<string, Character> }
 
 export function useChangeCtx(): ChangeCtx {
   const { core } = useCrisis();
   const world = useWorld();
   const cabinets = useMemo(() => new Map(core.cabinets.map((c) => [c.id, c])), [core.cabinets]);
-  return useMemo(() => ({ cabinets, world }), [cabinets, world]);
+  const characters = useMemo(() => new Map(core.characters.map((c) => [c.id, c])), [core.characters]);
+  return useMemo(() => ({ cabinets, world, characters }), [cabinets, world, characters]);
 }
+
+/** The picture of a character: the one its history row carried (staff), else the one the page already holds. */
+export function charPicture(c: CharChange, ctx: ChangeCtx): string | null {
+  return c.picture ?? ctx.characters.get(c.charId)?.picture_url ?? null;
+}
+/** Only a picture that is a web address or one of our own files is ever drawn. */
+export const portraitSrc = (src: string | null | undefined): string | null => (src && /^(https?:\/\/|\/[^/])/.test(src) ? src : null);
+export const initialsOf = (name: string): string => name.trim().split(/\s+/).map((w) => w[0] ?? '').slice(0, 2).join('').toUpperCase();
 
 export type Piece =
   | { t: 'text'; s: string }
   | { t: 'num'; from: number | null; to: number | null }
   | { t: 'owner'; from: string | null; to: string | null }
-  | { t: 'who'; id: string | null };
+  | { t: 'who'; id: string | null }
+  | { t: 'person'; name: string };
 
 export interface Described {
   Icon: LucideIcon;
@@ -52,12 +62,25 @@ export interface Described {
   title: string;
   kindLabel: string;
   lines: Piece[][];
+  /** A character's portrait: drawn in the disc instead of the icon. */
+  portrait?: { src: string | null; name: string };
 }
 
 const countryName = (ctx: ChangeCtx, key: string) => ctx.world?.byKey.get(key)?.name ?? 'A country';
 const km = (v: number) => (v >= 100 ? Math.round(v / 10) * 10 : Math.round(v)).toLocaleString('en-US');
 
-export function describe(c: HistoryChange, ctx: ChangeCtx): Described {
+function describeChar(c: CharChange, ctx: ChangeCtx): Described {
+  const cab = c.ownerTo ? ctx.cabinets.get(c.ownerTo) : null;
+  const lines: Piece[][] = [[{ t: 'person', name: c.name }]];
+  if (c.moved && c.bearing) lines.push([{ t: 'text', s: `${km(c.moveKm)} km ${c.bearing}` }]);
+  return {
+    Icon: UserRound, color: cab ? safeColor(cab.color) : CK.red, kindLabel: 'Character moved', title: 'Character moved', lines,
+    portrait: { src: portraitSrc(charPicture(c, ctx)), name: c.name },
+  };
+}
+
+export function describe(c: AnyChange, ctx: ChangeCtx): Described {
+  if (c.type === 'character') return describeChar(c, ctx);
   if (c.noBefore) {
     // An older row: say what it looked like after the change, without inventing a "from".
     const held: Piece[] = c.ownerTo ? [{ t: 'text', s: 'Held by' }, { t: 'who', id: c.ownerTo }] : [];
@@ -137,6 +160,7 @@ export function PieceLine({ pieces, ctx }: { pieces: Piece[]; ctx: ChangeCtx }) 
   const out: ReactNode[] = pieces.map((p, i) => {
     if (p.t === 'text') return <span key={i}>{p.s}</span>;
     if (p.t === 'who') return <CabinetChip key={i} id={p.id} ctx={ctx} />;
+    if (p.t === 'person') return <b key={i} style={{ color: CK.ink, fontWeight: 800, overflowWrap: 'anywhere' }}>{p.name}</b>;
     if (p.t === 'owner') return (
       <span key={i} className="inline-flex items-center flex-wrap" style={{ gap: 6 }}>
         <CabinetChip id={p.from} ctx={ctx} />{arrow}<CabinetChip id={p.to} ctx={ctx} />
@@ -159,6 +183,17 @@ export function PieceLine({ pieces, ctx }: { pieces: Piece[]; ctx: ChangeCtx }) 
 /** The disc a change carries in a list or a pop-up. */
 export function ChangeDisc({ d, size = 38 }: { d: Described; size?: number }) {
   const I = d.Icon;
+  if (d.portrait) {
+    // A character: the portrait in a ring of its cabinet's colour (initials on the colour when there is no picture).
+    return (
+      <span className="flex-shrink-0 grid place-items-center" aria-hidden style={{ width: size, height: size, borderRadius: '50%', background: d.portrait.src ? '#fff' : d.color, border: `3px solid ${d.color}`, boxSizing: 'border-box', overflow: 'hidden', color: '#fff', boxShadow: CK.shadowSm, fontWeight: 800, fontSize: Math.round(size * 0.34) }}>
+        {d.portrait.src
+          // eslint-disable-next-line @next/next/no-img-element
+          ? <img src={d.portrait.src} alt="" draggable={false} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+          : initialsOf(d.portrait.name)}
+      </span>
+    );
+  }
   return (
     <span className="flex-shrink-0 grid place-items-center" aria-hidden style={{ width: size, height: size, borderRadius: '50%', background: d.color, color: '#fff', boxShadow: CK.shadowSm }}>
       <I size={Math.round(size * 0.5)} strokeWidth={1.6} />
@@ -168,8 +203,20 @@ export function ChangeDisc({ d, size = 38 }: { d: Described; size?: number }) {
 
 // ─────────── The picture ───────────
 
-export function snapshotSpec(c: HistoryChange, ctx: ChangeCtx, opts: { reveal?: boolean } = {}): SnapshotSpec {
+export function snapshotSpec(c: AnyChange, ctx: ChangeCtx, opts: { reveal?: boolean } = {}): SnapshotSpec {
   const cabColor = (id: string | null) => { const cab = id ? ctx.cabinets.get(id) : null; return cab ? safeColor(cab.color) : NOBODY; };
+  if (c.type === 'character') {
+    const col = cabColor(c.ownerTo ?? c.ownerFrom);
+    const portrait = { src: portraitSrc(charPicture(c, ctx)), name: c.name };
+    if (c.moved && c.posFrom && c.posTo) {
+      return {
+        tokens: [{ kind: 'custom', color: col, at: c.posFrom, ghost: true, label: 'Before', portrait }, { kind: 'custom', color: col, at: c.posTo, label: 'Now', portrait }],
+        arrow: { from: c.posFrom, to: c.posTo, color: col }, countries: [], shapes: [],
+      };
+    }
+    const at = c.posTo ?? c.posFrom;
+    return { tokens: at ? [{ kind: 'custom', color: col, at, portrait }] : [], countries: [], shapes: [] };
+  }
   if (c.type === 'region') {
     const col = cabColor(c.ownerTo);
     return {

@@ -27,7 +27,11 @@ const ids = (x: unknown): string[] => (Array.isArray(x) ? x.filter((v): v is str
  * `rows` are the whole history, newest first. `batchNewestId` is the id of the newest row of the batch to go back to:
  * every row above it in the list is newer and is undone. Answers null when that row is not in the list (too far back).
  */
-export function buildRestoreSet(current: MapData, rows: HistoryRow[], batchNewestId: string, crisisId: string): RestorePlan | null {
+export function buildRestoreSet(
+  current: MapData, rows: HistoryRow[], batchNewestId: string, crisisId: string,
+  /** Where each character stands now. Left out, characters are not brought back. */
+  chars?: Array<{ id: string; lng: number; lat: number }>,
+): RestorePlan | null {
   const at = rows.findIndex((r) => r.id === batchNewestId);
   if (at < 0) return null;
   const newer = rows.slice(0, at);
@@ -52,6 +56,10 @@ export function buildRestoreSet(current: MapData, rows: HistoryRow[], batchNewes
     } else if (table === 'crisis_shapes') {
       key = str(either.id) && `s:${str(either.id)}`;
       target = op === 'insert' ? { kind: 'absent' } : op === 'update' ? (old ? { kind: 'row', row: old } : { kind: 'unknown' }) : gone ? { kind: 'row', row: gone } : { kind: 'unknown' };
+    } else if (table === 'crisis_characters' && chars) {
+      // Only moves are logged: the first move since that point has the spot the character stood on then.
+      key = str(either.id) && `h:${str(either.id)}`;
+      target = op === 'update' && old ? { kind: 'row', row: old } : { kind: 'unknown' };
     } else continue;
     if (key && !targets.has(key)) targets.set(key, target);
   }
@@ -62,10 +70,20 @@ export function buildRestoreSet(current: MapData, rows: HistoryRow[], batchNewes
   const units = new Map(current.units.map((u) => [u.id, u]));
   const regions = new Map(current.regions.map((r) => [r.region_key, r]));
   const shapes = new Map(current.shapes.map((s) => [s.id, s]));
+  const standing = new Map((chars ?? []).map((c) => [c.id, c]));
 
   for (const [key, t] of targets) {
     const id = key.slice(2);
     if (t.kind === 'unknown') { skipped += 1; continue; }
+
+    if (key.startsWith('h:')) {
+      const here = standing.get(id);
+      if (t.kind !== 'row' || !here) continue;
+      const lng = t.row.lng; const lat = t.row.lat;
+      if (typeof lng !== 'number' || typeof lat !== 'number') { skipped += 1; continue; }
+      if (Math.abs(lng - here.lng) > 1e-6 || Math.abs(lat - here.lat) > 1e-6) set.chars?.push({ id, lng, lat });
+      continue;
+    }
 
     if (key.startsWith('u:')) {
       const u = units.get(id);

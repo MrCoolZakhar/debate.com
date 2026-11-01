@@ -5,13 +5,13 @@
 
 import { useState } from 'react';
 import { ChevronDown, ChevronUp, Layers, RotateCcw } from 'lucide-react';
-import type { HistoryChange } from '@/lib/crisis/history';
 import { Btn, CK } from '../../crisisKit';
+import type { AnyChange } from './charChange';
 import { ChangeDisc, PieceLine, describe, type ChangeCtx } from './changeKit';
 
 const timeOf = (iso: string) => new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 
-export function ChangeRow({ c, ctx, staff, onOpen, flat }: { c: HistoryChange; ctx: ChangeCtx; staff: boolean; onOpen: () => void; flat?: boolean }) {
+export function ChangeRow({ c, ctx, staff, onOpen, flat }: { c: AnyChange; ctx: ChangeCtx; staff: boolean; onOpen: () => void; flat?: boolean }) {
   const d = describe(c, ctx);
   return (
     <button
@@ -33,19 +33,21 @@ export function ChangeRow({ c, ctx, staff, onOpen, flat }: { c: HistoryChange; c
 }
 
 /** "3 troop changes, 1 border, 2 areas". */
-function summary(changes: HistoryChange[]): string {
+function summary(changes: AnyChange[]): string {
   const troops = changes.filter((c) => c.type === 'unit').length;
   const borders = changes.filter((c) => c.type === 'region').length;
   const areas = changes.filter((c) => c.type === 'shape').length;
+  const people = changes.filter((c) => c.type === 'character').length;
   const parts: string[] = [];
   if (troops) parts.push(`${troops} ${troops === 1 ? 'troop change' : 'troop changes'}`);
   if (borders) parts.push(`${borders} ${borders === 1 ? 'border' : 'borders'}`);
   if (areas) parts.push(`${areas} ${areas === 1 ? 'area' : 'areas'}`);
+  if (people) parts.push(`${people} ${people === 1 ? 'character moved' : 'characters moved'}`);
   return parts.join(', ');
 }
 
 export default function BatchEntry({ changes, at, by, ctx, staff, canRestore, whenLabel, onOpen, onRestore }: {
-  changes: HistoryChange[];
+  changes: AnyChange[];
   /** The time of the batch (its newest row). */
   at: string;
   by: string | null;
@@ -54,7 +56,7 @@ export default function BatchEntry({ changes, at, by, ctx, staff, canRestore, wh
   canRestore: boolean;
   /** "today at 14:32": the point the map would go back to. */
   whenLabel: string;
-  onOpen: (c: HistoryChange) => void;
+  onOpen: (c: AnyChange) => void;
   /** Brings the map back; rejects with the reason (shown by the caller). */
   onRestore: () => Promise<void>;
 }) {

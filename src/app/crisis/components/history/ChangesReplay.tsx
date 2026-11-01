@@ -8,15 +8,16 @@
 
 import { memo, useMemo, type ReactElement } from 'react';
 import type { Geometry } from 'geojson';
-import type { HistoryChange, LngLat } from '@/lib/crisis/history';
+import type { LngLat } from '@/lib/crisis/history';
 import type { UnitKind } from '@/lib/crisis/types';
 import { easeInOut } from '../map/mapAnimate';
 import { GLYPH_MARKUP } from '../map/glyphs';
 import { LAND, LAND_LINE, SEA, type WorldData } from '../map/mapData';
 import { safeColor } from '../map/tokens';
 import { CK, Skeleton } from '../../crisisKit';
-import { H, R, W, latOf, mainBox, mercY, polysOf, ringBbox, shapePts } from './MapSnapshot';
-import type { ChangeCtx } from './changeKit';
+import { H, PortraitDisc, R, W, latOf, mainBox, mercY, polysOf, ringBbox, shapePts } from './MapSnapshot';
+import type { AnyChange } from './charChange';
+import { charPicture, portraitSrc, type ChangeCtx } from './changeKit';
 
 const NOBODY = '#6B6256';
 /** The share of the whole timeline one change takes to play; the rest is the stagger between the first and the last. */
@@ -30,12 +31,12 @@ export const progressOf = (t: number, i: number, n: number): number => easeInOut
 
 interface View { x0: number; x1: number; y0: number; y1: number; k: number }
 
-function viewFor(world: WorldData, changes: HistoryChange[]): View | null {
+function viewFor(world: WorldData, changes: AnyChange[]): View | null {
   const xs: number[] = []; const ys: number[] = [];
   const add = (p: LngLat | null) => { if (p) { xs.push(p[0]); ys.push(mercY(p[1])); } };
   let area = false;
   for (const c of changes) {
-    if (c.type === 'unit') { add(c.posFrom); add(c.posTo); }
+    if (c.type === 'unit' || c.type === 'character') { add(c.posFrom); add(c.posTo); }
     else if (c.type === 'shape') {
       area = true;
       for (const g of [c.geomFrom, c.geomTo]) if (g) for (const p of shapePts(g)) add(p);
@@ -82,7 +83,7 @@ const Land = memo(function Land({ world, view }: { world: WorldData; view: View 
 });
 
 interface Prepared {
-  c: HistoryChange;
+  c: AnyChange;
   color: string;
   fromColor: string | null;
   toColor: string | null;
@@ -94,27 +95,35 @@ interface Prepared {
   polygon?: boolean;
   from?: [number, number] | null;
   to?: [number, number] | null;
+  /** A character's portrait. */
+  portrait?: { src: string | null; name: string };
 }
 
 const lerp = (a: number, b: number, e: number) => a + (b - a) * e;
 
-function Token({ x, y, kind, color, ghost, scale = 1, opacity = 1, label, hot }: {
+function Token({ x, y, kind, color, ghost, scale = 1, opacity = 1, label, hot, portrait }: {
   x: number; y: number; kind: string; color: string; ghost?: boolean; scale?: number; opacity?: number; label?: string; hot?: boolean;
+  /** A character: its portrait replaces the unit glyph. */
+  portrait?: { src: string | null; name: string };
 }) {
   const glyph = GLYPH_MARKUP[kind as UnitKind] ?? GLYPH_MARKUP.custom;
   const halo = { paintOrder: 'stroke', stroke: '#F5F0E4', strokeWidth: 3, strokeLinejoin: 'round' } as const;
   return (
     <g transform={`translate(${x.toFixed(1)} ${y.toFixed(1)}) scale(${scale.toFixed(3)})`} opacity={opacity}>
       {hot && <circle r={R + 6} fill="none" stroke={CK.goldDeep} strokeWidth={3} />}
-      <circle r={R} fill={ghost ? '#fff' : color} stroke={ghost ? color : '#fff'} strokeWidth={ghost ? 2.2 : 2.5} strokeDasharray={ghost ? '4 3' : undefined} />
-      <g transform={`translate(-8 -8) scale(${16 / 24})`} fill="none" stroke={ghost ? color : '#fff'} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" dangerouslySetInnerHTML={{ __html: glyph }} />
+      {portrait ? <PortraitDisc r={R + 2} color={color} src={portrait.src} name={portrait.name} ghost={ghost} /> : (
+        <>
+          <circle r={R} fill={ghost ? '#fff' : color} stroke={ghost ? color : '#fff'} strokeWidth={ghost ? 2.2 : 2.5} strokeDasharray={ghost ? '4 3' : undefined} />
+          <g transform={`translate(-8 -8) scale(${16 / 24})`} fill="none" stroke={ghost ? color : '#fff'} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" dangerouslySetInnerHTML={{ __html: glyph }} />
+        </>
+      )}
       {label && <text y={R + 15} textAnchor="middle" fontSize={11.5} fontWeight={800} fill={CK.ink} {...halo}>{label}</text>}
     </g>
   );
 }
 
 export default function ChangesReplay({ world, changes, ctx, t, hot }: {
-  world: WorldData | null; changes: HistoryChange[]; ctx: ChangeCtx;
+  world: WorldData | null; changes: AnyChange[]; ctx: ChangeCtx;
   /** 0 is how the map was before the send, 1 is how it is now. */
   t: number;
   /** The row the pointer is on: drawn with a ring. */
@@ -134,6 +143,7 @@ export default function ChangesReplay({ world, changes, ctx, t, hot }: {
       const fromColor = cab(c.ownerFrom); const toColor = cab(c.ownerTo);
       const color = toColor ?? fromColor ?? NOBODY;
       if (c.type === 'unit') return { c, color, fromColor, toColor, from: px(c.posFrom), to: px(c.posTo) };
+      if (c.type === 'character') return { c, color, fromColor, toColor, from: px(c.posFrom), to: px(c.posTo), portrait: { src: portraitSrc(charPicture(c, ctx)), name: c.name } };
       if (c.type === 'shape') {
         const g = c.geomTo ?? c.geomFrom;
         return { c, color, fromColor, toColor, ptsFrom: ptsOf(c.geomFrom), ptsTo: ptsOf(c.geomTo), polygon: g?.type !== 'LineString' && c.shapeKind !== 'line' };
@@ -151,7 +161,7 @@ export default function ChangesReplay({ world, changes, ctx, t, hot }: {
       }
       return { c, color, fromColor, toColor, d };
     });
-  }, [world, view, changes, ctx.cabinets]);
+  }, [world, view, changes, ctx]);
 
   if (!world || !view) {
     return <div style={{ aspectRatio: `${W} / ${H}`, borderRadius: 18, overflow: 'hidden' }}><Skeleton h={H} r={0} /></div>;
@@ -184,6 +194,22 @@ export default function ChangesReplay({ world, changes, ctx, t, hot }: {
       else {
         if (from) draw(p.c.rowId + 'f', from, 1 - e, true);
         if (to) draw(p.c.rowId + 't', to, e);
+      }
+      return;
+    }
+    if (p.c.type === 'character') {
+      // A character: its portrait glides from where it was to where it is, the same way a unit's token does.
+      const c = p.c;
+      const name = active || isHot ? c.name : undefined;
+      const portrait = p.portrait;
+      if (p.from && p.to) {
+        const x = lerp(p.from[0], p.to[0], e); const y = lerp(p.from[1], p.to[1], e);
+        trails.push(<line key={c.rowId} x1={p.from[0]} y1={p.from[1]} x2={x} y2={y} stroke={p.color} strokeWidth={3} strokeDasharray="8 6" strokeLinecap="round" opacity={0.75} />);
+        tokens.push(<Token key={c.rowId + 'g'} x={p.from[0]} y={p.from[1]} kind="custom" color={p.color} ghost portrait={portrait} opacity={0.5 * (1 - e) + 0.2} />);
+        tokens.push(<Token key={c.rowId} x={x} y={y} kind="custom" color={p.color} portrait={portrait} label={name} hot={isHot} />);
+      } else {
+        const at = p.to ?? p.from;
+        if (at) tokens.push(<Token key={c.rowId} x={at[0]} y={at[1]} kind="custom" color={p.color} portrait={portrait} scale={0.4 + 0.6 * e} opacity={e} label={name} hot={isHot} />);
       }
       return;
     }
