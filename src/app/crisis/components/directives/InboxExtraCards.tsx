@@ -7,7 +7,7 @@
 //     picker (SpareOffer) to give them a new one. It disappears once they play a living character.
 
 import { useState, type CSSProperties } from 'react';
-import { CalendarClock, Check, Clock, Hourglass, UserRoundPlus, X } from 'lucide-react';
+import { CalendarClock, Check, ChevronDown, Clock, Hourglass, UserRoundPlus, X } from 'lucide-react';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { crisisError } from '@/lib/crisis/api';
 import type { Character } from '@/lib/crisis/types';
@@ -200,5 +200,45 @@ export function ExtraNextBody({ item, now }: { item: MeetingItem | SpareItem; no
       </span>
       <span className="rd-fade" style={{ display: 'block', flex: 1, minHeight: 0, overflow: 'hidden', marginTop: 11, fontSize: 14, lineHeight: 1.55, fontWeight: 500, color: CK.inkSoft, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{m.intention}</span>
     </>
+  );
+}
+
+/**
+ * Command's "Waiting for a Reply": a delegate whose character is dead, arrested or missing sits at the very TOP as a compact row (greyed
+ * portrait, "Give <delegate> a new character", the state). Pressing it opens the spare picker (SpareOffer) in place, under the row;
+ * it leaves by itself once the delegate plays a living character. Nothing here writes except SpareOffer's own give.
+ */
+export function SpareTopRow({ item, onChanged }: { item: SpareItem; onChanged?: () => void }) {
+  const { core } = useCrisis();
+  const [open, setOpen] = useState(false);
+  const { member, char } = item;
+  const cab = core.cabinets.find((c) => c.id === char.cabinet_id);
+  return (
+    <div style={{ background: 'rgba(163,65,47,0.07)', borderRadius: 14, boxShadow: 'inset 0 0 0 1px rgba(163,65,47,0.22)', margin: '0 0 8px' }}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="flex items-center w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+        style={{ gap: 10, padding: '8px 10px', border: 0, background: 'transparent', cursor: 'pointer', borderRadius: 14, fontFamily: CK.font, color: CK.ink }}
+      >
+        <span style={{ lineHeight: 0, opacity: 0.6, filter: 'grayscale(0.9)', flex: 'none' }}><Avatar name={char.name} src={char.picture_url} size={34} color={cab?.color ?? CK.red} /></span>
+        <span style={{ minWidth: 0, flex: 1 }}>
+          <span className="flex items-center" style={{ gap: 5, fontSize: 14.5, fontWeight: 800, lineHeight: 1.25, overflowWrap: 'anywhere' }}>
+            <UserRoundPlus size={14} strokeWidth={1.5} aria-hidden style={{ flex: 'none', color: CK.danger }} />
+            Give {member.display_name} a new character
+          </span>
+          <span style={{ display: 'block', fontSize: 12, fontWeight: 800, color: CK.danger, lineHeight: 1.3, overflowWrap: 'anywhere' }}>
+            {char.name}, {goneWord(char).toLowerCase()}
+          </span>
+        </span>
+        <ChevronDown size={16} strokeWidth={1.5} aria-hidden style={{ flex: 'none', color: CK.inkSoft, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 160ms' }} />
+      </button>
+      {open && (
+        <div style={{ padding: '0 10px 10px' }}>
+          <SpareOffer delegate={member} char={char} framed={false} onDone={() => { setOpen(false); onChanged?.(); }} />
+        </div>
+      )}
+    </div>
   );
 }

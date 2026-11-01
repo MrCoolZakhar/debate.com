@@ -50,6 +50,7 @@ import { FLY_MS, type FocusRequest } from './mapFocusFly';
 import { freehandCorners, type FreePt } from './freehand';
 import { TIDY_KM, absorbIntoCountry, areaClaimOthers, snapToNeighbours, cleanTolFor, tidyAreaClaim } from './geomClean';
 import { useShapeMover } from './shapeMove';
+import { mountZoneHandles } from './zoneHandles';
 import { SIGHT_MAX_KM, kmFromPointer, kmText, sightHandleAt, sightKmOf, sightRing } from './sight';
 import {
   addCityLayers, createCityLabels, fillCities, loadCities, setCitiesVisible, type City,
@@ -479,7 +480,6 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
 
   const zoneTypes = settings.zoneTypes;
   const customTypes = settings.customUnitTypes;
-  const zoneTypeById = useMemo(() => new Map(zoneTypes.map((t) => [t.id, t])), [zoneTypes]);
   const zones = useMemo(() => shownShapes.filter((s) => s.kind === 'zone'), [shownShapes]);
 
   // ── tools and selection ──
@@ -581,6 +581,8 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
   // Staff can still add units and change borders while looking through a cabinet's eyes.
   const editable = stage ? stage.kind === 'border' : staff && !compact;
   const canEditTerr = editable && canMap && tool === 'select' && !draft;
+  // The pen shows only where a click or drag would add to an outline.
+  const penOn = editable && canMap && ((tool === 'draw' && (!draft || draft.phase === 'draw')) || (tool === 'zones' && draft?.phase === 'draw'));
   // Zones: drawn and reshaped on the main map by staff with map power (never inside a directive's reply).
   const canZones = editable && canMap && !isStage && !compact;
   // Units can be edited, added and removed on the main map; a directive reply only plans moves (nothing is saved before it is sent).
@@ -1231,6 +1233,18 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
     set.shapes.push({ id, geometry: areaGeometry(moved) });
     back.shapes.push({ id, geometry: z.geometry });
     void applyEdits(set, `You moved the zone ${z.label?.trim() || ''}`.trim(), () => back, null, { fail: 'Could not move the zone.' });
+  }, [applyEdits]);
+
+  /** A selected zone's corners were dragged, added or removed: one change, one undo step. */
+  const reshapeZone = useCallback((id: string, next: Multi) => {
+    const z = dataRef.current?.shapes.find((x) => x.id === id && x.kind === 'zone');
+    if (!z || !next.length) return;
+    const geometry = areaGeometry(next);
+    if (sameJson(z.geometry, geometry)) return;
+    const set = emptySet(); const back = emptySet();
+    set.shapes.push({ id, geometry });
+    back.shapes.push({ id, geometry: z.geometry });
+    void applyEdits(set, `You reshaped the zone ${z.label?.trim() || ''}`.trim(), () => back, null, { fail: 'Could not save the zone.' });
   }, [applyEdits]);
 
   /** An existing zone's details were changed in its card: kept at once (the outline is kept as it is reshaped, below). */
@@ -2091,12 +2105,12 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
         }
         if (!near && hoverShown.current) setSource(SRC_HOVER, emptyFc);
         hoverShown.current = near;
-        const drawing = tool === 'zones' && !!draft;
+        const overMarker = !!(e.originalEvent.target as HTMLElement | null)?.closest?.('.wm-marker');
         const onRing = !near && canUnits && editable && !compact && tool === 'select'
           && ((!!sightCtl.current && sightCtl.current.hit(e.point)) || !!ringAt(map, e.point));
         map.getCanvasContainer().style.cursor = near ? 'grab'
           : onRing ? 'ew-resize'
-          : drawing || tool === 'draw' ? PEN_CURSOR
+          : penOn && !overMarker ? PEN_CURSOR
           : tool === 'paint' || tool === 'erase' || (tool === 'unit' && addKind) ? 'crosshair'
             : tool === 'give' ? 'pointer' : '';
       },
@@ -2403,14 +2417,14 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
     const el = map.getCanvasContainer();
     el.dataset.tool = canMap && editable ? tool : '';
     if (draft) el.dataset.busy = '1'; else delete el.dataset.busy;
-    el.style.cursor = tool === 'draw' || (tool === 'zones' && !!draft) ? PEN_CURSOR : tool === 'paint' || tool === 'erase' || (tool === 'unit' && addKind) ? 'crosshair' : tool === 'give' ? 'pointer' : '';
+    el.style.cursor = penOn ? PEN_CURSOR : tool === 'paint' || tool === 'erase' || (tool === 'unit' && addKind) ? 'crosshair' : tool === 'give' ? 'pointer' : '';
     if (draft || tool === 'draw' || tool === 'paint' || tool === 'erase') map.doubleClickZoom.disable(); else map.doubleClickZoom.enable();
     if (tool !== 'give' || draft) {
       whenStyleReady(map, () => {
         for (const key of world.byKey.keys()) map.setFeatureState({ source: SRC_COUNTRIES, id: key }, { hi: false });
       });
     }
-  }, [tool, world, addKind, draft, canMap, editable]);
+  }, [tool, world, addKind, draft, canMap, editable, penOn]);
 
   // Escape backs out of whatever is open.
   useEffect(() => {
@@ -2656,6 +2670,21 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
     }));
     return () => { for (const h of corners.current) h.remove(); corners.current = []; };
   }, [world, canEditTerr, selTerr, selMulti, selDetailed, selOwnerColor, stageOutline, resetEdit, setSource]);
+
+  // A zone picked in Select shows the same handles (every piece and hole): drag a corner or a side's dot, double-click a
+  // corner away. Each change is kept at once. A zone with a very detailed outline can only be carried (Move handle).
+  const zoneSelId = !draft && canZones && tool === 'select' && !compact ? selZoneRow?.id ?? null : null;
+  useEffect(() => {
+    const map = mapRef.current; const ml = mlRef.current;
+    if (!world || !map || !ml || !zoneSelId || !selZoneMulti.length || vertexCount(selZoneMulti) > HANDLE_LIMIT) return;
+    const id = zoneSelId;
+    return mountZoneHandles({
+      map, ml, base: selZoneMulti,
+      preview: (m) => { if (m) setSource(SRC_EDIT, multiFc(m, null)); else resetEdit(); },
+      commit: (next) => reshapeZone(id, next),
+      fail: (text) => notifyErr(text, 'crisis-map'),
+    });
+  }, [world, zoneSelId, selZoneMulti, reshapeZone, resetEdit, setSource]);
 
   // New territory preview, in its owner's colours.
   useEffect(() => {
@@ -3338,7 +3367,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
       panel = (
         <ZoneEditor
           key={draft.sid} isNew={!draft.editId} phase={draft.phase} types={zoneTypes} cabinets={cabinets}
-          initial={was ? zoneFormOf(was, zoneTypes) : { name: '', type: zoneTypes[0]?.id ?? null, color: ZONE_NO_TYPE_COLOR, description: '', vis: 'public', revealed: [], owner: null }}
+          initial={was ? zoneFormOf(was, zoneTypes) : { name: '', type: null, color: ZONE_NO_TYPE_COLOR, description: '', vis: 'public', revealed: [], owner: null }}
           pointCount={draft.points.length} minPoints={MIN_POINTS} canUndo={draftCanUndo} busy={busy}
           infoOnly={draft.infoOnly}
           onRedraw={() => setDraft({ ...draft, phase: 'draw', points: [], trail: [...draft.trail.slice(-49), draft.points] })}
@@ -3383,7 +3412,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
     } else if (selZoneRow) {
       panel = (
         <ZoneInfoCard
-          key={selZoneRow.id} zone={selZoneRow} type={selZoneRow.zone_type ? zoneTypeById.get(selZoneRow.zone_type) ?? null : null} cabinets={cabinets}
+          key={selZoneRow.id} zone={selZoneRow} cabinets={cabinets}
           staff={staff && !staffViewer} canEdit={canZones} canControl={canZones}
           onControl={(id) => setZoneController(selZoneRow.id, id)}
           onEdit={() => { changeTool('zones'); editZone(selZoneRow.id); }} onClose={() => setSelZone(null)}
@@ -3466,7 +3495,8 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
       : draft ? null
       : sightUnit && canUnits && tool === 'select' ? 'Press anywhere on the dashed ring and drag, or drag its round handle, to change how far it sees.'
         : canEditTerr && selTerr && selValid ? (selDetailed ? 'Press on the red outline and drag to bend the border, then save.' : 'Drag a corner or a small dot on a side to reshape it, then save.') + (selTerr.kind === 'area' ? ' Drag the Move handle, or the territory itself, to carry all of it.' : '')
-          : null;
+          : zoneSelId && selZoneRow && vertexCount(selZoneMulti) <= HANDLE_LIMIT ? 'Drag a corner or a small dot on a side to reshape the zone, or the Move handle to carry all of it.'
+            : null;
 
   const pendingUnit = pendingMove ? rawData?.units.find((u) => u.id === pendingMove.id) ?? null : null;
   const compactInfo = compact && selUnitRow

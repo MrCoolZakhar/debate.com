@@ -63,7 +63,7 @@ function navFor(role: CrisisRole, base: string, confSlug: string): NavItem[] {
     return [{ href: base, label: 'News', icon: ic(Newspaper) }, map, characters(), { href: `/conferences/${confSlug}/press`, label: 'Press Desk', icon: ic(Megaphone), external: true }];
   }
   // Delegates: "Cabinet" (Peter, 26 Oct 2026). History is a tab inside the Map page for everybody (27 Oct 2026).
-  return [{ href: base, label: 'My crisis', icon: ic(Home) }, map, news(), meetings(), characters(undefined, 'Cabinet')];
+  return [{ href: base, label: 'My crisis', icon: ic(Home) }, { href: `${base}/directives`, label: 'Directives', icon: ic(ScrollText) }, map, news(), meetings(), characters(undefined, 'Cabinet')];
 }
 
 function Rail({ v, items }: { v: CrisisContextValue; items: NavItem[] }) {

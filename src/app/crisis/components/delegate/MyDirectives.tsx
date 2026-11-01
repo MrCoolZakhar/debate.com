@@ -10,12 +10,13 @@
 // A click opens the conversation, where the author can also edit or withdraw it in place while nobody has answered it.
 
 import { useState } from 'react';
-import { Clock, Undo2, Pencil } from 'lucide-react';
+import Link from 'next/link';
+import { ChevronRight, Clock, Undo2, Pencil } from 'lucide-react';
 import { dirNumber, isChairSendBack, timeAgo } from '@/lib/crisis/format';
 import type { Directive, DirectiveNote } from '@/lib/crisis/types';
 import type { CrisisRef } from '@/lib/crisis/api';
 import { Avatar, Btn, Card, CK, Skeleton } from '../../crisisKit';
-import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
+import { crisisBase, useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { CARD_GAP_BELOW, CabinetCrest, CabinetFoot, CabinetName, SEAL_ROW, cabinetColorOf, cabinetRing, cabinetWash, crestIndent, isCabinetDirective } from '../directives/cabinetStamp';
 import DirectiveDialog from './DirectiveDialog';
 import DirectiveDeepLink from '../notifications/DirectiveDeepLink';
@@ -28,7 +29,7 @@ const CARD_HEIGHT = 112; // minimum; a long title makes the card taller
 const PORTRAIT = 48;
 const OVERHANG = PORTRAIT / 3;
 
-function DirectiveCard({ d, author, onOpen }: { d: Directive; author: PersonRef; onOpen: () => void }) {
+export function DirectiveCard({ d, author, onOpen }: { d: Directive; author: PersonRef; onOpen: () => void }) {
   const { core } = useCrisis();
   const { color: tagColor, word: tagWord, icon: tagIcon } = verdictOf(d, 13);
   const sentBack = isChairSendBack(d);
@@ -46,7 +47,7 @@ function DirectiveCard({ d, author, onOpen }: { d: Directive; author: PersonRef;
         aria-label={`Cabinet directive ${dirNumber(d)}: ${d.title}. ${tagWord}`}
         className="relative text-left w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] transition-transform active:scale-[0.99]"
         style={{
-          display: 'block', minHeight: CARD_HEIGHT, padding: '20px 16px 10px', margin: `${SEAL_ROW / 2 + 6}px 3px ${CARD_GAP_BELOW}px`, width: 'calc(100% - 6px)', cursor: 'pointer', fontFamily: CK.font, color: CK.ink,
+          display: 'block', minHeight: CARD_HEIGHT, padding: '20px 16px 10px', margin: `${SEAL_ROW / 2 + 2}px 3px ${CARD_GAP_BELOW}px`, width: 'calc(100% - 6px)', cursor: 'pointer', fontFamily: CK.font, color: CK.ink,
           background: cabinetWash(color), borderRadius: 20, border: 0, overflow: 'visible',
           boxShadow: ask ? cabinetRing(color, 3, `${CK.shadow}, 0 0 0 5px rgba(47,95,143,0.35)`) : cabinetRing(color, 3, CK.shadow),
         }}
@@ -87,7 +88,7 @@ function DirectiveCard({ d, author, onOpen }: { d: Directive; author: PersonRef;
       aria-label={`Directive ${dirNumber(d)}: ${d.title}. ${tagWord}`}
       className="relative text-left w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] transition-transform active:scale-[0.99]"
       style={{
-        minHeight: CARD_HEIGHT, display: 'flex', gap: 10, padding: 0, cursor: 'pointer', fontFamily: CK.font, color: CK.ink,
+        minHeight: CARD_HEIGHT, display: 'flex', gap: 10, padding: 0, marginTop: OVERHANG + 2, cursor: 'pointer', fontFamily: CK.font, color: CK.ink,
         background: CK.card, borderRadius: 20, border: '1px solid rgba(27,56,40,0.14)', overflow: 'visible',
         boxShadow: ask ? `${CK.shadow}, 0 0 0 2px rgba(47,95,143,0.35)` : CK.shadow,
       }}
@@ -155,7 +156,18 @@ export default function MyDirectives({
   return (
     <section aria-labelledby="my-directives-title">
       <DirectiveDeepLink onId={setOpenId} />
-      <h2 id="my-directives-title" style={{ margin: '0 0 16px', fontSize: 17, fontWeight: 800, color: CK.ink }}>My Directives</h2>
+      <div className="flex items-baseline justify-between flex-wrap" style={{ gap: '2px 12px', margin: '0 0 12px' }}>
+        <h2 id="my-directives-title" style={{ margin: 0, fontSize: 17, fontWeight: 800, color: CK.ink }}>My Directives</h2>
+        {directives !== null && directives.length > 0 && (
+          <Link
+            href={`${crisisBase(cref)}/directives`}
+            className="inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+            style={{ gap: 4, fontSize: 13.5, fontWeight: 800, color: CK.red, textDecoration: 'underline', borderRadius: 6 }}
+          >
+            See all ({directives.length})<ChevronRight size={15} strokeWidth={1.5} aria-hidden />
+          </Link>
+        )}
+      </div>
       {returned.length > 0 && onEditReturned && (
         <div className="grid" style={{ gap: 12, marginBottom: 24 }}>
           {returned.map((d) => (
@@ -175,11 +187,11 @@ export default function MyDirectives({
         </div>
       )}
       {directives === null ? (
-        <div className="grid gap-6"><Skeleton h={CARD_HEIGHT} r={20} /><Skeleton h={CARD_HEIGHT} r={20} /></div>
+        <div className="grid gap-3"><Skeleton h={CARD_HEIGHT} r={20} /><Skeleton h={CARD_HEIGHT} r={20} /></div>
       ) : directives.length === 0 ? (
         <Card><p style={{ margin: 0, fontSize: 14, color: CK.inkSoft }}>You have not sent a directive yet.</p></Card>
       ) : (
-        <div className="grid" style={{ gap: 28 }}>
+        <div className="grid" style={{ gap: 6 }}>
           {directives.map((d) => <DirectiveCard key={d.id} d={d} author={personOf(d.author_character_id)} onOpen={() => setOpenId(d.id)} />)}
         </div>
       )}

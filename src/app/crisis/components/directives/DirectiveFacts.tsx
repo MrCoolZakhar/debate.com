@@ -109,7 +109,7 @@ export default function DirectiveFacts({ d, names, editing, onChanged, compact =
   );
 
   if (compact) {
-    // ONE tight row of small facts (wraps on a narrow width): From, Waiting since, Length, Themes, Responsible.
+    // ONE tight row of small facts (wraps on a narrow width): From, Waiting since, Length, Themes, then Responsible at the right end. No secret goals chip.
     const who = authorName(d, names);
     const themeCount = d.themes.length + (covertShown ? 1 : 0);
     return (
@@ -136,7 +136,8 @@ export default function DirectiveFacts({ d, names, editing, onChanged, compact =
             )}
           </Fact>
         )}
-        <div style={{ flex: '0 1 240px', minWidth: 190 }}>
+        {/* Pushed to the right end of the SAME row; it drops to its own line only when the pop-up is too narrow for one row. */}
+        <div style={{ flex: '0 1 220px', minWidth: 190, marginLeft: 'auto' }}>
           <Fact big icon={<UserRound size={13} strokeWidth={1.6} />} label="Responsible for this directive">{responsibleBody}</Fact>
           {writer && !confirmTo && (
             <div style={{ marginTop: 4 }}>

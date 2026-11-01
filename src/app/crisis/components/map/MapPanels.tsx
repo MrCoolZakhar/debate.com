@@ -803,32 +803,17 @@ export function ZoneEditor({
 
   return (
     <Shell title={title} onClose={onCancel}>
-      <Field label="Description">
-        <textarea
-          style={{ ...fieldStyle, fontSize: 15, lineHeight: 1.45, minHeight: 84, resize: 'vertical' }} rows={3} value={f.description} maxLength={2000}
-          aria-label="Zone description" onChange={(e) => setF({ ...f, description: e.target.value }, false)} onBlur={form.flush}
-        />
-      </Field>
       <Field label="Name">
         <input
           style={fieldStyle} value={f.name} maxLength={ZONE_NAME_MAX} aria-label="Zone name" autoFocus={isNew}
           onChange={(e) => setF({ ...f, name: e.target.value }, false)} onBlur={form.flush}
         />
       </Field>
-      <Field label="Type">
-        <GSelect
-          size="sm" value={f.type ?? ''} aria-label="Zone type"
-          options={[{ value: '', label: 'No type' }, ...types.map((t) => ({ value: t.id, label: t.name }))]}
-          onChange={(v) => setF({ ...f, type: v || null })}
+      <Field label="Description">
+        <textarea
+          style={{ ...fieldStyle, fontSize: 15, lineHeight: 1.45, minHeight: 84, resize: 'vertical' }} rows={3} value={f.description} maxLength={2000}
+          aria-label="Zone description" onChange={(e) => setF({ ...f, description: e.target.value }, false)} onBlur={form.flush}
         />
-        {type ? null : (
-          <div style={{ marginTop: 8 }}>
-            <Palette value={f.color} onChange={(c) => setF({ ...f, color: c })} />
-            {types.length === 0 && (
-              <p style={{ margin: '6px 0 0', fontSize: 12, color: CK.inkSoft }}>The Crisis Director can add zone types in Settings, under Map.</p>
-            )}
-          </div>
-        )}
       </Field>
       <Field label="Controlled by">
         <OwnerPicker value={f.owner} cabinets={cabinets} withNobody ariaLabel="Who controls this zone" onChange={(id) => setF({ ...f, owner: id })} />
@@ -862,6 +847,9 @@ export function ZoneEditor({
           <Btn size="sm" tone="ghost" icon={<Pencil size={14} strokeWidth={1.5} />} onClick={onRedraw}>Redraw the outline</Btn>
         </Field>
       )}
+      <Field label="Colour">
+        <Palette value={color} onChange={(c) => setF({ ...f, color: c, type: null })} />
+      </Field>
       <p style={{ margin: '0 0 10px', fontSize: 12.5, color: CK.inkSoft }}>
         {isNew ? 'Drag a white corner to move it, a small dot on a side to add a corner, or the Move handle to carry the whole zone. ' : ''}A zone never changes who holds the land.
       </p>
@@ -880,23 +868,18 @@ export function ZoneEditor({
   );
 }
 
-/** A zone's card for everyone who can see it: its name, type, description. Staff can open it for editing. */
-export function ZoneInfoCard({ zone, type, cabinets, staff, canEdit, canControl, onControl, onEdit, onClose }: {
-  zone: MapShape; type: ZoneType | null; cabinets: PanelCabinet[]; staff: boolean; canEdit: boolean;
+/** A zone's card for everyone who can see it: its name and description. Staff can open it for editing. */
+export function ZoneInfoCard({ zone, cabinets, staff, canEdit, canControl, onControl, onEdit, onClose }: {
+  zone: MapShape; cabinets: PanelCabinet[]; staff: boolean; canEdit: boolean;
   /** Staff with map power can change who controls the zone with one click. */
   canControl: boolean; onControl: (id: string | null) => void;
   onEdit: () => void; onClose: () => void;
 }) {
   const controller = cabinets.find((c) => c.id === zone.owner_cabinet_id) ?? null;
-  const color = type?.color ?? zone.color ?? ZONE_NO_TYPE_COLOR;
   const seen = zone.public ? 'Everyone' : zone.revealed_to.length
     ? zone.revealed_to.map((id) => cabinets.find((c) => c.id === id)?.name ?? 'A cabinet').join(', ') : 'Staff only';
   return (
     <Shell title={zone.label?.trim() || 'Zone'} onClose={onClose}>
-      <p className="flex items-start" style={{ margin: '-4px 0 10px', gap: 8, fontSize: 13, color: CK.ink, overflowWrap: 'anywhere' }}>
-        <span style={{ marginTop: 3 }}><Swatch color={color} /></span>
-        <span><b>{type ? type.name : 'Zone'}</b>{type?.description ? <span style={{ display: 'block', fontSize: 12.5, color: CK.inkSoft }}>{type.description}</span> : null}</span>
-      </p>
       {zone.description?.trim() ? (
         <p style={{ margin: '0 0 10px', fontSize: 13.5, color: CK.ink, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{zone.description}</p>
       ) : null}
@@ -934,7 +917,6 @@ export function ZonesPanel({ zones, types, cabinets, onDraw, onPick, onClose }: 
       ) : (
         <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 2 }}>
           {zones.map((z) => {
-            const t = types.find((x) => x.id === z.zone_type);
             const ctl = cabinets.find((c) => c.id === z.owner_cabinet_id);
             return (
               <li key={z.id}>
@@ -947,7 +929,7 @@ export function ZonesPanel({ zones, types, cabinets, onDraw, onPick, onClose }: 
                   <span style={{ minWidth: 0 }}>
                     <b style={{ display: 'block', fontSize: 13.5, color: CK.ink, overflowWrap: 'anywhere' }}>{z.label?.trim() || 'Zone'}</b>
                     <span style={{ display: 'block', fontSize: 12, color: CK.inkSoft, overflowWrap: 'anywhere' }}>
-                      {t ? t.name : 'No type'}{ctl ? ` · Controlled by ${ctl.short}` : ''}{z.public ? '' : z.revealed_to.length ? ' · Some cabinets' : ' · Staff only'}
+                      {[ctl ? `Controlled by ${ctl.short}` : '', z.public ? '' : z.revealed_to.length ? 'Some cabinets' : 'Staff only'].filter(Boolean).join(' · ') || 'Everyone'}
                     </span>
                   </span>
                 </button>

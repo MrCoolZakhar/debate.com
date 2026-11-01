@@ -9,6 +9,8 @@ import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import DirectivePopup from '../directives/DirectivePopup';
 import { buildNames, isOpenStatus, lastAnsweredByAuthor, sortDirectives } from '../directives/directiveKit';
 import QueueRow from '../directives/QueueRow';
+import { SpareTopRow } from '../directives/InboxExtraCards';
+import { buildExtras, type SpareItem } from '../directives/inboxItems';
 import { isCabinetDirective } from '../directives/cabinetStamp';
 import AssignControl from './commandAssign';
 import { beingWritten, isStaffRow, staffLoads } from './commandData';
@@ -22,6 +24,12 @@ export function WaitingCard({ directives, base, now, onOpen, onChanged }: {
   const { core, settings, ref } = useCrisis();
   const names = useMemo(() => buildNames(core.cabinets, core.characters, core.members), [core]);
   const staff = useMemo(() => core.members.filter(isStaffRow), [core.members]);
+
+  // Delegates whose character is dead, arrested or missing and who need a new one: the very top of the list.
+  const spares = useMemo(
+    () => buildExtras(null, core.characters, core.members).filter((x): x is SpareItem => x.extra === 'spare').sort((a, b) => a.member.display_name.localeCompare(b.member.display_name)),
+    [core.characters, core.members],
+  );
 
   // A directive someone is writing a reply to right now is being dealt with: it leaves the waiting list and is counted apart.
   const { waiting, writing, counts } = useMemo(() => {
@@ -57,8 +65,9 @@ export function WaitingCard({ directives, base, now, onOpen, onChanged }: {
       ) : (
         <>
           {/* Every open directive nobody is writing to yet; the list scrolls inside the card, the footer stays. */}
-          {waiting.length === 0 ? <EmptyLine>{writing > 0 ? 'Everything open is being written.' : 'Every directive has an answer.'}</EmptyLine> : (
+          {waiting.length === 0 && spares.length === 0 ? <EmptyLine>{writing > 0 ? 'Everything open is being written.' : 'Every directive has an answer.'}</EmptyLine> : (
             <div className="cmd-scroll flex flex-col" style={{ gap: 2 }}>
+              {spares.map((x) => <SpareTopRow key={x.id} item={x} onChanged={() => onChanged?.()} />)}
               {waiting.map((d) => (
                 <div key={d.id} style={{ position: 'relative' }}>
                   <QueueRow d={d} names={names} sev={waitSeverity(d.waiting_since, now)} whenLabel={waitLabel(d.waiting_since, now)} onOpen={() => onOpen(d)} compact />

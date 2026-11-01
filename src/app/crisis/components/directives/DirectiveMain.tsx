@@ -10,7 +10,7 @@
 // Nothing but internal notes, the hand-over and the "being written" mark is written before Send reply.
 // Staff only: it shows the author's secret goals. A CABINET directive wears design B (cabinetStamp.tsx): the cabinet's seal and the number
 // overlapping the pop-up's top border with the small CABINET stamp; NO emphasis on who submitted it (owner, 1 Nov 2026): the white band
-// (faintly washed in the cabinet's colour) is ONE tight row, the cabinet's name, the secret goals, then "From" (a 20px portrait and the
+// (faintly washed in the cabinet's colour) is ONE tight row, the cabinet's name, then "From" (a 20px portrait and the
 // name) beside "Waiting since", the length, the themes and who is responsible; the text follows straight after it at 15px.
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
@@ -113,11 +113,11 @@ export default function DirectiveMain({ directive: d, reply, notesVersion = 0, o
           <h2 style={{ margin: '4px 0 0', fontSize: 24, lineHeight: 1.18, fontWeight: 800, overflowWrap: 'anywhere' }}>{d.title}</h2>
         </div>
         {/* One white band: the character on the left, the facts and who is responsible in the space beside them */}
-        <div className="flex flex-wrap" style={{ gap: isCab ? '10px 22px' : '8px 20px', alignItems: isCab ? 'center' : undefined, padding: isCab ? '12px 22px' : '0 22px 12px', background: isCab ? cabinetWash(accent) : CK.card, boxShadow: `0 1px 0 ${CK.hair}` }}>
+        <div className="flex flex-wrap" style={{ gap: isCab ? '10px 18px' : '8px 20px', alignItems: isCab ? 'center' : undefined, padding: isCab ? '12px 22px' : '0 22px 12px', background: isCab ? cabinetWash(accent) : CK.card, boxShadow: `0 1px 0 ${CK.hair}` }}>
           {isCab ? (
             <div className="flex items-center flex-wrap" style={{ gap: '4px 10px', minWidth: 0 }}>
+              {/* A cabinet directive has no author's secret goals to show: the cabinet name opens the row. */}
               <b style={{ fontSize: 16, lineHeight: 1.25, color: accent, overflowWrap: 'break-word', wordBreak: 'normal' }}>{cabinet?.name ?? 'Cabinet'}</b>
-              {goals && <SecretGoalsChip goals={goals} />}
             </div>
           ) : (
           <div className="flex" style={{ gap: 14, flex: '0 1 270px', minWidth: 0 }}>
