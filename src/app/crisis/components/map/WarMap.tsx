@@ -11,7 +11,7 @@
 // (crisis_map_drafts) shown over the sent map; Send to delegates applies it in one transaction.
 
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react';
 import type { GeoJSONSource, Map as MLMap, MapMouseEvent, Marker as MLMarker } from 'maplibre-gl';
 import type { Feature, FeatureCollection, Geometry } from 'geojson';
 import { Building2, Cloud, Droplets, Eye, Layers, Send, SquareDashed, UserRound, Users } from 'lucide-react';
@@ -67,7 +67,7 @@ import MapToolbar, { TOOLBAR_CSS, type Tool } from './MapToolbar';
 import { loadProvinces, provinceAt, type Province } from './provinces';
 import {
   CharacterCard, KindPicker, NewTerritoryPanel, PlaceUnitPanel, TerritoryCard, UnitEditor, UnitViewer, ZoneEditor, ZoneInfoCard, ZonesPanel,
-  zoneColorOf, zoneFormOf, zoneVisibility, type PanelCabinet, type TerritoryInfo, type UnitDraft, type ZoneForm,
+  panelEditState, redoPanelEdit, subscribePanelEdits, undoPanelEdit, zoneColorOf, zoneFormOf, zoneVisibility, type PanelCabinet, type TerritoryInfo, type UnitDraft, type ZoneForm,
 } from './MapPanels';
 import {
   addPhysicalSources, createNameLabels, fillRegions, fillWater, loadRegions, loadWater, setRegionsVisible, setWaterVisible,
@@ -91,6 +91,8 @@ interface Draft {
   points: LngLat[];
   /** The point lists before each change made in the refine step, newest last (what Undo steps back through). */
   trail: LngLat[][];
+  /** Point lists Undo took back in this step of the drawing, newest last (what Redo puts back). */
+  fwd?: LngLat[][];
   owner: string | null;
   /** True once someone picked the holder (Nobody included); until then it follows the land the shape touches. */
   ownerChosen: boolean;
@@ -102,7 +104,10 @@ interface PendingMove { id: string; name: string; lng: number; lat: number }
 interface TerrEdit { key: string; multi: Multi; trail: Multi[] }
 
 /** The draft with its points replaced, remembering the old ones for Undo. */
-const withPoints = (d: Draft, points: LngLat[]): Draft => ({ ...d, points, trail: [...d.trail.slice(-49), d.points] });
+const withPoints = (d: Draft, points: LngLat[]): Draft => ({ ...d, points, trail: [...d.trail.slice(-49), d.points], fwd: [] });
+
+/** The outline is closed: the refine step starts with nothing to step back through. */
+const toRefine = (d: Draft): Draft => ({ ...d, phase: 'refine', trail: [], fwd: [] });
 
 const terrKey = (t: TerrRef): string => (t.kind === 'country' ? `c:${t.key}` : `a:${t.id}`);
 
@@ -1413,8 +1418,18 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
   const undoDraft = useCallback(() => {
     setDraft((d) => {
       if (!d) return d;
-      if (d.trail.length) return { ...d, points: d.trail[d.trail.length - 1], trail: d.trail.slice(0, -1) };
-      return d.phase === 'draw' ? { ...d, points: d.points.slice(0, -1) } : d;
+      if (d.trail.length) return { ...d, points: d.trail[d.trail.length - 1], trail: d.trail.slice(0, -1), fwd: [...(d.fwd ?? []), d.points] };
+      // Drawing with no point left to take back: the drawing is dropped. A closed outline goes back to drawing.
+      if (d.phase === 'draw') return null;
+      return d.infoOnly ? d : { ...d, phase: 'draw', trail: [], fwd: [] };
+    });
+  }, []);
+
+  /** Redo in the editor: puts back the point or corner Undo just took away. */
+  const redoDraft = useCallback(() => {
+    setDraft((d) => {
+      if (!d || !d.fwd?.length) return d;
+      return { ...d, points: d.fwd[d.fwd.length - 1], fwd: d.fwd.slice(0, -1), trail: [...d.trail.slice(-49), d.points] };
     });
   }, []);
 
@@ -1931,9 +1946,9 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
           }
           if (pts.length >= MIN_POINTS) {
             const fp = map.project(pts[0]);
-            if (Math.hypot(fp.x - e.point.x, fp.y - e.point.y) < 12) { setDraft({ ...draft, phase: 'refine' }); return; }
+            if (Math.hypot(fp.x - e.point.x, fp.y - e.point.y) < 12) { setDraft(toRefine(draft)); return; }
           }
-          setDraft({ ...draft, points: [...pts, [round5(clampLng(e.lngLat.lng)), round5(clampLat(e.lngLat.lat))]] });
+          setDraft(withPoints(draft, [...pts, [round5(clampLng(e.lngLat.lng)), round5(clampLat(e.lngLat.lat))]]));
           return;
         }
         // Draw: a click starts a new outline, whatever is under it (land it covers is taken from its holder).
@@ -1977,7 +1992,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
       onMapDblClick: (e) => {
         if (draft && draft.phase === 'draw' && draft.points.length >= MIN_POINTS) {
           e.preventDefault();
-          setDraft({ ...draft, phase: 'refine' });
+          setDraft(toRefine(draft));
         }
       },
       onPress: (e) => {
@@ -2103,7 +2118,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
             return;
           }
           const from: Draft = draft ?? { sid: new Date().getTime(), kind: 'area', phase: 'draw', points: [], owner: chipOwner, ownerChosen: true, trail: [] };
-          setDraft({ ...from, phase: 'refine', points: from.points.length >= 2 ? [...from.points, ...corners] : corners });
+          setDraft(toRefine({ ...from, points: from.points.length >= 2 ? [...from.points, ...corners] : corners }));
           return;
         }
         const dr = dragRef.current;
@@ -2191,6 +2206,36 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
       },
     };
   });
+
+  // ── Undo and Redo act on the innermost thing in progress first ──
+  // 1 a drag being made, 2 a card field waiting to be kept, 3 the drawing (points, then corners, then back to drawing),
+  // 4 an outline change not yet kept, 5 only then the last change that was kept.
+  const panelState = useSyncExternalStore(subscribePanelEdits, panelEditState, () => '00');
+  const panelCanUndo = panelState[0] === '1';
+  const panelCanRedo = panelState[1] === '1';
+  const draftOn = !!draft && editable;
+  const draftCanUndo = draftOn && !!draft && (draft.trail.length > 0 || draft.phase === 'draw' || !draft.infoOnly);
+  const draftCanRedo = draftOn && !!draft?.fwd?.length;
+  const lastStep = historyRef.current[historyRef.current.length - 1];
+  const mapUndo = useCallback((): void => {
+    if (brush.cancel() || mover.cancel()) return;
+    if (freeRef.current || dragRef.current) { liveRef.current?.escape(); return; }
+    if (undoPanelEdit()) return;
+    if (draftOn && draftCanUndo) { undoDraft(); return; }
+    if (terrEditRef.current) { undoOutline(); return; }
+    goBack();
+  }, [brush, mover, draftOn, draftCanUndo, undoDraft, undoOutline, goBack]);
+  const mapRedo = useCallback((): void => {
+    if (redoPanelEdit()) return;
+    if (draftOn) { if (draftCanRedo) redoDraft(); return; }
+    goForward();
+  }, [draftOn, draftCanRedo, redoDraft, goForward]);
+  const undoLabel = panelCanUndo ? 'Undo the last change in the card'
+    : draftOn && draftCanUndo && draft
+      ? (draft.phase === 'draw' ? (draft.trail.length || draft.points.length > 1 ? 'Undo last point' : 'Cancel the drawing') : draft.trail.length ? 'Undo corner' : 'Undo: back to drawing the outline')
+      : terrEdit ? 'Undo corner'
+        : lastStep ? `Undo: ${lastStep.text.replace(/^You /, '')}` : null;
+  const redoLabel = panelCanRedo ? 'Redo the change in the card' : draftOn && draftCanRedo ? (draft?.phase === 'draw' ? 'Redo point' : 'Redo corner') : null;
 
   // ── create the map (once) ──
   useEffect(() => {
@@ -2663,7 +2708,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
       });
       el.addEventListener('click', (ev) => {
         ev.stopPropagation();
-        if (i === 0) setDraft((d) => (d && d.sid === sid && d.phase === 'draw' && d.points.length >= MIN_POINTS ? { ...d, phase: 'refine' } : d));
+        if (i === 0) setDraft((d) => (d && d.sid === sid && d.phase === 'draw' && d.points.length >= MIN_POINTS ? toRefine(d) : d));
       });
       el.addEventListener('dblclick', (ev) => {
         ev.stopPropagation();
@@ -3295,10 +3340,10 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
         <ZoneEditor
           key={draft.sid} isNew={!draft.editId} phase={draft.phase} types={zoneTypes} cabinets={cabinets}
           initial={was ? zoneFormOf(was, zoneTypes) : { name: '', type: zoneTypes[0]?.id ?? null, color: ZONE_NO_TYPE_COLOR, description: '', vis: 'public', revealed: [], owner: null }}
-          pointCount={draft.points.length} minPoints={MIN_POINTS} canUndo={draft.trail.length > 0} busy={busy}
+          pointCount={draft.points.length} minPoints={MIN_POINTS} canUndo={draftCanUndo} busy={busy}
           infoOnly={draft.infoOnly}
           onRedraw={() => setDraft({ ...draft, phase: 'draw', points: [], trail: [...draft.trail.slice(-49), draft.points] })}
-          onColor={setZoneColor} onUndo={undoDraft} onFinish={() => setDraft({ ...draft, phase: 'refine' })}
+          onColor={setZoneColor} onUndo={undoDraft} onFinish={() => setDraft(toRefine(draft))}
           onSave={(f) => submitZone(draft, f)} onInfo={(f) => saveZoneInfo(draft, f)} onCancel={() => setDraft(null)}
           onDelete={draft.editId ? () => removeZone(draft.editId as string) : undefined}
         />
@@ -3316,9 +3361,9 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
           }
           canSave={draft.ownerChosen || draft.owner !== null}
           onOwner={(id) => { setChipOwner(id); setDraft((d) => (d ? { ...d, owner: id, ownerChosen: true } : d)); }}
-          canUndo={draft.trail.length > 0}
+          canUndo={draftCanUndo}
           onUndo={undoDraft}
-          onFinish={() => setDraft({ ...draft, phase: 'refine' })}
+          onFinish={() => setDraft(toRefine(draft))}
           onSave={() => submitNewArea(draft)}
           onClose={() => setDraft(null)}
         />
@@ -3547,8 +3592,9 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
             allowed={{ give: editable && canMap, paint: editable && canMap, erase: editable && canMap, draw: editable && canMap, zones: canZones, unit: unitEditing }}
             cabinets={cabinets} owner={chipOwner} onOwner={setChipOwner}
             brushKm={brushKm} onBrushKm={(km) => { brushTouched.current = true; setBrushKm(km); }}
-            history={editable && (canMap || canUnits || canChars)} canUndo={historyN > 0} canRedo={redoN > 0} busy={busy}
-            onUndo={goBack} onRedo={goForward} onFit={fitView}
+            history={editable && (canMap || canUnits || canChars)} canUndo={panelCanUndo || (draftOn && draftCanUndo) || !!terrEdit || historyN > 0} canRedo={panelCanRedo || (draftOn ? draftCanRedo : redoN > 0)} busy={busy}
+            undoLabel={undoLabel} redoLabel={redoLabel} undoInFields={draftOn && !!draft && draft.phase === 'draw' && draft.points.length > 0}
+            onUndo={mapUndo} onRedo={mapRedo} onFit={fitView}
             viewTools={viewTools} editable={editable && (canMap || canUnits)} provincesReady={provincesReady}
           />
         </>

@@ -23,7 +23,7 @@ import type { Cabinet, Directive } from '@/lib/crisis/types';
 import { Btn, CK, fieldStyle, useScrollLock } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { whenLabel } from '../delegate/directiveUi';
-import { CabinetHead, CabinetStamp, SubmitterLine, cabinetColorOf, cabinetRing } from '../directives/cabinetStamp';
+import { CabinetCrest, CabinetName, CabinetStamp, SubmitterLine, cabinetColorOf, cabinetRing, crestIndent } from '../directives/cabinetStamp';
 import { DirectiveBody } from '../directives/attachedImage';
 import PopBanner from '../directives/PopBanner';
 import { ThemeTags } from '../directives/directiveParts';
@@ -94,11 +94,12 @@ export function ChairDirectiveCard({ d, author, cabinet, cref, readOnly = false,
 
   const back = () => { setMode('view'); setNote(''); };
   const color = cabinetColorOf(cabinet);
-  // Design B (owner, 1 Nov 2026): the cabinet's seal, name and number top left, the state under them, the top bar top right.
+  // Design B (owner, 1 Nov 2026): the seal and the number on the card's top border, the cabinet's name beside them with the state under it,
+  // the top bar top right.
   const header = (
     <div className="flex items-start justify-between" style={{ gap: 8 }}>
       <div style={{ minWidth: 0, flex: 1 }}>
-        <CabinetHead cabinet={cabinet} n={dirNumber(d)} sealSize={36} nameSize={14.5} />
+        <CabinetName cabinet={cabinet} size={14.5} indent={crestIndent(40)} />
         {readOnly ? (
           <span className="inline-flex items-center" style={{ gap: 5, marginTop: 6, fontSize: 12, fontWeight: 800, color: verdict.color }}>{verdict.icon}{verdict.word}</span>
         ) : (
@@ -107,7 +108,7 @@ export function ChairDirectiveCard({ d, author, cabinet, cref, readOnly = false,
           </span>
         )}
       </div>
-      {topBar && <div style={{ flex: 'none', marginTop: 12 }}>{topBar}</div>}
+      {topBar && <div style={{ flex: 'none' }}>{topBar}</div>}
     </div>
   );
 
@@ -117,16 +118,19 @@ export function ChairDirectiveCard({ d, author, cabinet, cref, readOnly = false,
     <div onKeyDown={onKeyDown}>
       <div
         style={{
-          position: 'relative', overflow: 'visible', minWidth: 0, background: CK.card, borderRadius: 22, padding: '30px 20px 16px', marginTop: 22,
+          position: 'relative', overflow: 'visible', minWidth: 0, background: CK.card, borderRadius: 22, padding: '26px 20px 16px', marginTop: 24,
           boxShadow: cabinetRing(color, 3, `${CK.shadow}, 0 24px 60px rgba(58,14,15,0.4)`),
         }}
       >
-        <CabinetStamp size="pop" onDark />
+        <CabinetCrest cabinet={cabinet} n={dirNumber(d)} sealSize={40} left={20} />
         {header}
 
         {!asking ? (
           <div key="view" className="cm-fade">
-            <h3 style={{ margin: '14px 0 0', fontSize: 25, lineHeight: 1.2, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{d.title}</h3>
+            <div className="flex items-center" style={{ gap: 10, marginTop: 14 }}>
+              <h3 style={{ flex: 1, minWidth: 0, margin: 0, fontSize: 25, lineHeight: 1.2, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{d.title}</h3>
+              <CabinetStamp size="pop" />
+            </div>
             {(d.themes ?? []).length > 0 && (
               <div className="flex flex-wrap items-center" style={{ gap: 6, marginTop: 8 }}>
                 <ThemeTags themes={d.themes ?? []} />
@@ -136,7 +140,7 @@ export function ChairDirectiveCard({ d, author, cabinet, cref, readOnly = false,
               <DirectiveBody body={d.body} thumb={360} style={{ margin: 0, fontSize: 14.5, lineHeight: 1.6, color: CK.ink, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }} />
             </div>
             <div style={{ marginTop: 12 }}>
-              <SubmitterLine name={author.name} picture={author.picture_url} color={author.color} when={`Sent ${whenLabel(d.created_at)}`} />
+              <SubmitterLine name={author.name} picture={author.picture_url} color={author.color} when={`Sent ${whenLabel(d.created_at)}`} size={24} from={false} />
             </div>
             {readOnly && replyLabel && reply && (
               <p style={{ margin: '10px 0 0', fontSize: 13.5, lineHeight: 1.5, color: CK.inkSoft, overflowWrap: 'anywhere' }}><b>{replyLabel}: </b>{reply}</p>

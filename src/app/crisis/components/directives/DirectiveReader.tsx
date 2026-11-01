@@ -20,10 +20,10 @@ import { Avatar, Btn, CK, agoLabel, cabinetTint, waitLabel, waitSeverity } from 
 import { CharacterLink } from '../character/CharacterProfileHost';
 import { CabinetLogo, NameStack, NumberBadge, StaffPic, ThemeTags, shortName } from './directiveParts';
 import { KIND_ICON, authorName, isBeingWritten, memberName, outcomeView, writingAge, writtenByOther, type Lane, type Names } from './directiveKit';
-import { CabinetHead, CabinetSeal, CabinetStamp, SubmitterLine, cabinetColorOf, isCabinetDirective } from './cabinetStamp';
+import { CabinetCrest, CabinetName, CabinetStamp, SubmitterLine, cabinetColorOf, crestIndent, isCabinetDirective } from './cabinetStamp';
 import { ExtraFront, ExtraNextBody } from './InboxExtraCards';
 import { isExtra, type ReaderItem } from './inboxItems';
-import { FrontShell, MAX_STACK, NavControls, NextShell, STRIP } from './readerParts';
+import { FrontShell, HIDDEN, MAX_STACK, NavControls, NextShell, STRIP } from './readerParts';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { DirectiveBody, plainText } from './attachedImage';
 
@@ -75,7 +75,7 @@ const sentWhen = (d: Directive, now: number) => `Sent ${agoLabel(d.created_at, n
 
 /**
  * A smaller copy of the front card, further back in the stack: badge, title, character, the start of the text.
- * A cabinet directive is framed in its cabinet's colour, shows the seal and the name, and wears a small stamp on its top edge.
+ * A cabinet directive is framed in its cabinet's colour, wears its seal and number on its top border and has the small stamp inside, beside the name.
  */
 function DirectiveNext({ d, k, fw, names, lane, now, onPick, readOnly }: { d: Directive; k: number; fw: number; names: Names; lane: Lane; now: number; onPick: () => void; readOnly?: ReaderReadOnly }) {
   const { memberId } = useCrisis();
@@ -91,34 +91,45 @@ function DirectiveNext({ d, k, fw, names, lane, now, onPick, readOnly }: { d: Di
     <NextShell
       k={k} fw={fw} grey={grey} ring={isCab} color={color} onPick={onPick}
       label={`Read directive No. ${dirNumber(d)}: ${d.title}`}
-      badge={<NumberBadge n={dirNumber(d)} color={color} style={{ position: 'absolute', zIndex: 2, top: -9, left: 40 + 14 }} />}
-      stamp={isCab ? <CabinetStamp size="row" style={{ top: -12, right: 6 }} /> : undefined}
+      badge={isCab
+        ? <CabinetCrest cabinet={cab} n={dirNumber(d)} sealSize={28} left={HIDDEN + 14} />
+        : <NumberBadge n={dirNumber(d)} color={color} style={{ position: 'absolute', zIndex: 2, top: -9, left: HIDDEN + 14 }} />}
     >
-      <span style={{ display: 'block', flex: 'none', fontSize: 18, fontWeight: 800, lineHeight: 1.22, overflowWrap: 'anywhere', paddingRight: isCab ? 62 : 0 }}>{d.title}</span>
       {isCab ? (
         <>
-          <span className="flex items-center" style={{ flex: 'none', gap: 8, marginTop: 11 }}>
-            <CabinetSeal cabinet={cab} size={28} />
-            <b style={{ fontSize: 13.5, color, lineHeight: 1.2, overflowWrap: 'anywhere' }}>{cab?.name ?? 'Cabinet'}</b>
+          {/* The name beside the seal with the small stamp inside the card, then the title, then the author with the icons and the wait. */}
+          <span className="flex flex-wrap items-center" style={{ flex: 'none', gap: '2px 8px' }}>
+            <CabinetName cabinet={cab} size={13.5} indent={crestIndent(28)} style={{ flex: '1 1 auto', minWidth: 0 }} />
+            <CabinetStamp size="xs" />
           </span>
-          <span style={{ display: 'block', flex: 'none', marginTop: 6 }}><SubmitterLine name={who} size={0} /></span>
+          <span style={{ display: 'block', flex: 'none', marginTop: 6, fontSize: 18, fontWeight: 800, lineHeight: 1.22, overflowWrap: 'anywhere' }}>{d.title}</span>
+          <span className="flex items-center flex-wrap" style={{ flex: 'none', gap: '4px 9px', marginTop: 10 }}>
+            <SubmitterLine name={who} picture={ch?.picture_url} color={color} size={22} from={false} />
+            <KindIcon size={14} strokeWidth={1.5} aria-label={KIND_LABEL[d.kind]} style={{ color: CK.red, flex: 'none' }} />
+            <span className="inline-flex items-center" style={{ gap: 3, fontSize: 12, fontWeight: 800, color: when.sev ? WAIT_COLOR[when.sev] : CK.inkSoft, fontVariantNumeric: 'tabular-nums' }}>
+              <Clock size={12} strokeWidth={1.6} aria-hidden />{when.text}
+            </span>
+          </span>
         </>
       ) : (
-        <span className="flex items-center" style={{ flex: 'none', gap: 9, marginTop: 11 }}>
-          <Avatar name={who} src={ch?.picture_url} size={38} color={color} />
-          <span style={{ minWidth: 0, flex: 1 }}>
-            <span style={{ display: 'block', fontSize: 14.5, fontWeight: 800, lineHeight: 1.2, overflowWrap: 'anywhere' }}>{shortName(who)}</span>
-            <span style={{ display: 'block', fontSize: 11.5, fontWeight: 600, color: CK.muted, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{ch?.title?.trim() || cab?.name || ''}</span>
+        <>
+          <span style={{ display: 'block', flex: 'none', fontSize: 18, fontWeight: 800, lineHeight: 1.22, overflowWrap: 'anywhere' }}>{d.title}</span>
+          <span className="flex items-center" style={{ flex: 'none', gap: 9, marginTop: 11 }}>
+            <Avatar name={who} src={ch?.picture_url} size={38} color={color} />
+            <span style={{ minWidth: 0, flex: 1 }}>
+              <span style={{ display: 'block', fontSize: 14.5, fontWeight: 800, lineHeight: 1.2, overflowWrap: 'anywhere' }}>{shortName(who)}</span>
+              <span style={{ display: 'block', fontSize: 11.5, fontWeight: 600, color: CK.muted, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{ch?.title?.trim() || cab?.name || ''}</span>
+            </span>
           </span>
-        </span>
+          <span className="flex items-center flex-wrap" style={{ flex: 'none', gap: '4px 9px', marginTop: 10 }}>
+            <KindIcon size={14} strokeWidth={1.5} aria-label={KIND_LABEL[d.kind]} style={{ color: CK.red, flex: 'none' }} />
+            <CabinetLogo cabinet={cab} size={18} />
+            <span className="inline-flex items-center" style={{ gap: 3, fontSize: 12, fontWeight: 800, color: when.sev ? WAIT_COLOR[when.sev] : CK.inkSoft, fontVariantNumeric: 'tabular-nums' }}>
+              <Clock size={12} strokeWidth={1.6} aria-hidden />{when.text}
+            </span>
+          </span>
+        </>
       )}
-      <span className="flex items-center flex-wrap" style={{ flex: 'none', gap: '4px 9px', marginTop: 10 }}>
-        <KindIcon size={14} strokeWidth={1.5} aria-label={KIND_LABEL[d.kind]} style={{ color: CK.red, flex: 'none' }} />
-        {!isCab && <CabinetLogo cabinet={cab} size={18} />}
-        <span className="inline-flex items-center" style={{ gap: 3, fontSize: 12, fontWeight: 800, color: when.sev ? WAIT_COLOR[when.sev] : CK.inkSoft, fontVariantNumeric: 'tabular-nums' }}>
-          <Clock size={12} strokeWidth={1.6} aria-hidden />{when.text}
-        </span>
-      </span>
       {readOnly && (() => { const st = readOnly.stateOf(d); return (
         <span className="inline-flex items-center" style={{ flex: 'none', gap: 5, marginTop: 8, fontSize: 12, fontWeight: 800, color: st.color }}>{st.icon}{st.word}</span>
       ); })()}
@@ -177,22 +188,24 @@ function FrontCard({ d, names, lane, now, index, total, onPrev, onNext, onRespon
 
   return (
     <FrontShell color={color} ring={isCab} label={`Directive No. ${dirNumber(d)}: ${d.title}`} onActivate={onRespond}>
-      {isCab && <CabinetStamp size="card" />}
+      {isCab && <CabinetCrest cabinet={cab} n={dirNumber(d)} sealSize={40} left={30} />}
       {!isCab && <NumberBadge n={dirNumber(d)} color={color} style={{ position: 'absolute', zIndex: 2, top: -9, left: 26 }} />}
 
-      <div style={{ flex: 'none', padding: isCab ? '28px 26px 0 30px' : '24px 26px 0 30px' }}>
+      <div style={{ flex: 'none', padding: isCab ? '26px 26px 0 30px' : '24px 26px 0 30px' }}>
         {isCab ? (
           <>
-            <div style={{ paddingRight: 150 }}><CabinetHead cabinet={cab} n={dirNumber(d)} sealSize={42} nameSize={15.5} /></div>
-            <h2 style={{ margin: '12px 0 0', fontSize: 30, lineHeight: 1.18, fontWeight: 800, overflowWrap: 'anywhere' }}>{d.title}</h2>
-            <p className="flex items-center flex-wrap" style={{ margin: '10px 0 0', gap: '4px 12px', fontSize: 12.5, fontWeight: 700, color: CK.inkSoft }}>
+            <CabinetName cabinet={cab} size={15.5} indent={crestIndent(40)} />
+            <div className="flex items-center" style={{ gap: 12, marginTop: 12 }}>
+              <h2 style={{ flex: 1, minWidth: 0, margin: 0, fontSize: 30, lineHeight: 1.18, fontWeight: 800, overflowWrap: 'anywhere' }}>{d.title}</h2>
+              <CabinetStamp size="card" />
+            </div>
+            {/* The bottom line of the header: the author's portrait and name with the kind, the themes and the wait. */}
+            <div className="flex items-center flex-wrap" style={{ margin: '12px 0 0', gap: '6px 14px', fontSize: 12.5, fontWeight: 700, color: CK.inkSoft }}>
+              <SubmitterLine name={who} picture={ch?.picture_url} color={color} when={sentWhen(d, now)} size={26} characterId={ch?.id} from={false} />
               <span className="inline-flex items-center" style={{ gap: 6 }}><KindIcon size={15} strokeWidth={1.5} aria-hidden style={{ color: CK.red }} />{KIND_LABEL[d.kind]}</span>
               <ThemeTags themes={d.themes} />
               <span className="flex-1" />
               {waitClock}
-            </p>
-            <div style={{ marginTop: 10 }}>
-              <SubmitterLine name={who} picture={ch?.picture_url} color={color} when={sentWhen(d, now)} size={24} characterId={ch?.id} />
             </div>
           </>
         ) : (
@@ -316,8 +329,7 @@ export default function DirectiveReader({ queue, focusId, onFocus, onOpen, onTak
   const upcoming = Math.max(0, total - at - 1);
   const stackFit = stackLayout(stageW, upcoming);
   const n = stackFit.n;
-  // With nothing stacked beside it a cabinet directive's stamp pokes out on the right: leave it room inside the stage.
-  const fw = n === 0 && front && !isExtra(front) && isCabinetDirective(front) ? stackFit.fw - 16 : stackFit.fw;
+  const fw = stackFit.fw;
   const stack = useMemo(() => queue.slice(at + 1, at + 1 + n), [queue, at, n]);
   if (!front) return null;
 

@@ -5,7 +5,8 @@
 // the status while there is no answer) is a coloured tag that sticks out on the very top edge. Small
 // beneath the title: when the reply came in, then the first lines of the reply (or of the directive).
 // A CABINET directive is drawn differently (design B, owner 1 Nov 2026; directives/cabinetStamp.tsx): framed in its cabinet's colour, the
-// seal and name first, the title big, the author a small muted line, and the CABINET stamp poking out of the top right edge.
+// seal and the number on its top border, the name a small label, the title big with the CABINET stamp inside the card beside it, and the
+// author's portrait and name.
 // A click opens the conversation, where the author can also edit or withdraw it in place while nobody has answered it.
 
 import { useState } from 'react';
@@ -15,7 +16,7 @@ import type { Directive, DirectiveNote } from '@/lib/crisis/types';
 import type { CrisisRef } from '@/lib/crisis/api';
 import { Avatar, Btn, Card, CK, Skeleton } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
-import { CabinetHead, CabinetStamp, SubmitterLine, cabinetColorOf, cabinetRing, isCabinetDirective } from '../directives/cabinetStamp';
+import { CabinetCrest, CabinetName, CabinetStamp, SubmitterLine, cabinetColorOf, cabinetRing, crestIndent, isCabinetDirective } from '../directives/cabinetStamp';
 import DirectiveDialog from './DirectiveDialog';
 import DirectiveDeepLink from '../notifications/DirectiveDeepLink';
 import { KIND_WORD, kindIcon, verdictOf } from './directiveUi';
@@ -45,26 +46,29 @@ function DirectiveCard({ d, author, onOpen }: { d: Directive; author: PersonRef;
         aria-label={`Cabinet directive ${dirNumber(d)}: ${d.title}. ${tagWord}`}
         className="relative text-left w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] transition-transform active:scale-[0.99]"
         style={{
-          display: 'block', minHeight: CARD_HEIGHT, padding: '14px 16px 12px', margin: '0 12px 0 0', width: 'calc(100% - 12px)', cursor: 'pointer', fontFamily: CK.font, color: CK.ink,
+          display: 'block', minHeight: CARD_HEIGHT, padding: '20px 16px 12px', margin: '22px 3px 0', width: 'calc(100% - 6px)', cursor: 'pointer', fontFamily: CK.font, color: CK.ink,
           background: CK.card, borderRadius: 20, border: 0, overflow: 'visible',
           boxShadow: ask ? cabinetRing(color, 3, `${CK.shadow}, 0 0 0 5px rgba(47,95,143,0.35)`) : cabinetRing(color, 3, CK.shadow),
         }}
       >
-        <CabinetStamp size="row" style={{ top: -12, right: -10 }} />
+        <CabinetCrest cabinet={cabinet} n={dirNumber(d)} sealSize={38} left={16} />
         <span
           title={tagWord}
           className="inline-flex items-center"
           style={{
-            position: 'absolute', zIndex: 2, top: -11, right: 112, gap: 5, height: 22, padding: '0 9px', borderRadius: 9,
+            position: 'absolute', zIndex: 2, top: -11, right: 14, gap: 5, height: 22, padding: '0 9px', borderRadius: 9,
             background: tagColor, color: '#FFF', fontSize: 11.5, fontWeight: 800, boxShadow: '0 2px 6px rgba(27,56,40,0.22)', whiteSpace: 'nowrap',
           }}
         >
           {tagIcon}{tagWord}
         </span>
-        <span style={{ display: 'block', paddingRight: 88 }}><CabinetHead cabinet={cabinet} n={dirNumber(d)} sealSize={30} nameSize={13} /></span>
-        <b style={{ display: 'block', marginTop: 8, fontSize: 17, lineHeight: 1.28, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{d.title}</b>
-        <span style={{ display: 'block', marginTop: 4 }}>
-          <SubmitterLine name={author.name} picture={author.picture_url} color={author.color} size={0}
+        <CabinetName cabinet={cabinet} size={13} indent={crestIndent(38)} />
+        <span className="flex items-center" style={{ gap: 10, marginTop: 6 }}>
+          <b style={{ flex: 1, minWidth: 0, display: 'block', fontSize: 17, lineHeight: 1.28, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{d.title}</b>
+          <CabinetStamp size="row" />
+        </span>
+        <span style={{ display: 'block', marginTop: 6 }}>
+          <SubmitterLine name={author.name} picture={author.picture_url} color={author.color} size={22} from={false}
             when={d.answered_at ? `${sentBack ? 'Sent back' : 'Reply'} ${timeAgo(d.answered_at)}` : `Sent ${timeAgo(d.created_at)}`} />
         </span>
         <span

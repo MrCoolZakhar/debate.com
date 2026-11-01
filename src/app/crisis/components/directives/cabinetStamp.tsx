@@ -1,13 +1,14 @@
-'use client';
 // Gavelling Crisis: the look of a CABINET directive, in one place (owner, 1 Nov 2026: "I like the cabinet stamp, use pretty much
-// design B but the cabinet stamp big and going out"). A cabinet directive is a white card framed in its cabinet's own colour,
-// the cabinet's seal small at the top left with the cabinet's name in its colour and the number, the TITLE large, and the person
-// who sent it only as a small muted line ("From John F. Kennedy · Sent 4 min ago"). On top of it a big red rubber stamp
-// "CABINET" in the display face, tilted, overlapping the card's top right edge and poking OUT of the card. Personal and joint
-// directives keep their own look, so a cabinet one stands out.
+// design B but the cabinet stamp big"; 1 Nov 2026 later: "stamps are broken, just put them on the actual card"). A cabinet directive
+// is a white card framed in its cabinet's own colour. The cabinet's SEAL overlaps the card's top left border (half outside, with a white
+// ring and a soft shadow) and the "No. 26" NUMBER badge sits on the same border right beside it (CabinetCrest). The cabinet's name is a
+// small coloured label on one line inside the card above the title (CabinetName), the TITLE is large, and the red rubber stamp
+// "CABINET" in the display face sits INSIDE the card, tilted, to the right of the title (CabinetStamp, an ordinary flex item: nothing
+// hangs outside, nothing is clipped, it can never sit under a control in the card's corner). The author is a small round portrait with
+// the name on the card's bottom line (SubmitterLine). Personal and joint directives keep their own look, so a cabinet one stands out.
 //
-// The card that wears the stamp must NOT clip it (overflow visible) and leaves room for it (margin on top and on the right);
-// `stampRoom` says how much each size needs. The stamp never takes a click.
+// Only the seal and the number poke past the card's border: the card that wears them must not clip (overflow visible) and the thing
+// holding it leaves `sealSize / 2` of room above it. The stamp never takes a click.
 
 import type { CSSProperties, ReactNode } from 'react';
 import { Landmark } from 'lucide-react';
@@ -25,40 +26,33 @@ export const isCabinetDirective = (d: Pick<Directive, 'kind'>): boolean => d.kin
 /** The cabinet's own colour, red when there is no cabinet. */
 export const cabinetColorOf = (cabinet?: Pick<Cabinet, 'color'> | null): string => cabinet?.color ?? CK.red;
 
-/**
- * The three sizes of the stamp: `pop` in the big pop-ups (about twice a normal badge), `card` on the big reader cards, `row` in lists.
- * `top` and `right` say how far it hangs past the card's top and right edges (negative = outside the card).
- */
+/** The sizes of the stamp: `pop` in the big pop-ups, `card` on the big reader card, `row` in lists, `xs` in the tight Command rows. */
 const SIZES = {
-  pop: { font: 34, pad: '6px 16px 2px', border: 3, radius: 9, spacing: '0.12em', top: -30, right: -14 },
-  card: { font: 26, pad: '5px 13px 2px', border: 3, radius: 8, spacing: '0.12em', top: -14, right: -12 },
-  row: { font: 14, pad: '3px 8px 1px', border: 2.5, radius: 6, spacing: '0.12em', top: -9, right: -8 },
+  pop: { font: 28, pad: '5px 14px 1px', border: 3, radius: 9, spacing: '0.12em' },
+  card: { font: 22, pad: '4px 11px 1px', border: 3, radius: 8, spacing: '0.12em' },
+  row: { font: 14, pad: '3px 8px 1px', border: 2.5, radius: 6, spacing: '0.12em' },
+  xs: { font: 12, pad: '2px 6px 0', border: 2, radius: 5, spacing: '0.1em' },
 } as const;
 export type StampSize = keyof typeof SIZES;
 
-/** How much empty space a card needs on its top and right so the stamp it wears is never cut off by what holds it. */
-export function stampRoom(size: StampSize): { top: number; right: number } {
-  return { top: Math.abs(SIZES[size].top) + 2, right: Math.abs(SIZES[size].right) + 2 };
-}
-
 /**
- * The red rubber stamp. Absolutely positioned: put it inside the (position: relative, overflow: visible) card. On a dark pop-up
- * scrim a cream fill keeps the part that hangs outside readable; on a light list it is see-through ink (multiply).
+ * The red rubber stamp. An ordinary flex item that sits INSIDE the card, to the right of the title (put it in a `flex items-center`
+ * row with the title). On a light card it is see-through ink (multiply); `onDark` (the red band of a pop-up) gives it a cream fill.
  */
-export function CabinetStamp({ size = 'row', onDark = false, style }: { size?: StampSize; /** The part outside the card is over a dark scrim. */ onDark?: boolean; style?: CSSProperties }) {
+export function CabinetStamp({ size = 'row', onDark = false, style }: { size?: StampSize; /** It sits on a dark or red band. */ onDark?: boolean; style?: CSSProperties }) {
   const s = SIZES[size];
   return (
     <span
       aria-hidden
       className={crisisDisplay.className}
       style={{
-        position: 'absolute', zIndex: 4, top: s.top, right: s.right, pointerEvents: 'none', userSelect: 'none',
+        position: 'relative', flex: 'none', display: 'inline-block', alignSelf: 'center', margin: '2px 3px', zIndex: 2, pointerEvents: 'none', userSelect: 'none',
         transform: 'rotate(-9deg)', transformOrigin: 'center', whiteSpace: 'nowrap', lineHeight: 1.1,
         fontSize: s.font, letterSpacing: s.spacing, padding: s.pad, borderRadius: s.radius,
         border: `${s.border}px solid ${STAMP_RED}`, color: STAMP_RED,
         background: onDark ? 'rgba(255,244,230,0.96)' : 'transparent',
         opacity: onDark ? 0.97 : 0.9, mixBlendMode: onDark ? 'normal' : 'multiply',
-        boxShadow: onDark ? '0 6px 16px rgba(42,10,12,0.35)' : undefined,
+        boxShadow: onDark ? '0 4px 12px rgba(42,10,12,0.3)' : undefined,
         ...style,
       }}
     >
@@ -90,32 +84,68 @@ export function CabinetSeal({ cabinet, size = 32, style }: { cabinet?: Pick<Cabi
   );
 }
 
-/** The top left of the card: the seal, the cabinet's name in its colour and the "No. 23" badge. `after` goes at the far end. */
+/** Space the seal takes beside the cabinet's name: the name's left padding when the crest's `left` equals the body's left padding. */
+export const crestIndent = (sealSize: number): number => sealSize + 8;
+
+/**
+ * The crest on the card's top border: the seal (half outside, a white ring, a soft shadow) and the "No. 26" badge right beside it, also
+ * on the border. Absolutely positioned: put it as a child of the (position: relative, overflow: visible) card. `sealTop` / `badgeTop`
+ * override where they sit (a pop-up on a phone has no outside to overlap into).
+ */
+export function CabinetCrest({ cabinet, n, sealSize = 32, left = 14, sealTop, badgeTop = -9 }: {
+  cabinet?: Pick<Cabinet, 'name' | 'color' | 'logo_url'> | null; n: number; sealSize?: number; left?: number;
+  sealTop?: number | string; badgeTop?: number | string;
+}) {
+  const color = cabinetColorOf(cabinet);
+  return (
+    <>
+      <CabinetSeal
+        cabinet={cabinet}
+        size={sealSize}
+        style={{ position: 'absolute', zIndex: 3, top: sealTop ?? -Math.round(sealSize / 2), left, border: '3px solid #FFFFFF', boxShadow: '0 3px 10px rgba(27,56,40,0.28)', pointerEvents: 'none' }}
+      />
+      <NumberBadge n={n} color={color} style={{ position: 'absolute', zIndex: 3, top: badgeTop, left: left + sealSize + 6, pointerEvents: 'none' }} />
+    </>
+  );
+}
+
+/** The cabinet's name: a small label in its colour on ONE line (it wraps at spaces only, a very long single word breaks as a last resort). */
+export function CabinetName({ cabinet, size = 13.5, indent = 0, style }: {
+  cabinet?: Pick<Cabinet, 'name' | 'color'> | null; size?: number; /** Left padding that clears the seal beside it. */ indent?: number; style?: CSSProperties;
+}) {
+  return (
+    <b style={{ display: 'block', paddingLeft: indent, fontSize: size, fontWeight: 800, color: cabinetColorOf(cabinet), lineHeight: 1.25, fontFamily: CK.font, overflowWrap: 'break-word', wordBreak: 'normal', ...style }}>
+      {cabinet?.name ?? 'Cabinet'}
+    </b>
+  );
+}
+
+/** A plain inline head (seal, name, number) for places that are not the framed card, such as a step inside a pop-up. */
 export function CabinetHead({ cabinet, n, sealSize = 32, nameSize = 13.5, after }: {
   cabinet?: Pick<Cabinet, 'name' | 'color' | 'logo_url'> | null; n: number; sealSize?: number; nameSize?: number; after?: ReactNode;
 }) {
   const color = cabinetColorOf(cabinet);
   return (
-    <span className="flex items-center" style={{ gap: 9, minWidth: 0, fontFamily: CK.font }}>
+    <span className="flex items-center flex-wrap" style={{ gap: '4px 9px', minWidth: 0, fontFamily: CK.font }}>
       <CabinetSeal cabinet={cabinet} size={sealSize} />
-      <b style={{ fontSize: nameSize, fontWeight: 800, color, lineHeight: 1.2, overflowWrap: 'anywhere', minWidth: 0 }}>{cabinet?.name ?? 'Cabinet'}</b>
+      <b style={{ fontSize: nameSize, fontWeight: 800, color, lineHeight: 1.2, overflowWrap: 'break-word', wordBreak: 'normal' }}>{cabinet?.name ?? 'Cabinet'}</b>
       <NumberBadge n={n} color={color} style={{ flex: 'none' }} />
       {after}
     </span>
   );
 }
 
-/** Who sent it, small and muted: "From John F. Kennedy · Sent 4 min ago". The portrait is optional and tiny; with `characterId` the
- *  portrait and the name open that character (leave it out inside a button). */
-export function SubmitterLine({ name, picture, color, when, size = 22, extra, characterId }: {
-  name: string; picture?: string | null; color?: string; when?: string; size?: number; extra?: ReactNode; characterId?: string | null;
+/** Who sent it: a small round portrait and the name ("Robert McNamara"), with "From" and the time ("From Robert McNamara · Sent 4 min ago")
+ *  unless `from` is false. With `characterId` the portrait and the name open that character (leave it out inside a button). */
+export function SubmitterLine({ name, picture, color, when, size = 22, extra, characterId, from = true }: {
+  name: string; picture?: string | null; color?: string; when?: string; size?: number; extra?: ReactNode; characterId?: string | null; from?: boolean;
 }) {
   const portrait = size > 0 ? <Avatar name={name} src={picture} size={size} color={color ?? CK.red} /> : null;
   return (
     <span className="flex items-center flex-wrap" style={{ gap: '3px 7px', fontSize: 12.5, fontWeight: 600, color: CK.muted, fontFamily: CK.font, lineHeight: 1.3 }}>
       {portrait && (characterId ? <CharacterLink id={characterId} style={{ borderRadius: '50%', lineHeight: 0 }}>{portrait}</CharacterLink> : portrait)}
-      <span style={{ overflowWrap: 'anywhere', minWidth: 0 }}>
-        From {characterId ? <CharacterName id={characterId}>{name}</CharacterName> : name}{when ? ` · ${when}` : ''}
+      <span style={{ overflowWrap: 'break-word', minWidth: 0 }}>
+        {from ? 'From ' : ''}{characterId ? <CharacterName id={characterId}>{name}</CharacterName> : name}{when ? ` · ${when}` : ''}
       </span>
       {extra}
     </span>

@@ -62,6 +62,30 @@ type SaveStatus = 'idle' | 'saving' | 'saved';
 const AUTOSAVE_PAUSE_MS = 600;
 const AUTOSAVE_QUICK_MS = 60;
 
+// Changes waiting to be kept: the map's Undo and Redo take these back first (restoring the earlier value and cancelling the
+// pending save) before touching anything that was already kept.
+interface PanelEdit { canUndo: () => boolean; canRedo: () => boolean; undo: () => void; redo: () => void }
+const panelEdits = new Set<PanelEdit>();
+const panelListeners = new Set<() => void>();
+const notifyPanelEdits = () => { panelListeners.forEach((l) => l()); };
+/** For useSyncExternalStore: "<undo><redo>" as two 0/1 digits. */
+export function panelEditState(): string {
+  let u = '0'; let r = '0';
+  panelEdits.forEach((e) => { if (e.canUndo()) u = '1'; if (e.canRedo()) r = '1'; });
+  return u + r;
+}
+export function subscribePanelEdits(l: () => void): () => void { panelListeners.add(l); return () => { panelListeners.delete(l); }; }
+export function undoPanelEdit(): boolean {
+  const list = Array.from(panelEdits).reverse().filter((e) => e.canUndo());
+  if (!list.length) return false;
+  list[0].undo(); return true;
+}
+export function redoPanelEdit(): boolean {
+  const list = Array.from(panelEdits).reverse().filter((e) => e.canRedo());
+  if (!list.length) return false;
+  list[0].redo(); return true;
+}
+
 const keyWith = <T,>(norm: ((v: T) => T) | undefined, v: T): string => JSON.stringify(norm ? norm(v) : v);
 
 function useAutoSave<T>(initial: T, o: {
@@ -79,6 +103,10 @@ function useAutoSave<T>(initial: T, o: {
   const busy = useRef(false);
   const again = useRef(false);
   const flushRef = useRef<() => Promise<void>>(async () => undefined);
+  /** The values before each change still waiting to be kept (Undo), and the ones Undo took back (Redo). */
+  const hist = useRef<T[]>([]);
+  const fwd = useRef<T[]>([]);
+  const forget = () => { if (hist.current.length || fwd.current.length) { hist.current = []; fwd.current = []; notifyPanelEdits(); } };
 
   useEffect(() => {
     flushRef.current = async () => {
@@ -86,7 +114,9 @@ function useAutoSave<T>(initial: T, o: {
       if (!opts.current.enabled) return;
       if (busy.current) { again.current = true; return; }
       const v = cur.current; const k = keyWith(opts.current.norm, v);
-      if (k === saved.current || (opts.current.ready && !opts.current.ready(v))) return;
+      if (k === saved.current) { forget(); return; }
+      if (opts.current.ready && !opts.current.ready(v)) return;
+      forget();
       busy.current = true; saved.current = k; setStatus('saving');
       try { await opts.current.save(v); } catch { /* the caller said why */ }
       busy.current = false;
@@ -97,12 +127,31 @@ function useAutoSave<T>(initial: T, o: {
 
   const set = useCallback((patch: Partial<T>, quick = false) => {
     const next = { ...cur.current, ...patch } as T;
+    // Typing in a burst is one step; every choice is its own.
+    if (opts.current.enabled && (quick || timer.current === null)) { hist.current = [...hist.current.slice(-29), cur.current]; fwd.current = []; notifyPanelEdits(); }
     cur.current = next; setDState(next); setStatus((x) => (x === 'saved' ? 'idle' : x));
     if (!opts.current.enabled) return;
     if (timer.current !== null) window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => { void flushRef.current(); }, quick ? AUTOSAVE_QUICK_MS : AUTOSAVE_PAUSE_MS);
   }, []);
   const flush = useCallback(() => { void flushRef.current(); }, []);
+  /** Puts the form to `v` and keeps it after the usual pause only when it differs from what was last kept. */
+  const jump = useCallback((v: T) => {
+    cur.current = v; setDState(v); setStatus((x) => (x === 'saved' ? 'idle' : x));
+    if (timer.current !== null) { window.clearTimeout(timer.current); timer.current = null; }
+    if (keyWith(opts.current.norm, v) !== saved.current) timer.current = window.setTimeout(() => { void flushRef.current(); }, AUTOSAVE_PAUSE_MS);
+    notifyPanelEdits();
+  }, []);
+  useEffect(() => {
+    const entry: PanelEdit = {
+      canUndo: () => hist.current.length > 0,
+      canRedo: () => fwd.current.length > 0,
+      undo: () => { const prev = hist.current.pop(); if (prev === undefined) return; fwd.current.push(cur.current); jump(prev); },
+      redo: () => { const nxt = fwd.current.pop(); if (nxt === undefined) return; hist.current.push(cur.current); jump(nxt); },
+    };
+    panelEdits.add(entry);
+    return () => { panelEdits.delete(entry); notifyPanelEdits(); };
+  }, [jump]);
   /** Drops what is waiting (the thing is being deleted). */
   const discard = useCallback(() => {
     if (timer.current !== null) { window.clearTimeout(timer.current); timer.current = null; }

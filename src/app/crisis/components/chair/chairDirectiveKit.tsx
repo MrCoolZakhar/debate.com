@@ -12,7 +12,7 @@ import { Avatar, CK } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { outcomeColor, outcomeIcon, statusColor, statusIcon, whenLabel, whenTitle } from '../delegate/directiveUi';
 import { NumberBadge, ThemeIcons } from '../directives/directiveParts';
-import { CabinetHead, CabinetStamp, cabinetColorOf, cabinetRing, isCabinetDirective, stampRoom } from '../directives/cabinetStamp';
+import { CabinetCrest, CabinetName, CabinetStamp, SubmitterLine, cabinetColorOf, cabinetRing, crestIndent, isCabinetDirective } from '../directives/cabinetStamp';
 
 // ───────────── the store ─────────────
 
@@ -82,11 +82,12 @@ export function ChairDirectiveRow({ d, variant = 'list', muted = false }: { d: D
   const themes = card ? d.themes ?? [] : [];
   const cabinet = d.cabinet_id ? core.cabinets.find((c) => c.id === d.cabinet_id) ?? null : null;
 
-  // A cabinet directive (design B, owner 1 Nov 2026): its own framed card in the cabinet's colour, the seal and name first, the title
-  // big, the sender only as a small muted line, and the CABINET stamp poking out of the top right edge.
+  // A cabinet directive (design B, owner 1 Nov 2026): its own framed card in the cabinet's colour, the seal and the number on its top
+  // border, the name a small label, the title big with the CABINET stamp inside the card beside it, and the sender's portrait and name
+  // on the bottom line.
   if (isCabinetDirective(d)) {
     const color = cabinetColorOf(cabinet);
-    const room = stampRoom('row');
+    const seal = card ? 30 : 26;
     return (
       <button
         type="button"
@@ -95,21 +96,24 @@ export function ChairDirectiveRow({ d, variant = 'list', muted = false }: { d: D
         className="cm-lift block text-left w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
         style={{
           position: 'relative', overflow: 'visible', border: 0, cursor: 'pointer', fontFamily: CK.font, color: CK.ink, background: CK.card, borderRadius: 16,
-          padding: '11px 12px 10px', margin: `${room.top + 4}px ${room.right}px 0 0`, width: `calc(100% - ${room.right}px)`,
+          padding: '11px 12px 10px', margin: `${Math.round(seal / 2) + 4}px 2px 0`, width: 'calc(100% - 4px)',
           boxShadow: cabinetRing(color, 2, CK.shadowSm), opacity: muted ? 0.72 : 1,
         }}
       >
-        <CabinetStamp size="row" />
-        <span style={{ display: 'block', paddingRight: 84 }}><CabinetHead cabinet={cabinet} n={dirNumber(d)} sealSize={card ? 34 : 28} nameSize={13} /></span>
+        <CabinetCrest cabinet={cabinet} n={dirNumber(d)} sealSize={seal} left={12} />
+        <CabinetName cabinet={cabinet} size={13} indent={crestIndent(seal)} />
         {card && (
-          <span className="flex items-center flex-wrap" style={{ gap: '2px 10px', marginTop: 6, fontSize: 12.5, fontWeight: 800 }}>
+          <span className="flex items-center flex-wrap" style={{ gap: '2px 10px', marginTop: 5, fontSize: 12.5, fontWeight: 800 }}>
             <span className="inline-flex items-center gap-1.5" style={{ color: v.color }}>{v.icon}{v.word}</span>
             {outcome && <span className="inline-flex items-center gap-1.5" style={{ color: outcomeColor(outcome) }}>{outcomeIcon(outcome, 14)}{OUTCOME_LABEL[outcome]}</span>}
           </span>
         )}
-        <b style={{ display: 'block', marginTop: 7, fontSize: card ? 17 : 16, lineHeight: 1.25, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{d.title}</b>
-        <span className="flex items-center flex-wrap" style={{ gap: '2px 8px', marginTop: 4, fontSize: 12.5, fontWeight: 600, color: CK.muted, overflowWrap: 'anywhere' }}>
-          <span title={whenTitle(d.created_at)}>From {a.name} · Sent {whenLabel(d.created_at)}</span>
+        <span className="flex items-center" style={{ gap: 8, marginTop: 6 }}>
+          <b style={{ flex: 1, minWidth: 0, display: 'block', fontSize: card ? 17 : 16, lineHeight: 1.25, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{d.title}</b>
+          <CabinetStamp size={card ? 'row' : 'xs'} />
+        </span>
+        <span className="flex items-center flex-wrap" style={{ gap: '4px 10px', marginTop: 6 }} title={whenTitle(d.created_at)}>
+          <SubmitterLine name={a.name} picture={a.picture_url} color={a.color} when={`Sent ${whenLabel(d.created_at)}`} size={22} from={false} />
           {themes.length > 0 && <ThemeIcons themes={themes} />}
         </span>
       </button>

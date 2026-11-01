@@ -9,6 +9,7 @@ import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import DirectivePopup from '../directives/DirectivePopup';
 import { buildNames, isOpenStatus, lastAnsweredByAuthor, sortDirectives } from '../directives/directiveKit';
 import QueueRow from '../directives/QueueRow';
+import { isCabinetDirective } from '../directives/cabinetStamp';
 import AssignControl from './commandAssign';
 import { beingWritten, isStaffRow, staffLoads } from './commandData';
 import { EmptyLine, LinkBtn } from './commandParts';
@@ -61,8 +62,10 @@ export function WaitingCard({ directives, base, now, onOpen, onChanged }: {
               {waiting.map((d) => (
                 <div key={d.id} style={{ position: 'relative' }}>
                   <QueueRow d={d} names={names} sev={waitSeverity(d.waiting_since, now)} whenLabel={waitLabel(d.waiting_since, now)} onOpen={() => onOpen(d)} compact />
-                  {/* Change the backroomer right here: hangs on the top edge, opposite the number badge. */}
-                  <span style={{ position: 'absolute', zIndex: 3, top: 3, right: 10, lineHeight: 0 }}>
+                  {/* Change the backroomer right here. Other directives: hangs on the top edge, opposite the number badge. A cabinet directive:
+                      inside the card's top right corner, on the cabinet name's line (the stamp is lower, beside the title); that card starts 17px
+                      down (half the seal's height plus 4, the room its crest needs above it). */}
+                  <span style={{ position: 'absolute', zIndex: 3, top: isCabinetDirective(d) ? 21 : 3, right: isCabinetDirective(d) ? 13 : 10, lineHeight: 0 }}>
                     <AssignControl cref={ref} directive={d} staff={staff} openCounts={counts} onChanged={() => onChanged?.()} />
                   </span>
                 </div>

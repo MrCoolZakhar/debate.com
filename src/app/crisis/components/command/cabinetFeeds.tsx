@@ -6,8 +6,8 @@
 //   Crisis News         published stories for that cabinet or for every room, newest first.
 // A row with `onOpen` is a button that opens the item; without it the row unfolds in place (a chair reads the text there).
 // A directive row is design B (owner, 1 Nov 2026; directives/cabinetStamp.tsx): its own card framed in the cabinet's colour, the seal and
-// name first, the status (icon and word), the title big, the sender only as a small muted line, and the CABINET stamp poking out of the
-// card's top right edge.
+// and the number on its top border, the name a small label, the status (icon and word), the title big with the CABINET stamp inside the
+// card beside it, and the sender's portrait and name on the bottom line.
 
 import { useMemo, useState, type CSSProperties } from 'react';
 import { ChevronDown, ChevronRight, ChevronUp, Landmark, Newspaper, Radio, Users } from 'lucide-react';
@@ -17,7 +17,7 @@ import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { verdictOf, whenLabel, whenTitle } from '../delegate/directiveUi';
 import { DirectiveBody } from '../directives/attachedImage';
 import { NumberBadge } from '../directives/directiveParts';
-import { CabinetHead, CabinetStamp, cabinetColorOf, cabinetRing, stampRoom } from '../directives/cabinetStamp';
+import { CabinetCrest, CabinetName, CabinetStamp, SubmitterLine, cabinetColorOf, cabinetRing, crestIndent } from '../directives/cabinetStamp';
 import { dirNumber } from '@/lib/crisis/format';
 import NewsDetailDialog from '../news/NewsDetailDialog';
 import { audienceLabel, newsTime, newsTimeTitle } from '../news/NewsList';
@@ -67,39 +67,43 @@ function DirectiveRow({ d, onOpen }: { d: Directive; onOpen?: (d: Directive) => 
   const color = cabinetColorOf(cabinet);
   const v = verdictOf(d);
   const note = d.status === 'changes_requested' ? (d.reply ?? '').trim() : '';
-  const room = stampRoom('row');
+  const seal = 30;
   const head = (
     <span className="flex items-start" style={{ gap: 10 }}>
       <span style={{ flex: 1, minWidth: 0, display: 'block' }}>
-        <span style={{ display: 'block', paddingRight: 84 }}><CabinetHead cabinet={cabinet} n={dirNumber(d)} sealSize={30} nameSize={13} /></span>
+        <CabinetName cabinet={cabinet} size={13} indent={crestIndent(seal)} />
         <span className="inline-flex items-center gap-1.5" style={{ marginTop: 6, fontSize: 13, fontWeight: 800, color: v.color }}>{v.icon}{v.word}</span>
-        <b style={{ display: 'block', marginTop: 2, fontSize: 16.5, lineHeight: 1.28, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{d.title}</b>
-        <span style={{ display: 'block', marginTop: 3, fontSize: 12.5, fontWeight: 600, color: CK.muted, overflowWrap: 'anywhere' }}>
-          {a.name ? <>From {a.name}</> : 'Cabinet directive'}
-          <span title={whenTitle(d.created_at)}>{` · Sent ${whenLabel(d.created_at)}`}</span>
+        <span className="flex items-center" style={{ gap: 8, marginTop: 2 }}>
+          <b style={{ flex: 1, minWidth: 0, display: 'block', fontSize: 16.5, lineHeight: 1.28, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{d.title}</b>
+          <CabinetStamp size="xs" />
+        </span>
+        <span title={whenTitle(d.created_at)} style={{ display: 'block', marginTop: 5 }}>
+          {a.name
+            ? <SubmitterLine name={a.name} picture={a.picture} color={a.color} when={`Sent ${whenLabel(d.created_at)}`} size={22} from={false} />
+            : <span style={{ fontSize: 12.5, fontWeight: 600, color: CK.muted }}>{`Cabinet directive · Sent ${whenLabel(d.created_at)}`}</span>}
         </span>
       </span>
-      <span aria-hidden style={{ flex: 'none', color: CK.muted, lineHeight: 0, paddingTop: 36 }}>
+      <span aria-hidden style={{ flex: 'none', color: CK.muted, lineHeight: 0, paddingTop: 30 }}>
         {onOpen ? <ChevronRight size={18} strokeWidth={1.5} /> : open ? <ChevronUp size={18} strokeWidth={1.5} /> : <ChevronDown size={18} strokeWidth={1.5} />}
       </span>
     </span>
   );
-  // The card never clips its stamp; the margins give the stamp room on the top and the right.
+  // The card never clips its seal and number: they sit on its top border, with room above it.
   const card: CSSProperties = {
     position: 'relative', overflow: 'visible', background: CK.card, borderRadius: 16, fontFamily: CK.font, color: CK.ink, textAlign: 'left',
-    margin: `${room.top + 4}px ${room.right}px 0 0`, width: `calc(100% - ${room.right}px)`, boxShadow: cabinetRing(color, 2, CK.shadowSm),
+    margin: `${Math.round(seal / 2) + 4}px 2px 0`, width: 'calc(100% - 4px)', boxShadow: cabinetRing(color, 2, CK.shadowSm),
   };
   if (onOpen) {
     return (
       <button type="button" onClick={() => onOpen(d)} aria-label={`${d.title}, cabinet directive, ${v.word}`} className={focusCls} style={{ ...card, border: 0, padding: '11px 12px 10px', cursor: 'pointer' }}>
-        <CabinetStamp size="row" />
+        <CabinetCrest cabinet={cabinet} n={dirNumber(d)} sealSize={seal} left={12} />
         {head}
       </button>
     );
   }
   return (
     <div style={{ ...card, padding: '11px 12px 10px' }}>
-      <CabinetStamp size="row" />
+      <CabinetCrest cabinet={cabinet} n={dirNumber(d)} sealSize={seal} left={12} />
       <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className={focusCls} style={{ width: '100%', textAlign: 'left', border: 0, background: 'transparent', padding: 0, cursor: 'pointer', fontFamily: CK.font }}>{head}</button>
       {open && (
         <div style={{ marginTop: 8, marginLeft: 4, paddingLeft: 12, borderLeft: `3px solid ${a.color}` }}>

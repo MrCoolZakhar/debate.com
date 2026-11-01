@@ -418,7 +418,7 @@ export async function answerDirective(ref: CrisisRef, directiveId: string, outco
   return must(res, 'Could not send the reply. It is kept, try again.') as AnswerResult;
 }
 
-export type EditDirectiveResult = { ok: true } | { ok: false; reason: 'answered' | 'being_answered' } | { ok: false; reason: 'too_long'; limit: number };
+export type EditDirectiveResult = { ok: true } | { ok: false; reason: 'answered' | 'being_answered' | 'approved' } | { ok: false; reason: 'too_long'; limit: number };
 
 /** The author edits their directive until staff answer it (docs/crisis/sql/030). */
 export async function editDirective(ref: CrisisRef, directiveId: string, d: Partial<Pick<DirectiveDraft, 'title' | 'body' | 'themes' | 'receiver' | 'covert'>>): Promise<EditDirectiveResult> {

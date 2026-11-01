@@ -3,8 +3,8 @@
 // the database (docs/crisis/sql/027); whenever one is waiting for them this big centred pop-up opens over a dimmed page on any staff
 // page, under a playful "New Cabinet Directive!" banner: Review (opens it the way a notification does), Allocate to someone else
 // (the second step replaces the pop-up's content, never a second pop-up) or X. What was handled or dismissed is remembered on this
-// device. The directive is drawn as design B (cabinetStamp.tsx): a card framed in its cabinet's colour with the seal and name, the
-// title large, the sender a small muted line and the big CABINET stamp poking out of its top right corner. It waits while any dialog is open and never shows what was already waiting for more than 30 minutes when the page opened.
+// device. The directive is drawn as design B (cabinetStamp.tsx): a card framed in its cabinet's colour with the seal and the number
+// on its top border, the name a small label, the title large with the big CABINET stamp inside the card beside it, and the sender's portrait and name. It waits while any dialog is open and never shows what was already waiting for more than 30 minutes when the page opened.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -22,7 +22,7 @@ import { staffLoads } from '../command/commandData';
 import { responsibleMembers } from '../command/setupKit';
 import { authorName, buildNames } from './directiveKit';
 import { StaffPic } from './directiveParts';
-import { CabinetHead, CabinetStamp, SubmitterLine, cabinetColorOf, cabinetRing } from './cabinetStamp';
+import { CabinetCrest, CabinetHead, CabinetName, CabinetStamp, SubmitterLine, cabinetColorOf, cabinetRing, crestIndent } from './cabinetStamp';
 import { plainText } from './attachedImage';
 import PopBanner from './PopBanner';
 import { useNow } from './useNow';
@@ -215,7 +215,7 @@ export default function CabinetDirectivePrompt() {
         >
           <PopBanner icon={<ScrollText size={26} strokeWidth={1.6} />}>New Cabinet Directive!</PopBanner>
 
-          <div className="flex items-center" style={{ gap: 8, minHeight: 36, marginTop: 10, marginBottom: picking ? 0 : 30 }}>
+          <div className="flex items-center" style={{ gap: 8, minHeight: 36, marginTop: 10, marginBottom: picking ? 0 : 4 }}>
             {picking ? (
               <button
                 type="button"
@@ -254,15 +254,19 @@ export default function CabinetDirectivePrompt() {
 
           {!picking && (
             <div key={d.id} className={cursor > 0 ? 'cm-next' : undefined} style={{ flex: 'none', minHeight: 0 }}>
-              <div style={{ position: 'relative', overflow: 'visible', background: CK.card, borderRadius: 20, padding: '20px 18px 16px', boxShadow: cabinetRing(cabinetColorOf(cabinet), 3, CK.shadow), margin: '0 6px' }}>
-                <CabinetStamp size="pop" onDark />
-                <CabinetHead cabinet={cabinet} n={dirNumber(d)} sealSize={36} nameSize={14.5} />
-                <b style={{ display: 'block', marginTop: 12, fontSize: 25, lineHeight: 1.2, overflowWrap: 'anywhere' }}>{d.title}</b>
+              <div style={{ position: 'relative', overflow: 'visible', background: CK.card, borderRadius: 20, padding: '22px 18px 16px', boxShadow: cabinetRing(cabinetColorOf(cabinet), 3, CK.shadow), margin: '20px 6px 0' }}>
+                {/* The seal and the number sit on the card's top border; the name is one line beside them; the stamp is inside, beside the title. */}
+                <CabinetCrest cabinet={cabinet} n={dirNumber(d)} sealSize={40} left={18} />
+                <CabinetName cabinet={cabinet} size={14.5} indent={crestIndent(40)} />
+                <div className="flex items-center" style={{ gap: 10, marginTop: 10 }}>
+                  <b style={{ flex: 1, minWidth: 0, display: 'block', fontSize: 25, lineHeight: 1.2, overflowWrap: 'anywhere' }}>{d.title}</b>
+                  <CabinetStamp size="pop" />
+                </div>
                 <p key="body" className="cm-fade" style={{ margin: '12px 0 0', maxHeight: 'min(30dvh, 250px)', overflowY: 'auto', background: CK.well, borderRadius: 14, padding: '11px 14px', fontSize: 15, lineHeight: 1.6, color: CK.ink, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
                   {plainText(d.body)}
                 </p>
                 <div style={{ marginTop: 12 }}>
-                  <SubmitterLine name={author} picture={character?.picture_url ?? null} color={cabinetColorOf(cabinet)} when={`Sent ${arrived || 'just now'}`} size={22} />
+                  <SubmitterLine name={author} picture={character?.picture_url ?? null} color={cabinetColorOf(cabinet)} when={`Sent ${arrived || 'just now'}`} size={24} from={false} />
                 </div>
               </div>
             </div>

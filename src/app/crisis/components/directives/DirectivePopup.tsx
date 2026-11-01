@@ -148,7 +148,7 @@ export default function DirectivePopup(props: DirectivePopupProps) {
     <Portal>
       <div className="dp-wrap" style={{ fontFamily: CK.font, color: CK.ink, display: profileId ? 'none' : undefined }}>
         <style>{`
-          .dp-wrap { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; --dp-r: 24px; --dp-badge-top: -9px; --dp-pt: 16px; }
+          .dp-wrap { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; --dp-r: 24px; --dp-badge-top: -9px; --dp-pt: 16px; --dp-seal-top: -22px; --dp-crest-extra: 14px; }
           .dp-row { position: relative; display: flex; gap: 12px; width: min(1380px, calc(100vw - 32px)); height: min(860px, calc(100dvh - 48px)); }
           .dp-main { position: relative; flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; background: ${CK.surface}; border-radius: var(--dp-r); box-shadow: 0 24px 60px rgba(58,14,15,0.35); }
           .dp-side { flex: 0 0 clamp(380px, 34%, 460px); }
@@ -165,7 +165,7 @@ export default function DirectivePopup(props: DirectivePopupProps) {
             .dp-side { flex: 1 1 0; }
           }
           @media (max-width: 639px) {
-            .dp-wrap { --dp-r: 0px; --dp-badge-top: 8px; --dp-pt: 38px; }
+            .dp-wrap { --dp-r: 0px; --dp-badge-top: 8px; --dp-pt: 38px; --dp-seal-top: 8px; --dp-crest-extra: 22px; }
             .dp-row { width: 100vw; height: 100dvh; }
           }
           @media (prefers-reduced-motion: reduce) { .dp-row, .dp-swap > .dp-main, .dp-swap > .dp-side { animation: none; } }

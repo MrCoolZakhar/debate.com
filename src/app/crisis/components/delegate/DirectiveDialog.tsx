@@ -5,7 +5,8 @@
 // notes), oldest first. The author can ALWAYS write a clarification in the big note box at the bottom, at any status, even before the
 // backroom has replied (addNote). While nobody has answered it, the author can also Edit it IN PLACE (owner, 1 Nov 2026: the title in
 // the band and the text in the first bubble turn into large fields, Save changes / Cancel at the bottom, editDirective) or Withdraw it
-// (asked in place, then withdrawDirective). Every field here is 15.5px or bigger.
+// (asked in place, then withdrawDirective). A CABINET directive can be edited only while it waits for the chair (awaiting_chair) or the chair
+// asked for changes (changes_requested); after the chair approved it, Edit is gone. Every field here is 15.5px or bigger.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, Pencil, Send, Undo2, X } from 'lucide-react';
@@ -14,6 +15,7 @@ import { addNote, crisisError, editDirective, withdrawDirective, type CrisisRef 
 import { CHAIR_SEND_BACK_WORD, dirNumber, isChairSendBack } from '@/lib/crisis/format';
 import type { Directive, DirectiveNote } from '@/lib/crisis/types';
 import { Btn, cabinetTint, CK, ThemeTag } from '../../crisisKit';
+import { isCabinetDirective } from '../directives/cabinetStamp';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { CharacterName } from '../character/CharacterProfileHost';
 import CrisisDialog from './CrisisDialog';
@@ -57,6 +59,8 @@ export default function DirectiveDialog({
   const [withdrawing, setWithdrawing] = useState(false);
   // Until the crisis team answers it, its author can still change it or take it back.
   const editable = isAuthor && (d.status === 'awaiting_chair' || d.status === 'queued' || d.status === 'claimed' || d.status === 'clarify');
+  // A cabinet directive can be changed only until the chair has approved it (owner, 1 Nov 2026); the others keep the rule above.
+  const canEdit = isAuthor && (isCabinetDirective(d) ? (d.status === 'awaiting_chair' || d.status === 'changes_requested') : editable);
   const withdrawn = d.status === 'withdrawn';
 
   // Editing in place: the title and the text become fields where they are shown.
@@ -68,7 +72,7 @@ export default function DirectiveDialog({
   const savingRef = useRef(false);
   const editAttach = useImageAttach(cref);
   const editAttachSet = editAttach.setUrl;
-  const showEdit = editing && editable;
+  const showEdit = editing && canEdit;
   const wordLimit = settings.wordLimit;
   const words = countWords(withAttached(eBody, editAttach.url));
   const over = wordLimit > 0 && words > wordLimit;
@@ -100,6 +104,10 @@ export default function DirectiveDialog({
         onChanged();
       } else if (er.reason === 'being_answered') {
         setProblem('The crisis team is writing the answer right now, so it can\'t be changed. Your text is kept.');
+        onChanged();
+      } else if (er.reason === 'approved') {
+        notifyErr('Your chair already approved this cabinet directive, so it can\'t be changed.');
+        setEditing(false);
         onChanged();
       } else if (er.reason === 'answered') {
         setProblem('The crisis team already answered this directive, so it can\'t be changed.');
@@ -250,7 +258,7 @@ export default function DirectiveDialog({
               <span className="flex flex-wrap gap-1.5" style={{ marginTop: 8 }}>{d.themes.map((t) => <ThemeTag key={t} theme={t} size="md" />)}</span>
             )}
           </div>
-          {editable && !sentBack && !showEdit && (
+          {(editable || canEdit) && !sentBack && !showEdit && (
             <div className="flex items-center flex-wrap" style={{ gap: 8 }}>
               {confirmWithdraw ? (
                 <>
@@ -260,8 +268,8 @@ export default function DirectiveDialog({
                 </>
               ) : (
                 <>
-                  <Btn tone="ghost" icon={<Pencil size={15} strokeWidth={1.5} />} onClick={startEdit}>Edit</Btn>
-                  <Btn tone="danger" icon={<Undo2 size={15} strokeWidth={1.5} />} onClick={() => setConfirmWithdraw(true)}>Withdraw</Btn>
+                  {canEdit && <Btn tone="ghost" icon={<Pencil size={15} strokeWidth={1.5} />} onClick={startEdit}>Edit</Btn>}
+                  {editable && <Btn tone="danger" icon={<Undo2 size={15} strokeWidth={1.5} />} onClick={() => setConfirmWithdraw(true)}>Withdraw</Btn>}
                 </>
               )}
             </div>

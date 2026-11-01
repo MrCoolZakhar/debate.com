@@ -62,3 +62,5 @@
 --   (9 units, 4 countries, no areas or zones, history and draft cleared, map notices removed).
 -- 33 crisis_chair_rooms(p_crisis): the committee room code and chair password for a crisis chair's own cabinet (staff:
 --   every cabinet), so "Open chair console" links to /join?code=CODE-PASSWORD&mode=chair (chairs could not read committees).
+-- 34 crisis_edit_directive: no "The delegate edited this directive." note any more (old ones deleted); a cabinet
+--   directive can be edited only while awaiting_chair or changes_requested (reason 'approved' once the chair approved it).

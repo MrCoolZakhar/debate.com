@@ -52,6 +52,11 @@ export interface MapToolbarProps {
   busy: boolean;
   onUndo: () => void;
   onRedo: () => void;
+  /** What Undo and Redo will do, for their tooltips (null: nothing). */
+  undoLabel?: string | null;
+  redoLabel?: string | null;
+  /** The shortcut also works inside a text field (the person is placing points on the map). */
+  undoInFields?: boolean;
   onFit: () => void;
   /** The map's show-and-hide switches, drawn behind "Show on the map". */
   viewTools: ReactNode;
@@ -136,7 +141,8 @@ export default function MapToolbar(p: MapToolbarProps) {
       const s = live.current;
       if (ev.defaultPrevented || s.keysOff) return;
       const t = ev.target as HTMLElement | null;
-      if (t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable || t.closest('[role="combobox"],[role="listbox"],[data-gsel-popover]'))) return;
+      const inField = !!t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable || !!t.closest('[role="combobox"],[role="listbox"],[data-gsel-popover]'));
+      if (inField && !(s.undoInFields && (ev.metaKey || ev.ctrlKey) && !ev.altKey && ['z', 'y'].includes(ev.key.toLowerCase()))) return;
       const root = wrap.current;
       if (!root || !root.isConnected || root.offsetParent === null) return;
       // A pop-up over the map takes the keys, unless the map is inside that pop-up.
@@ -220,10 +226,10 @@ export default function MapToolbar(p: MapToolbarProps) {
 
         {p.history && (
         <div className="wm-tb-group" role="group" aria-label="Undo and redo" style={{ marginLeft: 'auto' }}>
-          <button type="button" className="wm-tb wm-tb-ur" disabled={!p.canUndo || p.busy} onClick={p.onUndo} title={p.canUndo ? 'Undo the last thing you did (Ctrl or Cmd with Z). Press again to go back further.' : 'Nothing to undo yet'}>
+          <button type="button" className="wm-tb wm-tb-ur" disabled={!p.canUndo || p.busy} onClick={p.onUndo} title={p.canUndo ? `${p.undoLabel ?? 'Undo the last thing you did'} (Ctrl or Cmd with Z). Press again to go back further.` : 'Nothing to undo yet'}>
             <Undo2 size={20} strokeWidth={1.5} aria-hidden /><span className="wm-tb-name">Undo</span>
           </button>
-          <button type="button" className="wm-tb wm-tb-ur" disabled={!p.canRedo || p.busy} onClick={p.onRedo} title={p.canRedo ? 'Do again what you just undid (Shift with Ctrl or Cmd with Z)' : 'Nothing to redo'}>
+          <button type="button" className="wm-tb wm-tb-ur" disabled={!p.canRedo || p.busy} onClick={p.onRedo} title={p.canRedo ? `${p.redoLabel ?? 'Do again what you just undid'} (Shift with Ctrl or Cmd with Z)` : 'Nothing to redo'}>
             <Redo2 size={20} strokeWidth={1.5} aria-hidden /><span className="wm-tb-name">Redo</span>
           </button>
         </div>

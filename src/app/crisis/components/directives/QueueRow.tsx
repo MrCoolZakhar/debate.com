@@ -6,8 +6,9 @@
 // right, small: theme, kind, cabinet logo, wait time, backroomer. Clicking the portrait opens the character.
 // Used by the backroom inbox and the "Waiting for a Reply" card on Command.
 // A CABINET directive is drawn as design B (cabinetStamp.tsx): framed in its cabinet's colour, the seal and name first, the title big,
-// the sender only a small muted line, the CABINET stamp poking out of its top right edge, and no backroomer (cabinet directives do not
-// care who the responsible backroomer is).
+// the seal and the number overlapping its top border, the name a small label on one line, the title big with the CABINET stamp INSIDE the
+// card to its right, the sender's portrait and name on the bottom line with the icons and the wait, and no backroomer (cabinet directives
+// do not care who the responsible backroomer is).
 
 import { Clock, MessageCircle, Pencil } from 'lucide-react';
 import type { Directive } from '@/lib/crisis/types';
@@ -17,7 +18,7 @@ import { CharacterLink, CharacterName } from '../character/CharacterProfileHost'
 import { seatFitFontPx } from '@/lib/seatName';
 import { CabinetLogo, NumberBadge, shortName, StaffPic, ThemeTags } from './directiveParts';
 import { KIND_ICON, authorName, writerOf, writingAge, writtenByOther, type Names } from './directiveKit';
-import { CabinetHead, CabinetStamp, SubmitterLine, cabinetColorOf, cabinetRing, isCabinetDirective, stampRoom } from './cabinetStamp';
+import { CabinetCrest, CabinetName, CabinetStamp, SubmitterLine, cabinetColorOf, cabinetRing, crestIndent, isCabinetDirective } from './cabinetStamp';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { useNow } from './useNow';
 
@@ -55,17 +56,18 @@ export default function QueueRow({ d, names, whenLabel, sev, selected, delegateN
 
   if (isCab) {
     const cc = cabinetColorOf(cab);
-    const room = stampRoom('row');
     const ring = selected ? 3 : 2;
+    const seal = compact ? 26 : 32;
+    const padX = compact ? 12 : 14;
     return (
       <div
         style={{
           position: 'relative', overflow: 'visible', background: CK.card, borderRadius: compact ? 14 : 18, minWidth: 0,
-          margin: `${room.top + 4}px ${room.right}px 0 0`, boxShadow: cabinetRing(cc, ring, CK.shadowSm), opacity: other ? 0.62 : 1, filter: other ? 'grayscale(0.7)' : undefined,
+          margin: `${Math.round(seal / 2) + 4}px 3px 0`, boxShadow: cabinetRing(cc, ring, CK.shadowSm), opacity: other ? 0.62 : 1, filter: other ? 'grayscale(0.7)' : undefined,
         }}
       >
-        {/* Command lays a small control on the card's top right corner: the stamp moves left of it there. */}
-        <CabinetStamp size="row" style={compact ? { right: 40 } : undefined} />
+        {/* The seal and the number sit ON the card's top border. */}
+        <CabinetCrest cabinet={cab} n={dirNumber(d)} sealSize={seal} left={padX} />
         <button
           type="button"
           onClick={onOpen}
@@ -73,12 +75,17 @@ export default function QueueRow({ d, names, whenLabel, sev, selected, delegateN
           className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] transition-transform active:scale-[0.99]"
           style={{ position: 'absolute', inset: 0, zIndex: 1, width: '100%', border: 0, background: 'transparent', borderRadius: 'inherit', cursor: 'pointer', padding: 0 }}
         />
-        <div style={{ position: 'relative', fontFamily: CK.font, color: CK.ink, padding: compact ? '12px 12px 9px' : '14px 14px 11px', pointerEvents: 'none' }}>
-          <span style={{ display: 'block', paddingRight: compact ? 120 : 84 }}><CabinetHead cabinet={cab} n={dirNumber(d)} sealSize={compact ? 26 : 32} nameSize={compact ? 12.5 : 13.5} /></span>
-          <span style={{ display: 'block', marginTop: compact ? 7 : 9, fontSize: compact ? 15.5 : 18, fontWeight: 800, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{d.title}</span>
-          <span className="flex flex-wrap items-center" style={{ gap: '4px 10px', marginTop: compact ? 5 : 7 }}>
-            <span style={{ flex: '1 1 140px', minWidth: 0, position: 'relative', zIndex: 2, pointerEvents: 'auto' }}>
-              <SubmitterLine name={who} picture={ch?.picture_url} color={color} size={0} characterId={ch?.id} />
+        <div style={{ position: 'relative', fontFamily: CK.font, color: CK.ink, padding: compact ? `11px ${padX}px 9px` : `13px ${padX}px 11px`, pointerEvents: 'none' }}>
+          {/* The name: one line beside the seal; Command lays a small control on the card's top right corner, so it keeps clear of it. */}
+          <CabinetName cabinet={cab} size={compact ? 12.5 : 13.5} indent={crestIndent(seal)} style={{ paddingRight: compact ? 64 : 0 }} />
+          <span className="flex items-center" style={{ gap: 8, marginTop: compact ? 5 : 7 }}>
+            <span style={{ flex: 1, minWidth: 0, display: 'block', fontSize: compact ? 15.5 : 18, fontWeight: 800, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{d.title}</span>
+            <CabinetStamp size={compact ? 'xs' : 'row'} />
+          </span>
+          {/* The bottom line: the author's portrait and name, then the icons and the wait. */}
+          <span className="flex flex-wrap items-center" style={{ gap: '4px 10px', marginTop: compact ? 6 : 8 }}>
+            <span style={{ flex: '1 1 150px', minWidth: 0, position: 'relative', zIndex: 2, pointerEvents: 'auto' }}>
+              <SubmitterLine name={who} picture={ch?.picture_url} color={cc} size={compact ? 22 : 24} characterId={ch?.id} from={false} />
             </span>
             <span className="flex flex-wrap items-center justify-end" style={{ gap: '4px 8px', marginLeft: 'auto' }}>
               {delegateNote && <MessageCircle size={14} strokeWidth={1.5} aria-label="The delegate sent a note" style={{ color: '#3E6A9A' }} />}
