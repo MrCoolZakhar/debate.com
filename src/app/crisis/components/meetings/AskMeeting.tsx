@@ -2,24 +2,22 @@
 // Gavelling Crisis: a delegate asks for a meeting (who, what about, how long, when).
 
 import { useMemo, useState } from 'react';
-import { Check, Send } from 'lucide-react';
-import GSelect from '@/components/GSelect';
+import { Check, Minus, Plus, Send } from 'lucide-react';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { crisisError, requestMeeting, type CrisisRef } from '@/lib/crisis/api';
 import type { Cabinet } from '@/lib/crisis/types';
-import { Btn, Card, CardTitle, CK, FieldLabel, Segmented, fieldStyle } from '../../crisisKit';
-import { DURATIONS, WHEN_NEXT, WHEN_NOW, type Person, AvatarStack } from './meetingKit';
+import { Btn, Card, CardTitle, CK, FieldLabel, fieldStyle } from '../../crisisKit';
+import { MEETING_DEFAULT, MEETING_MAX, MEETING_MIN, type Person, AvatarStack } from './meetingKit';
 
-type WhenMode = 'next' | 'now' | 'other';
+const clampMinutes = (n: number) => Math.min(MEETING_MAX, Math.max(MEETING_MIN, Math.round(n)));
 
 export default function AskMeeting({ refx, people, cabinets, myCharacterId, onDone }: {
   refx: CrisisRef; people: Map<string, Person>; cabinets: Cabinet[]; myCharacterId: string | null; onDone: () => void;
 }) {
   const [picked, setPicked] = useState<string[]>([]);
   const [intention, setIntention] = useState('');
-  const [minutes, setMinutes] = useState('10');
-  const [mode, setMode] = useState<WhenMode>('next');
-  const [other, setOther] = useState('');
+  // Typed as text so it can be cleared while editing; read as a whole number of minutes when sent.
+  const [minutes, setMinutes] = useState(String(MEETING_DEFAULT));
   const [busy, setBusy] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
   const [sentNote, setSentNote] = useState<string | null>(null);
@@ -40,13 +38,13 @@ export default function AskMeeting({ refx, people, cabinets, myCharacterId, onDo
   const send = async () => {
     if (!picked.length) { setHint('Pick at least one other character to meet.'); return; }
     if (!intention.trim()) { setHint('Say what the meeting is about.'); return; }
-    const when = mode === 'next' ? WHEN_NEXT : mode === 'now' ? WHEN_NOW : other.trim();
+    const length = clampMinutes(Number(minutes) || MEETING_DEFAULT);
     setBusy(true);
     try {
-      const r = await requestMeeting(refx, { character_ids: picked, intention: intention.trim(), duration_minutes: Number(minutes), wanted_time: when || null });
+      const r = await requestMeeting(refx, { character_ids: picked, intention: intention.trim(), duration_minutes: length });
       if (!r.ok) { setHint('Pick at least one other character to meet.'); return; }
       notifyOk(r.status === 'awaiting_delegates' || r.status === 'pending' ? 'Meeting asked for' : 'Meeting set', 'crisis-meeting');
-      setPicked([]); setIntention(''); setOther(''); setHint(null);
+      setPicked([]); setIntention(''); setMinutes(String(MEETING_DEFAULT)); setHint(null);
       setSentNote(r.status === 'awaiting_delegates' ? 'Sent to the others first. It goes to the crisis team once they answer, or in 5 minutes.' : null);
       onDone();
     } catch (e) {
@@ -89,13 +87,25 @@ export default function AskMeeting({ refx, people, cabinets, myCharacterId, onDo
           <textarea id="mt-intent" value={intention} onChange={(e) => { setIntention(e.target.value); setHint(null); }} rows={3} maxLength={500} style={{ ...fieldStyle, resize: 'vertical' }} placeholder="For example: agree a joint line before the vote" />
         </div>
         <div>
-          <FieldLabel>How long</FieldLabel>
-          <GSelect value={minutes} onChange={setMinutes} aria-label="Meeting length" options={DURATIONS.map((d) => ({ value: String(d), label: `${d} minutes` }))} />
-        </div>
-        <div>
-          <FieldLabel>When</FieldLabel>
-          <Segmented<WhenMode> ariaLabel="When" value={mode} onChange={setMode} options={[{ value: 'next', label: WHEN_NEXT }, { value: 'now', label: WHEN_NOW }, { value: 'other', label: 'Another time' }]} />
-          {mode === 'other' && <input value={other} onChange={(e) => setOther(e.target.value)} maxLength={120} aria-label="When" placeholder="For example: after the break" style={{ ...fieldStyle, marginTop: 8 }} />}
+          <FieldLabel htmlFor="mt-minutes">How long, in minutes</FieldLabel>
+          <div className="flex items-center" style={{ gap: 8 }}>
+            <button type="button" aria-label="One minute less" onClick={() => setMinutes(String(clampMinutes((Number(minutes) || MEETING_DEFAULT) - 1)))}
+              className="inline-flex items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+              style={{ width: 44, height: 44, flex: 'none', border: 0, cursor: 'pointer', borderRadius: 12, background: CK.card, color: CK.ink, boxShadow: `inset 0 0 0 1px ${CK.hair}` }}>
+              <Minus size={18} strokeWidth={1.5} aria-hidden />
+            </button>
+            <input id="mt-minutes" type="number" inputMode="numeric" min={MEETING_MIN} max={MEETING_MAX} step={1} value={minutes}
+              onChange={(e) => setMinutes(e.target.value.replace(/[^0-9]/g, '').slice(0, 3))}
+              onBlur={() => setMinutes(String(clampMinutes(Number(minutes) || MEETING_DEFAULT)))}
+              style={{ ...fieldStyle, width: 96, height: 44, flex: 'none', textAlign: 'center', fontSize: 20, fontWeight: 800, fontVariantNumeric: 'tabular-nums' }} />
+            <button type="button" aria-label="One minute more" onClick={() => setMinutes(String(clampMinutes((Number(minutes) || MEETING_DEFAULT) + 1)))}
+              className="inline-flex items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+              style={{ width: 44, height: 44, flex: 'none', border: 0, cursor: 'pointer', borderRadius: 12, background: CK.card, color: CK.ink, boxShadow: `inset 0 0 0 1px ${CK.hair}` }}>
+              <Plus size={18} strokeWidth={1.5} aria-hidden />
+            </button>
+            <span style={{ fontSize: 15, fontWeight: 700, color: CK.inkSoft }}>minutes</span>
+          </div>
+          <p style={{ margin: '6px 0 0', fontSize: 13, color: CK.inkSoft }}>From {MEETING_MIN} to {MEETING_MAX} minutes.</p>
         </div>
       </div>
 

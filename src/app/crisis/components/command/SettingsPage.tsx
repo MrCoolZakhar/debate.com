@@ -171,6 +171,12 @@ function SettingsBody() {
                 hint="Off: delegates see where their own cabinet's characters stand on the map, and no one else's."
               />
             )}
+            {full && (
+              <ToggleRow
+                title="Delegates see where their own cabinet stands" checked={!s.hideCabinetLocations} onChange={(on) => save('hideCabinetLocations', !on)}
+                hint="On: delegates see the other characters of their own cabinet on the map. Off: they see only their own character. Their own character always shows."
+              />
+            )}
           </Card>
         )}
 

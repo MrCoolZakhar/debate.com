@@ -25,7 +25,7 @@ export default function ViewingAsBanner() {
   };
   return (
     <div role="status" className="sticky flex flex-wrap items-center justify-center"
-      style={{ top: 0, zIndex: 70, gap: 10, padding: '7px 14px', background: CK.redGrad, color: '#FFE8D6', fontFamily: CK.font, fontSize: 13.5, fontWeight: 700, boxShadow: '0 2px 10px rgba(58,14,15,0.3)' }}>
+      style={{ top: 'calc(var(--crisis-bar-h, 56px) + env(safe-area-inset-top, 0px))', zIndex: 29, gap: 10, padding: '7px 14px', background: CK.redGrad, color: '#FFE8D6', fontFamily: CK.font, fontSize: 13.5, fontWeight: 700, boxShadow: '0 2px 10px rgba(58,14,15,0.3)' }}>
       <Eye size={16} strokeWidth={1.5} aria-hidden style={{ flex: 'none' }} />
       <span style={{ overflowWrap: 'anywhere' }}>
         Trying it as {displayName || ROLE_LABEL[role]}{displayName ? `, ${ROLE_LABEL[role]}` : ''}. This is a test view for 2 hours and signs nobody out

@@ -196,25 +196,29 @@ function TopBar({ v, items }: { v: CrisisContextValue; items: NavItem[] }) {
   };
   return (
     <>
-    <header className="sticky z-30 flex items-center" style={{ top: 'env(safe-area-inset-top, 0px)', height: 56, gap: 14, padding: '0 18px', fontFamily: CK.font, background: scrolled ? 'rgba(239,227,218,0.86)' : 'transparent', backdropFilter: scrolled ? 'blur(12px) saturate(1.2)' : 'none', boxShadow: scrolled ? '0 1px 0 rgba(110,30,30,0.10)' : 'none', transition: 'background 160ms ease' }}>
+    {/* Never a fixed height: a long name, a "Back to my account" button or a narrow window wraps the bar onto a second row
+        instead of pushing the bell and the account menu off the edge. 56px is the one-row height (--crisis-bar-h, which the
+        "Trying it as" banner and the page heights below it read). */}
+    <header className="sticky z-30 flex items-center flex-wrap" style={{ top: 'env(safe-area-inset-top, 0px)', minHeight: 'var(--crisis-bar-h, 56px)', columnGap: 14, rowGap: 2, padding: '6px 18px', fontFamily: CK.font, background: scrolled ? 'rgba(239,227,218,0.86)' : 'transparent', backdropFilter: scrolled ? 'blur(12px) saturate(1.2)' : 'none', boxShadow: scrolled ? '0 1px 0 rgba(110,30,30,0.10)' : 'none', transition: 'background 160ms ease' }}>
       <BrandLogo height={22} priority />
       <div className="hidden sm:flex items-center min-w-0" style={{ gap: 6, fontSize: 13, fontWeight: 600, color: CK.muted }}>
         <span>{v.conference.acronym}</span>
         <span aria-hidden>/</span>
         <b style={{ color: CK.ink, fontWeight: 700, overflowWrap: 'anywhere' }}>Gavelling Crisis</b>
       </div>
-      <div className="flex-1" />
-      <span className="hidden sm:inline" style={{ fontSize: 12.5, fontWeight: 600, color: CK.inkSoft }}>
-        {v.displayName ? `${v.displayName} · ` : ''}{ROLE_LABEL[v.role]}
-      </span>
-      <NotificationBell />
-      {viewingAs ? (
-        <Btn tone="red" size="sm" onClick={signOutCode} icon={<LogOut size={14} strokeWidth={1.6} />}>Back to my account</Btn>
-      ) : codeUser ? (
-        <Btn tone="ghost" size="sm" onClick={signOutCode} icon={<LogOut size={14} strokeWidth={1.6} />}>Sign out</Btn>
-      ) : (
-        <ProfileAvatarMenu size={36} tone="light" panelStyle={{ zIndex: 60 }} />
-      )}
+      <div className="flex items-center flex-wrap justify-end" style={{ gap: '4px 14px', marginLeft: 'auto', minWidth: 0 }}>
+        <span className="hidden sm:inline" style={{ fontSize: 12.5, fontWeight: 600, color: CK.inkSoft, overflowWrap: 'anywhere' }}>
+          {v.displayName ? `${v.displayName} · ` : ''}{ROLE_LABEL[v.role]}
+        </span>
+        <NotificationBell />
+        {viewingAs ? (
+          <Btn tone="red" size="sm" onClick={signOutCode} icon={<LogOut size={14} strokeWidth={1.6} />}>Back to my account</Btn>
+        ) : codeUser ? (
+          <Btn tone="ghost" size="sm" onClick={signOutCode} icon={<LogOut size={14} strokeWidth={1.6} />}>Sign out</Btn>
+        ) : (
+          <ProfileAvatarMenu size={36} tone="light" panelStyle={{ zIndex: 60 }} />
+        )}
+      </div>
     </header>
     {/* Phone navigation: the rail is hidden under 768px. */}
       <nav ref={bar} aria-label="Crisis pages" className="md:hidden fixed left-0 right-0 bottom-0 flex justify-around" style={{ background: CK.redGrad, padding: '6px 8px calc(6px + env(safe-area-inset-bottom, 0px))', zIndex: 40 }}>
@@ -307,7 +311,7 @@ export default function CrisisLayout({ children }: { children: React.ReactNode }
   return (
     <CrisisProvider value={v}>
       <CharacterProfileProvider>
-      <div className="min-h-screen" style={{ background: CK.pageBg, backgroundAttachment: 'fixed', color: CK.ink, fontFamily: CK.font }}>
+      <div className="min-h-screen" style={{ ['--crisis-bar-h' as string]: '56px', background: CK.pageBg, backgroundAttachment: 'fixed', color: CK.ink, fontFamily: CK.font }}>
         <TopBar v={v} items={items} />
         <Rail v={v} items={items} />
         <main className="crisis-main" style={{ padding: '4px 18px 90px', marginLeft: 0 }}>

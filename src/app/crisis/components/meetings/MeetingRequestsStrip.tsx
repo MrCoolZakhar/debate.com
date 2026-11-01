@@ -18,7 +18,7 @@ import type { Cabinet, Meeting, Member } from '@/lib/crisis/types';
 import { Btn, CK, fieldStyle, agoLabel } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { CharacterName } from '../character/CharacterProfileHost';
-import { AvatarStack, NameList, requesterName, usePeople, whenText, type Person } from './meetingKit';
+import { AvatarStack, NameList, requesterName, usePeople, hasWhen, whenText, type Person } from './meetingKit';
 import { decideMeetingChecked, MEETING_ALREADY_DECIDED } from './decide';
 import { serverNow } from '@/lib/serverClock';
 
@@ -89,7 +89,7 @@ function Row({ m, refx, people, cabinets, members, canDecide, compact, now, onDe
           </p>
           <p style={{ margin: '2px 0 0', fontSize: 12.5, color: CK.inkSoft, lineHeight: 1.4, overflowWrap: 'anywhere' }}>{m.intention}</p>
           <p style={{ margin: '3px 0 0', fontSize: 12, fontWeight: 700, color: CK.muted, fontVariantNumeric: 'tabular-nums' }}>
-            {m.duration_minutes} min · {whenText(m)} · asked {agoLabel(m.created_at, now)}
+            {m.duration_minutes} min{hasWhen(m) ? ` · ${whenText(m)}` : ''} · asked {agoLabel(m.created_at, now)}
           </p>
         </div>
         {canDecide && !declining && (

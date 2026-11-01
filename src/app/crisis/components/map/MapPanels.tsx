@@ -4,7 +4,7 @@
 // area: who holds it, and how to reshape it), drawing new territory, and a character's card.
 // Each panel keeps its own form state; the caller gives it a `key` so a new subject starts clean.
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Check, ChevronDown, Eye, ImagePlus, Pencil, Plus, RotateCcw, Trash2, X, Undo2 } from 'lucide-react';
 import GSelect from '@/components/GSelect';
 import { crisisError } from '@/lib/crisis/api';
@@ -49,6 +49,86 @@ function Shell({ title, onClose, children }: { title: string; onClose: () => voi
       </div>
       {children}
     </div>
+  );
+}
+
+// ─────────── Saving by itself ───────────
+// A card of an existing unit, area or zone has no Save button: every change is kept as soon as it is made. A toggle, a chip or a
+// choice is kept at once; typing is kept after a short pause or when the field is left; closing the card keeps what is waiting.
+// The card keeps its own copy of the form; when the map's copy changes from outside (another person, a drag on the map, a
+// change that could not be kept and was put back) the form follows it.
+
+type SaveStatus = 'idle' | 'saving' | 'saved';
+const AUTOSAVE_PAUSE_MS = 600;
+const AUTOSAVE_QUICK_MS = 60;
+
+const keyWith = <T,>(norm: ((v: T) => T) | undefined, v: T): string => JSON.stringify(norm ? norm(v) : v);
+
+function useAutoSave<T>(initial: T, o: {
+  enabled: boolean; save: (v: T) => void | Promise<void>; ready?: (v: T) => boolean;
+  /** The form as it is kept (text trimmed, lists in one order): two forms with the same kept look are the same, so a trailing space being typed is never taken away. */
+  norm?: (v: T) => T;
+}) {
+  const [d, setDState] = useState<T>(initial);
+  const [status, setStatus] = useState<SaveStatus>('idle');
+  const cur = useRef<T>(initial);
+  const saved = useRef(keyWith(o.norm, initial));
+  const opts = useRef(o);
+  useEffect(() => { opts.current = o; });
+  const timer = useRef<number | null>(null);
+  const busy = useRef(false);
+  const again = useRef(false);
+  const flushRef = useRef<() => Promise<void>>(async () => undefined);
+
+  useEffect(() => {
+    flushRef.current = async () => {
+      if (timer.current !== null) { window.clearTimeout(timer.current); timer.current = null; }
+      if (!opts.current.enabled) return;
+      if (busy.current) { again.current = true; return; }
+      const v = cur.current; const k = keyWith(opts.current.norm, v);
+      if (k === saved.current || (opts.current.ready && !opts.current.ready(v))) return;
+      busy.current = true; saved.current = k; setStatus('saving');
+      try { await opts.current.save(v); } catch { /* the caller said why */ }
+      busy.current = false;
+      if (again.current) { again.current = false; void flushRef.current(); return; }
+      setStatus('saved');
+    };
+  });
+
+  const set = useCallback((patch: Partial<T>, quick = false) => {
+    const next = { ...cur.current, ...patch } as T;
+    cur.current = next; setDState(next); setStatus((x) => (x === 'saved' ? 'idle' : x));
+    if (!opts.current.enabled) return;
+    if (timer.current !== null) window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => { void flushRef.current(); }, quick ? AUTOSAVE_QUICK_MS : AUTOSAVE_PAUSE_MS);
+  }, []);
+  const flush = useCallback(() => { void flushRef.current(); }, []);
+  /** Drops what is waiting (the thing is being deleted). */
+  const discard = useCallback(() => {
+    if (timer.current !== null) { window.clearTimeout(timer.current); timer.current = null; }
+    saved.current = keyWith(opts.current.norm, cur.current);
+  }, []);
+
+  // The map's copy changed from outside: follow it (unless something of ours is typed and waiting, or being kept).
+  const initKey = keyWith(o.norm, initial);
+  useEffect(() => {
+    if (initKey === saved.current || initKey === keyWith(opts.current.norm, cur.current) || busy.current || timer.current !== null) return;
+    cur.current = initial; saved.current = initKey; setDState(initial);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initKey]);
+
+  // Closing the card (or choosing something else) keeps what is waiting.
+  useEffect(() => () => { void flushRef.current(); }, []);
+
+  return { d, set, status, flush, discard };
+}
+
+/** "Saving" / "Saved", in a row of fixed height so the card never jumps. */
+function SaveState({ status }: { status: SaveStatus }) {
+  return (
+    <span aria-live="polite" className="inline-flex items-center" style={{ height: 18, gap: 4, fontSize: 12, fontWeight: 700, color: CK.muted }}>
+      {status === 'saving' ? 'Saving' : status === 'saved' ? (<><Check size={13} strokeWidth={1.8} aria-hidden />Saved</>) : null}
+    </span>
   );
 }
 
@@ -186,15 +266,26 @@ export function PlaceUnitPanel({ kind, custom, onBack, onClose }: { kind: UnitKi
   );
 }
 
-/** The editor for a unit (staff) and for a unit about to be added. */
+/** The unit form: the draft plus the amount as typed (so the 0 can be cleared while typing). */
+type UnitForm = UnitDraft & { amountText: string };
+const amountOk = (t: string): boolean => /^\d{1,7}$/.test(t.trim()) && Number(t) <= 1000000;
+const unitFormOf = (d: UnitDraft): UnitForm => ({ ...d, amountText: String(Number.isFinite(d.strength) ? d.strength : 0) });
+
+/** The editor for a unit (staff) and for a unit about to be added. A unit that is already on the map is kept as it is changed. */
 export function UnitEditor({
   isNew, initial, cabinets, busy, customTypes = [], onUploadPicture, onSubmit, onDelete, onClose,
 }: {
   isNew: boolean; initial: UnitDraft; cabinets: PanelCabinet[]; busy: boolean;
   customTypes?: CustomUnitType[]; onUploadPicture?: (file: File) => Promise<string>;
-  onSubmit: (d: UnitDraft) => void; onDelete?: () => void; onClose: () => void;
+  onSubmit: (d: UnitDraft) => void | Promise<void>; onDelete?: () => void; onClose: () => void;
 }) {
-  const [d, setD] = useState<UnitDraft>(initial);
+  const form = useAutoSave<UnitForm>(unitFormOf(initial), {
+    enabled: !isNew,
+    norm: (f) => ({ ...f, name: f.name.trim(), note: f.note.trim(), details: f.details.trim(), revealed: [...f.revealed].sort(), amountText: amountOk(f.amountText) ? String(Number(f.amountText)) : f.amountText.trim() }),
+    ready: (f) => f.name.trim().length > 0 && amountOk(f.amountText),
+    save: (f) => { const { amountText, ...rest } = f; return onSubmit({ ...rest, strength: Number(amountText) }); },
+  });
+  const d = form.d;
   const [confirm, setConfirm] = useState(false);
   const [moreOpen, setMoreOpen] = useState(!!initial.picture || !!initial.details.trim());
   const [uploading, setUploading] = useState(false);
@@ -206,28 +297,26 @@ export function UnitEditor({
     if (fileInput.current) fileInput.current.value = '';
     if (!file || !onUploadPicture) return;
     setUploading(true); setPicErr('');
-    try { const url = await onUploadPicture(file); setD((x) => ({ ...x, picture: url })); }
+    try { const url = await onUploadPicture(file); form.set({ picture: url }, true); }
     catch (e) { setPicErr(crisisError(e, 'Could not upload the picture.')); }
     finally { setUploading(false); }
   };
-  // The amount stays text while it is typed (so the 0 can be cleared); it is checked when the unit is saved.
-  const [amountText, setAmountText] = useState(String(Number.isFinite(initial.strength) ? initial.strength : 0));
   const [amountErr, setAmountErr] = useState(false);
   const others = cabinets.filter((c) => c.id !== d.owner);
   const valid = d.name.trim().length > 0;
   const submit = () => {
-    const t = amountText.trim();
-    const n = t === '' ? NaN : Number(t);
-    if (!Number.isInteger(n) || n < 0 || n > 1000000) { setAmountErr(true); return; }
-    onSubmit({ ...d, strength: n });
+    if (!amountOk(d.amountText)) { setAmountErr(true); return; }
+    const { amountText, ...rest } = d;
+    void onSubmit({ ...rest, strength: Number(amountText) });
   };
   const amount = (
     <Field label="Amount">
       <input
         type="text" inputMode="numeric" autoComplete="off" aria-invalid={amountErr} aria-label="Amount"
-        style={{ ...fieldStyle, padding: '6px 10px', ...(amountErr ? { boxShadow: `0 0 0 2px ${CK.red}` } : {}) }} value={amountText}
-        onChange={(e) => { setAmountText(e.target.value.replace(/[^0-9]/g, '').slice(0, 7)); setAmountErr(false); }}
-        onKeyDown={(e) => { if (e.key === 'Enter' && valid && !busy) submit(); }}
+        style={{ ...fieldStyle, padding: '6px 10px', ...(amountErr ? { boxShadow: `0 0 0 2px ${CK.red}` } : {}) }} value={d.amountText}
+        onChange={(e) => { form.set({ amountText: e.target.value.replace(/[^0-9]/g, '').slice(0, 7) }); setAmountErr(false); }}
+        onBlur={() => { if (!isNew && !amountOk(d.amountText)) setAmountErr(true); else form.flush(); }}
+        onKeyDown={(e) => { if (e.key === 'Enter' && valid && !busy) { if (isNew) submit(); else form.flush(); } }}
       />
     </Field>
   );
@@ -252,7 +341,7 @@ export function UnitEditor({
                   {uploading ? 'Uploading' : d.picture ? 'Change picture' : 'Add a picture'}
                 </Btn>
               )}
-              {d.picture && <Btn size="sm" tone="ghost" onClick={() => setD({ ...d, picture: null })}>Remove picture</Btn>}
+              {d.picture && <Btn size="sm" tone="ghost" onClick={() => form.set({ picture: null }, true)}>Remove picture</Btn>}
             </div>
             {!d.picture && type?.picture_url && <p style={{ margin: '6px 0 0', fontSize: 12, color: CK.inkSoft }}>It uses the picture of {type.name}.</p>}
             {picErr && <p role="alert" style={{ margin: '6px 0 0', fontSize: 12, fontWeight: 600, color: CK.red }}>{picErr}</p>}
@@ -261,7 +350,7 @@ export function UnitEditor({
             <textarea
               style={{ ...fieldStyle, minHeight: 64, resize: 'vertical' }} value={d.details} maxLength={CUSTOM_UNIT_DETAILS_MAX} aria-label="Details"
               placeholder={type?.details ? type.details : 'What it is and what it can do (optional)'}
-              onChange={(e) => setD({ ...d, details: e.target.value })}
+              onChange={(e) => form.set({ details: e.target.value })} onBlur={form.flush}
             />
           </Field>
         </div>
@@ -272,7 +361,7 @@ export function UnitEditor({
     <Field label="Owner">
       <GSelect
         size="sm" value={d.owner ?? ''} aria-label="Owner" options={ownerOptions(cabinets)}
-        onChange={(v) => setD({ ...d, owner: v || null, revealed: v ? d.revealed.filter((x) => x !== v) : d.revealed })}
+        onChange={(v) => form.set({ owner: v || null, revealed: v ? d.revealed.filter((x) => x !== v) : d.revealed }, true)}
       />
     </Field>
   );
@@ -287,8 +376,8 @@ export function UnitEditor({
       <Field label="Name">
         <input
           style={fieldStyle} value={d.name} maxLength={120} autoFocus={isNew}
-          onChange={(e) => setD({ ...d, name: e.target.value })}
-          onKeyDown={(e) => { if (e.key === 'Enter' && isNew && valid && !busy) submit(); }}
+          onChange={(e) => form.set({ name: e.target.value })} onBlur={form.flush}
+          onKeyDown={(e) => { if (e.key === 'Enter' && valid && !busy) { if (isNew) submit(); else form.flush(); } }}
         />
       </Field>
       {isNew ? (
@@ -310,8 +399,8 @@ export function UnitEditor({
                 onChange={(v) => {
                   if (v.startsWith('c:')) {
                     const t = customTypes.find((x) => x.key === v.slice(2));
-                    setD({ ...d, kind: 'custom', customType: t?.key ?? null, sight: d.sight === null && typeof t?.sight_km === 'number' ? t.sight_km : d.sight });
-                  } else setD({ ...d, kind: v as UnitKind, customType: null });
+                    form.set({ kind: 'custom', customType: t?.key ?? null, sight: d.sight === null && typeof t?.sight_km === 'number' ? t.sight_km : d.sight }, true);
+                  } else form.set({ kind: v as UnitKind, customType: null }, true);
                 }}
               />
             </Field>
@@ -323,8 +412,8 @@ export function UnitEditor({
             <input
               type="number" min={0} max={5000} inputMode="numeric" style={{ ...fieldStyle, padding: '6px 10px' }}
               placeholder={`${KIND_META[d.kind].sight} (usual for ${KIND_META[d.kind].label.toLowerCase()})`}
-              value={d.sight === null ? '' : d.sight}
-              onChange={(e) => setD({ ...d, sight: e.target.value === '' ? null : Math.max(0, Math.min(5000, Math.round(Number(e.target.value) || 0))) })}
+              value={d.sight === null ? '' : d.sight} onBlur={form.flush}
+              onChange={(e) => form.set({ sight: e.target.value === '' ? null : Math.max(0, Math.min(5000, Math.round(Number(e.target.value) || 0))) })}
             />
             <p style={{ margin: '4px 0 0', fontSize: 12, color: CK.inkSoft }}>
               {d.kind === 'spy'
@@ -338,28 +427,30 @@ export function UnitEditor({
               {others.map((c) => (
                 <CheckRow
                   key={c.id} label={c.name} color={c.color} checked={d.revealed.includes(c.id)}
-                  onChange={(on) => setD({ ...d, revealed: toggled(d.revealed, c.id, on) })}
+                  onChange={(on) => form.set({ revealed: toggled(d.revealed, c.id, on) }, true)}
                 />
               ))}
             </Field>
           )}
           <Field label="Note for the crisis team">
-            <textarea style={{ ...fieldStyle, minHeight: 56, resize: 'vertical' }} value={d.note} maxLength={600} onChange={(e) => setD({ ...d, note: e.target.value })} />
+            <textarea style={{ ...fieldStyle, minHeight: 56, resize: 'vertical' }} value={d.note} maxLength={600} onChange={(e) => form.set({ note: e.target.value })} onBlur={form.flush} />
           </Field>
         </>
       )}
       <div className="flex flex-wrap items-center" style={{ gap: 8 }}>
-        <Btn size="sm" disabled={busy || !valid} icon={<Check size={14} strokeWidth={1.5} />} onClick={submit}>{isNew ? 'Add unit' : 'Save'}</Btn>
+        {isNew && <Btn size="sm" disabled={busy || !valid} icon={<Check size={14} strokeWidth={1.5} />} onClick={submit}>Add unit</Btn>}
         {isNew && <Btn size="sm" tone="ghost" onClick={onClose}>Cancel</Btn>}
         {!isNew && onDelete && !confirm && (
           <Btn size="sm" tone="danger" disabled={busy} icon={<Trash2 size={14} strokeWidth={1.5} />} onClick={() => setConfirm(true)}>Delete</Btn>
         )}
+        {!isNew && <SaveState status={form.status} />}
       </div>
+      {!isNew && !valid && <p role="alert" style={{ margin: '6px 0 0', fontSize: 12, fontWeight: 600, color: CK.red }}>Give the unit a name to keep the changes.</p>}
       {confirm && onDelete && (
         <div style={{ marginTop: 10, padding: 10, borderRadius: 12, background: CK.well }}>
           <p style={{ margin: '0 0 8px', fontSize: 13, color: CK.ink }}>Remove this unit from the map?</p>
           <div className="flex" style={{ gap: 8 }}>
-            <Btn size="sm" tone="red" disabled={busy} onClick={onDelete}>Yes, remove it</Btn>
+            <Btn size="sm" tone="red" disabled={busy} onClick={() => { form.discard(); onDelete(); }}>Yes, remove it</Btn>
             <Btn size="sm" tone="ghost" onClick={() => setConfirm(false)}>Keep it</Btn>
           </div>
         </div>
@@ -421,31 +512,30 @@ export interface TerritoryInfo { label: string; description: string }
 /**
  * A selected country or drawn area: who holds it and, for staff with map power, how to reshape it. Like a map editor's
  * side card: the outline is changed on the map (corners, small dots on the sides, or the outline itself), the name and
- * description are typed here, and Save keeps all of it while Cancel puts everything back. The holder applies at once.
+ * description are typed here, and everything is kept as it is changed: there is no Save. Undo steps the last change back.
  * `detailed` outlines (many corners) are reshaped by pressing on the outline; simple ones also show corners.
  */
 export function TerritoryCard({
-  name, kind, owner, cabinets, editable, detailed, edited, busy, info, outlineDirty, canUndo,
-  onOwner, onUndo, onSave, onCancel, onReset, onDelete, onClose,
+  name, kind, owner, cabinets, editable, detailed, edited, busy, info, canUndo,
+  onOwner, onUndo, onSave, onReset, onDelete, onClose,
 }: {
   name: string; kind: 'country' | 'area'; owner: string | null; cabinets: PanelCabinet[]; editable: boolean; detailed: boolean;
   edited: boolean; busy: boolean;
   /** A drawn area's saved name and description (null for a country). */
   info: TerritoryInfo | null;
-  /** The outline has been changed on the map and not saved yet. */
-  outlineDirty: boolean; canUndo: boolean;
-  onOwner: (id: string | null) => void; onUndo: () => void; onSave: (info: TerritoryInfo | null) => void; onCancel: () => void;
+  canUndo: boolean;
+  onOwner: (id: string | null) => void; onUndo: () => void; onSave: (info: TerritoryInfo | null) => void;
   onReset?: () => void; onDelete?: () => void; onClose: () => void;
 }) {
   const [confirm, setConfirm] = useState<'reset' | 'delete' | null>(null);
-  const [label, setLabel] = useState(info?.label ?? '');
-  const [desc, setDesc] = useState(info?.description ?? '');
+  const form = useAutoSave<{ label: string; desc: string }>({ label: info?.label ?? '', desc: info?.description ?? '' }, {
+    enabled: editable && kind === 'area' && !!info,
+    norm: (v) => ({ label: v.label.trim(), desc: v.desc.trim() }),
+    save: (v) => onSave({ label: v.label.trim(), description: v.desc.trim() }),
+  });
   const holder = cabinets.find((c) => c.id === owner);
-  const infoDirty = !!info && (label.trim() !== info.label.trim() || desc.trim() !== info.description.trim());
-  const dirty = outlineDirty || infoDirty;
-  const cancel = () => { setLabel(info?.label ?? ''); setDesc(info?.description ?? ''); onCancel(); };
   return (
-    <Shell title={kind === 'area' && (info?.label || '').trim() ? (info?.label ?? name) : name} onClose={() => { cancel(); onClose(); }}>
+    <Shell title={kind === 'area' && (info?.label || '').trim() ? (info?.label ?? name) : name} onClose={onClose}>
       <p style={{ margin: '-6px 0 10px', fontSize: 12.5, fontWeight: 600, color: CK.muted }}>
         {kind === 'country' ? (edited ? 'Country, border changed in this crisis' : 'Country') : 'Drawn territory'}
       </p>
@@ -462,10 +552,10 @@ export function TerritoryCard({
       {kind === 'area' && editable && (
         <>
           <Field label="Name">
-            <input style={fieldStyle} value={label} maxLength={ZONE_NAME_MAX} aria-label="Name" onChange={(e) => setLabel(e.target.value)} />
+            <input style={fieldStyle} value={form.d.label} maxLength={ZONE_NAME_MAX} aria-label="Name" onChange={(e) => form.set({ label: e.target.value })} onBlur={form.flush} />
           </Field>
           <Field label="Description">
-            <textarea style={{ ...fieldStyle, minHeight: 60, resize: 'vertical' }} value={desc} maxLength={2000} aria-label="Description" onChange={(e) => setDesc(e.target.value)} />
+            <textarea style={{ ...fieldStyle, minHeight: 60, resize: 'vertical' }} value={form.d.desc} maxLength={2000} aria-label="Description" onChange={(e) => form.set({ desc: e.target.value })} onBlur={form.flush} />
           </Field>
         </>
       )}
@@ -475,19 +565,15 @@ export function TerritoryCard({
       {editable && (
         <p style={{ margin: '0 0 10px', fontSize: 12.5, color: CK.inkSoft }}>
           {detailed
-            ? 'To move the border, press on the outline and drag. It bends out or in from that point; pulling it outward extends this holder\'s land, and saving cuts the new ground out of everyone else\'s. The holder applies at once, the rest when you save.'
-            : 'Drag a white corner to move it, or drag a small dot on a side to add a corner there. Double-click a corner to remove it. Pulling outward extends this holder\'s land, and saving cuts the new ground out of everyone else\'s. The holder applies at once, the rest when you save.'}
+            ? 'To move the border, press on the outline and drag. It bends out or in from that point; pulling it outward extends this holder\'s land and cuts the new ground out of everyone else\'s. Everything is kept as you change it.'
+            : 'Drag a white corner to move it, or drag a small dot on a side to add a corner there. Double-click a corner to remove it. Pulling outward extends this holder\'s land and cuts the new ground out of everyone else\'s. Everything is kept as you change it.'}
         </p>
       )}
       {editable && (
         <div className="flex flex-wrap items-center" style={{ gap: 8, marginBottom: confirm ? 0 : 2 }}>
-          <Btn size="sm" disabled={busy || !dirty} icon={<Check size={14} strokeWidth={1.5} />} onClick={() => onSave(info ? { label: label.trim(), description: desc.trim() } : null)}>Save</Btn>
-          <Btn size="sm" tone="ghost" disabled={busy || !dirty} onClick={cancel}>Cancel</Btn>
           <Btn size="sm" tone="ghost" disabled={busy || !canUndo} icon={<Undo2 size={14} strokeWidth={1.5} />} onClick={onUndo}>Undo</Btn>
+          {kind === 'area' && info && <SaveState status={form.status} />}
         </div>
-      )}
-      {editable && dirty && (
-        <p style={{ margin: '6px 0 0', fontSize: 12, fontWeight: 600, color: CK.red }}>{outlineDirty ? 'The shape on the map is not saved yet.' : 'Your changes are not saved yet.'}</p>
       )}
       {editable && (onReset || onDelete) && !confirm && (
         <div className="flex flex-wrap" style={{ gap: 8, marginTop: 10 }}>
@@ -506,7 +592,7 @@ export function TerritoryCard({
         />
       )}
       {confirm === 'delete' && onDelete && (
-        <Confirm text="Remove this territory from the map?" yes="Yes, remove it" busy={busy} onYes={onDelete} onNo={() => setConfirm(null)} />
+        <Confirm text="Remove this territory from the map?" yes="Yes, remove it" busy={busy} onYes={() => { form.discard(); onDelete(); }} onNo={() => setConfirm(null)} />
       )}
     </Shell>
   );
@@ -615,29 +701,37 @@ function Palette({ value, onChange }: { value: string; onChange: (c: string) => 
 
 /**
  * A zone being drawn, or an existing zone being edited: the outline is changed on the map, the name, type, description and
- * who sees it are set here, Save keeps all of it and Cancel puts everything back.
+ * who sees it are set here. A new zone is kept with Save zone; an existing one is kept as it is changed (no Save), and Done closes it.
  */
 export function ZoneEditor({
-  isNew, phase, initial, types, cabinets, pointCount, minPoints, canUndo, outlineDirty, busy, infoOnly, onRedraw,
-  onColor, onUndo, onFinish, onSave, onCancel, onDelete,
+  isNew, phase, initial, types, cabinets, pointCount, minPoints, canUndo, busy, infoOnly, onRedraw,
+  onColor, onUndo, onFinish, onSave, onInfo, onCancel, onDelete,
 }: {
   isNew: boolean; phase: 'draw' | 'refine'; initial: ZoneForm; types: ZoneType[]; cabinets: PanelCabinet[]; pointCount: number; minPoints: number;
-  canUndo: boolean; outlineDirty: boolean; busy: boolean;
+  canUndo: boolean; busy: boolean;
   /** The zone's shape has several pieces or holes: its details can be edited here, its outline cannot. */
   infoOnly?: boolean;
   /** Starts the outline again from nothing (drawn freehand or point by point). */
   onRedraw?: () => void;
   /** The colour the zone is drawn in now (so the map's preview follows the type or the swatch). */
   onColor: (c: string) => void;
-  onUndo: () => void; onFinish: () => void; onSave: (f: ZoneForm) => void; onCancel: () => void; onDelete?: () => void;
+  onUndo: () => void; onFinish: () => void; onSave: (f: ZoneForm) => void;
+  /** An existing zone's details were changed: keep them (the outline is kept by the map as it is reshaped). */
+  onInfo: (f: ZoneForm) => void | Promise<void>;
+  onCancel: () => void; onDelete?: () => void;
 }) {
-  const [f, setF] = useState<ZoneForm>(initial);
   const [confirm, setConfirm] = useState(false);
+  const detailsOk = (v: ZoneForm) => v.name.trim().length > 0 && (v.vis !== 'cabinets' || v.revealed.length > 0);
+  const form = useAutoSave<ZoneForm>(initial, {
+    enabled: !isNew && phase === 'refine', ready: detailsOk, save: onInfo,
+    norm: (v) => ({ ...v, name: v.name.trim(), description: v.description.trim(), revealed: [...v.revealed].sort() }),
+  });
+  const f = form.d;
+  const setF = (next: ZoneForm, quick = true) => form.set(next, quick);
   const type = types.find((t) => t.id === f.type) ?? null;
   const color = type?.color ?? f.color;
   useEffect(() => { onColor(color); }, [color, onColor]);
-  const dirty = outlineDirty || JSON.stringify(f) !== JSON.stringify(initial);
-  const valid = f.name.trim().length > 0 && pointCount >= minPoints && (f.vis !== 'cabinets' || f.revealed.length > 0);
+  const valid = detailsOk(f) && pointCount >= minPoints;
   const title = isNew ? 'New Zone' : 'Zone';
 
   if (phase === 'draw') {
@@ -679,7 +773,7 @@ export function ZoneEditor({
       <Field label="Name">
         <input
           style={fieldStyle} value={f.name} maxLength={ZONE_NAME_MAX} aria-label="Zone name" autoFocus={isNew}
-          onChange={(e) => setF({ ...f, name: e.target.value })}
+          onChange={(e) => setF({ ...f, name: e.target.value }, false)} onBlur={form.flush}
         />
       </Field>
       <Field label="Type">
@@ -706,7 +800,7 @@ export function ZoneEditor({
         <OwnerPicker value={f.owner} cabinets={cabinets} withNobody ariaLabel="Who controls this zone" onChange={(id) => setF({ ...f, owner: id })} />
       </Field>
       <Field label="Description">
-        <textarea style={{ ...fieldStyle, minHeight: 60, resize: 'vertical' }} value={f.description} maxLength={2000} aria-label="Zone description" onChange={(e) => setF({ ...f, description: e.target.value })} />
+        <textarea style={{ ...fieldStyle, minHeight: 60, resize: 'vertical' }} value={f.description} maxLength={2000} aria-label="Zone description" onChange={(e) => setF({ ...f, description: e.target.value }, false)} onBlur={form.flush} />
       </Field>
       <Field label="Seen by">
         <div role="radiogroup" aria-label="Who sees this zone" className="flex flex-wrap" style={{ background: CK.well, borderRadius: 11, padding: 3, gap: 2 }}>
@@ -736,15 +830,16 @@ export function ZoneEditor({
         {isNew ? 'Drag a white corner to move it, a small dot on a side to add a corner, or the Move handle to carry the whole zone. ' : ''}A zone never changes who holds the land.
       </p>
       <div className="flex flex-wrap items-center" style={{ gap: 8 }}>
-        <Btn size="sm" disabled={busy || !valid || (!isNew && !dirty)} icon={<Check size={14} strokeWidth={1.5} />} onClick={() => onSave(f)}>Save zone</Btn>
-        <Btn size="sm" tone="ghost" onClick={onCancel}>Cancel</Btn>
+        {isNew && <Btn size="sm" disabled={busy || !valid} icon={<Check size={14} strokeWidth={1.5} />} onClick={() => onSave(f)}>Save zone</Btn>}
+        <Btn size="sm" tone="ghost" onClick={onCancel}>{isNew ? 'Cancel' : 'Done'}</Btn>
         <Btn size="sm" tone="ghost" disabled={!canUndo} icon={<Undo2 size={14} strokeWidth={1.5} />} onClick={onUndo}>Undo</Btn>
         {!isNew && onDelete && !confirm && (
           <Btn size="sm" tone="danger" disabled={busy} icon={<Trash2 size={14} strokeWidth={1.5} />} onClick={() => setConfirm(true)}>Delete</Btn>
         )}
+        {!isNew && <SaveState status={form.status} />}
       </div>
-      {!isNew && dirty && <p style={{ margin: '6px 0 0', fontSize: 12, fontWeight: 600, color: CK.red }}>Your changes are not saved yet.</p>}
-      {confirm && onDelete && <Confirm text="Remove this zone from the map?" yes="Yes, remove it" busy={busy} onYes={onDelete} onNo={() => setConfirm(false)} />}
+      {!isNew && !detailsOk(f) && <p role="alert" style={{ margin: '6px 0 0', fontSize: 12, fontWeight: 600, color: CK.red }}>Give the zone a name, and choose a cabinet if it is seen by chosen cabinets, to keep the changes.</p>}
+      {confirm && onDelete && <Confirm text="Remove this zone from the map?" yes="Yes, remove it" busy={busy} onYes={() => { form.discard(); onDelete(); }} onNo={() => setConfirm(false)} />}
     </Shell>
   );
 }

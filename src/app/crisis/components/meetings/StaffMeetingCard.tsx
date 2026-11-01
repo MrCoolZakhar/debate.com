@@ -8,7 +8,7 @@ import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { crisisError, type CrisisRef } from '@/lib/crisis/api';
 import type { Cabinet, MeetingStatus, Member } from '@/lib/crisis/types';
 import { Btn, CK, fieldStyle, agoLabel } from '../../crisisKit';
-import { AnswerList, AvatarStack, Fact, NameList, StatusLine, requesterName, whenText, type MeetingResponse, type MeetingX, type Person } from './meetingKit';
+import { AnswerList, AvatarStack, Fact, NameList, StatusLine, requesterName, hasWhen, whenText, type MeetingResponse, type MeetingX, type Person } from './meetingKit';
 import { decideMeetingChecked, MEETING_ALREADY_DECIDED } from './decide';
 import { InTheRoom, MeetingClockControls, MeetingClockReadout } from './MeetingClock';
 import { meetingInProgress } from '@/lib/crisis/meetings';
@@ -49,9 +49,9 @@ export default function StaffMeetingCard({ m, refx, people, cabinets, members, c
       </div>
       <p style={{ margin: 0, fontSize: 14.5, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}><NameList ids={m.character_ids} people={people} /></p>
       <p style={{ margin: '6px 0 10px', fontSize: 13.5, lineHeight: 1.5, color: CK.inkSoft, overflowWrap: 'anywhere' }}>{m.intention}</p>
-      <div className="grid" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10 }}>
+      <div className="grid" style={{ gridTemplateColumns: `repeat(${hasWhen(m) ? 3 : 2}, minmax(0, 1fr))`, gap: 10 }}>
         <Fact label="Length">{m.duration_minutes} min</Fact>
-        <Fact label="When">{whenText(m)}</Fact>
+        {hasWhen(m) && <Fact label="When">{whenText(m)}</Fact>}
         <Fact label="Asked by">{requesterName(m, people, members)}</Fact>
       </div>
       {m.status === 'awaiting_delegates' && responses !== undefined && <AnswerList m={m} responses={responses} people={people} cabinets={cabinets} />}

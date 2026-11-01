@@ -6,7 +6,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
-  ArrowDown, ArrowRight, ArrowUp, Flag, MapPinOff, MapPinPlus, MoveUpRight, PenTool, TrendingDown, TrendingUp, UserRound,
+  ArrowDown, ArrowRight, ArrowUp, Flag, Info, MapPinOff, MapPinPlus, MoveUpRight, PenTool, TrendingDown, TrendingUp, UserRound,
   type LucideIcon,
 } from 'lucide-react';
 import type { Cabinet, Character } from '@/lib/crisis/types';
@@ -80,6 +80,7 @@ function describeChar(c: CharChange, ctx: ChangeCtx): Described {
 }
 
 export function describe(c: AnyChange, ctx: ChangeCtx): Described {
+  if (c.type === 'other') return { Icon: Info, color: CK.inkSoft, kindLabel: 'Map change', title: 'A change', lines: [] };
   if (c.type === 'character') return describeChar(c, ctx);
   if (c.noBefore) {
     // An older row: say what it looked like after the change, without inventing a "from".
@@ -205,6 +206,7 @@ export function ChangeDisc({ d, size = 38 }: { d: Described; size?: number }) {
 
 export function snapshotSpec(c: AnyChange, ctx: ChangeCtx, opts: { reveal?: boolean } = {}): SnapshotSpec {
   const cabColor = (id: string | null) => { const cab = id ? ctx.cabinets.get(id) : null; return cab ? safeColor(cab.color) : NOBODY; };
+  if (c.type === 'other') return { tokens: [], countries: [], shapes: [] };
   if (c.type === 'character') {
     const col = cabColor(c.ownerTo ?? c.ownerFrom);
     const portrait = { src: portraitSrc(charPicture(c, ctx)), name: c.name };

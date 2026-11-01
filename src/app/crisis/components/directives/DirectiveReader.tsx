@@ -1,24 +1,29 @@
 'use client';
-// Gavelling Crisis: the backroom's directives, read ONE BY ONE. The directive in front is large (the "No. 13"
+// Gavelling Crisis: the backroom's "to reply" items, read ONE BY ONE. The item in front is large (the "No. 13"
 // badge overlapping its top edge, the TITLE first, the character beneath it, then the text), and the next
-// directives of the lane wait to the right as smaller copies of it (same layout, each shorter and narrower, centred
+// items of the lane wait to the right as smaller copies of it (same layout, each shorter and narrower, centred
 // on the front card), every one BEHIND the one before it and peeking out on its right edge, so together they fill the
 // space out to the page's right edge. A card's content sits in the part that peeks out, so no title is ever covered.
-// Clicking one brings it to the front; pressing the front one, its Respond button or Enter opens the directive
+// Clicking one brings it to the front; pressing the front directive, its Respond button or Enter opens the directive
 // pop-up to answer it. The left and right arrow keys move along. The lane and the filters above decide which
-// directives are in the stack, in queue order. Presentation and choices only: nothing here writes except the
-// character's backroomer (CharacterBackroomer). With `readOnly` (the chair's Directives page) the same reader shows each directive's
-// state instead of the backroomer picker and "Take over", and its button only opens the directive.
+// items are in the stack, in queue order. An item is a directive, or (backroom only) a meeting request or a delegate who
+// needs a new character: those are decided in place on their card (InboxExtraCards). A CABINET directive wears design B
+// (cabinetStamp.tsx): framed in its cabinet's colour, the seal and name first, the sender a small muted line, the big
+// CABINET stamp poking out of its top right corner. Presentation and choices only: nothing here writes. With `readOnly`
+// (the chair's Directives page) the same reader shows each directive's state and its button only opens the directive.
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { ChevronLeft, ChevronRight, Clock, Eye, MessageCircle, Pencil, Reply } from 'lucide-react';
+import { Clock, Eye, MessageCircle, Pencil, Reply } from 'lucide-react';
 import { dirNumber } from '@/lib/crisis/format';
 import { KIND_LABEL, type Directive } from '@/lib/crisis/types';
 import { Avatar, Btn, CK, agoLabel, cabinetTint, waitLabel, waitSeverity } from '../../crisisKit';
 import { CharacterLink } from '../character/CharacterProfileHost';
-import CharacterBackroomer from './CharacterBackroomer';
 import { CabinetLogo, NameStack, NumberBadge, StaffPic, ThemeTags, shortName } from './directiveParts';
 import { KIND_ICON, authorName, isBeingWritten, memberName, outcomeView, writingAge, writtenByOther, type Lane, type Names } from './directiveKit';
+import { CabinetHead, CabinetSeal, CabinetStamp, SubmitterLine, cabinetColorOf, isCabinetDirective } from './cabinetStamp';
+import { ExtraFront, ExtraNextBody } from './InboxExtraCards';
+import { isExtra, type ReaderItem } from './inboxItems';
+import { FrontShell, MAX_STACK, NavControls, NextShell, STRIP } from './readerParts';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { DirectiveBody, plainText } from './attachedImage';
 
@@ -31,13 +36,6 @@ export interface ReaderReadOnly {
 }
 
 const WAIT_COLOR = { ok: CK.ink, late: CK.goldDeep, very: CK.danger } as const;
-
-/** How tall each card in the stack is, as a share of the front card's height (shorter, one step at a time). */
-const HEIGHTS = [0.88, 0.77, 0.67, 0.58];
-/** The width of the strip each stacked card shows, and the part of its box that hides behind the card before it. */
-const STRIP = 232;
-const HIDDEN = 40;
-const MAX_STACK = HEIGHTS.length;
 
 /** How many stacked cards fit beside the front card, and how wide the front card is then (it takes what is left). */
 export function stackLayout(stageW: number, available: number): { n: number; fw: number } {
@@ -72,63 +70,83 @@ function Writing({ d, names, now, small }: { d: Directive; names: Names; now: nu
   );
 }
 
+/** "Sent 4 min ago" (the sender's line on a cabinet directive; just now reads "Sent just now"). */
+const sentWhen = (d: Directive, now: number) => `Sent ${agoLabel(d.created_at, now) || 'just now'}`;
+
 /**
  * A smaller copy of the front card, further back in the stack: badge, title, character, the start of the text.
- * It sits BEHIND the card before it; only its right part shows (STRIP wide), and its content starts there.
+ * A cabinet directive is framed in its cabinet's colour, shows the seal and the name, and wears a small stamp on its top edge.
  */
-function NextCard({ d, k, fw, names, lane, now, onPick, readOnly }: { d: Directive; k: number; fw: number; names: Names; lane: Lane; now: number; onPick: () => void; readOnly?: ReaderReadOnly }) {
+function DirectiveNext({ d, k, fw, names, lane, now, onPick, readOnly }: { d: Directive; k: number; fw: number; names: Names; lane: Lane; now: number; onPick: () => void; readOnly?: ReaderReadOnly }) {
   const { memberId } = useCrisis();
   const grey = writtenByOther(d, memberId, now);
   const cab = d.cabinet_id ? names.cabinets.get(d.cabinet_id) : undefined;
   const ch = d.author_character_id ? names.characters.get(d.author_character_id) : undefined;
   const who = authorName(d, names);
+  const isCab = isCabinetDirective(d);
   const color = cab?.color ?? CK.red;
   const when = whenOf(d, lane, now, readOnly);
   const KindIcon = KIND_ICON[d.kind];
-  const pct = HEIGHTS[k - 1];
-  const left = fw + (k - 1) * STRIP - HIDDEN;
-  const style: CSSProperties = {
-    position: 'absolute', left, width: STRIP + HIDDEN, zIndex: 30 - k,
-    top: `calc(14px + (100% - 20px) * ${((1 - pct) / 2).toFixed(4)})`, height: `calc((100% - 20px) * ${pct})`,
-  };
   return (
-    <div className="rd-next" style={style}>
-      <div style={{ position: 'relative', height: '100%', background: CK.card, borderRadius: 22, boxShadow: `${CK.shadowSm}, 0 16px 34px rgba(58,14,15,0.18)`, border: '1px solid rgba(27,56,40,0.14)', overflow: 'visible', opacity: grey ? 0.62 : 1, filter: grey ? 'grayscale(0.7)' : undefined }}>
-        <NumberBadge n={dirNumber(d)} color={color} style={{ position: 'absolute', zIndex: 2, top: -9, left: HIDDEN + 14 }} />
-        <button type="button" onClick={onPick} aria-label={`Read directive No. ${dirNumber(d)}: ${d.title}`}
-          className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] transition-transform hover:-translate-y-0.5"
-          style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%', textAlign: 'left', border: 0, background: 'transparent', cursor: 'pointer', borderRadius: 'inherit', padding: `20px 16px 14px ${HIDDEN + 14}px`, fontFamily: CK.font, color: CK.ink, overflow: 'hidden' }}>
-          <span style={{ display: 'block', flex: 'none', fontSize: 18, fontWeight: 800, lineHeight: 1.22, overflowWrap: 'anywhere' }}>{d.title}</span>
-          <span className="flex items-center" style={{ flex: 'none', gap: 9, marginTop: 11 }}>
-            <Avatar name={who} src={ch?.picture_url} size={38} color={color} />
-            <span style={{ minWidth: 0, flex: 1 }}>
-              <span style={{ display: 'block', fontSize: 14.5, fontWeight: 800, lineHeight: 1.2, overflowWrap: 'anywhere' }}>{shortName(who)}</span>
-              <span style={{ display: 'block', fontSize: 11.5, fontWeight: 600, color: CK.muted, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{ch?.title?.trim() || cab?.name || ''}</span>
-            </span>
+    <NextShell
+      k={k} fw={fw} grey={grey} ring={isCab} color={color} onPick={onPick}
+      label={`Read directive No. ${dirNumber(d)}: ${d.title}`}
+      badge={<NumberBadge n={dirNumber(d)} color={color} style={{ position: 'absolute', zIndex: 2, top: -9, left: 40 + 14 }} />}
+      stamp={isCab ? <CabinetStamp size="row" style={{ top: -12, right: 6 }} /> : undefined}
+    >
+      <span style={{ display: 'block', flex: 'none', fontSize: 18, fontWeight: 800, lineHeight: 1.22, overflowWrap: 'anywhere', paddingRight: isCab ? 62 : 0 }}>{d.title}</span>
+      {isCab ? (
+        <>
+          <span className="flex items-center" style={{ flex: 'none', gap: 8, marginTop: 11 }}>
+            <CabinetSeal cabinet={cab} size={28} />
+            <b style={{ fontSize: 13.5, color, lineHeight: 1.2, overflowWrap: 'anywhere' }}>{cab?.name ?? 'Cabinet'}</b>
           </span>
-          <span className="flex items-center flex-wrap" style={{ flex: 'none', gap: '4px 9px', marginTop: 10 }}>
-            <KindIcon size={14} strokeWidth={1.5} aria-label={KIND_LABEL[d.kind]} style={{ color: CK.red, flex: 'none' }} />
-            <CabinetLogo cabinet={cab} size={18} />
-            <span className="inline-flex items-center" style={{ gap: 3, fontSize: 12, fontWeight: 800, color: when.sev ? WAIT_COLOR[when.sev] : CK.inkSoft, fontVariantNumeric: 'tabular-nums' }}>
-              <Clock size={12} strokeWidth={1.6} aria-hidden />{when.text}
-            </span>
+          <span style={{ display: 'block', flex: 'none', marginTop: 6 }}><SubmitterLine name={who} size={0} /></span>
+        </>
+      ) : (
+        <span className="flex items-center" style={{ flex: 'none', gap: 9, marginTop: 11 }}>
+          <Avatar name={who} src={ch?.picture_url} size={38} color={color} />
+          <span style={{ minWidth: 0, flex: 1 }}>
+            <span style={{ display: 'block', fontSize: 14.5, fontWeight: 800, lineHeight: 1.2, overflowWrap: 'anywhere' }}>{shortName(who)}</span>
+            <span style={{ display: 'block', fontSize: 11.5, fontWeight: 600, color: CK.muted, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{ch?.title?.trim() || cab?.name || ''}</span>
           </span>
-          {readOnly && (() => { const st = readOnly.stateOf(d); return (
-            <span className="inline-flex items-center" style={{ flex: 'none', gap: 5, marginTop: 8, fontSize: 12, fontWeight: 800, color: st.color }}>{st.icon}{st.word}</span>
-          ); })()}
-          {isBeingWritten(d, now) && <span style={{ flex: 'none', marginTop: 8 }}><Writing d={d} names={names} now={now} small /></span>}
-          {/* The start of the text, fading out where the card ends. */}
-          <span className="rd-fade" style={{ display: 'block', flex: 1, minHeight: 0, overflow: 'hidden', marginTop: 11, fontSize: 14, lineHeight: 1.55, fontWeight: 500, color: CK.inkSoft, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{plainText(d.body)}</span>
-        </button>
-      </div>
-    </div>
+        </span>
+      )}
+      <span className="flex items-center flex-wrap" style={{ flex: 'none', gap: '4px 9px', marginTop: 10 }}>
+        <KindIcon size={14} strokeWidth={1.5} aria-label={KIND_LABEL[d.kind]} style={{ color: CK.red, flex: 'none' }} />
+        {!isCab && <CabinetLogo cabinet={cab} size={18} />}
+        <span className="inline-flex items-center" style={{ gap: 3, fontSize: 12, fontWeight: 800, color: when.sev ? WAIT_COLOR[when.sev] : CK.inkSoft, fontVariantNumeric: 'tabular-nums' }}>
+          <Clock size={12} strokeWidth={1.6} aria-hidden />{when.text}
+        </span>
+      </span>
+      {readOnly && (() => { const st = readOnly.stateOf(d); return (
+        <span className="inline-flex items-center" style={{ flex: 'none', gap: 5, marginTop: 8, fontSize: 12, fontWeight: 800, color: st.color }}>{st.icon}{st.word}</span>
+      ); })()}
+      {isBeingWritten(d, now) && <span style={{ flex: 'none', marginTop: 8 }}><Writing d={d} names={names} now={now} small /></span>}
+      {/* The start of the text, fading out where the card ends. */}
+      <span className="rd-fade" style={{ display: 'block', flex: 1, minHeight: 0, overflow: 'hidden', marginTop: 11, fontSize: 14, lineHeight: 1.55, fontWeight: 500, color: CK.inkSoft, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{plainText(d.body)}</span>
+    </NextShell>
   );
 }
 
-/** The directive in front: large, with its text, a few facts, who looks after the character, and Respond. */
-function FrontCard({ d, names, lane, now, all, index, total, onPrev, onNext, onRespond, onTakeOver, onChanged, readOnly }: {
-  d: Directive; names: Names; lane: Lane; now: number; all: Directive[]; index: number; total: number;
-  onPrev: () => void; onNext: () => void; onRespond: () => void; onTakeOver: () => void; onChanged: () => void; readOnly?: ReaderReadOnly;
+function NextCard({ item, k, fw, names, lane, now, onPick, readOnly }: { item: ReaderItem; k: number; fw: number; names: Names; lane: Lane; now: number; onPick: () => void; readOnly?: ReaderReadOnly }) {
+  if (!isExtra(item)) return <DirectiveNext d={item} k={k} fw={fw} names={names} lane={lane} now={now} onPick={onPick} readOnly={readOnly} />;
+  const meeting = item.extra === 'meeting';
+  return (
+    <NextShell
+      k={k} fw={fw} color={meeting ? '#3E6A9A' : CK.danger} onPick={onPick}
+      grey={meeting && item.m.status === 'awaiting_delegates'}
+      label={meeting ? 'Read this meeting request' : `Give ${item.member.display_name} a new character`}
+    >
+      <ExtraNextBody item={item} now={now} />
+    </NextShell>
+  );
+}
+
+/** The directive in front: large, with its text, a few facts and Respond. */
+function FrontCard({ d, names, lane, now, index, total, onPrev, onNext, onRespond, onTakeOver, readOnly }: {
+  d: Directive; names: Names; lane: Lane; now: number; index: number; total: number;
+  onPrev: () => void; onNext: () => void; onRespond: () => void; onTakeOver: () => void; readOnly?: ReaderReadOnly;
 }) {
   const { memberId } = useCrisis();
   const takeable = !readOnly && writtenByOther(d, memberId, now) && (d.status === 'queued' || d.status === 'claimed');
@@ -136,7 +154,8 @@ function FrontCard({ d, names, lane, now, all, index, total, onPrev, onNext, onR
   const cab = d.cabinet_id ? names.cabinets.get(d.cabinet_id) : undefined;
   const ch = d.author_character_id ? names.characters.get(d.author_character_id) : undefined;
   const who = authorName(d, names);
-  const color = cab?.color ?? CK.red;
+  const isCab = isCabinetDirective(d);
+  const color = isCab ? cabinetColorOf(cab) : cab?.color ?? CK.red;
   const KindIcon = KIND_ICON[d.kind];
   const when = whenOf(d, lane, now, readOnly);
   const open = d.status === 'queued' || d.status === 'claimed';
@@ -147,49 +166,57 @@ function FrontCard({ d, names, lane, now, all, index, total, onPrev, onNext, onR
   facts.push(<span key="w">{d.word_count} words</span>);
   if (d.receiver?.trim()) facts.push(<span key="t">To {d.receiver}</span>);
   if (d.covert) facts.push(<span key="c" style={{ color: CK.redDeep }}>Covert</span>);
-  facts.push(<span key="r">{responsible ? `Responsible: ${memberName(responsible, names)}` : 'Nobody responsible yet'}</span>);
+  // A cabinet directive does not care who the responsible backroomer is (owner, 1 Nov 2026); the others say it is just for this directive.
+  if (!isCab) facts.push(<span key="r">{responsible ? `Responsible for this directive: ${memberName(responsible, names)}` : 'Nobody responsible for this directive yet'}</span>);
 
-  const iconBtn = { width: 34, height: 34, borderRadius: '50%', border: 0, background: CK.well, color: CK.forest, cursor: 'pointer', flex: 'none' } as const;
+  const waitClock = (
+    <span className="inline-flex items-center" style={{ gap: 4, fontSize: 13, fontWeight: 800, color: when.sev ? WAIT_COLOR[when.sev] : CK.inkSoft, fontVariantNumeric: 'tabular-nums' }}>
+      <Clock size={14} strokeWidth={1.6} aria-hidden />{when.text}
+    </span>
+  );
 
   return (
-    <article
-      className="rd-front"
-      aria-label={`Directive No. ${dirNumber(d)}: ${d.title}`}
-      onClick={(e) => {
-        const t = e.target as HTMLElement;
-        if (t.closest('button, a, input, textarea, [role="combobox"], [role="listbox"], [data-no-open]')) return;
-        if (window.getSelection()?.toString()) return;
-        onRespond();
-      }}
-      style={{
-        position: 'absolute', left: 0, top: 14, bottom: 6, width: 'var(--fw)', zIndex: 30, display: 'flex', flexDirection: 'column', cursor: 'pointer',
-        background: CK.card, borderRadius: 24, border: '1px solid rgba(27,56,40,0.14)', boxShadow: `${CK.shadow}, 0 22px 44px rgba(58,14,15,0.18), inset 6px 0 0 ${color}`,
-        fontFamily: CK.font, color: CK.ink,
-      }}
-    >
-      <NumberBadge n={dirNumber(d)} color={color} style={{ position: 'absolute', zIndex: 2, top: -9, left: 26 }} />
+    <FrontShell color={color} ring={isCab} label={`Directive No. ${dirNumber(d)}: ${d.title}`} onActivate={onRespond}>
+      {isCab && <CabinetStamp size="card" />}
+      {!isCab && <NumberBadge n={dirNumber(d)} color={color} style={{ position: 'absolute', zIndex: 2, top: -9, left: 26 }} />}
 
-      <div style={{ flex: 'none', padding: '24px 26px 0 30px' }}>
-        <p className="flex items-center flex-wrap" style={{ margin: 0, gap: '4px 12px', fontSize: 12.5, fontWeight: 700, color: CK.inkSoft }}>
-          <span className="inline-flex items-center" style={{ gap: 6 }}><KindIcon size={15} strokeWidth={1.5} aria-hidden style={{ color: CK.red }} />{KIND_LABEL[d.kind]}</span>
-          <ThemeTags themes={d.themes} />
-          <span className="flex-1" />
-          <span className="inline-flex items-center" style={{ gap: 4, fontSize: 13, fontWeight: 800, color: when.sev ? WAIT_COLOR[when.sev] : CK.inkSoft, fontVariantNumeric: 'tabular-nums' }}>
-            <Clock size={14} strokeWidth={1.6} aria-hidden />{when.text}
-          </span>
-        </p>
-        <h2 style={{ margin: '8px 0 0', fontSize: 28, lineHeight: 1.18, fontWeight: 800, overflowWrap: 'anywhere' }}>{d.title}</h2>
-        <div className="flex items-center" style={{ gap: 14, marginTop: 14 }}>
-          <CharacterLink id={ch?.id} style={{ borderRadius: '50%', lineHeight: 0 }}><Avatar name={who} src={ch?.picture_url} size={58} color={color} /></CharacterLink>
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <NameStack name={who} align="left" big={19} small={12.5} width={220} characterId={ch?.id} />
-            {ch?.title && <p style={{ margin: '2px 0 0', fontSize: 13, fontWeight: 600, color: CK.inkSoft, lineHeight: 1.3, overflowWrap: 'anywhere' }}>{ch.title}</p>}
-          </div>
-          <span className="inline-flex items-center" style={{ gap: 7, flex: 'none', maxWidth: '40%' }}>
-            <CabinetLogo cabinet={cab} size={26} />
-            <b style={{ fontSize: 13.5, color, overflowWrap: 'anywhere' }}>{cab?.name ?? 'No cabinet'}</b>
-          </span>
-        </div>
+      <div style={{ flex: 'none', padding: isCab ? '28px 26px 0 30px' : '24px 26px 0 30px' }}>
+        {isCab ? (
+          <>
+            <div style={{ paddingRight: 150 }}><CabinetHead cabinet={cab} n={dirNumber(d)} sealSize={42} nameSize={15.5} /></div>
+            <h2 style={{ margin: '12px 0 0', fontSize: 30, lineHeight: 1.18, fontWeight: 800, overflowWrap: 'anywhere' }}>{d.title}</h2>
+            <p className="flex items-center flex-wrap" style={{ margin: '10px 0 0', gap: '4px 12px', fontSize: 12.5, fontWeight: 700, color: CK.inkSoft }}>
+              <span className="inline-flex items-center" style={{ gap: 6 }}><KindIcon size={15} strokeWidth={1.5} aria-hidden style={{ color: CK.red }} />{KIND_LABEL[d.kind]}</span>
+              <ThemeTags themes={d.themes} />
+              <span className="flex-1" />
+              {waitClock}
+            </p>
+            <div style={{ marginTop: 10 }}>
+              <SubmitterLine name={who} picture={ch?.picture_url} color={color} when={sentWhen(d, now)} size={24} characterId={ch?.id} />
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="flex items-center flex-wrap" style={{ margin: 0, gap: '4px 12px', fontSize: 12.5, fontWeight: 700, color: CK.inkSoft }}>
+              <span className="inline-flex items-center" style={{ gap: 6 }}><KindIcon size={15} strokeWidth={1.5} aria-hidden style={{ color: CK.red }} />{KIND_LABEL[d.kind]}</span>
+              <ThemeTags themes={d.themes} />
+              <span className="flex-1" />
+              {waitClock}
+            </p>
+            <h2 style={{ margin: '8px 0 0', fontSize: 28, lineHeight: 1.18, fontWeight: 800, overflowWrap: 'anywhere' }}>{d.title}</h2>
+            <div className="flex items-center" style={{ gap: 14, marginTop: 14 }}>
+              <CharacterLink id={ch?.id} style={{ borderRadius: '50%', lineHeight: 0 }}><Avatar name={who} src={ch?.picture_url} size={58} color={color} /></CharacterLink>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <NameStack name={who} align="left" big={19} small={12.5} width={220} characterId={ch?.id} />
+                {ch?.title && <p style={{ margin: '2px 0 0', fontSize: 13, fontWeight: 600, color: CK.inkSoft, lineHeight: 1.3, overflowWrap: 'anywhere' }}>{ch.title}</p>}
+              </div>
+              <span className="inline-flex items-center" style={{ gap: 7, flex: 'none', maxWidth: '40%' }}>
+                <CabinetLogo cabinet={cab} size={26} />
+                <b style={{ fontSize: 13.5, color, overflowWrap: 'anywhere' }}>{cab?.name ?? 'No cabinet'}</b>
+              </span>
+            </div>
+          </>
+        )}
         <div className="flex items-center flex-wrap" style={{ marginTop: 8, gap: '4px 12px' }}>
           <Writing d={d} names={names} now={now} />
           {takeable && (
@@ -215,36 +242,22 @@ function FrontCard({ d, names, lane, now, all, index, total, onPrev, onNext, onR
         </p>
       </div>
 
-      {/* The footer: who looks after the character on the left; the arrows, "3 of 12" and Respond on the right. */}
+      {/* The footer: the state (chair's reader) on the left; the arrows, "3 of 12" and Respond on the right. Who looks after a character is
+          changed on the character's own page, never here. */}
       <div className="flex items-center flex-wrap" data-no-open style={{ flex: 'none', gap: '8px 16px', padding: '12px 20px 14px 30px', boxShadow: `0 -1px 0 ${CK.hair}`, borderRadius: '0 0 24px 24px', background: CK.card }}>
         <div style={{ flex: '1 1 260px', minWidth: 0 }}>
-          {state ? (
-            <span className="inline-flex items-center" style={{ gap: 7, fontSize: 15, fontWeight: 800, color: state.color, overflowWrap: 'anywhere' }}>{state.icon}{state.word}</span>
-          ) : ch && <CharacterBackroomer character={ch} names={names} all={all} onChanged={onChanged} />}
+          {state && <span className="inline-flex items-center" style={{ gap: 7, fontSize: 15, fontWeight: 800, color: state.color, overflowWrap: 'anywhere' }}>{state.icon}{state.word}</span>}
         </div>
-        <span className="inline-flex items-center" style={{ gap: 8 }}>
-          <button type="button" onClick={onPrev} disabled={total < 2} aria-label="Previous directive" title="Previous directive (left arrow)"
-            className="grid place-items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] active:scale-[0.94] transition-transform disabled:opacity-40" style={iconBtn}>
-            <ChevronLeft size={19} strokeWidth={1.6} />
-          </button>
-          <span className="inline-flex items-baseline" style={{ gap: 5, whiteSpace: 'nowrap' }}>
-            <b style={{ fontSize: 20, fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{index + 1}</b>
-            <span style={{ fontSize: 12.5, fontWeight: 600, color: CK.inkSoft }}>of {total}</span>
-          </span>
-          <button type="button" onClick={onNext} disabled={total < 2} aria-label="Next directive" title="Next directive (right arrow)"
-            className="grid place-items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] active:scale-[0.94] transition-transform disabled:opacity-40" style={iconBtn}>
-            <ChevronRight size={19} strokeWidth={1.6} />
-          </button>
-        </span>
+        <NavControls index={index} total={total} onPrev={onPrev} onNext={onNext} />
         <Btn tone="green" icon={readOnly ? <Eye size={16} strokeWidth={1.5} /> : <Reply size={16} strokeWidth={1.5} />} onClick={onRespond}>{readOnly ? readOnly.actionLabel(d) : open ? 'Respond' : 'Open'}</Btn>
       </div>
-    </article>
+    </FrontShell>
   );
 }
 
-export default function DirectiveReader({ queue, focusId, onFocus, onOpen, onTakeOver, active, names, lane, now, all, onChanged, readOnly }: {
-  /** The lane, filtered and in queue order. */
-  queue: Directive[];
+export default function DirectiveReader({ queue, focusId, onFocus, onOpen, onTakeOver, active, names, lane, now, onChanged, readOnly }: {
+  /** The lane, filtered and in queue order: directives, and in the backroom also meeting requests and characters to replace. */
+  queue: ReaderItem[];
   focusId: string | null;
   onFocus: (id: string) => void;
   /** Open the directive pop-up on this directive. */
@@ -256,7 +269,7 @@ export default function DirectiveReader({ queue, focusId, onFocus, onOpen, onTak
   names: Names;
   lane: Lane;
   now: number;
-  all: Directive[];
+  /** Something an extra card decided (a meeting answered, a character given): the caller re-reads. */
   onChanged: () => void;
   /** The chair's read-only reader: states instead of the backroomer picker, no "Take over". */
   readOnly?: ReaderReadOnly;
@@ -271,7 +284,7 @@ export default function DirectiveReader({ queue, focusId, onFocus, onOpen, onTak
   };
   const moveRef = useRef(move);
   const openRef = useRef<() => void>(() => {});
-  useEffect(() => { moveRef.current = move; openRef.current = () => { if (front) onOpen(front); }; });
+  useEffect(() => { moveRef.current = move; openRef.current = () => { if (front && !isExtra(front)) onOpen(front); }; });
 
   useEffect(() => {
     if (!active) return;
@@ -301,14 +314,17 @@ export default function DirectiveReader({ queue, focusId, onFocus, onOpen, onTak
   }, [hasFront]);
 
   const upcoming = Math.max(0, total - at - 1);
-  const { n, fw } = stackLayout(stageW, upcoming);
+  const stackFit = stackLayout(stageW, upcoming);
+  const n = stackFit.n;
+  // With nothing stacked beside it a cabinet directive's stamp pokes out on the right: leave it room inside the stage.
+  const fw = n === 0 && front && !isExtra(front) && isCabinetDirective(front) ? stackFit.fw - 16 : stackFit.fw;
   const stack = useMemo(() => queue.slice(at + 1, at + 1 + n), [queue, at, n]);
   if (!front) return null;
 
   return (
-    <div ref={stage} className="rd-stage" style={{ ['--fw' as string]: `${fw}px` } as CSSProperties} role="region" aria-label="Directives, one by one">
+    <div ref={stage} className="rd-stage" style={{ ['--fw' as string]: `${fw}px` } as CSSProperties} role="region" aria-label="To reply, one by one">
       <style>{`
-        .rd-stage { position: relative; z-index: 0; isolation: isolate; overflow: hidden; width: 100%; height: clamp(470px, calc(100dvh - 232px), 800px); }
+        .rd-stage { position: relative; z-index: 0; isolation: isolate; overflow-x: clip; overflow-y: visible; width: 100%; height: clamp(470px, calc(100dvh - 232px), 800px); }
         .rd-next { transition: left 320ms cubic-bezier(0.22,1,0.36,1), height 320ms cubic-bezier(0.22,1,0.36,1), top 320ms cubic-bezier(0.22,1,0.36,1), width 320ms cubic-bezier(0.22,1,0.36,1); animation: rd-in 280ms cubic-bezier(0.22,1,0.36,1) backwards; }
         .rd-front { animation: rd-front 260ms cubic-bezier(0.22,1,0.36,1) backwards; }
         .rd-scroll { scrollbar-width: thin; }
@@ -318,12 +334,16 @@ export default function DirectiveReader({ queue, focusId, onFocus, onOpen, onTak
         @media (max-width: 899px) { .rd-stage { height: clamp(470px, calc(100dvh - 260px), 800px); } }
         @media (prefers-reduced-motion: reduce) { .rd-next, .rd-front { animation: none; transition: none; } }
       `}</style>
-      <FrontCard
-        key={front.id} d={front} names={names} lane={lane} now={now} all={all} index={at} total={total}
-        onPrev={() => move(-1)} onNext={() => move(1)} onRespond={() => onOpen(front)} onTakeOver={() => onTakeOver(front)} onChanged={onChanged} readOnly={readOnly}
-      />
-      {stack.map((d, i) => (
-        <NextCard key={d.id} d={d} k={i + 1} fw={fw} names={names} lane={lane} now={now} onPick={() => onFocus(d.id)} readOnly={readOnly} />
+      {isExtra(front) ? (
+        <ExtraFront key={front.id} item={front} now={now} index={at} total={total} onPrev={() => move(-1)} onNext={() => move(1)} onChanged={onChanged} />
+      ) : (
+        <FrontCard
+          key={front.id} d={front} names={names} lane={lane} now={now} index={at} total={total}
+          onPrev={() => move(-1)} onNext={() => move(1)} onRespond={() => onOpen(front)} onTakeOver={() => onTakeOver(front)} readOnly={readOnly}
+        />
+      )}
+      {stack.map((item, i) => (
+        <NextCard key={item.id} item={item} k={i + 1} fw={fw} names={names} lane={lane} now={now} onPick={() => onFocus(item.id)} readOnly={readOnly} />
       ))}
     </div>
   );

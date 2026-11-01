@@ -60,3 +60,5 @@
 --   settings.customUnitTypes), written by crisis_apply_map_set_v2; crisis_history_safe passes custom_type and picture_url.
 -- Data, 1 Nov 2026 (owner): the test crisis map (gavelling-test-mun-2027 / jcc) was reset to its seed of 25 Oct
 --   (9 units, 4 countries, no areas or zones, history and draft cleared, map notices removed).
+-- 33 crisis_chair_rooms(p_crisis): the committee room code and chair password for a crisis chair's own cabinet (staff:
+--   every cabinet), so "Open chair console" links to /join?code=CODE-PASSWORD&mode=chair (chairs could not read committees).

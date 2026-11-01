@@ -198,7 +198,6 @@ export default function ChairDirectivesPage() {
           names={names}
           lane={active === 'answered' ? 'answered' : 'open'}
           now={now}
-          all={readable}
           onChanged={() => { void read(); }}
           readOnly={READ_ONLY}
         />

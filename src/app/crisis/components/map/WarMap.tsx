@@ -37,7 +37,7 @@ import {
   type CharMove, type EditSet, type MapData, type ShapeInfo, type StageOptions, type UnitChange,
 } from './mapEdits';
 import type { MapShape, MapUnit, UnitKind } from '@/lib/crisis/types';
-import { ZONE_NO_TYPE_COLOR } from '@/lib/crisis/zones';
+import { ZONE_NO_TYPE_COLOR, type ZoneType } from '@/lib/crisis/zones';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { Btn, CK, Segmented, cabinetTint } from '../../crisisKit';
 import { mayEditCharacters } from '../character/characterStatus';
@@ -58,7 +58,7 @@ import {
   KIND_META, centroidOf, clampLat, clampLng, loadWorldData, shapePoints, type CountryLabel, type LngLat, type WorldData,
 } from './mapData';
 import {
-  BLANK_STYLE, DRAFT, L_BASE_FILL, L_LAND, L_SHAPE_FILL, L_ZONE_FILL, NOBODY, SRC_BASE, SRC_BRUSH, SRC_COUNTRIES, SRC_DRAFT, SRC_EDIT, SRC_HOVER, SRC_PLANS,
+  BLANK_STYLE, DRAFT, L_BASE_FILL, L_LAND, LAND, L_SHAPE_FILL, L_ZONE_FILL, NOBODY, SRC_BASE, SRC_BRUSH, SRC_COUNTRIES, SRC_DRAFT, SRC_EDIT, SRC_HOVER, SRC_PLANS,
   SRC_SEL, SRC_SHAPES, SRC_SIGHT, editLayers, mapLayers,
 } from './mapStyle';
 import { BRUSH_DEFAULT_KM, brushKmForPixels, planErase, planPaint } from './brush';
@@ -98,7 +98,7 @@ interface Draft {
 
 interface PendingMove { id: string; name: string; lng: number; lat: number }
 
-/** An outline changed on the map and not saved yet (the card's Save keeps it, Cancel puts it back). */
+/** An outline changed on the map, kept a moment after the corner is let go (the card's Undo or the map's Undo steps it back). */
 interface TerrEdit { key: string; multi: Multi; trail: Multi[] }
 
 /** The draft with its points replaced, remembering the old ones for Undo. */
@@ -262,6 +262,24 @@ const unitRow = (u: MapUnit) => ({
 const unitAddOf = (u: MapUnit) => ({ id: u.id, ...unitRow(u), lng: u.lng, lat: u.lat });
 
 const sameJson = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+
+/** The changes to an existing zone's details (name, type, colour, description, who sees it, who controls it), added to an edit set and its way back. */
+function zoneInfoEdits(was: MapShape, f: ZoneForm, types: ZoneType[], set: EditSet, back: EditSet): void {
+  const name = f.name.trim();
+  const type = types.find((t) => t.id === f.type) ?? null;
+  const color = type?.color ?? f.color;
+  const vis = zoneVisibility(f);
+  const description = f.description.trim() || null;
+  const i: ShapeInfo = { id: was.id }; const b: ShapeInfo = { id: was.id };
+  if (name !== (was.label ?? '')) { i.label = name; b.label = was.label ?? null; }
+  if (color !== (was.color ?? null)) { i.color = color; b.color = was.color ?? null; }
+  if (description !== (was.description ?? null)) { i.description = description; b.description = was.description ?? null; }
+  if ((type?.id ?? null) !== (was.zone_type ?? null)) { i.zone_type = type?.id ?? null; b.zone_type = was.zone_type ?? null; }
+  if (vis.public !== was.public) { i.public = vis.public; b.public = was.public; }
+  if ([...vis.revealed_to].sort().join() !== [...(was.revealed_to ?? [])].sort().join()) { i.revealed_to = vis.revealed_to; b.revealed_to = was.revealed_to ?? []; }
+  if (Object.keys(i).length > 1) { set.shapeInfo?.push(i); back.shapeInfo?.push(b); }
+  if ((f.owner ?? null) !== (was.owner_cabinet_id ?? null)) { set.owners.push({ id: was.id, owner_cabinet_id: f.owner ?? null }); back.owners.push({ id: was.id, owner_cabinet_id: was.owner_cabinet_id ?? null }); }
+}
 
 /** A local id for a unit added in the unsent changes. */
 const localUnitId = () => `new-u-${new Date().getTime().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
@@ -965,7 +983,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
     return true;
   }, [writePlan, othersFor, applyEdits, nameOf]);
 
-  /** An outline changed on the map waits in the editor (its card's Save keeps it, Cancel puts it back). */
+  /** An outline changed on the map waits a moment in the editor, then is kept (see the effect after saveTerritory). */
   const stageOutline = useCallback((t: TerrRef, next: Multi) => {
     const key = terrKey(t);
     setTerrEdit((prev) => (prev && prev.key === key ? { key, multi: next, trail: [...prev.trail.slice(-49), prev.multi] } : { key, multi: next, trail: [] }));
@@ -1002,6 +1020,14 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
       void applyEdits(set, `You updated ${nameOf(t, d)}`, () => back, null, { fail: 'Could not save the territory.' });
     }
   }, [commitOutline, applyEdits, nameOf]);
+
+  // A changed outline is kept a moment after the corner is let go (Undo on the card, or the map's Undo, steps it back).
+  const keptEdit = useRef<TerrEdit | null>(null);
+  useEffect(() => {
+    if (!terrEdit || !selTerr || terrEdit.key !== terrKey(selTerr) || keptEdit.current === terrEdit) return;
+    const t = window.setTimeout(() => { keptEdit.current = terrEdit; saveTerritory(selTerr, null); }, 350);
+    return () => window.clearTimeout(t);
+  }, [terrEdit, selTerr, saveTerritory]);
 
   const pickOwner = useCallback((t: TerrRef, owner: string | null) => {
     const d = dataRef.current;
@@ -1173,15 +1199,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
       const was = d.shapes.find((x) => x.id === dr.editId);
       if (!was) { setDraft(null); return; }
       if (!sameJson(was.geometry, geometry)) { set.shapes.push({ id: was.id, geometry }); back.shapes.push({ id: was.id, geometry: was.geometry }); }
-      const i: ShapeInfo = { id: was.id }; const b: ShapeInfo = { id: was.id };
-      if (name !== (was.label ?? '')) { i.label = name; b.label = was.label ?? null; }
-      if (color !== (was.color ?? null)) { i.color = color; b.color = was.color ?? null; }
-      if (description !== (was.description ?? null)) { i.description = description; b.description = was.description ?? null; }
-      if ((type?.id ?? null) !== (was.zone_type ?? null)) { i.zone_type = type?.id ?? null; b.zone_type = was.zone_type ?? null; }
-      if (vis.public !== was.public) { i.public = vis.public; b.public = was.public; }
-      if ([...vis.revealed_to].sort().join() !== [...(was.revealed_to ?? [])].sort().join()) { i.revealed_to = vis.revealed_to; b.revealed_to = was.revealed_to ?? []; }
-      if (Object.keys(i).length > 1) { set.shapeInfo?.push(i); back.shapeInfo?.push(b); }
-      if ((f.owner ?? null) !== (was.owner_cabinet_id ?? null)) { set.owners.push({ id: was.id, owner_cabinet_id: f.owner ?? null }); back.owners.push({ id: was.id, owner_cabinet_id: was.owner_cabinet_id ?? null }); }
+      zoneInfoEdits(was, f, zoneTypes, set, back);
       if (isEmptySet(set)) { setDraft(null); return; }
       text = `You changed the zone ${name}`;
     }
@@ -1209,6 +1227,44 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
     back.shapes.push({ id, geometry: z.geometry });
     void applyEdits(set, `You moved the zone ${z.label?.trim() || ''}`.trim(), () => back, null, { fail: 'Could not move the zone.' });
   }, [applyEdits]);
+
+  /** An existing zone's details were changed in its card: kept at once (the outline is kept as it is reshaped, below). */
+  const saveZoneInfo = useCallback(async (dr: Draft, f: ZoneForm) => {
+    const d = dataRef.current;
+    const was = dr.editId ? d?.shapes.find((x) => x.id === dr.editId && x.kind === 'zone') : undefined;
+    if (!d || !was || !f.name.trim()) return;
+    const set = emptySet(); const back = emptySet();
+    zoneInfoEdits(was, f, zoneTypes, set, back);
+    if (isEmptySet(set)) return;
+    await applyEdits(set, `You changed the zone ${f.name.trim()}`, () => back, null, { fail: 'Could not save the zone.' });
+  }, [zoneTypes, applyEdits]);
+
+  // A zone being reshaped keeps each new outline once the corner is let go (the outline it opened with is not written again).
+  const zoneKeptPts = useRef<{ sid: number; json: string } | null>(null);
+  useEffect(() => {
+    if (!draft || draft.kind !== 'zone' || !draft.editId || draft.infoOnly || draft.phase !== 'refine' || draft.points.length < MIN_POINTS) return;
+    const json = JSON.stringify(draft.points);
+    if (!zoneKeptPts.current || zoneKeptPts.current.sid !== draft.sid) { zoneKeptPts.current = { sid: draft.sid, json }; return; }
+    if (zoneKeptPts.current.json === json) return;
+    const { sid, editId: id, points: pts } = draft;
+    const t = window.setTimeout(() => {
+      const was = dataRef.current?.shapes.find((x) => x.id === id && x.kind === 'zone');
+      if (!was) return;
+      try {
+        const multi = clean(toMulti({ type: 'Polygon', coordinates: [[...pts, pts[0]]] }));
+        if (areaOf(multi) <= AREA_EPS) { notifyErr('That shape has no area. Draw at least three points apart.', 'crisis-map'); return; }
+        zoneKeptPts.current = { sid, json };
+        const geometry = areaGeometry(multi);
+        if (sameJson(was.geometry, geometry)) return;
+        const set = emptySet(); const back = emptySet();
+        set.shapes.push({ id: was.id, geometry }); back.shapes.push({ id: was.id, geometry: was.geometry });
+        void applyEdits(set, `You reshaped the zone ${was.label?.trim() || ''}`.trim(), () => back, null, { fail: 'Could not save the zone.' });
+      } catch {
+        notifyErr('That shape could not be worked out. Try drawing it again.', 'crisis-map');
+      }
+    }, 350);
+    return () => window.clearTimeout(t);
+  }, [draft, applyEdits]);
 
   // ── Give land, Paint and Erase ──
   // Drawn areas (and the countries one cabinet holds) as the clipper takes them. A brush or a province never changes a
@@ -1405,7 +1461,8 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
     });
   }, [ref, run]);
 
-  const submitUnit = useCallback(async (dd: UnitDraft, existing: MapUnit | null) => {
+  /** `quiet`: a card that keeps its changes as they are made does not announce each one. */
+  const submitUnit = useCallback(async (dd: UnitDraft, existing: MapUnit | null, quiet = false) => {
     const before = rawRef.current;
     const patch = {
       name: dd.name.trim(), kind: dd.kind, strength: dd.strength, owner_cabinet_id: dd.owner,
@@ -1429,7 +1486,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
         if (Object.keys(c).length > 1) {
           set.units.push(c); back.units.push(b);
           await applyEdits(set, `You updated ${patch.name}`, () => back, null, { fail: 'Could not save the unit.' });
-          notifyOk('Unit saved to the unsent changes', 'crisis-map');
+          if (!quiet) notifyOk('Unit saved to the unsent changes', 'crisis-map');
         }
         return;
       }
@@ -1459,7 +1516,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
           pushHistory({ text: `You added ${patch.name}`, undo: () => dropUnit(id) });
         }
         setLast({ at: new Date().getTime(), text: existing ? `You updated ${patch.name}` : `You added ${patch.name}` });
-        notifyOk(existing ? 'Unit saved' : 'Unit added', 'crisis-map');
+        if (!quiet) notifyOk(existing ? 'Unit saved' : 'Unit added', 'crisis-map');
         if (!existing) changeTool('select');
       } catch (e) {
         if (before) setData(before);
@@ -1809,7 +1866,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
   });
 
   // Moving a whole shape: the Move handle on a selected area or zone (and the body of the selected shape in Select), or on
-  // a shape being drawn or reshaped. A zone moves at once; an area waits in its card for Save; a shape in hand moves its corners.
+  // a shape being drawn or reshaped. A zone and an area are kept at once; a shape in hand moves its corners.
   const moveDraftPts = draft && editable && canMap && draft.phase === 'refine' && !draft.infoOnly && draft.points.length >= MIN_POINTS ? draft.points : null;
   const moveZoneRow = !draft && canZones && tool === 'select' ? selZoneRow : null;
   const moveAreaOk = !draft && !moveZoneRow && canEditTerr && selTerr?.kind === 'area' && selValid;
@@ -1822,6 +1879,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
   }, [compact, stageKind, moveDraftPts, moveZoneRow, moveAreaOk, selMulti]);
   const mover = useShapeMover({
     ready: !!world, mapRef, mlRef, shape: moveShape, body: true,
+    hideId: moveZoneRow ? moveZoneRow.id : moveAreaOk && selTerr?.kind === 'area' ? selTerr.id : null,
     // A press on the selected area's outline reshapes it instead.
     blocked: (e) => !!(moveAreaOk && mapRef.current && edgeAt(mapRef.current, selMulti, e.point, e.lngLat)),
     preview: (moved) => {
@@ -2434,7 +2492,8 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
       features: drawn.map((s) => {
         const color = colorOf(s);
         // Territory is filled and outlined exactly like the cabinet's countries.
-        const props = s.kind === 'area' ? { tint: cabinetTint(color, 0.27), edge: cabinetTint(color, 0.95) } : {};
+        // The fill is opaque (the tint worked out over the land colour), so no border or line underneath shows through a drawn area.
+        const props = s.kind === 'area' ? { tint: mixHex(LAND, color, 0.27), edge: cabinetTint(color, 0.95) } : {};
         const ctl = controllerOf(s);
         return {
           type: 'Feature' as const,
@@ -2945,9 +3004,14 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
   );
   const charViewer = staff ? staffViewer : cabinetId;
   const seeOtherChars = settings.delegatesSeeOtherCharacters;
+  // "Delegates see where their own cabinet stands" off: a delegate sees only their own character of their cabinet.
+  const hideOwnCabinet = !staff && settings.hideCabinetLocations;
+  const myCharId = v.characterId;
   const visibleChars = useMemo(
-    () => (staff && !staffViewer ? placedChars : placedChars.filter((c) => (!!charViewer && c.cabinet_id === charViewer) || seeOtherChars)),
-    [placedChars, staff, staffViewer, charViewer, seeOtherChars],
+    () => (staff && !staffViewer ? placedChars : placedChars.filter((c) => (
+      !!charViewer && c.cabinet_id === charViewer ? (!hideOwnCabinet || c.id === myCharId) : seeOtherChars
+    ))),
+    [placedChars, staff, staffViewer, charViewer, seeOtherChars, hideOwnCabinet, myCharId],
   );
   const showChars = !isStage && (compact || charsOn) && (staff || !!cabinetId);
   const canMoveChars = staff && !compact && tool === 'select' && mayEditCharacters(v.role, settings);
@@ -3231,11 +3295,11 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
         <ZoneEditor
           key={draft.sid} isNew={!draft.editId} phase={draft.phase} types={zoneTypes} cabinets={cabinets}
           initial={was ? zoneFormOf(was, zoneTypes) : { name: '', type: zoneTypes[0]?.id ?? null, color: ZONE_NO_TYPE_COLOR, description: '', vis: 'public', revealed: [], owner: null }}
-          pointCount={draft.points.length} minPoints={MIN_POINTS} canUndo={draft.trail.length > 0} outlineDirty={draft.trail.length > 0} busy={busy}
+          pointCount={draft.points.length} minPoints={MIN_POINTS} canUndo={draft.trail.length > 0} busy={busy}
           infoOnly={draft.infoOnly}
           onRedraw={() => setDraft({ ...draft, phase: 'draw', points: [], trail: [...draft.trail.slice(-49), draft.points] })}
           onColor={setZoneColor} onUndo={undoDraft} onFinish={() => setDraft({ ...draft, phase: 'refine' })}
-          onSave={(f) => submitZone(draft, f)} onCancel={() => setDraft(null)}
+          onSave={(f) => submitZone(draft, f)} onInfo={(f) => saveZoneInfo(draft, f)} onCancel={() => setDraft(null)}
           onDelete={draft.editId ? () => removeZone(draft.editId as string) : undefined}
         />
       );
@@ -3304,9 +3368,9 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
       const u = selUnitRow;
       panel = unitEditing ? (
         <UnitEditor
-          key={`${u.id}:${u.name}:${u.kind}:${u.strength}:${u.owner_cabinet_id}:${u.revealed_to.join()}:${u.note}:${u.sight_km ?? ''}:${u.custom_type ?? ''}:${u.picture_url ?? ''}:${u.details ?? ''}`}
+          key={u.id}
           isNew={false} busy={busy} cabinets={cabinets} initial={unitDraftOf(u)} customTypes={customTypes} onUploadPicture={(f) => uploadCrisisImage(ref, f)}
-          onSubmit={(d) => { void submitUnit(d, u); }} onDelete={() => { void removeUnit(u); }} onClose={() => setSelUnit(null)}
+          onSubmit={(d) => submitUnit(d, u, true)} onDelete={() => { void removeUnit(u); }} onClose={() => setSelUnit(null)}
         />
       ) : (
         <UnitViewer
@@ -3331,9 +3395,9 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
           editable={editable && canMap} detailed={selDetailed} busy={busy}
           edited={isCountry ? overrides.has(t.key) : false}
           info={!isCountry && selShape && !isStage ? { label: selShape.label ?? '', description: selShape.description ?? '' } : null}
-          outlineDirty={!!workMulti} canUndo={!!workMulti}
+          canUndo={!!workMulti || historyN > 0}
           onOwner={(id) => pickOwner(t, id)}
-          onUndo={undoOutline} onSave={(info) => saveTerritory(t, info)} onCancel={() => setTerrEdit(null)}
+          onUndo={workMulti ? undoOutline : goBack} onSave={(info) => saveTerritory(t, info)}
           onReset={isCountry ? () => { const b = baseShapes.get(t.key)?.multi; if (b && commitOutline(t, b, true)) setTerrEdit(null); } : undefined}
           onDelete={!isCountry ? () => removeArea(t.id) : undefined}
           onClose={() => setSelTerr(null)}

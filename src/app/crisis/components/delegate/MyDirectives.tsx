@@ -4,6 +4,8 @@
 // corner (as on the organiser Live Status card) with the kind as a small tag beneath it; the outcome (or
 // the status while there is no answer) is a coloured tag that sticks out on the very top edge. Small
 // beneath the title: when the reply came in, then the first lines of the reply (or of the directive).
+// A CABINET directive is drawn differently (design B, owner 1 Nov 2026; directives/cabinetStamp.tsx): framed in its cabinet's colour, the
+// seal and name first, the title big, the author a small muted line, and the CABINET stamp poking out of the top right edge.
 // A click opens the conversation, where the author can also edit or withdraw it in place while nobody has answered it.
 
 import { useState } from 'react';
@@ -12,6 +14,8 @@ import { dirNumber, isChairSendBack, timeAgo } from '@/lib/crisis/format';
 import type { Directive, DirectiveNote } from '@/lib/crisis/types';
 import type { CrisisRef } from '@/lib/crisis/api';
 import { Avatar, Btn, Card, CK, Skeleton } from '../../crisisKit';
+import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
+import { CabinetHead, CabinetStamp, SubmitterLine, cabinetColorOf, cabinetRing, isCabinetDirective } from '../directives/cabinetStamp';
 import DirectiveDialog from './DirectiveDialog';
 import DirectiveDeepLink from '../notifications/DirectiveDeepLink';
 import { KIND_WORD, kindIcon, verdictOf } from './directiveUi';
@@ -24,12 +28,55 @@ const PORTRAIT = 48;
 const OVERHANG = PORTRAIT / 3;
 
 function DirectiveCard({ d, author, onOpen }: { d: Directive; author: PersonRef; onOpen: () => void }) {
+  const { core } = useCrisis();
   const { color: tagColor, word: tagWord, icon: tagIcon } = verdictOf(d, 13);
   const sentBack = isChairSendBack(d);
   // A send-back's stored reply is only a notice; the card shows what the author wrote, and the chair's note is in the conversation.
   const reply = sentBack ? '' : d.reply?.trim() ?? '';
   const text = reply || plainText(d.body).trim();
   const ask = d.status === 'clarify';
+  if (isCabinetDirective(d)) {
+    const cabinet = d.cabinet_id ? core.cabinets.find((c) => c.id === d.cabinet_id) ?? null : null;
+    const color = cabinetColorOf(cabinet);
+    return (
+      <button
+        type="button"
+        onClick={onOpen}
+        aria-label={`Cabinet directive ${dirNumber(d)}: ${d.title}. ${tagWord}`}
+        className="relative text-left w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] transition-transform active:scale-[0.99]"
+        style={{
+          display: 'block', minHeight: CARD_HEIGHT, padding: '14px 16px 12px', margin: '0 12px 0 0', width: 'calc(100% - 12px)', cursor: 'pointer', fontFamily: CK.font, color: CK.ink,
+          background: CK.card, borderRadius: 20, border: 0, overflow: 'visible',
+          boxShadow: ask ? cabinetRing(color, 3, `${CK.shadow}, 0 0 0 5px rgba(47,95,143,0.35)`) : cabinetRing(color, 3, CK.shadow),
+        }}
+      >
+        <CabinetStamp size="row" style={{ top: -12, right: -10 }} />
+        <span
+          title={tagWord}
+          className="inline-flex items-center"
+          style={{
+            position: 'absolute', zIndex: 2, top: -11, right: 112, gap: 5, height: 22, padding: '0 9px', borderRadius: 9,
+            background: tagColor, color: '#FFF', fontSize: 11.5, fontWeight: 800, boxShadow: '0 2px 6px rgba(27,56,40,0.22)', whiteSpace: 'nowrap',
+          }}
+        >
+          {tagIcon}{tagWord}
+        </span>
+        <span style={{ display: 'block', paddingRight: 88 }}><CabinetHead cabinet={cabinet} n={dirNumber(d)} sealSize={30} nameSize={13} /></span>
+        <b style={{ display: 'block', marginTop: 8, fontSize: 17, lineHeight: 1.28, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{d.title}</b>
+        <span style={{ display: 'block', marginTop: 4 }}>
+          <SubmitterLine name={author.name} picture={author.picture_url} color={author.color} size={0}
+            when={d.answered_at ? `${sentBack ? 'Sent back' : 'Reply'} ${timeAgo(d.answered_at)}` : `Sent ${timeAgo(d.created_at)}`} />
+        </span>
+        <span
+          title={text}
+          className="line-clamp-2"
+          style={{ display: 'block', marginTop: 5, fontSize: 12.5, lineHeight: 1.4, color: CK.inkSoft, overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}
+        >
+          {text}
+        </span>
+      </button>
+    );
+  }
   return (
     <button
       type="button"

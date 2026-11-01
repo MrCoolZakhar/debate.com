@@ -18,6 +18,7 @@ import CharacterModal from '../character/CharacterModal';
 import { InPlaceCharacterScope } from '../character/CharacterProfileHost';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { authorName, buildNames } from './directiveKit';
+import { cabinetColorOf, isCabinetDirective } from './cabinetStamp';
 import DirectiveMain, { EffectsStepButton } from './DirectiveMain';
 import { DirectiveNav } from './DirectiveNav';
 import EffectsPanel from './EffectsPanel';
@@ -203,6 +204,9 @@ function PopupBody({ directive: d, onClose, onChanged, notesVersion = 0, nav, on
   const names = useMemo(() => buildNames(core.cabinets, core.characters, core.members), [core]);
   const who = authorName(d, names);
   const character = d.author_character_id ? names.characters.get(d.author_character_id) : undefined;
+  // A cabinet directive is framed in its cabinet's own colour (design B).
+  const isCab = isCabinetDirective(d);
+  const cabColor = cabinetColorOf(d.cabinet_id ? names.cabinets.get(d.cabinet_id) : undefined);
   const powers = useMemo(() => ({
     resources: director || settings.backroomPowers.resources,
     units: director || settings.backroomPowers.units,
@@ -278,7 +282,7 @@ function PopupBody({ directive: d, onClose, onChanged, notesVersion = 0, nav, on
       {/* Kept mounted (hidden) while the big map is shown, so the reply and the scroll are exactly as they were. */}
       <div className="dp-swap" style={{ display: mapReq ? 'none' : 'contents' }}>
         {showMain && (
-          <div className="dp-main">
+          <div className="dp-main" style={isCab ? { boxShadow: `0 0 0 3px ${cabColor}, 0 24px 60px rgba(58,14,15,0.35)` } : undefined}>
             <DirectiveMain
               directive={d}
               reply={reply}

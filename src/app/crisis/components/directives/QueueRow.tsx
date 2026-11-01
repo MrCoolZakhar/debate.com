@@ -5,6 +5,9 @@
 // character on the left (round portrait, surname in bold, the character's title beneath it), and on the
 // right, small: theme, kind, cabinet logo, wait time, backroomer. Clicking the portrait opens the character.
 // Used by the backroom inbox and the "Waiting for a Reply" card on Command.
+// A CABINET directive is drawn as design B (cabinetStamp.tsx): framed in its cabinet's colour, the seal and name first, the title big,
+// the sender only a small muted line, the CABINET stamp poking out of its top right edge, and no backroomer (cabinet directives do not
+// care who the responsible backroomer is).
 
 import { Clock, MessageCircle, Pencil } from 'lucide-react';
 import type { Directive } from '@/lib/crisis/types';
@@ -14,6 +17,7 @@ import { CharacterLink, CharacterName } from '../character/CharacterProfileHost'
 import { seatFitFontPx } from '@/lib/seatName';
 import { CabinetLogo, NumberBadge, shortName, StaffPic, ThemeTags } from './directiveParts';
 import { KIND_ICON, authorName, writerOf, writingAge, writtenByOther, type Names } from './directiveKit';
+import { CabinetHead, CabinetStamp, SubmitterLine, cabinetColorOf, cabinetRing, isCabinetDirective, stampRoom } from './cabinetStamp';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { useNow } from './useNow';
 
@@ -45,8 +49,62 @@ export default function QueueRow({ d, names, whenLabel, sev, selected, delegateN
   const color = cab?.color ?? CK.red;
   const KindIcon = KIND_ICON[d.kind];
   const waitColor = sev ? WAIT_COLOR[sev] : CK.inkSoft;
+  const isCab = isCabinetDirective(d);
   const responsible = (d.assigned_member_id ?? ch?.owner_member_id ?? null);
   const backroomer = responsible ? names.members.get(responsible) : undefined;
+
+  if (isCab) {
+    const cc = cabinetColorOf(cab);
+    const room = stampRoom('row');
+    const ring = selected ? 3 : 2;
+    return (
+      <div
+        style={{
+          position: 'relative', overflow: 'visible', background: CK.card, borderRadius: compact ? 14 : 18, minWidth: 0,
+          margin: `${room.top + 4}px ${room.right}px 0 0`, boxShadow: cabinetRing(cc, ring, CK.shadowSm), opacity: other ? 0.62 : 1, filter: other ? 'grayscale(0.7)' : undefined,
+        }}
+      >
+        {/* Command lays a small control on the card's top right corner: the stamp moves left of it there. */}
+        <CabinetStamp size="row" style={compact ? { right: 40 } : undefined} />
+        <button
+          type="button"
+          onClick={onOpen}
+          aria-label={`Open cabinet directive No. ${dirNumber(d)}: ${d.title}`}
+          className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] transition-transform active:scale-[0.99]"
+          style={{ position: 'absolute', inset: 0, zIndex: 1, width: '100%', border: 0, background: 'transparent', borderRadius: 'inherit', cursor: 'pointer', padding: 0 }}
+        />
+        <div style={{ position: 'relative', fontFamily: CK.font, color: CK.ink, padding: compact ? '12px 12px 9px' : '14px 14px 11px', pointerEvents: 'none' }}>
+          <span style={{ display: 'block', paddingRight: compact ? 120 : 84 }}><CabinetHead cabinet={cab} n={dirNumber(d)} sealSize={compact ? 26 : 32} nameSize={compact ? 12.5 : 13.5} /></span>
+          <span style={{ display: 'block', marginTop: compact ? 7 : 9, fontSize: compact ? 15.5 : 18, fontWeight: 800, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{d.title}</span>
+          <span className="flex flex-wrap items-center" style={{ gap: '4px 10px', marginTop: compact ? 5 : 7 }}>
+            <span style={{ flex: '1 1 140px', minWidth: 0, position: 'relative', zIndex: 2, pointerEvents: 'auto' }}>
+              <SubmitterLine name={who} picture={ch?.picture_url} color={color} size={0} characterId={ch?.id} />
+            </span>
+            <span className="flex flex-wrap items-center justify-end" style={{ gap: '4px 8px', marginLeft: 'auto' }}>
+              {delegateNote && <MessageCircle size={14} strokeWidth={1.5} aria-label="The delegate sent a note" style={{ color: '#3E6A9A' }} />}
+              {d.themes.length > 0 && <ThemeTags themes={d.themes} maxChips={1} />}
+              <span className="inline-flex items-center" style={{ gap: 3, fontSize: 12, fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: waitColor, flex: 'none' }}>
+                <Clock size={12} strokeWidth={1.6} aria-hidden />{whenLabel}
+              </span>
+            </span>
+          </span>
+          {writer && (
+            <span className="flex items-center" style={{ gap: 6, marginTop: compact ? 7 : 9, fontSize: compact ? 11.5 : 12, fontWeight: 800, color: CK.goldDeep, lineHeight: 1.25 }}>
+              <StaffPic member={writer} size={compact ? 16 : 18} />
+              <Pencil size={12} strokeWidth={1.6} aria-hidden style={{ flex: 'none' }} />
+              <span style={{ overflowWrap: 'anywhere' }}>Being written by {writer.display_name}, {writingAge(d, now)}</span>
+              {other && onTakeOver && (
+                <button type="button" onClick={onTakeOver} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+                  style={{ position: 'relative', zIndex: 2, pointerEvents: 'auto', marginLeft: 'auto', border: 0, borderRadius: 10, padding: '3px 9px', fontSize: 11.5, fontWeight: 800, cursor: 'pointer', background: CK.card, color: CK.forest, boxShadow: CK.shadowSm, fontFamily: CK.font }}>
+                  Take over
+                </button>
+              )}
+            </span>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   const P = compact ? 30 : 42;              // portrait, inside the row (it no longer hangs over the top corner)
   const titleSize = compact ? 15 : 18;

@@ -10,25 +10,27 @@
 // a row leaves this one.
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Flag, LocateFixed, Pause, PenTool, Play, RotateCcw, Shield, UserRound, type LucideIcon } from 'lucide-react';
+import { Flag, Info, LocateFixed, Pause, PenTool, Play, RotateCcw, Shield, UserRound, type LucideIcon } from 'lucide-react';
 import { crisisError } from '@/lib/crisis/api';
-import { crisisHistory } from '@/lib/crisis/history';
+import { crisisHistory, crisisHistorySince } from '@/lib/crisis/history';
 import { timeAgo } from '@/lib/crisis/format';
 import { Btn, CK, Skeleton } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import CrisisDialog from '../delegate/CrisisDialog';
-import ChangesReplay, { progressOf, startOf } from '../history/ChangesReplay';
+import ChangesReplay, { CATEGORY_COLOR, progressOf, startOf } from '../history/ChangesReplay';
 import { focusForAny, parseAnyChange, type AnyChange, type AnyFilter } from '../history/charChange';
 import { ChangeDisc, PieceLine, describe, useChangeCtx, type ChangeCtx, type Described } from '../history/changeKit';
 import { prefersReducedMotion } from './mapAnimate';
 import type { FocusRequest } from './mapFocusFly';
 
 /** The groups of the breakdown, in the order they are listed. */
-const GROUPS: Array<{ filter: AnyFilter; label: string; Icon: LucideIcon }> = [
+type Kind = AnyFilter | 'other';
+const GROUPS: Array<{ filter: Kind; label: string; Icon: LucideIcon }> = [
   { filter: 'troops', label: 'Troops', Icon: Shield },
   { filter: 'borders', label: 'Borders', Icon: Flag },
   { filter: 'areas', label: 'Areas', Icon: PenTool },
   { filter: 'characters', label: 'Characters', Icon: UserRound },
+  { filter: 'other', label: 'Other changes', Icon: Info },
 ];
 /** Rows made by one send share its time; a second either way covers rounding. */
 const SAME_SEND_MS = 1000;
@@ -39,8 +41,14 @@ export function readChangesStamp(raw: string | null | undefined): number | null 
   return Number.isFinite(n) && n > 1e12 ? Math.round(n) : null;
 }
 
-/** The most rows one look back reads (the history function's own cap). */
-const SINCE_LIMIT = 3000;
+/** One send's rows: a few first, more only when every row read still belongs to it. */
+async function rowsOfSend(ref: Parameters<typeof crisisHistory>[0], stamp: number) {
+  const until = new Date(stamp).toISOString();
+  const inSend = (at: string) => Math.abs(new Date(at).getTime() - stamp) <= SAME_SEND_MS;
+  let rows = await crisisHistory(ref, { until, limit: 120 });
+  if (rows.length >= 120 && rows.every((r) => inSend(r.created_at))) rows = await crisisHistory(ref, { until, limit: 600 });
+  return rows;
+}
 
 const countText = (n: number) => `${n} ${n === 1 ? 'Change' : 'Changes'} to the Map`;
 
@@ -77,10 +85,12 @@ export default function MapChangesDialog({ stamp, since = false, onClose, onPick
   const [changes, setChanges] = useState<AnyChange[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [hot, setHot] = useState<string | null>(null);
+  // Kinds of change the viewer has turned off in the picture (the list underneath still lists them all).
+  const [hidden, setHidden] = useState<ReadonlySet<Kind>>(() => new Set());
 
   useEffect(() => {
     let cancelled = false;
-    crisisHistory(ref, since ? { limit: SINCE_LIMIT } : { until: new Date(stamp).toISOString(), limit: 500 })
+    (since ? crisisHistorySince(ref, stamp, SAME_SEND_MS) : rowsOfSend(ref, stamp))
       .then((rows) => {
         if (cancelled) return;
         const mine = rows
@@ -103,7 +113,8 @@ export default function MapChangesDialog({ stamp, since = false, onClose, onPick
   const tRef = useRef(0);
   useEffect(() => { tRef.current = t; });
   const n = changes?.length ?? 0;
-  const durationMs = 3200 + Math.min(n, 30) * 70;
+  // Slow enough to follow: a send plays for a bit over four and a half seconds, a little longer for each change.
+  const durationMs = Math.round((3200 + Math.min(n, 30) * 70) * 1.4);
   const ready = !!changes && changes.length > 0 && !!ctx.world;
   const started = useRef(false);
   useEffect(() => {
@@ -134,19 +145,30 @@ export default function MapChangesDialog({ stamp, since = false, onClose, onPick
   const toggle = () => { if (playing) setPlaying(false); else { if (tRef.current >= 1) setT(0); setPlaying(true); } };
   const atEnd = t >= 1 && !playing;
 
+  // What the picture plays: every change of the kinds that are on.
+  const shown = useMemo(() => (changes ?? []).filter((c) => !hidden.has(c.filter)), [changes, hidden]);
+
   // What the video is showing now: the change that started last.
   const nowIdx = useMemo(() => {
-    if (!changes || t <= 0) return -1;
+    if (!shown.length || t <= 0) return -1;
     let idx = -1;
-    changes.forEach((_, i) => { if (t >= startOf(i, changes.length) && progressOf(t, i, changes.length) < 1) idx = i; });
+    shown.forEach((_, i) => { if (t >= startOf(i, shown.length) && progressOf(t, i, shown.length) < 1) idx = i; });
     return idx;
-  }, [changes, t]);
+  }, [shown, t]);
 
   const rows = useMemo(() => (changes ?? []).map((c) => ({ c, d: describe(c, ctx) })), [changes, ctx]);
   const groups = useMemo(
     () => GROUPS.map((g) => ({ ...g, rows: rows.filter((r) => r.c.filter === g.filter) })).filter((g) => g.rows.length > 0),
     [rows],
   );
+  const toggleKind = useCallback((k: Kind) => {
+    setHidden((cur) => {
+      const next = new Set(cur);
+      if (next.has(k)) next.delete(k);
+      else if (groups.filter((g) => !cur.has(g.filter)).length > 1) next.add(k);   // the last kind on stays on
+      return next;
+    });
+  }, [groups]);
 
   const pick = useCallback((c: AnyChange) => {
     const f = focusForAny(c);
@@ -165,7 +187,9 @@ export default function MapChangesDialog({ stamp, since = false, onClose, onPick
         .crisis-change-row:hover .crisis-change-go, .crisis-change-row:focus-visible .crisis-change-go { opacity: 1; transform: none; }
         .crisis-change-go { opacity: 0.55; transition: opacity 150ms ease-out, transform 150ms ease-out; }
         .crisis-scrub { width: 100%; accent-color: ${CK.red}; }
-        @media (prefers-reduced-motion: reduce) { .crisis-change-row { animation: none; } .crisis-change-go { transition: none; } }
+        .crisis-kind-chip { transition: background-color 140ms ease-out, box-shadow 140ms ease-out, opacity 140ms ease-out; }
+        .crisis-kind-chip:active { transform: scale(0.97); }
+        @media (prefers-reduced-motion: reduce) { .crisis-change-row { animation: none; } .crisis-change-go, .crisis-kind-chip { transition: none; } .crisis-kind-chip:active { transform: none; } }
       `}</style>
 
       {error ? (
@@ -183,7 +207,26 @@ export default function MapChangesDialog({ stamp, since = false, onClose, onPick
         </div>
       ) : (
         <div>
-          <ChangesReplay world={ctx.world} changes={changes} ctx={ctx} t={t} hot={hot} />
+          {groups.length > 1 && (
+            <div role="group" aria-label="Show in the picture" className="flex flex-wrap items-center" style={{ gap: 6, marginBottom: 8 }}>
+              {groups.map((g) => {
+                const on = !hidden.has(g.filter);
+                const col = g.filter === 'other' ? CK.inkSoft : CATEGORY_COLOR[g.filter];
+                return (
+                  <button
+                    key={g.filter} type="button" aria-pressed={on} onClick={() => toggleKind(g.filter)} title={on ? `Hide ${g.label.toLowerCase()}` : `Show ${g.label.toLowerCase()}`}
+                    className="crisis-kind-chip inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8E2424]"
+                    style={{ gap: 6, border: 0, cursor: 'pointer', fontFamily: CK.font, fontSize: 12.5, fontWeight: 800, padding: '5px 11px 5px 8px', borderRadius: 999, background: on ? `${col}1F` : CK.well, color: on ? CK.ink : CK.muted, boxShadow: on ? `inset 0 0 0 1.5px ${col}` : 'inset 0 0 0 1px rgba(27,56,40,0.1)', opacity: on ? 1 : 0.8 }}
+                  >
+                    <g.Icon size={14} strokeWidth={1.6} aria-hidden style={{ color: on ? col : CK.muted }} />
+                    {g.label}
+                    <span style={{ fontWeight: 600, color: CK.muted, fontVariantNumeric: 'tabular-nums' }}>{g.rows.length}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <ChangesReplay world={ctx.world} changes={shown} ctx={ctx} t={t} hot={hot} />
           <div className="flex items-center" style={{ gap: 12, marginTop: 12 }}>
             <Btn size="sm" tone="ghost" onClick={toggle} icon={playing ? <Pause size={15} strokeWidth={1.5} aria-hidden /> : atEnd ? <RotateCcw size={15} strokeWidth={1.5} aria-hidden /> : <Play size={15} strokeWidth={1.5} aria-hidden />}>
               {playing ? 'Pause' : atEnd ? 'Replay' : 'Play'}
@@ -196,7 +239,7 @@ export default function MapChangesDialog({ stamp, since = false, onClose, onPick
           </div>
           <div className="flex justify-between" style={{ fontSize: 12, fontWeight: 700, color: CK.muted, marginTop: 2 }} aria-hidden>
             <span>Before</span>
-            <span style={{ color: CK.inkSoft, textAlign: 'center', overflowWrap: 'anywhere', padding: '0 8px' }}>{nowIdx >= 0 ? describe(changes[nowIdx], ctx).title : ''}</span>
+            <span style={{ color: CK.inkSoft, textAlign: 'center', overflowWrap: 'anywhere', padding: '0 8px' }}>{nowIdx >= 0 ? describe(shown[nowIdx], ctx).title : ''}</span>
             <span>Now</span>
           </div>
 

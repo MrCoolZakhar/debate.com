@@ -7,8 +7,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Boxes, CalendarCheck, CalendarClock, ChevronRight, MonitorPlay, Newspaper, ScrollText } from 'lucide-react';
-import { crisisError, listDirectives, listMeetings, loadResources, type CrisisRef } from '@/lib/crisis/api';
-import { getCrisisClient } from '@/lib/crisis/client';
+import { crisisError, listDirectives, listMeetings, loadChairRooms, loadResources, type CrisisRef } from '@/lib/crisis/api';
 import { useCrisisLive } from '@/lib/crisis/live';
 import { meetingInProgress } from '@/lib/crisis/meetings';
 import { useClockOverlay } from '@/lib/crisis/meetingClockStore';
@@ -18,7 +17,7 @@ import { crisisBase, useCrisis } from '../../[conference]/[crisis]/CrisisContext
 import { Card, CardTitle, CK, resourceIcon, scenarioLabel, Skeleton, Tick } from '../../crisisKit';
 import DirectiveDeepLink from '../notifications/DirectiveDeepLink';
 import MeetingHistory from '../meetings/MeetingHistory';
-import MeetingRequestsStrip, { useMeetingPeople } from '../meetings/MeetingRequestsStrip';
+import { useMeetingPeople } from '../meetings/MeetingRequestsStrip';
 import StaffMeetingCard from '../meetings/StaffMeetingCard';
 import { useMeetingResponses } from '../meetings/useMeetingResponses';
 import { useCrisisNews } from '../news/useCrisisNews';
@@ -28,34 +27,19 @@ import ChairWaitingCard from './ChairWaitingCard';
 
 interface Room { cabinetId: string; name: string; code: string | null; chairPassword: string | null }
 
-/** The live room of each cabinet's conference committee: its code and chair password (committees.settings.chairJoinSuffix, readable
- *  by the room's code), the same read the Crisis Director's "Join as chair" uses (command/commandData.ts). */
-async function loadRooms(ref: CrisisRef, cabinets: Array<{ id: string; name: string; conference_committee_id: string | null }>): Promise<Room[]> {
-  const client = await getCrisisClient(ref.conf, ref.crisis);
-  const ids = cabinets.map((c) => c.conference_committee_id).filter((x): x is string => !!x);
-  const links = new Map<string, { session_id: string | null; session_code: string | null }>();
-  const rooms = new Map<string, { code: string | null; chairPassword: string | null }>();
-  if (ids.length) {
-    const r = await client.from('conference_committees').select('id, session_id, session_code').in('id', ids);
-    for (const row of (r.data ?? []) as Array<{ id: string; session_id: string | null; session_code: string | null }>) links.set(row.id, row);
-    const sids = [...links.values()].map((l) => l.session_id).filter((x): x is string => !!x);
-    if (sids.length) {
-      const cm = await client.from('committees').select('id, code, settings').in('id', sids);
-      for (const row of (cm.data ?? []) as Array<{ id: string; code: string | null; settings: { chairJoinSuffix?: unknown } | null }>) {
-        const pw = row.settings?.chairJoinSuffix;
-        rooms.set(row.id, { code: row.code, chairPassword: typeof pw === 'string' && pw ? pw : null });
-      }
-    }
-  }
+/** The room each of the chair's cabinets sits in: its code and chair password, from the database's chair-only read
+ *  (a chair cannot read the committees table). */
+async function loadRooms(ref: CrisisRef, cabinets: Array<{ id: string; name: string }>): Promise<Room[]> {
+  const rows = await loadChairRooms(ref);
+  const byCabinet = new Map(rows.map((x) => [x.cabinet_id, x]));
   return cabinets.map((c) => {
-    const link = c.conference_committee_id ? links.get(c.conference_committee_id) : undefined;
-    const room = link?.session_id ? rooms.get(link.session_id) : undefined;
-    return { cabinetId: c.id, name: c.name, code: room?.code ?? link?.session_code ?? null, chairPassword: room?.chairPassword ?? null };
+    const row = byCabinet.get(c.id);
+    return { cabinetId: c.id, name: c.name, code: row?.code ?? null, chairPassword: row?.chair_password ?? null };
   });
 }
 
 /** The cabinet's meetings on the Front Room, read only: those still asking the others, approved ones (the one running first, with
- *  its clock) and, collapsed, what was held. Requests waiting for a yes or no are the strip above. A chair sees these and may run
+ *  its clock) and, collapsed, what was held. Requests waiting for a yes or no are listed first. A chair sees these and may run
  *  the clock; only the backroom decides (owner, 1 Nov 2026). */
 function ChairMeetings() {
   const { ref, core, cabinetId } = useCrisis();
@@ -88,6 +72,7 @@ function ChairMeetings() {
     [mine],
   );
   const asking = useMemo(() => mine.filter((m) => m.status === 'awaiting_delegates'), [mine]);
+  const waiting = useMemo(() => mine.filter((m) => m.status === 'pending'), [mine]);
   const { responses } = useMeetingResponses(ref, true, asking.length > 0);
   const past = useMemo(() => mine.filter((m) => m.status !== 'awaiting_delegates' && m.status !== 'pending' && m.status !== 'approved'), [mine]);
   const running = approved.filter(meetingInProgress).length;
@@ -118,6 +103,9 @@ function ChairMeetings() {
             </p>
           )}
           {approved.length === 0 && <p style={{ margin: 0, fontSize: 13.5, color: CK.inkSoft }}>No meetings are approved yet.</p>}
+          {waiting.map((m) => (
+            <StaffMeetingCard key={m.id} m={m} refx={ref} people={people} cabinets={core.cabinets} members={core.members} canAct={false} onChanged={() => void load()} now={now} />
+          ))}
           {asking.map((m) => (
             <StaffMeetingCard key={m.id} m={m} refx={ref} people={people} cabinets={core.cabinets} members={core.members} canAct={false} onChanged={() => void load()} now={now} responses={responses} />
           ))}
@@ -136,13 +124,11 @@ const DASH_CSS = `
 .fr-wrap { display: flex; flex-direction: column; gap: 12px; padding-top: 6px; }
 .fr-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
 .fr-col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
-.fr-strip:empty { display: none; }
 @media (max-width: 1023px) { .fr-col-c { order: -1; } }
 @media (min-width: 1024px) and (min-height: 620px) {
   .fr-wrap { height: calc(100dvh - 78px); }
   .fr-grid { flex: 1; min-height: 0; grid-template-columns: minmax(0, 1fr) minmax(0, 1.12fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
   .fr-col { min-height: 0; }
-  .fr-strip { flex: none; max-height: 28dvh; overflow-y: auto; }
   .fr-pane { display: flex; flex-direction: column; min-height: 0; }
   .fr-grow { flex: 1 1 0; }
   .fr-fixed { flex: none; }
@@ -223,8 +209,6 @@ export default function ChairHome() {
         {error && <p role="status" style={{ flexBasis: '100%', margin: 0, fontSize: 13, color: CK.danger }}>{error}</p>}
       </header>
 
-      <div className="fr-strip"><MeetingRequestsStrip compact /></div>
-
       <div className="fr-grid">
         <div className="fr-col">
           <Card warm className="fr-fixed">
@@ -247,7 +231,7 @@ export default function ChairHome() {
                         Open chair console
                       </Link>
                     ) : (
-                      <span style={{ fontSize: 13, color: CK.muted }}>The committee room is not ready yet.</span>
+                      <span style={{ fontSize: 13, color: CK.muted }}>The committee room is not ready yet</span>
                     )}
                   </div>
                 ))}

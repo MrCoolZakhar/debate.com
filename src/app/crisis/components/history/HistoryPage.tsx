@@ -20,12 +20,15 @@ import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { mayEditCharacters } from '../character/characterStatus';
 import { isEmptySet, sendSet } from '../map/mapEdits';
 import { buildRestoreSet } from '../map/mapRestore';
-import BatchEntry from './BatchEntry';
+import BatchEntry, { EntryGuard } from './BatchEntry';
 import ChangeDialog from './ChangeDialog';
 import { parseAnyChange, type AnyChange, type AnyFilter } from './charChange';
 import { useChangeCtx } from './changeKit';
 
-const PAGE = 200;
+/** A drawn area carries its whole outline, so the rows are heavy: a few at a time. */
+const PAGE = 60;
+/** What is read when a bigger read fails. */
+const SMALL_PAGE = 20;
 /** How far back a restore reads the history. */
 const RESTORE_ROWS = 3000;
 type Filter = 'all' | AnyFilter;
@@ -62,7 +65,13 @@ export default function HistoryPage({ embedded = false }: { embedded?: boolean }
   const [open, setOpen] = useState<AnyChange | null>(null);
 
   const load = useCallback(async () => {
-    try { setRows(await crisisHistory(ref, { limit })); setError(null); } catch (e) { setError(crisisError(e, 'Could not load the history.')); }
+    try { setRows(await crisisHistory(ref, { limit })); setError(null); return; } catch (e) {
+      // A big read can be refused (the rows are heavy): a small one still shows the latest changes.
+      if (limit > SMALL_PAGE) {
+        try { setRows(await crisisHistory(ref, { limit: SMALL_PAGE })); setError(null); return; } catch { /* the first reason is told */ }
+      }
+      setError(crisisError(e, 'Could not load the history.'));
+    }
   }, [ref, limit]);
   useEffect(() => { void Promise.resolve().then(load); }, [load]);
   useCrisisLive(ref.id, ['crisis_units', 'crisis_map_regions', 'crisis_shapes'], () => { void load(); });
@@ -175,11 +184,13 @@ export default function HistoryPage({ embedded = false }: { embedded?: boolean }
               <Card key={day.key} style={{ padding: '14px 12px 8px' }}>
                 <h2 style={{ margin: '0 6px 6px', fontSize: 15, fontWeight: 800, color: CK.ink }}>{day.label}</h2>
                 {day.items.map((e) => (
-                  <BatchEntry
-                    key={e.batch.id} changes={e.changes} at={e.batch.at} by={e.batch.by} ctx={ctx} staff={staff} canRestore={canRestore}
-                    whenLabel={`${dayLabel(e.batch.at).toLowerCase()} at ${timeOf(e.batch.at)}`}
-                    onOpen={setOpen} onRestore={() => restore(e.batch)}
-                  />
+                  <EntryGuard key={e.batch.id} at={e.batch.at}>
+                    <BatchEntry
+                      changes={e.changes} at={e.batch.at} by={e.batch.by} ctx={ctx} staff={staff} canRestore={canRestore}
+                      whenLabel={`${dayLabel(e.batch.at).toLowerCase()} at ${timeOf(e.batch.at)}`}
+                      onOpen={setOpen} onRestore={() => restore(e.batch)}
+                    />
+                  </EntryGuard>
                 ))}
               </Card>
             ))}

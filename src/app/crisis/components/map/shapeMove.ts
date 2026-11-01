@@ -1,6 +1,6 @@
 'use client';
 // Gavelling Crisis map: carrying a whole shape somewhere else. A selected drawn area, a selected zone, or a shape being
-// drawn or reshaped shows a "Move" handle in its middle; dragging the handle (or, for a shape in hand, its body) shifts
+// drawn or reshaped shows a small round Move button just above its middle; dragging the button (or, for a shape in hand, its body) shifts
 // every corner by the same amount. The shift is worked out in Mercator space so the shape keeps its look at every
 // latitude, and is limited so no corner leaves the map. This hook owns the pointer and the handle and shows a preview
 // while dragging; it writes nothing: the caller turns the finished move into a map change (one undo step).
@@ -42,24 +42,43 @@ export function shiftMulti(m: Multi, s: Shift): Multi {
 /** True when a shift is more than rounding noise. */
 export const isShift = (s: Shift): boolean => Math.abs(s.dx) > 1e-6 || Math.abs(s.dy) > 1e-8;
 
-function makeMoveHandle(): HTMLElement {
+/** The layers that draw a stored shape and its selection: while one is carried, the original is hidden so only the moving copy shows. */
+const SHAPE_LAYERS = ['shape-area-fill', 'shape-area-line', 'shape-line', 'zone-fill', 'zone-control', 'zone-line'];
+const SELECTION_LAYERS = ['sel-fill', 'sel-halo', 'sel-line'];
+
+/**
+ * A small round white button with the four-arrow move icon. The marker element itself is positioned by MapLibre (it owns
+ * its transform), so the button is a child: it scales a little on hover and while it is carried.
+ */
+function makeMoveHandle(): { el: HTMLElement; grab: (on: boolean) => void } {
   const el = document.createElement('div');
-  el.className = 'wm-marker wm-move';
+  el.className = 'wm-marker wm-shape-handle';
   el.title = 'Drag to move the whole shape';
   el.setAttribute('role', 'button');
   el.setAttribute('aria-label', 'Move the whole shape');
-  Object.assign(el.style, {
-    display: 'flex', alignItems: 'center', gap: '5px', padding: '5px 11px 5px 8px', borderRadius: '999px', background: '#FFFFFF',
-    color: '#1B3828', font: '700 12px/1 var(--font-brand), Inter, system-ui, sans-serif', cursor: 'grab', userSelect: 'none',
-    boxShadow: '0 0 0 1.5px #1B3828, 0 3px 10px rgba(27,56,40,0.28)', whiteSpace: 'nowrap', zIndex: '3',
+  Object.assign(el.style, { width: '34px', height: '34px', zIndex: '3', cursor: 'move', userSelect: 'none', touchAction: 'none' });
+  const btn = document.createElement('div');
+  Object.assign(btn.style, {
+    width: '34px', height: '34px', borderRadius: '50%', background: '#FFFFFF', color: '#1B3828', display: 'grid', placeItems: 'center',
+    boxShadow: '0 0 0 1px rgba(27,56,40,0.14), 0 2px 8px rgba(27,56,40,0.28)', transition: 'transform 140ms ease-out, box-shadow 140ms ease-out',
+    cursor: 'move', pointerEvents: 'none',
   });
-  el.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+  btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
     + '<polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/>'
-    + '<line x1="2" x2="22" y1="12" y2="12"/><line x1="12" x2="12" y1="2" y2="22"/></svg><span>Move</span>';
+    + '<line x1="2" x2="22" y1="12" y2="12"/><line x1="12" x2="12" y1="2" y2="22"/></svg>';
+  el.appendChild(btn);
+  const reduce = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  let grabbing = false;
+  const look = (hover: boolean) => {
+    btn.style.transform = reduce ? 'none' : grabbing ? 'scale(1.12)' : hover ? 'scale(1.1)' : 'none';
+    btn.style.boxShadow = grabbing || hover ? '0 0 0 1.5px #1B3828, 0 3px 10px rgba(27,56,40,0.32)' : '0 0 0 1px rgba(27,56,40,0.14), 0 2px 8px rgba(27,56,40,0.28)';
+  };
+  el.addEventListener('pointerenter', () => look(true));
+  el.addEventListener('pointerleave', () => look(false));
   // A drag that ends on the handle must not also count as a click on the map under it.
   el.addEventListener('click', (ev) => ev.stopPropagation());
   el.addEventListener('dblclick', (ev) => ev.stopPropagation());
-  return el;
+  return { el, grab: (on) => { grabbing = on; el.style.cursor = on ? 'grabbing' : 'move'; look(false); } };
 }
 
 interface PointerLike { point: { x: number; y: number }; lngLat: { lng: number; lat: number }; originalEvent: Event; preventDefault: () => void }
@@ -75,6 +94,8 @@ export interface MoverOptions {
   body: boolean;
   /** Extra veto for a body press (such as a press on the outline, which reshapes instead). */
   blocked?: (e: PointerLike) => boolean;
+  /** The id of the stored shape being carried (a drawn area or a zone): its original is hidden while the moving copy shows. */
+  hideId?: string | null;
   /** The shape as it would be after the move while dragging; null when the drag ends. */
   preview: (moved: Multi | null) => void;
   /** The finished move. */
@@ -99,6 +120,37 @@ export function useShapeMover(o: MoverOptions): Mover {
   const down = useRef<{ from: Pt; at: { x: number; y: number }; shift: Shift; moved: boolean } | null>(null);
   const frame = useRef<number | null>(null);
 
+  // While a shape is carried, its original and its selection outline are hidden, so there is one moving copy and no doubled outline.
+  const ghost = useRef<{ filters: Map<string, unknown>; visible: Map<string, unknown> } | null>(null);
+  const setGhost = useRef((on: boolean) => {
+    const map = opts.current.mapRef.current;
+    if (!map) { ghost.current = null; return; }
+    try {
+      if (on && !ghost.current) {
+        const id = opts.current.hideId;
+        const filters = new Map<string, unknown>(); const visible = new Map<string, unknown>();
+        if (id) {
+          for (const l of SHAPE_LAYERS) {
+            if (!map.getLayer(l)) continue;
+            const f = map.getFilter(l);
+            filters.set(l, f ?? null);
+            map.setFilter(l, (f ? ['all', f, ['!=', ['get', 'id'], id]] : ['!=', ['get', 'id'], id]) as never);
+          }
+        }
+        for (const l of SELECTION_LAYERS) {
+          if (!map.getLayer(l)) continue;
+          visible.set(l, map.getLayoutProperty(l, 'visibility') ?? 'visible');
+          map.setLayoutProperty(l, 'visibility', 'none');
+        }
+        ghost.current = { filters, visible };
+      } else if (!on && ghost.current) {
+        const g = ghost.current; ghost.current = null;
+        g.filters.forEach((f, l) => { if (map.getLayer(l)) map.setFilter(l, f as never); });
+        g.visible.forEach((v, l) => { if (map.getLayer(l)) map.setLayoutProperty(l, 'visibility', v as 'visible' | 'none'); });
+      }
+    } catch { /* the map is going away */ }
+  });
+
   // The Move handle: a marker in the middle of the shape, dragged like any marker.
   const { ready, shape } = o;
   useEffect(() => {
@@ -107,7 +159,10 @@ export function useShapeMover(o: MoverOptions): Mover {
     const box = bboxOf(shape);
     if (!box) return;
     const at: Pt = labelPoint(shape) ?? [(box[0] + box[2]) / 2, (box[1] + box[3]) / 2];
-    const mk: MLMarker = new ml.Marker({ element: makeMoveHandle(), draggable: true, anchor: 'center', offset: [0, 24] }).setLngLat(at).addTo(map);
+    const handle = makeMoveHandle();
+    // Just above the middle, where the shape's name sits, so it never covers the label.
+    const mk: MLMarker = new ml.Marker({ element: handle.el, draggable: true, anchor: 'center', offset: [0, -26] }).setLngLat(at).addTo(map);
+    mk.on('dragstart', () => { handle.grab(true); setGhost.current(true); });
     const shiftNow = (): Shift => {
       const ll = mk.getLngLat();
       return limitShift(box, shiftBetween(at, [ll.lng, ll.lat]));
@@ -121,6 +176,7 @@ export function useShapeMover(o: MoverOptions): Mover {
       });
     });
     mk.on('dragend', () => {
+      handle.grab(false); setGhost.current(false);
       if (frame.current !== null) { window.cancelAnimationFrame(frame.current); frame.current = null; }
       const s = shiftNow();
       const p0 = map.project(at); const ll = mk.getLngLat(); const p1 = map.project([ll.lng, ll.lat]);
@@ -131,6 +187,7 @@ export function useShapeMover(o: MoverOptions): Mover {
     });
     return () => {
       if (frame.current !== null) { window.cancelAnimationFrame(frame.current); frame.current = null; }
+      setGhost.current(false);
       mk.remove();
     };
   }, [ready, shape, o.mapRef, o.mlRef]);
@@ -156,6 +213,7 @@ export function useShapeMover(o: MoverOptions): Mover {
       const { shape: sh } = opts.current;
       if (!st || !sh) return false;
       if (!st.moved && Math.hypot(e.point.x - st.at.x, e.point.y - st.at.y) < 4) return true;
+      if (!st.moved) setGhost.current(true);
       st.moved = true;
       const box = bboxOf(sh);
       if (!box) return true;
@@ -175,6 +233,7 @@ export function useShapeMover(o: MoverOptions): Mover {
       down.current = null;
       if (frame.current !== null) { window.cancelAnimationFrame(frame.current); frame.current = null; }
       const { shape: sh } = opts.current;
+      setGhost.current(false);
       opts.current.preview(null);
       if (!st.moved || !sh || !isShift(st.shift)) return false;
       opts.current.onMove(shiftMulti(sh, st.shift), st.shift);
@@ -184,6 +243,7 @@ export function useShapeMover(o: MoverOptions): Mover {
       if (!down.current) return false;
       down.current = null;
       if (frame.current !== null) { window.cancelAnimationFrame(frame.current); frame.current = null; }
+      setGhost.current(false);
       opts.current.preview(null);
       return true;
     },

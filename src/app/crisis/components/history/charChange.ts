@@ -7,7 +7,7 @@
 
 import {
   compassWord, distanceKm, parseChange,
-  type ChangeBase, type ChangeFilter, type HistoryChange, type HistoryRow, type LngLat,
+  type ChangeBase, type ChangeFilter, type ChangeOp, type HistoryChange, type HistoryRow, type LngLat,
 } from '@/lib/crisis/history';
 import { focusForChange, type MapFocus } from '@/lib/crisis/mapFocus';
 
@@ -27,7 +27,16 @@ export interface CharChange extends Omit<ChangeBase, 'filter'> {
   bearing: string | null;
 }
 
-export type AnyChange = HistoryChange | CharChange;
+/**
+ * A row the pages could not read (an unknown kind, a missing or damaged part): it is told as a plain "A change" and never breaks
+ * the list around it.
+ */
+export interface OtherChange {
+  rowId: string; at: string; by: string | null; op: ChangeOp; noBefore: boolean;
+  filter: 'other'; type: 'other';
+}
+
+export type AnyChange = HistoryChange | CharChange | OtherChange;
 export type AnyFilter = ChangeFilter | 'characters';
 
 const num = (x: unknown): number | null => {
@@ -66,13 +75,31 @@ export function parseCharChange(row: HistoryRow): CharChange | null {
   };
 }
 
-/** Any row people read on the history pages: a unit, a border, an area or a character. */
+/** A plain "A change" for a row that cannot be read. */
+function otherChange(row: HistoryRow): OtherChange {
+  const op = row.action.split(':')[1];
+  return {
+    rowId: row.id, at: row.created_at, by: row.by_name, op: op === 'insert' || op === 'delete' ? op : 'update',
+    noBefore: !row.before, filter: 'other', type: 'other',
+  };
+}
+
+/**
+ * Any row people read on the history pages: a unit, a border, an area or a character. A row that cannot be read (it
+ * throws, or is damaged) becomes a plain "A change" instead of breaking the page; a row that is meant to be hidden (a border
+ * that changed nothing, a kind nobody reads) is still null.
+ */
 export function parseAnyChange(row: HistoryRow): AnyChange | null {
-  return parseChange(row) ?? parseCharChange(row);
+  try {
+    return parseChange(row) ?? parseCharChange(row);
+  } catch {
+    return otherChange(row);
+  }
 }
 
 /** Where a change happened, for "Open the map". */
 export function focusForAny(c: AnyChange): MapFocus {
+  if (c.type === 'other') return {};
   if (c.type !== 'character') return focusForChange(c);
   const p = c.posTo ?? c.posFrom;
   return p ? { bbox: [p[0], p[1], p[0], p[1]] } : {};

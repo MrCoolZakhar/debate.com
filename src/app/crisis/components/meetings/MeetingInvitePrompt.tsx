@@ -17,7 +17,7 @@ import { CK, OverhangCard, useScrollLock } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { useMeetingPeople } from './MeetingRequestsStrip';
 import { useMeetingResponses } from './useMeetingResponses';
-import { AvatarStack, Fact, InviteButtons, NameList, cabinetColor, dueClock, requesterName, useMyCharacterId, whenText, type MeetingX } from './meetingKit';
+import { AvatarStack, Fact, InviteButtons, NameList, cabinetColor, dueClock, requesterName, useMyCharacterId, hasWhen, whenText, type MeetingX } from './meetingKit';
 
 const WATCH_MS = 1500;
 const KEEP_HANDLED = 300;
@@ -200,7 +200,7 @@ export default function MeetingInvitePrompt() {
             <p style={{ margin: '10px 0 12px', maxHeight: 'min(30dvh, 240px)', overflowY: 'auto', fontSize: 14.5, lineHeight: 1.55, color: CK.ink, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{m.intention}</p>
             <div className="grid" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
               <Fact label="Length">{m.duration_minutes} min</Fact>
-              <Fact label="When">{whenText(m)}</Fact>
+              {hasWhen(m) && <Fact label="When">{whenText(m)}</Fact>}
             </div>
             <p style={{ margin: '10px 0 0', fontSize: 12.5, color: CK.inkSoft }}>
               {due ? `If someone does not answer, it goes to the crisis team on its own at ${due}.` : 'If someone does not answer, it goes to the crisis team on its own after 5 minutes.'}

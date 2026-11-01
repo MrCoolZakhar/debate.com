@@ -71,7 +71,13 @@ export interface HistoryQuery {
   limit?: number;
 }
 
-const asRecord = (x: unknown): Record<string, unknown> | null => (x && typeof x === 'object' && !Array.isArray(x) ? (x as Record<string, unknown>) : null);
+/** An object, whether the database sent it as one or as JSON text; anything else is null. */
+const asRecord = (x: unknown): Record<string, unknown> | null => {
+  if (typeof x === 'string') {
+    try { return asRecord(JSON.parse(x)); } catch { return null; }
+  }
+  return x && typeof x === 'object' && !Array.isArray(x) ? (x as Record<string, unknown>) : null;
+};
 
 /** The map history, newest first. Throws a plain sentence on failure. */
 export async function crisisHistory(ref: CrisisRef, q: HistoryQuery = {}): Promise<HistoryRow[]> {
@@ -80,20 +86,44 @@ export async function crisisHistory(ref: CrisisRef, q: HistoryQuery = {}): Promi
   if (res.error) throw new UserFacingError(crisisError(res.error, 'Could not load the history.'));
   const raw = res.data as unknown;
   const list: unknown[] = Array.isArray(raw) ? raw : Array.isArray((raw as { rows?: unknown })?.rows) ? (raw as { rows: unknown[] }).rows : [];
-  return list
-    .map((r) => {
-      const o = r as Record<string, unknown>;
-      return {
-        id: String(o.id ?? ''),
-        action: typeof o.action === 'string' ? o.action : '',
+  const out: HistoryRow[] = [];
+  list.forEach((r, i) => {
+    // One damaged row is skipped; it never costs the page the rows around it.
+    try {
+      const o = asRecord(r);
+      if (!o) return;
+      const created = typeof o.created_at === 'string' ? o.created_at : '';
+      if (!created || Number.isNaN(new Date(created).getTime())) return;
+      const table = typeof o.table_name === 'string' ? o.table_name : typeof o.table === 'string' ? o.table : '';
+      const op = typeof o.op === 'string' ? o.op : typeof o.operation === 'string' ? o.operation : '';
+      const action = typeof o.action === 'string' && o.action ? o.action : table && op ? `${table}:${op.toLowerCase()}` : '';
+      if (!action) return;
+      out.push({
+        id: o.id === null || o.id === undefined || o.id === '' ? `${created}:${i}` : String(o.id),
+        action,
         before: asRecord(o.before),
         after: asRecord(o.after),
         by_name: typeof o.by_name === 'string' && o.by_name ? o.by_name : null,
-        created_at: typeof o.created_at === 'string' ? o.created_at : '',
-      };
-    })
-    .filter((r) => r.id && r.created_at && r.action)
-    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        created_at: created,
+      });
+    } catch { /* skipped */ }
+  });
+  return out.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+}
+
+/**
+ * The rows from `stamp` until now (the one growing "N changes to the map" notice). The history is newest first and a drawn
+ * area carries its whole outline, so a long read is heavy: it asks for a few rows, and for more only while the oldest row it
+ * got is still newer than the moment it wants.
+ */
+export async function crisisHistorySince(ref: CrisisRef, stamp: number, slackMs = 1000): Promise<HistoryRow[]> {
+  let rows: HistoryRow[] = [];
+  for (const limit of [80, 300, 1000, 3000]) {
+    rows = await crisisHistory(ref, { limit });
+    const oldest = rows.length ? new Date(rows[rows.length - 1].created_at).getTime() : 0;
+    if (rows.length < limit || oldest < stamp - slackMs) break;
+  }
+  return rows;
 }
 
 export interface ChangeBase {
@@ -147,7 +177,7 @@ const n = (x: unknown): number | null => {
   const v = Number(x);
   return Number.isFinite(v) ? v : null;
 };
-const s = (x: unknown): string | null => (typeof x === 'string' && x ? x : null);
+const s = (x: unknown): string | null => (typeof x === 'string' && x ? x : typeof x === 'number' && Number.isFinite(x) ? String(x) : null);
 const UNIT_KINDS: UnitKind[] = ['army', 'navy', 'air', 'missile', 'base', 'spy', 'sub', 'custom'];
 const pos = (r: Record<string, unknown> | null): LngLat | null => {
   if (!r) return null;

@@ -3,7 +3,8 @@
 // the database (docs/crisis/sql/027); whenever one is waiting for them this big centred pop-up opens over a dimmed page on any staff
 // page, under a playful "New Cabinet Directive!" banner: Review (opens it the way a notification does), Allocate to someone else
 // (the second step replaces the pop-up's content, never a second pop-up) or X. What was handled or dismissed is remembered on this
-// device. It waits while any dialog is open and never shows what was already waiting for more than 30 minutes when the page opened.
+// device. The directive is drawn as design B (cabinetStamp.tsx): a card framed in its cabinet's colour with the seal and name, the
+// title large, the sender a small muted line and the big CABINET stamp poking out of its top right corner. It waits while any dialog is open and never shows what was already waiting for more than 30 minutes when the page opened.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -15,12 +16,13 @@ import { dirNumber } from '@/lib/crisis/format';
 import { useCrisisLive } from '@/lib/crisis/live';
 import type { Directive } from '@/lib/crisis/types';
 import { serverNow } from '@/lib/serverClock';
-import { Avatar, agoLabel, CK, useScrollLock } from '../../crisisKit';
+import { agoLabel, CK, useScrollLock } from '../../crisisKit';
 import { crisisBase, useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { staffLoads } from '../command/commandData';
 import { responsibleMembers } from '../command/setupKit';
 import { authorName, buildNames } from './directiveKit';
-import { NumberBadge, StaffPic } from './directiveParts';
+import { StaffPic } from './directiveParts';
+import { CabinetHead, CabinetStamp, SubmitterLine, cabinetColorOf, cabinetRing } from './cabinetStamp';
 import { plainText } from './attachedImage';
 import PopBanner from './PopBanner';
 import { useNow } from './useNow';
@@ -213,7 +215,7 @@ export default function CabinetDirectivePrompt() {
         >
           <PopBanner icon={<ScrollText size={26} strokeWidth={1.6} />}>New Cabinet Directive!</PopBanner>
 
-          <div className="flex items-center" style={{ gap: 8, minHeight: 36, marginTop: 10 }}>
+          <div className="flex items-center" style={{ gap: 8, minHeight: 36, marginTop: 10, marginBottom: picking ? 0 : 30 }}>
             {picking ? (
               <button
                 type="button"
@@ -250,29 +252,30 @@ export default function CabinetDirectivePrompt() {
             </button>
           </div>
 
-          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', marginTop: 6 }}>
-            <div key={d.id} className={cursor > 0 ? 'cm-next flex items-start' : 'flex items-start'} style={{ gap: 14 }}>
-              <Avatar name={author} src={character?.picture_url ?? null} size={64} color={cabinet?.color ?? CK.red} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div className="flex items-center flex-wrap" style={{ gap: '2px 8px' }}>
-                  <NumberBadge n={dirNumber(d)} />
-                  <span style={{ fontSize: 13, fontWeight: 600, color: CK.muted }}>{arrived}</span>
+          {!picking && (
+            <div key={d.id} className={cursor > 0 ? 'cm-next' : undefined} style={{ flex: 'none', minHeight: 0 }}>
+              <div style={{ position: 'relative', overflow: 'visible', background: CK.card, borderRadius: 20, padding: '20px 18px 16px', boxShadow: cabinetRing(cabinetColorOf(cabinet), 3, CK.shadow), margin: '0 6px' }}>
+                <CabinetStamp size="pop" onDark />
+                <CabinetHead cabinet={cabinet} n={dirNumber(d)} sealSize={36} nameSize={14.5} />
+                <b style={{ display: 'block', marginTop: 12, fontSize: 25, lineHeight: 1.2, overflowWrap: 'anywhere' }}>{d.title}</b>
+                <p key="body" className="cm-fade" style={{ margin: '12px 0 0', maxHeight: 'min(30dvh, 250px)', overflowY: 'auto', background: CK.well, borderRadius: 14, padding: '11px 14px', fontSize: 15, lineHeight: 1.6, color: CK.ink, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+                  {plainText(d.body)}
+                </p>
+                <div style={{ marginTop: 12 }}>
+                  <SubmitterLine name={author} picture={character?.picture_url ?? null} color={cabinetColorOf(cabinet)} when={`Sent ${arrived || 'just now'}`} size={22} />
                 </div>
-                <b style={{ display: 'block', marginTop: 4, fontSize: 21, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{d.title}</b>
-                <span style={{ display: 'block', marginTop: 2, fontSize: 14, fontWeight: 600, color: CK.inkSoft, overflowWrap: 'anywhere' }}>
-                  {author}{cabinet ? `, ${cabinet.name}` : ''}
-                </span>
               </div>
             </div>
+          )}
 
-            {!picking && (
-              <p key="body" className="cm-fade" style={{ margin: '14px 0 0', maxHeight: 'min(34dvh, 280px)', overflowY: 'auto', background: CK.well, borderRadius: 14, padding: '11px 14px', fontSize: 15, lineHeight: 1.6, color: CK.ink, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
-                {plainText(d.body)}
-              </p>
-            )}
+          {picking && (
+          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', marginTop: 6 }}>
+            <div key={d.id} className="flex items-center" style={{ gap: 10 }}>
+              <CabinetHead cabinet={cabinet} n={dirNumber(d)} sealSize={32} nameSize={13.5} />
+            </div>
+            <b style={{ display: 'block', marginTop: 8, fontSize: 18, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{d.title}</b>
 
-            {picking && (
-              <div role="listbox" aria-label="Staff" className="cm-fade" style={{ marginTop: 14, maxHeight: 'min(320px, 44dvh)', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <div role="listbox" aria-label="Staff" className="cm-fade" style={{ marginTop: 14, maxHeight: 'min(320px, 44dvh)', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
                 {others.length === 0 && <p style={{ margin: 8, fontSize: 14, color: CK.inkSoft }}>There is nobody else on the staff yet</p>}
                 {others.map((m, i) => (
                   <button
@@ -295,9 +298,9 @@ export default function CabinetDirectivePrompt() {
                     </span>
                   </button>
                 ))}
-              </div>
-            )}
+            </div>
           </div>
+          )}
 
           {!picking && (
             <div key="actions" className="cm-fade flex items-center flex-wrap" style={{ gap: 10, marginTop: 14 }}>

@@ -20,12 +20,13 @@ import { crisisError, listDirectives, requestDirectiveChanges, reviewDirectiveAs
 import { dirNumber } from '@/lib/crisis/format';
 import { useCrisisLive } from '@/lib/crisis/live';
 import type { Cabinet, Directive } from '@/lib/crisis/types';
-import { Btn, CK, fieldStyle, OverhangCard, useScrollLock } from '../../crisisKit';
+import { Btn, CK, fieldStyle, useScrollLock } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
-import { whenLabel, whenTitle } from '../delegate/directiveUi';
+import { whenLabel } from '../delegate/directiveUi';
+import { CabinetHead, CabinetStamp, SubmitterLine, cabinetColorOf, cabinetRing } from '../directives/cabinetStamp';
 import { DirectiveBody } from '../directives/attachedImage';
 import PopBanner from '../directives/PopBanner';
-import { CabinetLogo, NumberBadge, ThemeTags } from '../directives/directiveParts';
+import { ThemeTags } from '../directives/directiveParts';
 import { chairGroup, chairVerdict, closeChairDirective, directiveAuthor, useRequestedChairDirective, type DirectiveAuthor } from './chairDirectiveKit';
 
 const WATCH_MS = 1500;
@@ -47,8 +48,6 @@ const COPY: Record<Exclude<Mode, 'view'>, { heading: string; line: string; label
   },
 };
 
-const AVATAR = 56;
-
 /**
  * One cabinet directive, read in full. Waiting for the chair: the three ways to deal with it. Anything else (`readOnly`): the
  * same card with its state on top and no buttons. `topBar` sits at the card's top right (the pop-up's navigation and X).
@@ -59,7 +58,6 @@ export function ChairDirectiveCard({ d, author, cabinet, cref, readOnly = false,
   const [mode, setMode] = useState<Mode>('view');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState<Doing | null>(null);
-  const overhang = Math.round(AVATAR / 3);
   const verdict = chairVerdict(d);
   const group = chairGroup(d);
   const reply = (d.reply ?? '').trim();
@@ -95,28 +93,21 @@ export function ChairDirectiveCard({ d, author, cabinet, cref, readOnly = false,
   };
 
   const back = () => { setMode('view'); setNote(''); };
+  const color = cabinetColorOf(cabinet);
+  // Design B (owner, 1 Nov 2026): the cabinet's seal, name and number top left, the state under them, the top bar top right.
   const header = (
-    <div className="flex items-start justify-between" style={{ gap: 8, paddingLeft: overhang + AVATAR + 12 - 18, minHeight: Math.round((AVATAR * 2) / 3) - 4 }}>
+    <div className="flex items-start justify-between" style={{ gap: 8 }}>
       <div style={{ minWidth: 0, flex: 1 }}>
+        <CabinetHead cabinet={cabinet} n={dirNumber(d)} sealSize={36} nameSize={14.5} />
         {readOnly ? (
-          <span className="inline-flex items-center" style={{ gap: 5, fontSize: 12, fontWeight: 800, color: verdict.color }}>{verdict.icon}{verdict.word}</span>
+          <span className="inline-flex items-center" style={{ gap: 5, marginTop: 6, fontSize: 12, fontWeight: 800, color: verdict.color }}>{verdict.icon}{verdict.word}</span>
         ) : (
-          <span className="inline-flex items-center" style={{ gap: 5, fontSize: 12, fontWeight: 800, color: CK.red }}>
+          <span className="inline-flex items-center" style={{ gap: 5, marginTop: 6, fontSize: 12, fontWeight: 800, color: CK.red }}>
             <Gavel size={15} strokeWidth={1.5} aria-hidden />Needs your decision
           </span>
         )}
-        <b style={{ display: 'block', marginTop: 2, fontSize: 16, lineHeight: 1.25, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{author.name}</b>
-        <span className="flex items-center flex-wrap" style={{ gap: '3px 10px', marginTop: 4, fontSize: 12.5, fontWeight: 600, color: CK.inkSoft }}>
-          <NumberBadge n={dirNumber(d)} />
-          {cabinet && (
-            <span className="inline-flex items-center" style={{ gap: 5, overflowWrap: 'anywhere' }}>
-              <CabinetLogo cabinet={cabinet} size={16} />{cabinet.name}
-            </span>
-          )}
-          <span title={whenTitle(d.created_at)} style={{ color: CK.muted }}>Sent {whenLabel(d.created_at)}</span>
-        </span>
       </div>
-      {topBar}
+      {topBar && <div style={{ flex: 'none', marginTop: 12 }}>{topBar}</div>}
     </div>
   );
 
@@ -124,23 +115,18 @@ export function ChairDirectiveCard({ d, author, cabinet, cref, readOnly = false,
 
   return (
     <div onKeyDown={onKeyDown}>
-      <OverhangCard
-        name={author.name}
-        src={author.picture_url}
-        color={author.color}
-        size={AVATAR}
-        warm
+      <div
         style={{
-          padding: '12px 18px 16px',
-          borderTop: `4px solid ${readOnly ? verdict.color : CK.red}`,
-          boxShadow: `${CK.shadow}, 0 24px 60px rgba(58,14,15,0.4)`,
+          position: 'relative', overflow: 'visible', minWidth: 0, background: CK.card, borderRadius: 22, padding: '30px 20px 16px', marginTop: 22,
+          boxShadow: cabinetRing(color, 3, `${CK.shadow}, 0 24px 60px rgba(58,14,15,0.4)`),
         }}
       >
+        <CabinetStamp size="pop" onDark />
         {header}
 
         {!asking ? (
           <div key="view" className="cm-fade">
-            <h3 style={{ margin: '12px 0 0', fontSize: 19, lineHeight: 1.28, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{d.title}</h3>
+            <h3 style={{ margin: '14px 0 0', fontSize: 25, lineHeight: 1.2, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{d.title}</h3>
             {(d.themes ?? []).length > 0 && (
               <div className="flex flex-wrap items-center" style={{ gap: 6, marginTop: 8 }}>
                 <ThemeTags themes={d.themes ?? []} />
@@ -148,6 +134,9 @@ export function ChairDirectiveCard({ d, author, cabinet, cref, readOnly = false,
             )}
             <div style={{ marginTop: 10, maxHeight: 'min(42dvh, 380px)', overflowY: 'auto', background: CK.well, borderRadius: 14, padding: '10px 12px' }}>
               <DirectiveBody body={d.body} thumb={360} style={{ margin: 0, fontSize: 14.5, lineHeight: 1.6, color: CK.ink, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }} />
+            </div>
+            <div style={{ marginTop: 12 }}>
+              <SubmitterLine name={author.name} picture={author.picture_url} color={author.color} when={`Sent ${whenLabel(d.created_at)}`} />
             </div>
             {readOnly && replyLabel && reply && (
               <p style={{ margin: '10px 0 0', fontSize: 13.5, lineHeight: 1.5, color: CK.inkSoft, overflowWrap: 'anywhere' }}><b>{replyLabel}: </b>{reply}</p>
@@ -200,7 +189,7 @@ export function ChairDirectiveCard({ d, author, cabinet, cref, readOnly = false,
             </div>
           </div>
         )}
-      </OverhangCard>
+      </div>
     </div>
   );
 }

@@ -3,7 +3,8 @@
 // front, the next ones of the chosen lane stepping off to the right, each smaller; clicking one brings it forward and
 // pressing the front one (or Respond) opens it as a pop-up with the "What happens when you send" panel docked beside
 // it (DirectivePopup). The lanes (Mine, Unassigned, All open, Waiting for delegate, Answered) and the filters stay as
-// a compact bar above. A notification's ?d=<id> brings that directive forward and opens it. Used at /directives and
+// a compact bar above. The lanes that wait for a staff reply (Mine, Unassigned, All open) also hold meeting requests and delegates
+// whose character needs replacing, inline with the directives (inboxItems.tsx; owner, 1 Nov 2026). A notification's ?d=<id> brings that directive forward and opens it. Used at /directives and
 // as the backroomer's home.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -12,16 +13,16 @@ import GSelect from '@/components/GSelect';
 import { notifyErr } from '@/lib/appNotify';
 import { CLOSED_DIRECTIVE_STATUSES, countDirectives, crisisError, listClosedDirectivesPage, listDirectives, markDrafting } from '@/lib/crisis/api';
 import { useCrisisLive, useSingleFlight } from '@/lib/crisis/live';
-import { KIND_LABEL, THEMES, type Directive, type Meeting } from '@/lib/crisis/types';
+import { KIND_LABEL, THEMES, type Directive } from '@/lib/crisis/types';
 import { Btn, Card, CK, Segmented, fieldStyle } from '../../crisisKit';
 import DirectiveReader from './DirectiveReader';
-import MeetingRequestsStrip from '../meetings/MeetingRequestsStrip';
 import { useNow } from './useNow';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import DirectivePopup from './DirectivePopup';
 import { MyDraftsButton, MyDraftsPanel, useReplyDraftList } from './MyReplyDrafts';
 import RoomChatButton from '../command/RoomChatDialog';
 import DirectiveDeepLink from '../notifications/DirectiveDeepLink';
+import { buildExtras, extraInLane, extraMatchesFilters, isDirectiveItem, mergeInbox, useInboxMeetings, type ReaderItem } from './inboxItems';
 import {
   CREATABLE_KINDS, NO_FILTERS, buildNames, inLane, lastAnsweredByAuthor, matchesFilters, sortDirectives,
   type Filters, type Lane, type QueueOrder,
@@ -68,18 +69,8 @@ function FilterBox({ icon, width, children }: { icon: LucideIcon; width: number;
 }
 
 export default function BackroomInbox() {
-  const { ref, staff, director, role, memberId, core, settings } = useCrisis();
+  const { ref, staff, director, memberId, core, settings } = useCrisis();
   const names = useMemo(() => buildNames(core.cabinets, core.characters, core.members), [core]);
-
-  // A backroomer's meeting requests are the ones that involve characters they look after (they sit at the very top, easy to answer);
-  // the director and the assistant director see every request there. The rest of a backroomer's requests stay in the strip lower down.
-  const lookedAfter = useMemo(() => new Set(core.characters.filter((c) => !!memberId && c.owner_member_id === memberId).map((c) => c.id)), [core.characters, memberId]);
-  const isBackroomer = role === 'backroomer';
-  const involvesMine = useCallback(
-    (m: Meeting) => (!!m.requested_by_character && lookedAfter.has(m.requested_by_character)) || m.character_ids.some((id) => lookedAfter.has(id)),
-    [lookedAfter],
-  );
-  const notMine = useCallback((m: Meeting) => !involvesMine(m), [involvesMine]);
 
   const [directives, setDirectives] = useState<Directive[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -151,18 +142,29 @@ export default function BackroomInbox() {
   };
   const lastAnswered = useMemo(() => lastAnsweredByAuthor(all), [all]);
 
+  // Meeting requests and delegates who need a new character sit in the same lanes, inline with the directives.
+  const { meetings, reload: reloadMeetings } = useInboxMeetings(ref, staff);
+  const extras = useMemo(() => buildExtras(meetings, core.characters, core.members), [meetings, core.characters, core.members]);
+
   const counts = useMemo(() => {
     const c: Record<Lane, number> = { mine: 0, unclaimed: 0, open: 0, waiting: 0, answered: 0 };
     for (const d of all) for (const l of Object.keys(c) as Lane[]) if (inLane(d, l, memberId)) c[l] += 1;
+    for (const x of extras) for (const l of Object.keys(c) as Lane[]) if (extraInLane(x, l, memberId)) c[l] += 1;
     // The answered count is the database's, not the number loaded so far.
     if (totals) c.answered = totals.answered;
     return c;
-  }, [all, memberId, totals]);
+  }, [all, extras, memberId, totals]);
 
-  const queue = useMemo(
-    () => sortDirectives(all.filter((d) => inLane(d, lane, memberId) && matchesFilters(d, filters, names)), order, lane, lastAnswered),
-    [all, lane, memberId, filters, names, order, lastAnswered],
+  const queue = useMemo<ReaderItem[]>(
+    () => mergeInbox(
+      sortDirectives(all.filter((d) => inLane(d, lane, memberId) && matchesFilters(d, filters, names)), order, lane, lastAnswered),
+      extras.filter((x) => extraInLane(x, lane, memberId) && extraMatchesFilters(x, filters, names)),
+      order,
+    ),
+    [all, extras, lane, memberId, filters, names, order, lastAnswered],
   );
+  // The directives alone: what the pop-up's arrows move through.
+  const directiveQueue = useMemo(() => queue.filter(isDirectiveItem), [queue]);
 
   // The directive in front: the one picked, else the first of the lane.
   const front = useMemo(() => queue.find((d) => d.id === focusId) ?? queue[0] ?? null, [queue, focusId]);
@@ -197,8 +199,8 @@ export default function BackroomInbox() {
   const afterChange = (what: 'claimed' | 'assigned' | 'answered') => {
     // Answering moves the reader on to the next directive of the lane; the last one closes it.
     if (what === 'answered') {
-      const at = queue.findIndex((x) => x.id === popupId);
-      const next = at < 0 ? null : (queue[at + 1] ?? queue[at - 1] ?? null);
+      const at = directiveQueue.findIndex((x) => x.id === popupId);
+      const next = at < 0 ? null : (directiveQueue[at + 1] ?? directiveQueue[at - 1] ?? null);
       setFocusId(next ? next.id : null);
       setPopupId(next ? next.id : null);
       if (!next) setPopupOpen(false);
@@ -229,15 +231,13 @@ export default function BackroomInbox() {
   ];
 
   const emptyText: Record<Lane, string> = {
-    mine: 'Nothing waiting for you', unclaimed: 'Every directive has someone on it', open: 'No open directives',
+    mine: 'Nothing waiting for you', unclaimed: 'Nothing is waiting for a reply', open: 'Nothing is waiting for a reply',
     waiting: 'Nobody is waiting on a delegate', answered: 'Nothing answered yet',
   };
 
   return (
     <div className="flex flex-col" style={{ gap: 10, marginTop: 6, width: '100%' }}>
       <DirectiveDeepLink onId={setLinkedId} />
-      {/* Meeting requests first, at the very top: a quick yes or no, ahead of everything. Renders nothing when none wait. */}
-      <MeetingRequestsStrip compact only={isBackroomer ? involvesMine : undefined} title={isBackroomer ? 'Meeting Requests for Your Characters' : undefined} />
       <div className="flex items-center justify-between flex-wrap" style={{ gap: 10 }}>
         <h1 className="flex items-center" style={{ margin: 0, gap: 8, fontSize: 22, fontWeight: 800, color: CK.ink }}><ListChecks size={22} strokeWidth={1.5} aria-hidden style={{ color: CK.red }} />Directives</h1>
         <div className="flex items-center flex-wrap" style={{ gap: 8, maxWidth: '100%' }}>
@@ -266,8 +266,6 @@ export default function BackroomInbox() {
           }}
         />
       )}
-
-      {isBackroomer && <MeetingRequestsStrip compact only={notMine} title="Other Meeting Requests" />}
 
       <div className="flex items-center flex-wrap" style={{ gap: 8 }}>
         <FilterBox icon={Landmark} width={185}><GSelect size="sm" aria-label="Cabinet" value={filters.cabinet} options={cabinetOptions} onChange={(v) => setF({ cabinet: v })} /></FilterBox>
@@ -315,12 +313,12 @@ export default function BackroomInbox() {
       {directives !== null && queue.length > 0 && (
         <DirectiveReader
           queue={queue} focusId={front?.id ?? null} onFocus={setFocusId} onOpen={openPopup} onTakeOver={takeOver} active={!popupOpen}
-          names={names} lane={lane} now={now} all={all} onChanged={() => { void load(); }}
+          names={names} lane={lane} now={now} onChanged={() => { void load(); void reloadMeetings(); }}
         />
       )}
 
       {selected && (
-        <DirectivePopup directive={selected} queue={queue} onSelect={(id) => { setFocusId(id); setPopupId(id); }} notesVersion={notesVersion} onChanged={afterChange} onClose={() => setPopupOpen(false)} />
+        <DirectivePopup directive={selected} queue={directiveQueue} onSelect={(id) => { setFocusId(id); setPopupId(id); }} notesVersion={notesVersion} onChanged={afterChange} onClose={() => setPopupOpen(false)} />
       )}
     </div>
   );

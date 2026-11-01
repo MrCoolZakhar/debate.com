@@ -2,7 +2,8 @@
 // Gavelling Crisis: the facts of an opened directive, in the white band beside the character at the top of the
 // pop-up (their own grid, then who is responsible in a column of its own on the same row), as a tidy grid of small labelled cells: how long it has waited (or when it was answered), when the author
 // last heard back, the length in words, who it is for, the themes, the secret goals (staff only), and who is
-// responsible with a picture and a compact picker to hand it to another backroomer. While someone is writing the
+// responsible for THIS directive with a picture and a compact picker to hand just this directive to another backroomer (a character's
+// own backroomer is changed on the character's page only; a cabinet directive never shows the character's backroomer). While someone is writing the
 // reply it says so, and handing the directive to somebody else then asks first, in place.
 // Handing over is the one thing here that writes at once (it is who the directive is with, not part of the reply);
 // the reply itself, with its outcome and every change, goes out only on Send reply.
@@ -109,7 +110,7 @@ export default function DirectiveFacts({ d, names, editing, onChanged }: {
     )}
 
     <div className="dp-resp flex flex-col" style={{ flex: '0 1 230px', gap: 8, minWidth: 180, paddingTop: 12, marginLeft: 'auto' }}>
-      <Fact icon={<UserRound size={13} strokeWidth={1.6} />} label="Responsible">
+      <Fact icon={<UserRound size={13} strokeWidth={1.6} />} label="Responsible for this directive">
         {confirmTo ? (
           <div className="flex flex-col" role="alertdialog" aria-label="Move it anyway?" style={{ gap: 6 }}>
             <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: CK.goldDeep, lineHeight: 1.35 }}>
@@ -122,14 +123,14 @@ export default function DirectiveFacts({ d, names, editing, onChanged }: {
           </div>
         ) : open && staffOptions.length > 0 ? (
           <GSelect size="sm" value={d.assigned_member_id ?? ''} onChange={(v) => hand(v)} options={staffOptions}
-            placeholder="Unclaimed, choose a person" aria-label="Responsible" disabled={handing} />
+            placeholder="Unclaimed, choose a person" aria-label="Responsible for this directive" disabled={handing} />
         ) : (
           <span className="inline-flex items-center" style={{ gap: 7 }}>
             <StaffPic member={d.assigned_member_id ? names.members.get(d.assigned_member_id) : null} size={24} />
             {memberName(d.assigned_member_id, names, 'Unassigned')}
           </span>
         )}
-        {!confirmTo && ownerId && ownerId !== d.assigned_member_id && (
+        {!confirmTo && ownerId && ownerId !== d.assigned_member_id && d.kind !== 'committee' && (
           <span className="inline-flex items-center" title="The backroomer for this character" style={{ gap: 6, marginTop: 4, fontSize: 12, fontWeight: 600, color: CK.inkSoft }}>
             <StaffPic member={names.members.get(ownerId)} size={18} />
             Usually {memberName(ownerId, names)}

@@ -17,7 +17,7 @@ import StaffMeetingCard from './StaffMeetingCard';
 import { InTheRoom, MeetingClockReadout } from './MeetingClock';
 import { meetingInProgress } from '@/lib/crisis/meetings';
 import { useClockOverlay } from '@/lib/crisis/meetingClockStore';
-import { AnswerList, AvatarStack, Fact, InviteButtons, NameList, StatusLine, requesterName, useMyCharacterId, usePeople, whenText, type Person } from './meetingKit';
+import { AnswerList, AvatarStack, Fact, InviteButtons, NameList, StatusLine, requesterName, useMyCharacterId, usePeople, hasWhen, whenText, type Person } from './meetingKit';
 import { useMeetingResponses } from './useMeetingResponses';
 import { serverNow } from '@/lib/serverClock';
 
@@ -117,7 +117,7 @@ export default function MeetingsPage() {
                     <p style={{ margin: '6px 0 10px', fontSize: 13.5, lineHeight: 1.5, color: CK.inkSoft, overflowWrap: 'anywhere' }}>{m.intention}</p>
                     <div className="grid" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
                       <Fact label="Length">{m.duration_minutes} min</Fact>
-                      <Fact label="When">{whenText(m)}</Fact>
+                      {hasWhen(m) && <Fact label="When">{whenText(m)}</Fact>}
                     </div>
                     <AnswerList m={m} responses={responses} people={people} cabinets={core.cabinets} />
                     <div style={{ marginTop: 12 }}><InviteButtons refx={ref} meetingId={m.id} onAnswered={answered} /></div>
@@ -135,7 +135,7 @@ export default function MeetingsPage() {
                 <p style={{ margin: '6px 0 10px', fontSize: 13.5, lineHeight: 1.5, color: CK.inkSoft, overflowWrap: 'anywhere' }}>{m.intention}</p>
                 <div className="grid" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
                   <Fact label="Length">{m.duration_minutes} min</Fact>
-                  <Fact label="When">{whenText(m)}</Fact>
+                  {hasWhen(m) && <Fact label="When">{whenText(m)}</Fact>}
                 </div>
                 {m.started_at && (m.status === 'approved' || m.status === 'held') && (
                   <div className="flex flex-col" style={{ gap: 10, marginTop: 12 }}>

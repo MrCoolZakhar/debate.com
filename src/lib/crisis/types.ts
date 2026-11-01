@@ -39,6 +39,8 @@ export interface CrisisSettings {
   mapChangesWait: boolean;
   /** Delegates also see where the other cabinets' characters stand on the map. Their own cabinet's are always shown. */
   delegatesSeeOtherCharacters: boolean;
+  /** On: delegates do NOT see where the other characters of their own cabinet stand on the map (their own character always shows). Default off. */
+  hideCabinetLocations: boolean;
   /** The zone types the Crisis Director defined (at most 20): a name, a colour and a description each. */
   zoneTypes: ZoneType[];
   /** Custom troop types (a name, a picture, a sight range, details) a unit on the map can be made from (docs/crisis/sql/029, part 32). */
@@ -59,6 +61,7 @@ export const DEFAULT_SETTINGS: CrisisSettings = {
   queueOrder: 'fair',
   mapChangesWait: true,
   delegatesSeeOtherCharacters: false,
+  hideCabinetLocations: false,
   zoneTypes: [],
   customUnitTypes: [],
 };
@@ -71,6 +74,7 @@ export function readSettings(raw: unknown): CrisisSettings {
     ...s,
     otherCabinets: other === 'names' ? 'names' : other === 'profiles' || other === 'full' ? 'profiles' : 'hidden',
     backroomPowers: { ...DEFAULT_SETTINGS.backroomPowers, ...(s.backroomPowers ?? {}) },
+    hideCabinetLocations: s.hideCabinetLocations === true,
     zoneTypes: readZoneTypes(s),
     customUnitTypes: readCustomUnitTypes(s),
   };

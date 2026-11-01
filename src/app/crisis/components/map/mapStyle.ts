@@ -83,18 +83,15 @@ export function mapLayers(): AddLayerObject[] {
       id: 'region-line', type: 'line', source: SRC_REGIONS, minzoom: 3, layout: { 'line-join': 'round' },
       paint: { 'line-color': '#B7AA88', 'line-width': ['interpolate', ['linear'], ['zoom'], 3, 0.5, 7, 1], 'line-dasharray': [3, 2], 'line-opacity': 0.85 },
     },
-    // Rivers: the biggest ones from far out, the full set once zoomed in.
-    {
-      id: 'river-coarse', type: 'line', source: SRC_RIVERS, minzoom: 2, maxzoom: 4.2, layout: { 'line-join': 'round', 'line-cap': 'round' },
-      paint: { 'line-color': RIVER, 'line-width': ['interpolate', ['linear'], ['zoom'], 2, 0.7, 4.2, 1.3] },
-    },
-    {
-      id: 'river-fine', type: 'line', source: SRC_RIVERS_FINE, minzoom: 4.2, layout: { 'line-join': 'round', 'line-cap': 'round' },
-      paint: { 'line-color': RIVER, 'line-width': ['interpolate', ['linear'], ['zoom'], 4.2, 0.9, 9, 2.2] },
-    },
     {
       id: 'c-own-line', type: 'line', source: SRC_COUNTRIES, layout: { 'line-join': 'round' },
       paint: { 'line-color': ['coalesce', ['feature-state', 'edge'], CLEAR], 'line-width': ['interpolate', ['linear'], ['zoom'], 0, 1, 6, 2.4] },
+    },
+    // The original outline of a changed country, dashed. It sits UNDER every drawn area, which is opaque, so a painted
+    // or drawn area reads as one clean shape and the old border never shows through it.
+    {
+      id: 'c-base-line', type: 'line', source: SRC_BASE, layout: { 'line-join': 'round' },
+      paint: { 'line-color': '#5E5340', 'line-width': ['interpolate', ['linear'], ['zoom'], 0, 0.9, 6, 1.8], 'line-dasharray': [3, 2], 'line-opacity': 0.9 },
     },
     {
       id: L_SHAPE_FILL, type: 'fill', source: SRC_SHAPES, filter: ['==', ['get', 'kind'], 'area'],
@@ -103,6 +100,15 @@ export function mapLayers(): AddLayerObject[] {
     {
       id: 'shape-area-line', type: 'line', source: SRC_SHAPES, filter: ['==', ['get', 'kind'], 'area'], layout: { 'line-join': 'round' },
       paint: { 'line-color': ['coalesce', ['get', 'edge'], ['get', 'color']], 'line-width': ['interpolate', ['linear'], ['zoom'], 0, 1, 6, 2.4] },
+    },
+    // Rivers: the biggest ones from far out, the full set once zoomed in. Water runs over territory.
+    {
+      id: 'river-coarse', type: 'line', source: SRC_RIVERS, minzoom: 2, maxzoom: 4.2, layout: { 'line-join': 'round', 'line-cap': 'round' },
+      paint: { 'line-color': RIVER, 'line-width': ['interpolate', ['linear'], ['zoom'], 2, 0.7, 4.2, 1.3] },
+    },
+    {
+      id: 'river-fine', type: 'line', source: SRC_RIVERS_FINE, minzoom: 4.2, layout: { 'line-join': 'round', 'line-cap': 'round' },
+      paint: { 'line-color': RIVER, 'line-width': ['interpolate', ['linear'], ['zoom'], 4.2, 0.9, 9, 2.2] },
     },
     {
       id: 'shape-line', type: 'line', source: SRC_SHAPES, filter: ['==', ['get', 'kind'], 'line'], layout: { 'line-join': 'round', 'line-cap': 'butt' },
@@ -118,11 +124,6 @@ export function mapLayers(): AddLayerObject[] {
     {
       id: 'zone-line', type: 'line', source: SRC_SHAPES, filter: ['==', ['get', 'kind'], 'zone'], layout: { 'line-join': 'round' },
       paint: { 'line-color': ['get', 'color'], 'line-width': ['interpolate', ['linear'], ['zoom'], 0, 1.4, 6, 2.6], 'line-dasharray': [3, 1.6] },
-    },
-    // The original outline again, dashed, over everything drawn, so it can be followed under any territory.
-    {
-      id: 'c-base-line', type: 'line', source: SRC_BASE, layout: { 'line-join': 'round' },
-      paint: { 'line-color': '#5E5340', 'line-width': ['interpolate', ['linear'], ['zoom'], 0, 0.9, 6, 1.8], 'line-dasharray': [3, 2], 'line-opacity': 0.9 },
     },
     { id: L_SHAPE_HIT, type: 'line', source: SRC_SHAPES, paint: { 'line-color': '#000000', 'line-width': 16, 'line-opacity': 0 } },
     { id: 'draft-fill', type: 'fill', source: SRC_DRAFT, filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': ['coalesce', ['get', 'tint'], DRAFT], 'fill-opacity': ['case', ['has', 'tint'], 1, 0.16] } },

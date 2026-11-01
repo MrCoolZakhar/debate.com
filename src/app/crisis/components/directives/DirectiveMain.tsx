@@ -8,17 +8,19 @@
 // size, then the conversation (DirectiveThread: notes, internal notes marked "Only staff", the answer). Bottom,
 // fixed: the composer (answer status, the text box, Send reply). Internal notes are added from the side panel.
 // Nothing but internal notes, the hand-over and the "being written" mark is written before Send reply.
-// Staff only: it shows the author's secret goals.
+// Staff only: it shows the author's secret goals. A CABINET directive wears design B (cabinetStamp.tsx): the cabinet's seal and name in
+// place of the author's portrait, the author only as a small muted line, and the big CABINET stamp poking out of the top edge.
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Clock, Package, SlidersHorizontal, Target, X, Zap } from 'lucide-react';
 import { listNotes } from '@/lib/crisis/api';
-import { dirNumber } from '@/lib/crisis/format';
+import { dirNumber, timeAgo } from '@/lib/crisis/format';
 import { KIND_LABEL, type Directive, type DirectiveNote } from '@/lib/crisis/types';
 import { Avatar, Btn, CK } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { CharacterLink, CharacterName } from '../character/CharacterProfileHost';
 import { CabinetLogo, NameStack, NumberBadge } from './directiveParts';
+import { CabinetSeal, CabinetStamp, SubmitterLine, isCabinetDirective } from './cabinetStamp';
 import { KIND_ICON, authorName, buildNames, listDirectiveCoauthors } from './directiveKit';
 import DirectiveComposer from './DirectiveComposer';
 import DirectiveFacts, { SecretGoalsChip, useSecretGoals } from './DirectiveFacts';
@@ -77,6 +79,7 @@ export default function DirectiveMain({ directive: d, reply, notesVersion = 0, o
   }, [ref, d.id, d.kind]);
 
   const KindIcon = KIND_ICON[d.kind];
+  const isCab = isCabinetDirective(d);
   const accent = cabinet?.color ?? CK.red;
   const coChars = (d.kind === 'joint' ? coIds : []).map((id) => names.characters.get(id)).filter((c): c is NonNullable<typeof c> => !!c);
   const hasLegacy = !!(d.resources_used || d.goal || d.affects);
@@ -89,6 +92,7 @@ export default function DirectiveMain({ directive: d, reply, notesVersion = 0, o
       {/* Top, fixed: the title, the character, then the facts and who is responsible */}
       <div style={{ flex: 'none', position: 'relative' }}>
         <div style={{ position: 'absolute', zIndex: 3, top: 'var(--dp-badge-top)', left: 22 }}><NumberBadge n={dirNumber(d)} /></div>
+        {isCab && <CabinetStamp size="pop" onDark style={{ top: 'calc(var(--dp-badge-top) * 2 - 6px)', right: 'clamp(110px, 24%, 215px)' }} />}
         <div style={{ background: CK.redGrad, color: '#FFF4E6', padding: 'var(--dp-pt) 18px 11px 22px', borderRadius: 'var(--dp-r) var(--dp-r) 0 0' }}>
           <div className="flex items-center justify-between" style={{ gap: 10 }}>
             <p className="inline-flex items-center flex-wrap" style={{ margin: 0, gap: '2px 12px', fontSize: 12.5, fontWeight: 700, color: 'rgba(255,232,214,0.88)' }}>
@@ -106,6 +110,17 @@ export default function DirectiveMain({ directive: d, reply, notesVersion = 0, o
         </div>
         {/* One white band: the character on the left, the facts and who is responsible in the space beside them */}
         <div className="flex flex-wrap" style={{ gap: '8px 20px', padding: '0 22px 12px', background: CK.card, boxShadow: `0 1px 0 ${CK.hair}` }}>
+          {isCab ? (
+            <div className="flex" style={{ gap: 14, flex: '0 1 300px', minWidth: 0 }}>
+              <span style={{ flex: 'none', marginTop: -OVERHANG, lineHeight: 0 }}>
+                <CabinetSeal cabinet={cabinet} size={PORTRAIT} style={{ boxShadow: '0 4px 12px rgba(27,56,40,0.25)', border: `3px solid ${accent}` }} />
+              </span>
+              <div className="flex flex-col" style={{ paddingTop: 8, minWidth: 0, flex: 1, gap: 5 }}>
+                <b style={{ fontSize: 19, lineHeight: 1.2, color: accent, overflowWrap: 'anywhere' }}>{cabinet?.name ?? 'Cabinet'}</b>
+                <SubmitterLine name={who} picture={character?.picture_url} color={accent} when={`Sent ${timeAgo(d.created_at)}`} size={22} characterId={character?.id} extra={goals ? <SecretGoalsChip goals={goals} /> : undefined} />
+              </div>
+            </div>
+          ) : (
           <div className="flex" style={{ gap: 14, flex: '0 1 270px', minWidth: 0 }}>
             <span style={{ flex: 'none', marginTop: -OVERHANG, lineHeight: 0 }}>
               <CharacterLink id={character?.id} style={{ borderRadius: '50%', lineHeight: 0 }}>
@@ -124,6 +139,7 @@ export default function DirectiveMain({ directive: d, reply, notesVersion = 0, o
               </p>
             </div>
           </div>
+          )}
           <DirectiveFacts d={d} names={names} editing={reply.editing} onChanged={onChanged} />
         </div>
       </div>

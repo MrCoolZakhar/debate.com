@@ -50,10 +50,15 @@ export const CREATABLE_KINDS: DirectiveKind[] = ['personal', 'joint', 'committee
 
 export const isOpenStatus = (d: Directive) => d.status === 'queued' || d.status === 'claimed';
 
+/**
+ * Which lane a directive is in. A CABINET directive does not care who the responsible backroomer is (owner, 1 Nov 2026): it is always
+ * in the shared lanes for every staff member (Unassigned and All open) and only in Mine while it is assigned to you, so handing it
+ * to somebody takes it out of your own queue but never out of "to reply".
+ */
 export function inLane(d: Directive, lane: Lane, memberId: string | null): boolean {
   switch (lane) {
     case 'mine': return !!memberId && d.assigned_member_id === memberId && isOpenStatus(d);
-    case 'unclaimed': return d.assigned_member_id === null && isOpenStatus(d);
+    case 'unclaimed': return (d.assigned_member_id === null || d.kind === 'committee') && isOpenStatus(d);
     case 'open': return isOpenStatus(d);
     case 'waiting': return d.status === 'clarify';
     case 'answered': return d.status === 'answered';

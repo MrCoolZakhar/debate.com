@@ -434,6 +434,14 @@ export async function withdrawDirective(ref: CrisisRef, directiveId: string): Pr
   return must(res, 'Could not withdraw the directive. Try again.') as { ok: boolean; reason?: 'answered' };
 }
 
+/** The committee room(s) a crisis chair opens as chair: their own cabinet's for a chair, every cabinet's for staff
+ *  (docs/crisis/sql/029, part 33). The password lets the join link fill it in. */
+export async function loadChairRooms(ref: CrisisRef): Promise<Array<{ cabinet_id: string; cabinet_name: string; code: string | null; chair_password: string | null }>> {
+  const client = await c(ref);
+  const res = await client.rpc('crisis_chair_rooms', { p_crisis: ref.id });
+  return must(res, 'Could not load the committee room.') as Array<{ cabinet_id: string; cabinet_name: string; code: string | null; chair_password: string | null }>;
+}
+
 /** Gives a delegate whose character died or was arrested a spare character (docs/crisis/sql/029g). */
 export async function giveSpare(ref: CrisisRef, memberId: string, spareId: string): Promise<{ ok: boolean; reason?: 'taken'; seat_moved?: boolean }> {
   const client = await c(ref);

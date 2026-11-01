@@ -34,12 +34,17 @@ export const STATUS_LOOK: Record<MeetingStatus, { Icon: LucideIcon; color: strin
   cancelled: { Icon: Ban, color: CK.muted },
 };
 
-export const DURATIONS = [5, 10, 15, 20, 30] as const;
-export const WHEN_NEXT = 'Next unmoderated caucus';
-export const WHEN_NOW = 'Now';
+/** A meeting lasts a custom number of minutes (the delegate types it): 1 to 180, ten by default. */
+export const MEETING_MIN = 1;
+export const MEETING_MAX = 180;
+export const MEETING_DEFAULT = 10;
 
+/** A wanted time is no longer asked for. An old request may still carry one; it is shown read only and only when it exists. */
+export function hasWhen(m: Meeting): boolean {
+  return !!(m.wanted_time && m.wanted_time.trim());
+}
 export function whenText(m: Meeting): string {
-  return m.wanted_time && m.wanted_time.trim() ? m.wanted_time : 'Not said';
+  return hasWhen(m) ? (m.wanted_time as string).trim() : '';
 }
 
 /** Everyone a meeting page can name: the viewer's characters plus the world list. */

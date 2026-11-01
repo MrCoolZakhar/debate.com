@@ -3,8 +3,8 @@
 // answer, or a quick burst by one person): a single change reads as itself, several read as "N changes" that open to
 // list them. Staff with map and unit power can also bring the map back to the point right after a batch.
 
-import { useState } from 'react';
-import { ChevronDown, ChevronUp, Layers, RotateCcw } from 'lucide-react';
+import { Component, useState, type ReactNode } from 'react';
+import { ChevronDown, ChevronUp, Info, Layers, RotateCcw } from 'lucide-react';
 import { Btn, CK } from '../../crisisKit';
 import type { AnyChange } from './charChange';
 import { ChangeDisc, PieceLine, describe, type ChangeCtx } from './changeKit';
@@ -38,12 +38,36 @@ function summary(changes: AnyChange[]): string {
   const borders = changes.filter((c) => c.type === 'region').length;
   const areas = changes.filter((c) => c.type === 'shape').length;
   const people = changes.filter((c) => c.type === 'character').length;
+  const others = changes.filter((c) => c.type === 'other').length;
   const parts: string[] = [];
   if (troops) parts.push(`${troops} ${troops === 1 ? 'troop change' : 'troop changes'}`);
   if (borders) parts.push(`${borders} ${borders === 1 ? 'border' : 'borders'}`);
   if (areas) parts.push(`${areas} ${areas === 1 ? 'area' : 'areas'}`);
   if (people) parts.push(`${people} ${people === 1 ? 'character moved' : 'characters moved'}`);
+  if (others) parts.push(`${others} ${others === 1 ? 'other change' : 'other changes'}`);
   return parts.join(', ');
+}
+
+/**
+ * One damaged entry must never take the whole History page down: if drawing it throws, it is told as a plain "A change"
+ * (still with its time) and the rest of the list carries on.
+ */
+export class EntryGuard extends Component<{ at: string; children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  componentDidCatch() { /* nothing to report: the entry is shown plainly */ }
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return (
+      <div className="flex" style={{ gap: 12, padding: '11px 6px', borderTop: `1px solid ${CK.hair}` }}>
+        <span className="flex-shrink-0 grid place-items-center" aria-hidden style={{ width: 38, height: 38, borderRadius: '50%', background: CK.inkSoft, color: '#fff' }}><Info size={19} strokeWidth={1.6} /></span>
+        <span className="min-w-0 flex-1">
+          <b style={{ display: 'block', fontSize: 14.5, fontWeight: 800, color: CK.ink }}>A change</b>
+          <span style={{ display: 'block', marginTop: 3, fontSize: 12.5, fontWeight: 600, color: CK.muted }}>{timeOf(this.props.at)}</span>
+        </span>
+      </div>
+    );
+  }
 }
 
 export default function BatchEntry({ changes, at, by, ctx, staff, canRestore, whenLabel, onOpen, onRestore }: {
