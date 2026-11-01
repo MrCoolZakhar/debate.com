@@ -20,7 +20,7 @@ import { Avatar, Btn, CK, agoLabel, cabinetTint, waitLabel, waitSeverity } from 
 import { CharacterLink } from '../character/CharacterProfileHost';
 import { CabinetLogo, NameStack, NumberBadge, StaffPic, ThemeTags, shortName } from './directiveParts';
 import { KIND_ICON, authorName, isBeingWritten, memberName, outcomeView, writingAge, writtenByOther, type Lane, type Names } from './directiveKit';
-import { CabinetCrest, CabinetName, CabinetStamp, SubmitterLine, cabinetColorOf, crestIndent, isCabinetDirective } from './cabinetStamp';
+import { CabinetCrest, CabinetFoot, CabinetName, SubmitterName, SubmitterPortrait, cabinetColorOf, cabinetWash, crestIndent, isCabinetDirective } from './cabinetStamp';
 import { ExtraFront, ExtraNextBody } from './InboxExtraCards';
 import { isExtra, type ReaderItem } from './inboxItems';
 import { FrontShell, HIDDEN, MAX_STACK, NavControls, NextShell, STRIP } from './readerParts';
@@ -90,26 +90,18 @@ function DirectiveNext({ d, k, fw, names, lane, now, onPick, readOnly }: { d: Di
   return (
     <NextShell
       k={k} fw={fw} grey={grey} ring={isCab} color={color} onPick={onPick}
+      tint={isCab ? cabinetWash(color) : undefined} padBottom={isCab ? 2 : 14}
       label={`Read directive No. ${dirNumber(d)}: ${d.title}`}
       badge={isCab
-        ? <CabinetCrest cabinet={cab} n={dirNumber(d)} sealSize={28} left={HIDDEN + 14} />
+        ? <CabinetCrest cabinet={cab} n={dirNumber(d)} sealSize={40} left={HIDDEN + 14} stamp="xs" />
         : <NumberBadge n={dirNumber(d)} color={color} style={{ position: 'absolute', zIndex: 2, top: -9, left: HIDDEN + 14 }} />}
+      stamp={isCab ? <SubmitterPortrait name={who} picture={ch?.picture_url} color={color} size={34} left={HIDDEN + 14} /> : undefined}
     >
       {isCab ? (
         <>
-          {/* The name beside the seal with the small stamp inside the card, then the title, then the author with the icons and the wait. */}
-          <span className="flex flex-wrap items-center" style={{ flex: 'none', gap: '2px 8px' }}>
-            <CabinetName cabinet={cab} size={13.5} indent={crestIndent(28)} style={{ flex: '1 1 auto', minWidth: 0 }} />
-            <CabinetStamp size="xs" />
-          </span>
+          {/* The name beside the seal, then the title, then the start of the text; the author's name small above the portrait that hangs on the card's bottom border, the kind and the wait to its right. */}
+          <CabinetName cabinet={cab} size={13.5} indent={crestIndent(40)} style={{ flex: 'none' }} />
           <span style={{ display: 'block', flex: 'none', marginTop: 6, fontSize: 18, fontWeight: 800, lineHeight: 1.22, overflowWrap: 'anywhere' }}>{d.title}</span>
-          <span className="flex items-center flex-wrap" style={{ flex: 'none', gap: '4px 9px', marginTop: 10 }}>
-            <SubmitterLine name={who} picture={ch?.picture_url} color={color} size={22} from={false} />
-            <KindIcon size={14} strokeWidth={1.5} aria-label={KIND_LABEL[d.kind]} style={{ color: CK.red, flex: 'none' }} />
-            <span className="inline-flex items-center" style={{ gap: 3, fontSize: 12, fontWeight: 800, color: when.sev ? WAIT_COLOR[when.sev] : CK.inkSoft, fontVariantNumeric: 'tabular-nums' }}>
-              <Clock size={12} strokeWidth={1.6} aria-hidden />{when.text}
-            </span>
-          </span>
         </>
       ) : (
         <>
@@ -136,6 +128,16 @@ function DirectiveNext({ d, k, fw, names, lane, now, onPick, readOnly }: { d: Di
       {isBeingWritten(d, now) && <span style={{ flex: 'none', marginTop: 8 }}><Writing d={d} names={names} now={now} small /></span>}
       {/* The start of the text, fading out where the card ends. */}
       <span className="rd-fade" style={{ display: 'block', flex: 1, minHeight: 0, overflow: 'hidden', marginTop: 11, fontSize: 14, lineHeight: 1.55, fontWeight: 500, color: CK.inkSoft, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{plainText(d.body)}</span>
+      {isCab && (
+        <div style={{ flex: 'none' }}>
+          <CabinetFoot portrait={34} name={who} marginTop={6}>
+            <KindIcon size={14} strokeWidth={1.5} aria-label={KIND_LABEL[d.kind]} style={{ color: CK.red, flex: 'none' }} />
+            <span className="inline-flex items-center" style={{ gap: 3, fontSize: 12, fontWeight: 800, color: when.sev ? WAIT_COLOR[when.sev] : CK.inkSoft, fontVariantNumeric: 'tabular-nums' }}>
+              <Clock size={12} strokeWidth={1.6} aria-hidden />{when.text}
+            </span>
+          </CabinetFoot>
+        </div>
+      )}
     </NextShell>
   );
 }
@@ -187,26 +189,16 @@ function FrontCard({ d, names, lane, now, index, total, onPrev, onNext, onRespon
   );
 
   return (
-    <FrontShell color={color} ring={isCab} label={`Directive No. ${dirNumber(d)}: ${d.title}`} onActivate={onRespond}>
-      {isCab && <CabinetCrest cabinet={cab} n={dirNumber(d)} sealSize={40} left={30} />}
+    <FrontShell color={color} ring={isCab} tint={isCab ? cabinetWash(color) : undefined} label={`Directive No. ${dirNumber(d)}: ${d.title}`} onActivate={onRespond}>
+      {isCab && <CabinetCrest cabinet={cab} n={dirNumber(d)} sealSize={56} left={30} stamp="card" />}
+      {isCab && <SubmitterPortrait name={who} picture={ch?.picture_url} color={color} size={44} left={30} characterId={ch?.id} />}
       {!isCab && <NumberBadge n={dirNumber(d)} color={color} style={{ position: 'absolute', zIndex: 2, top: -9, left: 26 }} />}
 
-      <div style={{ flex: 'none', padding: isCab ? '26px 26px 0 30px' : '24px 26px 0 30px' }}>
+      <div style={{ flex: 'none', padding: isCab ? '30px 26px 0 30px' : '24px 26px 0 30px' }}>
         {isCab ? (
           <>
-            <CabinetName cabinet={cab} size={15.5} indent={crestIndent(40)} />
-            <div className="flex items-center" style={{ gap: 12, marginTop: 12 }}>
-              <h2 style={{ flex: 1, minWidth: 0, margin: 0, fontSize: 30, lineHeight: 1.18, fontWeight: 800, overflowWrap: 'anywhere' }}>{d.title}</h2>
-              <CabinetStamp size="card" />
-            </div>
-            {/* The bottom line of the header: the author's portrait and name with the kind, the themes and the wait. */}
-            <div className="flex items-center flex-wrap" style={{ margin: '12px 0 0', gap: '6px 14px', fontSize: 12.5, fontWeight: 700, color: CK.inkSoft }}>
-              <SubmitterLine name={who} picture={ch?.picture_url} color={color} when={sentWhen(d, now)} size={26} characterId={ch?.id} from={false} />
-              <span className="inline-flex items-center" style={{ gap: 6 }}><KindIcon size={15} strokeWidth={1.5} aria-hidden style={{ color: CK.red }} />{KIND_LABEL[d.kind]}</span>
-              <ThemeTags themes={d.themes} />
-              <span className="flex-1" />
-              {waitClock}
-            </div>
+            <CabinetName cabinet={cab} size={15.5} indent={crestIndent(56)} />
+            <h2 style={{ margin: '12px 0 0', fontSize: 30, lineHeight: 1.18, fontWeight: 800, overflowWrap: 'anywhere' }}>{d.title}</h2>
           </>
         ) : (
           <>
@@ -257,9 +249,22 @@ function FrontCard({ d, names, lane, now, index, total, onPrev, onNext, onRespon
 
       {/* The footer: the state (chair's reader) on the left; the arrows, "3 of 12" and Respond on the right. Who looks after a character is
           changed on the character's own page, never here. */}
-      <div className="flex items-center flex-wrap" data-no-open style={{ flex: 'none', gap: '8px 16px', padding: '12px 20px 14px 30px', boxShadow: `0 -1px 0 ${CK.hair}`, borderRadius: '0 0 24px 24px', background: CK.card }}>
+      <div className="flex items-center flex-wrap" data-no-open style={{ flex: 'none', gap: '8px 16px', padding: '12px 20px 14px 30px', boxShadow: `0 -1px 0 ${CK.hair}`, borderRadius: '0 0 24px 24px', background: isCab ? 'transparent' : CK.card }}>
         <div style={{ flex: '1 1 260px', minWidth: 0 }}>
-          {state && <span className="inline-flex items-center" style={{ gap: 7, fontSize: 15, fontWeight: 800, color: state.color, overflowWrap: 'anywhere' }}>{state.icon}{state.word}</span>}
+          {isCab ? (
+            <>
+              {/* The author's name small, right above the portrait that hangs on the card's bottom border; the kind, themes, wait and state to its right. */}
+              <SubmitterName name={who} characterId={ch?.id} when={sentWhen(d, now)} />
+              <div className="flex items-center flex-wrap" style={{ minHeight: 26, paddingLeft: 56, marginTop: 2, gap: '4px 14px', fontSize: 12.5, fontWeight: 700, color: CK.inkSoft }}>
+                <span className="inline-flex items-center" style={{ gap: 6 }}><KindIcon size={15} strokeWidth={1.5} aria-hidden style={{ color: CK.red }} />{KIND_LABEL[d.kind]}</span>
+                <ThemeTags themes={d.themes} />
+                {waitClock}
+                {state && <span className="inline-flex items-center" style={{ gap: 7, fontSize: 14, fontWeight: 800, color: state.color, overflowWrap: 'anywhere' }}>{state.icon}{state.word}</span>}
+              </div>
+            </>
+          ) : (
+            state && <span className="inline-flex items-center" style={{ gap: 7, fontSize: 15, fontWeight: 800, color: state.color, overflowWrap: 'anywhere' }}>{state.icon}{state.word}</span>
+          )}
         </div>
         <NavControls index={index} total={total} onPrev={onPrev} onNext={onNext} />
         <Btn tone="green" icon={readOnly ? <Eye size={16} strokeWidth={1.5} /> : <Reply size={16} strokeWidth={1.5} />} onClick={onRespond}>{readOnly ? readOnly.actionLabel(d) : open ? 'Respond' : 'Open'}</Btn>

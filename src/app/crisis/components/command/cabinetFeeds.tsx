@@ -17,7 +17,7 @@ import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { verdictOf, whenLabel, whenTitle } from '../delegate/directiveUi';
 import { DirectiveBody } from '../directives/attachedImage';
 import { NumberBadge } from '../directives/directiveParts';
-import { CabinetCrest, CabinetName, CabinetStamp, SubmitterLine, cabinetColorOf, cabinetRing, crestIndent } from '../directives/cabinetStamp';
+import { CabinetCrest, CabinetFoot, CabinetName, SubmitterPortrait, cabinetColorOf, cabinetRing, cabinetWash, crestIndent, portraitRoom } from '../directives/cabinetStamp';
 import { dirNumber } from '@/lib/crisis/format';
 import NewsDetailDialog from '../news/NewsDetailDialog';
 import { audienceLabel, newsTime, newsTimeTitle } from '../news/NewsList';
@@ -67,43 +67,48 @@ function DirectiveRow({ d, onOpen }: { d: Directive; onOpen?: (d: Directive) => 
   const color = cabinetColorOf(cabinet);
   const v = verdictOf(d);
   const note = d.status === 'changes_requested' ? (d.reply ?? '').trim() : '';
-  const seal = 30;
+  const seal = 44;
+  const portrait = 30;
+  const hasAuthor = !!a.name;
   const head = (
     <span className="flex items-start" style={{ gap: 10 }}>
       <span style={{ flex: 1, minWidth: 0, display: 'block' }}>
         <CabinetName cabinet={cabinet} size={13} indent={crestIndent(seal)} />
         <span className="inline-flex items-center gap-1.5" style={{ marginTop: 6, fontSize: 13, fontWeight: 800, color: v.color }}>{v.icon}{v.word}</span>
-        <span className="flex items-center" style={{ gap: 8, marginTop: 2 }}>
-          <b style={{ flex: 1, minWidth: 0, display: 'block', fontSize: 16.5, lineHeight: 1.28, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{d.title}</b>
-          <CabinetStamp size="xs" />
-        </span>
-        <span title={whenTitle(d.created_at)} style={{ display: 'block', marginTop: 5 }}>
-          {a.name
-            ? <SubmitterLine name={a.name} picture={a.picture} color={a.color} when={`Sent ${whenLabel(d.created_at)}`} size={22} from={false} />
-            : <span style={{ fontSize: 12.5, fontWeight: 600, color: CK.muted }}>{`Cabinet directive · Sent ${whenLabel(d.created_at)}`}</span>}
-        </span>
+        <b style={{ display: 'block', marginTop: 2, fontSize: 16.5, lineHeight: 1.28, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{d.title}</b>
       </span>
-      <span aria-hidden style={{ flex: 'none', color: CK.muted, lineHeight: 0, paddingTop: 30 }}>
+      <span aria-hidden style={{ flex: 'none', color: CK.muted, lineHeight: 0, paddingTop: 34 }}>
         {onOpen ? <ChevronRight size={18} strokeWidth={1.5} /> : open ? <ChevronUp size={18} strokeWidth={1.5} /> : <ChevronDown size={18} strokeWidth={1.5} />}
       </span>
     </span>
   );
-  // The card never clips its seal and number: they sit on its top border, with room above it.
+  // The author at the foot: their name small above the portrait that hangs on the card's bottom border.
+  const foot = hasAuthor
+    ? <span className="block" title={whenTitle(d.created_at)}><CabinetFoot portrait={portrait} name={a.name as string} when={`Sent ${whenLabel(d.created_at)}`} marginTop={6} /></span>
+    : <span title={whenTitle(d.created_at)} style={{ display: 'block', marginTop: 5, fontSize: 12.5, fontWeight: 600, color: CK.muted }}>{`Cabinet directive · Sent ${whenLabel(d.created_at)}`}</span>;
+  const crest = (
+    <>
+      <CabinetCrest cabinet={cabinet} n={dirNumber(d)} sealSize={seal} left={12} stamp="xs" />
+      {hasAuthor && <SubmitterPortrait name={a.name as string} picture={a.picture} color={a.color} size={portrait} left={12} />}
+    </>
+  );
+  // The card never clips its seal, number, stamp or portrait: they sit on its borders, with room above and below it.
   const card: CSSProperties = {
-    position: 'relative', overflow: 'visible', background: CK.card, borderRadius: 16, fontFamily: CK.font, color: CK.ink, textAlign: 'left',
-    margin: `${Math.round(seal / 2) + 4}px 2px 0`, width: 'calc(100% - 4px)', boxShadow: cabinetRing(color, 2, CK.shadowSm),
+    position: 'relative', overflow: 'visible', background: cabinetWash(color), borderRadius: 16, fontFamily: CK.font, color: CK.ink, textAlign: 'left',
+    margin: `${Math.round(seal / 2) + 4}px 2px ${hasAuthor ? portraitRoom(portrait) : 8}px`, width: 'calc(100% - 4px)', boxShadow: cabinetRing(color, 2, CK.shadowSm),
   };
   if (onOpen) {
     return (
-      <button type="button" onClick={() => onOpen(d)} aria-label={`${d.title}, cabinet directive, ${v.word}`} className={focusCls} style={{ ...card, border: 0, padding: '11px 12px 10px', cursor: 'pointer' }}>
-        <CabinetCrest cabinet={cabinet} n={dirNumber(d)} sealSize={seal} left={12} />
+      <button type="button" onClick={() => onOpen(d)} aria-label={`${d.title}, cabinet directive, ${v.word}`} className={focusCls} style={{ ...card, border: 0, padding: `11px 12px ${hasAuthor ? 4 : 10}px`, cursor: 'pointer' }}>
+        {crest}
         {head}
+        {foot}
       </button>
     );
   }
   return (
-    <div style={{ ...card, padding: '11px 12px 10px' }}>
-      <CabinetCrest cabinet={cabinet} n={dirNumber(d)} sealSize={seal} left={12} />
+    <div style={{ ...card, padding: `11px 12px ${hasAuthor ? 4 : 10}px` }}>
+      {crest}
       <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className={focusCls} style={{ width: '100%', textAlign: 'left', border: 0, background: 'transparent', padding: 0, cursor: 'pointer', fontFamily: CK.font }}>{head}</button>
       {open && (
         <div style={{ marginTop: 8, marginLeft: 4, paddingLeft: 12, borderLeft: `3px solid ${a.color}` }}>
@@ -111,6 +116,7 @@ function DirectiveRow({ d, onOpen }: { d: Directive; onOpen?: (d: Directive) => 
           {note && <p style={{ margin: '8px 0 0', fontSize: 13, lineHeight: 1.45, color: CK.inkSoft, overflowWrap: 'anywhere' }}><b>Note from the chair: </b>{note}</p>}
         </div>
       )}
+      {foot}
     </div>
   );
 }

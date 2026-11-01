@@ -22,7 +22,7 @@ import { staffLoads } from '../command/commandData';
 import { responsibleMembers } from '../command/setupKit';
 import { authorName, buildNames } from './directiveKit';
 import { StaffPic } from './directiveParts';
-import { CabinetCrest, CabinetHead, CabinetName, CabinetStamp, SubmitterLine, cabinetColorOf, cabinetRing, crestIndent } from './cabinetStamp';
+import { CabinetCrest, CabinetFoot, CabinetHead, CabinetName, SEAL_POP, SubmitterPortrait, cabinetColorOf, cabinetRing, cabinetWash, crestIndent, portraitRoom } from './cabinetStamp';
 import { plainText } from './attachedImage';
 import PopBanner from './PopBanner';
 import { useNow } from './useNow';
@@ -254,20 +254,16 @@ export default function CabinetDirectivePrompt() {
 
           {!picking && (
             <div key={d.id} className={cursor > 0 ? 'cm-next' : undefined} style={{ flex: 'none', minHeight: 0 }}>
-              <div style={{ position: 'relative', overflow: 'visible', background: CK.card, borderRadius: 20, padding: '22px 18px 16px', boxShadow: cabinetRing(cabinetColorOf(cabinet), 3, CK.shadow), margin: '20px 6px 0' }}>
-                {/* The seal and the number sit on the card's top border; the name is one line beside them; the stamp is inside, beside the title. */}
-                <CabinetCrest cabinet={cabinet} n={dirNumber(d)} sealSize={40} left={18} />
-                <CabinetName cabinet={cabinet} size={14.5} indent={crestIndent(40)} />
-                <div className="flex items-center" style={{ gap: 10, marginTop: 10 }}>
-                  <b style={{ flex: 1, minWidth: 0, display: 'block', fontSize: 25, lineHeight: 1.2, overflowWrap: 'anywhere' }}>{d.title}</b>
-                  <CabinetStamp size="pop" />
-                </div>
+              <div style={{ position: 'relative', overflow: 'visible', background: cabinetWash(cabinetColorOf(cabinet)), borderRadius: 20, padding: '22px 18px 4px', boxShadow: cabinetRing(cabinetColorOf(cabinet), 3, CK.shadow), margin: `${SEAL_POP / 2 + 6}px 6px ${portraitRoom(44)}px` }}>
+                {/* The seal, the number and the small stamp sit on the card's top border; the author's portrait hangs on its bottom border with their name small above it. */}
+                <CabinetCrest cabinet={cabinet} n={dirNumber(d)} sealSize={SEAL_POP} left={18} stamp="pop" />
+                <SubmitterPortrait name={author} picture={character?.picture_url ?? null} color={cabinetColorOf(cabinet)} size={44} left={18} />
+                <CabinetName cabinet={cabinet} size={14.5} indent={crestIndent(SEAL_POP)} />
+                <b style={{ display: 'block', marginTop: 10, fontSize: 25, lineHeight: 1.2, overflowWrap: 'anywhere' }}>{d.title}</b>
                 <p key="body" className="cm-fade" style={{ margin: '12px 0 0', maxHeight: 'min(30dvh, 250px)', overflowY: 'auto', background: CK.well, borderRadius: 14, padding: '11px 14px', fontSize: 15, lineHeight: 1.6, color: CK.ink, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
                   {plainText(d.body)}
                 </p>
-                <div style={{ marginTop: 12 }}>
-                  <SubmitterLine name={author} picture={character?.picture_url ?? null} color={cabinetColorOf(cabinet)} when={`Sent ${arrived || 'just now'}`} size={24} from={false} />
-                </div>
+                <CabinetFoot portrait={44} name={author} when={`Sent ${arrived || 'just now'}`} marginTop={12} />
               </div>
             </div>
           )}

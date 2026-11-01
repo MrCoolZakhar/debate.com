@@ -40,8 +40,8 @@ export function NavControls({ index, total, onPrev, onNext }: { index: number; t
  * The big front card's shell. `color` is the inset strip on the left (a cabinet directive passes `ring` instead: a 3px frame in the
  * cabinet's colour). Children are its top, its scrolling middle and its footer.
  */
-export function FrontShell({ color, ring, label, onActivate, children }: {
-  color: string; ring?: boolean; label: string; onActivate?: () => void; children: ReactNode;
+export function FrontShell({ color, ring, tint, label, onActivate, children }: {
+  color: string; ring?: boolean; /** A faint wash over the whole card (a cabinet directive). */ tint?: string; label: string; onActivate?: () => void; children: ReactNode;
 }) {
   return (
     <article
@@ -54,8 +54,8 @@ export function FrontShell({ color, ring, label, onActivate, children }: {
         onActivate();
       } : undefined}
       style={{
-        position: 'absolute', left: 0, top: 14, bottom: 6, width: 'var(--fw)', zIndex: 30, display: 'flex', flexDirection: 'column', cursor: onActivate ? 'pointer' : 'default',
-        background: CK.card, borderRadius: 24, border: ring ? 'none' : '1px solid rgba(27,56,40,0.14)', fontFamily: CK.font, color: CK.ink,
+        position: 'absolute', left: 0, top: ring ? 32 : 14, bottom: ring ? 30 : 6, width: 'var(--fw)', zIndex: 30, display: 'flex', flexDirection: 'column', cursor: onActivate ? 'pointer' : 'default',
+        background: tint ?? CK.card, borderRadius: 24, border: ring ? 'none' : '1px solid rgba(27,56,40,0.14)', fontFamily: CK.font, color: CK.ink,
         boxShadow: ring
           ? `0 0 0 3px ${color}, ${CK.shadow}, 0 22px 44px rgba(58,14,15,0.18)`
           : `${CK.shadow}, 0 22px 44px rgba(58,14,15,0.18), inset 6px 0 0 ${color}`,
@@ -70,8 +70,9 @@ export function FrontShell({ color, ring, label, onActivate, children }: {
  * A smaller card further back in the stack. It sits BEHIND the card before it; only its right part shows (STRIP wide) and its content
  * starts there. `ring` frames it in `color` (a cabinet directive), `grey` mutes it. `badge` hangs on its top edge.
  */
-export function NextShell({ k, fw, grey, ring, color, label, onPick, badge, stamp, children }: {
-  k: number; fw: number; grey?: boolean; ring?: boolean; color: string; label: string; onPick: () => void; badge?: ReactNode; stamp?: ReactNode; children: ReactNode;
+export function NextShell({ k, fw, grey, ring, tint, padBottom = 14, color, label, onPick, badge, stamp, children }: {
+  k: number; fw: number; grey?: boolean; ring?: boolean; /** A faint wash over the whole card (a cabinet directive). */ tint?: string; /** The button's bottom padding (a card with a portrait on its bottom border has none). */ padBottom?: number;
+  color: string; label: string; onPick: () => void; badge?: ReactNode; stamp?: ReactNode; children: ReactNode;
 }) {
   const pct = HEIGHTS[k - 1];
   const left = fw + (k - 1) * STRIP - HIDDEN;
@@ -82,7 +83,7 @@ export function NextShell({ k, fw, grey, ring, color, label, onPick, badge, stam
   return (
     <div className="rd-next" style={style}>
       <div style={{
-        position: 'relative', height: '100%', background: CK.card, borderRadius: 22, overflow: 'visible', opacity: grey ? 0.62 : 1, filter: grey ? 'grayscale(0.7)' : undefined,
+        position: 'relative', height: '100%', background: tint ?? CK.card, borderRadius: 22, overflow: 'visible', opacity: grey ? 0.62 : 1, filter: grey ? 'grayscale(0.7)' : undefined,
         border: ring ? 'none' : '1px solid rgba(27,56,40,0.14)',
         boxShadow: ring ? `0 0 0 2px ${color}, ${CK.shadowSm}, 0 16px 34px rgba(58,14,15,0.18)` : `${CK.shadowSm}, 0 16px 34px rgba(58,14,15,0.18)`,
       }}>
@@ -90,7 +91,7 @@ export function NextShell({ k, fw, grey, ring, color, label, onPick, badge, stam
         {stamp}
         <button type="button" onClick={onPick} aria-label={label}
           className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] transition-transform hover:-translate-y-0.5"
-          style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%', textAlign: 'left', border: 0, background: 'transparent', cursor: 'pointer', borderRadius: 'inherit', padding: `20px 16px 14px ${HIDDEN + 14}px`, fontFamily: CK.font, color: CK.ink, overflow: 'hidden' }}>
+          style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%', textAlign: 'left', border: 0, background: 'transparent', cursor: 'pointer', borderRadius: 'inherit', padding: `20px 16px ${padBottom}px ${HIDDEN + 14}px`, fontFamily: CK.font, color: CK.ink, overflow: 'hidden' }}>
           {children}
         </button>
       </div>

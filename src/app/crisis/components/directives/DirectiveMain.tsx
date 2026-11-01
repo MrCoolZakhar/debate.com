@@ -9,8 +9,8 @@
 // fixed: the composer (answer status, the text box, Send reply). Internal notes are added from the side panel.
 // Nothing but internal notes, the hand-over and the "being written" mark is written before Send reply.
 // Staff only: it shows the author's secret goals. A CABINET directive wears design B (cabinetStamp.tsx): the cabinet's seal and the number
-// overlapping the pop-up's top border, the name in the white band, the author as a small portrait and name, and the big CABINET stamp
-// inside the red band beside the title.
+// overlapping the pop-up's top border with the small CABINET stamp, the author's name small at the foot of the red band with their portrait
+// hanging over the band's bottom edge, and the cabinet's name in the white band (faintly washed in the cabinet's colour).
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Clock, Package, SlidersHorizontal, Target, X, Zap } from 'lucide-react';
@@ -21,7 +21,7 @@ import { Avatar, Btn, CK } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { CharacterLink, CharacterName } from '../character/CharacterProfileHost';
 import { CabinetLogo, NameStack, NumberBadge } from './directiveParts';
-import { CabinetCrest, CabinetStamp, SubmitterLine, isCabinetDirective } from './cabinetStamp';
+import { CabinetCrest, SEAL_POP, SubmitterName, cabinetWash, isCabinetDirective } from './cabinetStamp';
 import { KIND_ICON, authorName, buildNames, listDirectiveCoauthors } from './directiveKit';
 import DirectiveComposer from './DirectiveComposer';
 import DirectiveFacts, { SecretGoalsChip, useSecretGoals } from './DirectiveFacts';
@@ -31,7 +31,8 @@ import type { DirectiveReply } from './useDirectiveReply';
 
 const PORTRAIT = 72;
 const OVERHANG = Math.round(PORTRAIT / 3);
-const SEAL = 44;
+const SEAL = SEAL_POP;
+const SUBMITTER = 44;
 
 /** A small tile with an icon, a label and a value (only for the old fields a row still carries). */
 function Tile({ icon, label, value }: { icon: ReactNode; label: string; value: ReactNode }) {
@@ -94,9 +95,9 @@ export default function DirectiveMain({ directive: d, reply, notesVersion = 0, o
       {/* Top, fixed: the title, the character, then the facts and who is responsible */}
       <div style={{ flex: 'none', position: 'relative' }}>
         {isCab
-          ? <CabinetCrest cabinet={cabinet} n={dirNumber(d)} sealSize={SEAL} left={22} sealTop="var(--dp-seal-top)" badgeTop="var(--dp-badge-top)" />
+          ? <CabinetCrest cabinet={cabinet} n={dirNumber(d)} sealSize={SEAL} left={22} sealTop="var(--dp-seal-top)" badgeTop="var(--dp-badge-top)" stamp="pop" stampTop="calc(var(--dp-badge-top) + 9px)" />
           : <div style={{ position: 'absolute', zIndex: 3, top: 'var(--dp-badge-top)', left: 22 }}><NumberBadge n={dirNumber(d)} /></div>}
-        <div style={{ background: CK.redGrad, color: '#FFF4E6', padding: isCab ? 'calc(var(--dp-pt) + var(--dp-crest-extra)) 18px 11px 22px' : 'var(--dp-pt) 18px 11px 22px', borderRadius: 'var(--dp-r) var(--dp-r) 0 0' }}>
+        <div style={{ background: CK.redGrad, color: '#FFF4E6', padding: isCab ? 'calc(var(--dp-pt) + var(--dp-crest-extra)) 18px 30px 22px' : 'var(--dp-pt) 18px 11px 22px', borderRadius: 'var(--dp-r) var(--dp-r) 0 0' }}>
           <div className="flex items-center justify-between" style={{ gap: 10 }}>
             <p className="inline-flex items-center flex-wrap" style={{ margin: 0, gap: '2px 12px', fontSize: 12.5, fontWeight: 700, color: 'rgba(255,232,214,0.88)' }}>
               <span className="inline-flex items-center" style={{ gap: 6 }}><KindIcon size={15} strokeWidth={1.5} aria-hidden />{KIND_LABEL[d.kind]}</span>
@@ -109,21 +110,23 @@ export default function DirectiveMain({ directive: d, reply, notesVersion = 0, o
               </button>
             </span>
           </div>
-          {isCab ? (
-            <div className="flex items-center" style={{ gap: 12, marginTop: 4 }}>
-              <h2 style={{ flex: 1, minWidth: 0, margin: 0, fontSize: 24, lineHeight: 1.18, fontWeight: 800, overflowWrap: 'anywhere' }}>{d.title}</h2>
-              <CabinetStamp size="pop" onDark />
-            </div>
-          ) : (
-            <h2 style={{ margin: '4px 0 0', fontSize: 24, lineHeight: 1.18, fontWeight: 800, overflowWrap: 'anywhere' }}>{d.title}</h2>
-          )}
+          <h2 style={{ margin: '4px 0 0', fontSize: 24, lineHeight: 1.18, fontWeight: 800, overflowWrap: 'anywhere' }}>{d.title}</h2>
+          {/* A cabinet directive: the author's name small at the foot of the red band, right above the portrait that hangs over its bottom edge. */}
+          {isCab && <SubmitterName name={who} characterId={character?.id} when={`Sent ${timeAgo(d.created_at)}`} size={12} style={{ marginTop: 8, color: 'rgba(255,232,214,0.9)' }} />}
         </div>
         {/* One white band: the character on the left, the facts and who is responsible in the space beside them */}
-        <div className="flex flex-wrap" style={{ gap: '8px 20px', padding: '0 22px 12px', background: CK.card, boxShadow: `0 1px 0 ${CK.hair}` }}>
+        <div className="flex flex-wrap" style={{ gap: '8px 20px', padding: '0 22px 12px', background: isCab ? cabinetWash(accent) : CK.card, boxShadow: `0 1px 0 ${CK.hair}` }}>
           {isCab ? (
-            <div className="flex flex-col" style={{ flex: '0 1 320px', minWidth: 0, gap: 6, paddingTop: 10 }}>
-              <b style={{ fontSize: 19, lineHeight: 1.2, color: accent, overflowWrap: 'break-word', wordBreak: 'normal' }}>{cabinet?.name ?? 'Cabinet'}</b>
-              <SubmitterLine name={who} picture={character?.picture_url} color={accent} when={`Sent ${timeAgo(d.created_at)}`} size={24} characterId={character?.id} from={false} extra={goals ? <SecretGoalsChip goals={goals} /> : undefined} />
+            <div className="flex items-start" style={{ gap: 14, flex: '0 1 320px', minWidth: 0 }}>
+              <span style={{ flex: 'none', marginTop: -Math.round(SUBMITTER / 2), lineHeight: 0, position: 'relative', zIndex: 2 }}>
+                <CharacterLink id={character?.id} style={{ borderRadius: '50%', lineHeight: 0 }}>
+                  <Avatar name={who} src={character?.picture_url} size={SUBMITTER} color={accent} style={{ border: 'none', boxShadow: '0 0 0 3px #FFFFFF, 0 3px 9px rgba(27,56,40,0.28)' }} />
+                </CharacterLink>
+              </span>
+              <div className="flex flex-col" style={{ paddingTop: 10, minWidth: 0, flex: 1, gap: 6 }}>
+                <b style={{ fontSize: 19, lineHeight: 1.2, color: accent, overflowWrap: 'break-word', wordBreak: 'normal' }}>{cabinet?.name ?? 'Cabinet'}</b>
+                {goals && <SecretGoalsChip goals={goals} />}
+              </div>
             </div>
           ) : (
           <div className="flex" style={{ gap: 14, flex: '0 1 270px', minWidth: 0 }}>

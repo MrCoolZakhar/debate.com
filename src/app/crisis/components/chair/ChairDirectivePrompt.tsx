@@ -23,7 +23,7 @@ import type { Cabinet, Directive } from '@/lib/crisis/types';
 import { Btn, CK, fieldStyle, useScrollLock } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { whenLabel } from '../delegate/directiveUi';
-import { CabinetCrest, CabinetName, CabinetStamp, SubmitterLine, cabinetColorOf, cabinetRing, crestIndent } from '../directives/cabinetStamp';
+import { CabinetCrest, CabinetFoot, CabinetName, SEAL_POP, SubmitterPortrait, cabinetColorOf, cabinetRing, cabinetWash, crestIndent, portraitRoom } from '../directives/cabinetStamp';
 import { DirectiveBody } from '../directives/attachedImage';
 import PopBanner from '../directives/PopBanner';
 import { ThemeTags } from '../directives/directiveParts';
@@ -99,7 +99,7 @@ export function ChairDirectiveCard({ d, author, cabinet, cref, readOnly = false,
   const header = (
     <div className="flex items-start justify-between" style={{ gap: 8 }}>
       <div style={{ minWidth: 0, flex: 1 }}>
-        <CabinetName cabinet={cabinet} size={14.5} indent={crestIndent(40)} />
+        <CabinetName cabinet={cabinet} size={14.5} indent={crestIndent(SEAL_POP)} />
         {readOnly ? (
           <span className="inline-flex items-center" style={{ gap: 5, marginTop: 6, fontSize: 12, fontWeight: 800, color: verdict.color }}>{verdict.icon}{verdict.word}</span>
         ) : (
@@ -118,19 +118,17 @@ export function ChairDirectiveCard({ d, author, cabinet, cref, readOnly = false,
     <div onKeyDown={onKeyDown}>
       <div
         style={{
-          position: 'relative', overflow: 'visible', minWidth: 0, background: CK.card, borderRadius: 22, padding: '26px 20px 16px', marginTop: 24,
+          position: 'relative', overflow: 'visible', minWidth: 0, background: cabinetWash(color), borderRadius: 22, padding: asking ? '26px 20px 34px' : '26px 20px 4px', margin: `${SEAL_POP / 2 + 6}px 0 ${portraitRoom(44)}px`,
           boxShadow: cabinetRing(color, 3, `${CK.shadow}, 0 24px 60px rgba(58,14,15,0.4)`),
         }}
       >
-        <CabinetCrest cabinet={cabinet} n={dirNumber(d)} sealSize={40} left={20} />
+        <CabinetCrest cabinet={cabinet} n={dirNumber(d)} sealSize={SEAL_POP} left={20} stamp="pop" />
+        <SubmitterPortrait name={author.name} picture={author.picture_url} color={author.color} size={44} left={20} />
         {header}
 
         {!asking ? (
           <div key="view" className="cm-fade">
-            <div className="flex items-center" style={{ gap: 10, marginTop: 14 }}>
-              <h3 style={{ flex: 1, minWidth: 0, margin: 0, fontSize: 25, lineHeight: 1.2, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{d.title}</h3>
-              <CabinetStamp size="pop" />
-            </div>
+            <h3 style={{ margin: '14px 0 0', fontSize: 25, lineHeight: 1.2, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{d.title}</h3>
             {(d.themes ?? []).length > 0 && (
               <div className="flex flex-wrap items-center" style={{ gap: 6, marginTop: 8 }}>
                 <ThemeTags themes={d.themes ?? []} />
@@ -139,21 +137,21 @@ export function ChairDirectiveCard({ d, author, cabinet, cref, readOnly = false,
             <div style={{ marginTop: 10, maxHeight: 'min(42dvh, 380px)', overflowY: 'auto', background: CK.well, borderRadius: 14, padding: '10px 12px' }}>
               <DirectiveBody body={d.body} thumb={360} style={{ margin: 0, fontSize: 14.5, lineHeight: 1.6, color: CK.ink, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }} />
             </div>
-            <div style={{ marginTop: 12 }}>
-              <SubmitterLine name={author.name} picture={author.picture_url} color={author.color} when={`Sent ${whenLabel(d.created_at)}`} size={24} from={false} />
-            </div>
             {readOnly && replyLabel && reply && (
               <p style={{ margin: '10px 0 0', fontSize: 13.5, lineHeight: 1.5, color: CK.inkSoft, overflowWrap: 'anywhere' }}><b>{replyLabel}: </b>{reply}</p>
             )}
-            {!readOnly && (
-              <div className="flex flex-wrap items-center" style={{ gap: 8, marginTop: 14, paddingTop: 12, borderTop: `1px solid ${CK.hair}` }}>
-                <Btn tone="green" icon={<Check size={16} strokeWidth={1.6} aria-hidden />} disabled={!!busy} onClick={() => run('approve')} title="Sends it to the backroom">
-                  {busy === 'approve' ? 'Approving' : 'Approve'}
-                </Btn>
-                <Btn tone="ghost" icon={<PencilLine size={16} strokeWidth={1.5} aria-hidden />} disabled={!!busy} onClick={() => setMode('changes')}>Request changes</Btn>
-                <Btn tone="danger" style={{ marginLeft: 'auto' }} icon={<XCircle size={16} strokeWidth={1.5} aria-hidden />} disabled={!!busy} onClick={() => setMode('reject')}>Reject</Btn>
-              </div>
-            )}
+            {/* The author's name small above the portrait that hangs on the card's bottom border; the decision buttons to its right. */}
+            <CabinetFoot portrait={44} name={author.name} when={`Sent ${whenLabel(d.created_at)}`} marginTop={12}>
+              {!readOnly && (
+                <>
+                  <Btn tone="green" icon={<Check size={16} strokeWidth={1.6} aria-hidden />} disabled={!!busy} onClick={() => run('approve')} title="Sends it to the backroom">
+                    {busy === 'approve' ? 'Approving' : 'Approve'}
+                  </Btn>
+                  <Btn tone="ghost" icon={<PencilLine size={16} strokeWidth={1.5} aria-hidden />} disabled={!!busy} onClick={() => setMode('changes')}>Request changes</Btn>
+                  <Btn tone="danger" icon={<XCircle size={16} strokeWidth={1.5} aria-hidden />} disabled={!!busy} onClick={() => setMode('reject')}>Reject</Btn>
+                </>
+              )}
+            </CabinetFoot>
           </div>
         ) : (
           <div key={mode} className="cm-fade" style={{ marginTop: 12 }}>

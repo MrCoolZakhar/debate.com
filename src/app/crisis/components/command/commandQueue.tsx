@@ -62,11 +62,11 @@ export function WaitingCard({ directives, base, now, onOpen, onChanged }: {
               {waiting.map((d) => (
                 <div key={d.id} style={{ position: 'relative' }}>
                   <QueueRow d={d} names={names} sev={waitSeverity(d.waiting_since, now)} whenLabel={waitLabel(d.waiting_since, now)} onOpen={() => onOpen(d)} compact />
-                  {/* Change the backroomer right here. Other directives: hangs on the top edge, opposite the number badge. A cabinet directive:
-                      inside the card's top right corner, on the cabinet name's line (the stamp is lower, beside the title); that card starts 17px
-                      down (half the seal's height plus 4, the room its crest needs above it). */}
-                  <span style={{ position: 'absolute', zIndex: 3, top: isCabinetDirective(d) ? 21 : 3, right: isCabinetDirective(d) ? 13 : 10, lineHeight: 0 }}>
-                    <AssignControl cref={ref} directive={d} staff={staff} openCounts={counts} onChanged={() => onChanged?.()} />
+                  {/* Change the backroomer right here. Other directives: hangs on the top edge, opposite the number badge. A cabinet directive: the
+                      assignee's avatar hangs over the card's top right border, half outside (the card starts 24px down, the room its seal needs
+                      above it, so the 30px avatar's centre is at 24). */}
+                  <span style={{ position: 'absolute', zIndex: 3, top: isCabinetDirective(d) ? 9 : 3, right: isCabinetDirective(d) ? 16 : 10, lineHeight: 0 }}>
+                    <AssignControl cref={ref} directive={d} staff={staff} openCounts={counts} onChanged={() => onChanged?.()} hanging={isCabinetDirective(d)} />
                   </span>
                 </div>
               ))}

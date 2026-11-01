@@ -16,7 +16,7 @@ import type { Directive, DirectiveNote } from '@/lib/crisis/types';
 import type { CrisisRef } from '@/lib/crisis/api';
 import { Avatar, Btn, Card, CK, Skeleton } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
-import { CabinetCrest, CabinetName, CabinetStamp, SubmitterLine, cabinetColorOf, cabinetRing, crestIndent, isCabinetDirective } from '../directives/cabinetStamp';
+import { CabinetCrest, CabinetFoot, CabinetName, SEAL_ROW, SubmitterPortrait, cabinetColorOf, cabinetRing, cabinetWash, crestIndent, isCabinetDirective, portraitRoom } from '../directives/cabinetStamp';
 import DirectiveDialog from './DirectiveDialog';
 import DirectiveDeepLink from '../notifications/DirectiveDeepLink';
 import { KIND_WORD, kindIcon, verdictOf } from './directiveUi';
@@ -46,12 +46,13 @@ function DirectiveCard({ d, author, onOpen }: { d: Directive; author: PersonRef;
         aria-label={`Cabinet directive ${dirNumber(d)}: ${d.title}. ${tagWord}`}
         className="relative text-left w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] transition-transform active:scale-[0.99]"
         style={{
-          display: 'block', minHeight: CARD_HEIGHT, padding: '20px 16px 12px', margin: '22px 3px 0', width: 'calc(100% - 6px)', cursor: 'pointer', fontFamily: CK.font, color: CK.ink,
-          background: CK.card, borderRadius: 20, border: 0, overflow: 'visible',
+          display: 'block', minHeight: CARD_HEIGHT, padding: '20px 16px 4px', margin: `${SEAL_ROW / 2 + 6}px 3px ${portraitRoom(34)}px`, width: 'calc(100% - 6px)', cursor: 'pointer', fontFamily: CK.font, color: CK.ink,
+          background: cabinetWash(color), borderRadius: 20, border: 0, overflow: 'visible',
           boxShadow: ask ? cabinetRing(color, 3, `${CK.shadow}, 0 0 0 5px rgba(47,95,143,0.35)`) : cabinetRing(color, 3, CK.shadow),
         }}
       >
-        <CabinetCrest cabinet={cabinet} n={dirNumber(d)} sealSize={38} left={16} />
+        <CabinetCrest cabinet={cabinet} n={dirNumber(d)} sealSize={SEAL_ROW} left={16} stamp="row" />
+        <SubmitterPortrait name={author.name} picture={author.picture_url} color={author.color} size={34} left={16} />
         <span
           title={tagWord}
           className="inline-flex items-center"
@@ -62,21 +63,19 @@ function DirectiveCard({ d, author, onOpen }: { d: Directive; author: PersonRef;
         >
           {tagIcon}{tagWord}
         </span>
-        <CabinetName cabinet={cabinet} size={13} indent={crestIndent(38)} />
-        <span className="flex items-center" style={{ gap: 10, marginTop: 6 }}>
-          <b style={{ flex: 1, minWidth: 0, display: 'block', fontSize: 17, lineHeight: 1.28, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{d.title}</b>
-          <CabinetStamp size="row" />
-        </span>
-        <span style={{ display: 'block', marginTop: 6 }}>
-          <SubmitterLine name={author.name} picture={author.picture_url} color={author.color} size={22} from={false}
-            when={d.answered_at ? `${sentBack ? 'Sent back' : 'Reply'} ${timeAgo(d.answered_at)}` : `Sent ${timeAgo(d.created_at)}`} />
-        </span>
+        <CabinetName cabinet={cabinet} size={13} indent={crestIndent(SEAL_ROW)} />
+        <b style={{ display: 'block', marginTop: 6, fontSize: 17, lineHeight: 1.28, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{d.title}</b>
         <span
           title={text}
           className="line-clamp-2"
           style={{ display: 'block', marginTop: 5, fontSize: 12.5, lineHeight: 1.4, color: CK.inkSoft, overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}
         >
           {text}
+        </span>
+        {/* The author's name small above the portrait that hangs on the card's bottom border. */}
+        <span className="block">
+          <CabinetFoot portrait={34} name={author.name} marginTop={6}
+            when={d.answered_at ? `${sentBack ? 'Sent back' : 'Reply'} ${timeAgo(d.answered_at)}` : `Sent ${timeAgo(d.created_at)}`} />
         </span>
       </button>
     );

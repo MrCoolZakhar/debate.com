@@ -1,14 +1,12 @@
-// Gavelling Crisis: the look of a CABINET directive, in one place (owner, 1 Nov 2026: "I like the cabinet stamp, use pretty much
-// design B but the cabinet stamp big"; 1 Nov 2026 later: "stamps are broken, just put them on the actual card"). A cabinet directive
-// is a white card framed in its cabinet's own colour. The cabinet's SEAL overlaps the card's top left border (half outside, with a white
-// ring and a soft shadow) and the "No. 26" NUMBER badge sits on the same border right beside it (CabinetCrest). The cabinet's name is a
-// small coloured label on one line inside the card above the title (CabinetName), the TITLE is large, and the red rubber stamp
-// "CABINET" in the display face sits INSIDE the card, tilted, to the right of the title (CabinetStamp, an ordinary flex item: nothing
-// hangs outside, nothing is clipped, it can never sit under a control in the card's corner). The author is a small round portrait with
-// the name on the card's bottom line (SubmitterLine). Personal and joint directives keep their own look, so a cabinet one stands out.
+// Gavelling Crisis: the look of a CABINET directive, in one place (owner, 1 Nov 2026). A cabinet directive is a card framed in its
+// cabinet's own colour with a very faint wash of that colour over the whole card. Everything that matters hangs OVER the card's border,
+// half outside, never clipped: the cabinet's SEAL (no border, no disc behind it, a soft drop shadow only) on the top left, the "No. 26"
+// badge beside it, the red CABINET stamp (small, tilted, on a white ground) on the top border after the badge, the assigned staff
+// person's avatar on the top right (Command only) and the SUBMITTER's round portrait on the BOTTOM border at the left, with their name
+// much smaller just above it (CabinetFoot + SubmitterPortrait). The icons and the wait sit on the bottom row to the right of the portrait.
 //
-// Only the seal and the number poke past the card's border: the card that wears them must not clip (overflow visible) and the thing
-// holding it leaves `sealSize / 2` of room above it. The stamp never takes a click.
+// The card that wears them must not clip (overflow visible) and the thing holding it leaves `sealSize / 2` of room above it and
+// `portrait / 2` below it. The stamp never takes a click.
 
 import type { CSSProperties, ReactNode } from 'react';
 import { Landmark } from 'lucide-react';
@@ -26,33 +24,31 @@ export const isCabinetDirective = (d: Pick<Directive, 'kind'>): boolean => d.kin
 /** The cabinet's own colour, red when there is no cabinet. */
 export const cabinetColorOf = (cabinet?: Pick<Cabinet, 'color'> | null): string => cabinet?.color ?? CK.red;
 
-/** The sizes of the stamp: `pop` in the big pop-ups, `card` on the big reader card, `row` in lists, `xs` in the tight Command rows. */
+/** The sizes of the stamp (about 60% of the first design): `pop` in the big pop-ups, `card` on the big reader card, `row` in lists, `xs` in the tight rows. */
 const SIZES = {
-  pop: { font: 28, pad: '5px 14px 1px', border: 3, radius: 9, spacing: '0.12em' },
-  card: { font: 22, pad: '4px 11px 1px', border: 3, radius: 8, spacing: '0.12em' },
-  row: { font: 14, pad: '3px 8px 1px', border: 2.5, radius: 6, spacing: '0.12em' },
-  xs: { font: 12, pad: '2px 6px 0', border: 2, radius: 5, spacing: '0.1em' },
+  pop: { font: 17, pad: '3px 8px 1px', border: 2, radius: 6, spacing: '0.12em' },
+  card: { font: 13, pad: '2px 7px 0', border: 2, radius: 5, spacing: '0.12em' },
+  row: { font: 10, pad: '2px 5px 0', border: 1.5, radius: 4, spacing: '0.12em' },
+  xs: { font: 9, pad: '2px 4px 0', border: 1.5, radius: 4, spacing: '0.1em' },
 } as const;
 export type StampSize = keyof typeof SIZES;
 
 /**
- * The red rubber stamp. An ordinary flex item that sits INSIDE the card, to the right of the title (put it in a `flex items-center`
- * row with the title). On a light card it is see-through ink (multiply); `onDark` (the red band of a pop-up) gives it a cream fill.
+ * The red rubber stamp, on a WHITE ground so it reads over any card. It is placed by CabinetCrest, ON the card's top border (half outside,
+ * tilted about -8 degrees). Used on its own it is an ordinary inline item.
  */
-export function CabinetStamp({ size = 'row', onDark = false, style }: { size?: StampSize; /** It sits on a dark or red band. */ onDark?: boolean; style?: CSSProperties }) {
+export function CabinetStamp({ size = 'row', style }: { size?: StampSize; /** Kept for old callers; the stamp now always has its white ground. */ onDark?: boolean; style?: CSSProperties }) {
   const s = SIZES[size];
   return (
     <span
       aria-hidden
       className={crisisDisplay.className}
       style={{
-        position: 'relative', flex: 'none', display: 'inline-block', alignSelf: 'center', margin: '2px 3px', zIndex: 2, pointerEvents: 'none', userSelect: 'none',
-        transform: 'rotate(-9deg)', transformOrigin: 'center', whiteSpace: 'nowrap', lineHeight: 1.1,
+        position: 'relative', flex: 'none', display: 'inline-block', alignSelf: 'center', zIndex: 3, pointerEvents: 'none', userSelect: 'none',
+        transform: 'rotate(-8deg)', transformOrigin: 'center', whiteSpace: 'nowrap', lineHeight: 1.1,
         fontSize: s.font, letterSpacing: s.spacing, padding: s.pad, borderRadius: s.radius,
-        border: `${s.border}px solid ${STAMP_RED}`, color: STAMP_RED,
-        background: onDark ? 'rgba(255,244,230,0.96)' : 'transparent',
-        opacity: onDark ? 0.97 : 0.9, mixBlendMode: onDark ? 'normal' : 'multiply',
-        boxShadow: onDark ? '0 4px 12px rgba(42,10,12,0.3)' : undefined,
+        border: `${s.border}px solid ${STAMP_RED}`, color: STAMP_RED, background: '#FFFFFF',
+        boxShadow: '0 2px 6px rgba(27,56,40,0.18)',
         ...style,
       }}
     >
@@ -61,40 +57,50 @@ export function CabinetStamp({ size = 'row', onDark = false, style }: { size?: S
   );
 }
 
+/** A very faint wash of the cabinet's colour over the whole card (about 5%), still plain enough for dark text. */
+export function cabinetWash(color: string, amount = 5): string {
+  return `color-mix(in srgb, ${color} ${amount}%, ${CK.card})`;
+}
+
 /** The box-shadow ring in the cabinet's colour that frames the card (3px in a pop-up, 2px in a list), then any shadow after it. */
 export function cabinetRing(color: string, width = 3, after?: string): string {
   return `0 0 0 ${width}px ${color}${after ? `, ${after}` : ''}`;
 }
 
-/** The cabinet's seal: its logo in a round near-white disc, else a disc in the cabinet's colour with a landmark. */
+/** The cabinet's seal: its logo as it is (no border, no disc behind it), else a disc in the cabinet's colour with a landmark. A soft drop shadow only. */
 export function CabinetSeal({ cabinet, size = 32, style }: { cabinet?: Pick<Cabinet, 'name' | 'color' | 'logo_url'> | null; size?: number; style?: CSSProperties }) {
   const color = cabinetColorOf(cabinet);
   if (cabinet?.logo_url) {
     return (
-      <span aria-hidden style={{ width: size, height: size, borderRadius: '50%', flex: 'none', display: 'grid', placeItems: 'center', overflow: 'hidden', background: '#FDFCF9', border: '0.5px solid rgba(221,212,192,0.7)', boxShadow: '0 2px 7px rgba(27,56,40,0.2)', ...style }}>
+      <span aria-hidden style={{ width: size, height: size, flex: 'none', display: 'grid', placeItems: 'center', filter: 'drop-shadow(0 3px 6px rgba(27,56,40,0.3))', ...style }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={cabinet.logo_url} alt="" draggable={false} style={{ width: '82%', height: '82%', objectFit: 'contain', display: 'block' }} />
+        <img src={cabinet.logo_url} alt="" draggable={false} style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
       </span>
     );
   }
   return (
-    <span aria-hidden style={{ width: size, height: size, borderRadius: '50%', flex: 'none', display: 'grid', placeItems: 'center', background: `linear-gradient(135deg, ${color}, color-mix(in srgb, ${color} 68%, #000))`, color: '#FFF4E6', boxShadow: '0 2px 7px rgba(27,56,40,0.2)', ...style }}>
+    <span aria-hidden style={{ width: size, height: size, borderRadius: '50%', flex: 'none', display: 'grid', placeItems: 'center', background: `linear-gradient(135deg, ${color}, color-mix(in srgb, ${color} 68%, #000))`, color: '#FFF4E6', boxShadow: '0 3px 10px rgba(27,56,40,0.3)', ...style }}>
       <Landmark size={Math.round(size * 0.52)} strokeWidth={1.5} />
     </span>
   );
 }
 
+/** The seal's size in a list row (about 1.5x the first design) and in a pop-up. */
+export const SEAL_ROW = 48;
+export const SEAL_POP = 64;
+
 /** Space the seal takes beside the cabinet's name: the name's left padding when the crest's `left` equals the body's left padding. */
 export const crestIndent = (sealSize: number): number => sealSize + 8;
 
 /**
- * The crest on the card's top border: the seal (half outside, a white ring, a soft shadow) and the "No. 26" badge right beside it, also
- * on the border. Absolutely positioned: put it as a child of the (position: relative, overflow: visible) card. `sealTop` / `badgeTop`
- * override where they sit (a pop-up on a phone has no outside to overlap into).
+ * The crest on the card's top border: the seal (half outside, bigger, no ring) with the "No. 26" badge right beside it, and the small CABINET
+ * stamp (`stamp`, white ground, tilted) after the badge, all ON the border. Absolutely positioned: put it as a child of the
+ * (position: relative, overflow: visible) card. `sealTop` / `badgeTop` / `stampTop` override where they sit (a pop-up on a phone has no
+ * outside to overlap into; `stampTop` is where the stamp's CENTRE sits, 0 = on the border).
  */
-export function CabinetCrest({ cabinet, n, sealSize = 32, left = 14, sealTop, badgeTop = -9 }: {
+export function CabinetCrest({ cabinet, n, sealSize = SEAL_ROW, left = 14, sealTop, badgeTop = -9, stamp, stampTop = 0 }: {
   cabinet?: Pick<Cabinet, 'name' | 'color' | 'logo_url'> | null; n: number; sealSize?: number; left?: number;
-  sealTop?: number | string; badgeTop?: number | string;
+  sealTop?: number | string; badgeTop?: number | string; stamp?: StampSize | false; stampTop?: number | string;
 }) {
   const color = cabinetColorOf(cabinet);
   return (
@@ -102,9 +108,12 @@ export function CabinetCrest({ cabinet, n, sealSize = 32, left = 14, sealTop, ba
       <CabinetSeal
         cabinet={cabinet}
         size={sealSize}
-        style={{ position: 'absolute', zIndex: 3, top: sealTop ?? -Math.round(sealSize / 2), left, border: '3px solid #FFFFFF', boxShadow: '0 3px 10px rgba(27,56,40,0.28)', pointerEvents: 'none' }}
+        style={{ position: 'absolute', zIndex: 3, top: sealTop ?? -Math.round(sealSize / 2), left, pointerEvents: 'none' }}
       />
       <NumberBadge n={n} color={color} style={{ position: 'absolute', zIndex: 3, top: badgeTop, left: left + sealSize + 6, pointerEvents: 'none' }} />
+      {stamp && (
+        <CabinetStamp size={stamp} style={{ position: 'absolute', zIndex: 3, top: stampTop, left: left + sealSize + 6 + 74, transform: 'translateY(-50%) rotate(-8deg)' }} />
+      )}
     </>
   );
 }
@@ -149,5 +158,62 @@ export function SubmitterLine({ name, picture, color, when, size = 22, extra, ch
       </span>
       {extra}
     </span>
+  );
+}
+
+
+/** Who sent it, small and muted, just above the portrait that hangs on the card's bottom border ("Robert McNamara · Sent 4 min ago"). */
+export function SubmitterName({ name, characterId, when, extra, size = 11.5, style }: {
+  name: string; characterId?: string | null; when?: string; size?: number; extra?: ReactNode; style?: CSSProperties;
+}) {
+  return (
+    <span className="flex items-center flex-wrap" style={{ gap: '2px 7px', fontSize: size, fontWeight: 600, color: CK.muted, fontFamily: CK.font, lineHeight: 1.3, ...style }}>
+      <span style={{ overflowWrap: 'break-word', minWidth: 0 }}>
+        {characterId ? <CharacterName id={characterId}>{name}</CharacterName> : name}{when ? ` · ${when}` : ''}
+      </span>
+      {extra}
+    </span>
+  );
+}
+
+/**
+ * The submitter's round portrait HANGING ON THE CARD'S BOTTOM BORDER, half outside, with a white ring. Absolutely positioned: a child of
+ * the card (position: relative, overflow: visible); `left` equals the card's side padding. With `characterId` it opens that character
+ * (leave it out inside a button or a card that is itself one press). The thing holding the card leaves `size / 2 + 6` below it.
+ */
+export function SubmitterPortrait({ name, picture, color, size = 34, left = 14, characterId }: {
+  name: string; picture?: string | null; color?: string; size?: number; left?: number; characterId?: string | null;
+}) {
+  const face = <Avatar name={name} src={picture} size={size} color={color ?? CK.red} style={{ border: 'none', boxShadow: 'none' }} />;
+  return (
+    <span
+      style={{
+        position: 'absolute', zIndex: 4, left, bottom: -Math.round(size / 2), width: size, height: size, borderRadius: '50%', lineHeight: 0, background: '#FFFFFF',
+        boxShadow: '0 0 0 3px #FFFFFF, 0 3px 9px rgba(27,56,40,0.28)', pointerEvents: characterId ? 'auto' : 'none',
+      }}
+    >
+      {characterId ? <CharacterLink id={characterId} style={{ borderRadius: '50%', lineHeight: 0, display: 'block' }}>{face}</CharacterLink> : face}
+    </span>
+  );
+}
+
+/** The room under a card that wears a bottom portrait, so it never covers the next card. */
+export const portraitRoom = (size: number): number => Math.round(size / 2) + 8;
+
+/**
+ * The bottom of a cabinet card, in the flow: the submitter's name small, then a row (as tall as the top half of the portrait that hangs
+ * below it, `SubmitterPortrait`) holding `children` (theme icons, the wait) to the RIGHT of that portrait. The card gives it a small
+ * bottom padding only: the portrait's top half fills this row.
+ */
+export function CabinetFoot({ portrait = 34, name, characterId, when, extra, marginTop = 8, children }: {
+  portrait?: number; name: string; characterId?: string | null; when?: string; extra?: ReactNode; marginTop?: number; children?: ReactNode;
+}) {
+  return (
+    <div style={{ marginTop }}>
+      <SubmitterName name={name} characterId={characterId} when={when} extra={extra} />
+      <div className="flex flex-wrap items-center justify-end" style={{ minHeight: Math.round(portrait / 2) + 4, paddingLeft: portrait + 12, gap: '4px 9px', marginTop: 2 }}>
+        {children}
+      </div>
+    </div>
   );
 }

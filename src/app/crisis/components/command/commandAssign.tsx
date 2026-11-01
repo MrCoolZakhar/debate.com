@@ -15,8 +15,10 @@ import { StaffPic } from '../directives/directiveParts';
 
 const W = 252;
 
-export default function AssignControl({ cref, directive, staff, openCounts, onChanged }: {
+export default function AssignControl({ cref, directive, staff, openCounts, onChanged, hanging }: {
   cref: CrisisRef; directive: Directive; staff: Member[]; openCounts: Map<string, number>; onChanged: () => void;
+  /** The avatar alone, bigger, with a white ring and a tiny chevron badge on its corner: it hangs over a card's border (a cabinet directive). */
+  hanging?: boolean;
 }) {
   const btn = useRef<HTMLButtonElement>(null);
   const box = useRef<HTMLDivElement>(null);
@@ -84,10 +86,23 @@ export default function AssignControl({ cref, directive, staff, openCounts, onCh
         aria-label={`Change who has this directive. Now ${current ? current.display_name : 'nobody'}`}
         title={current ? `With ${current.display_name}. Change` : 'Nobody has it. Pick someone'}
         className="inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] active:scale-[0.96] transition-transform"
-        style={{ gap: 2, border: 0, cursor: 'pointer', padding: '2px 4px 2px 2px', borderRadius: 999, background: CK.card, boxShadow: `${CK.shadowSm}, inset 0 0 0 1px ${CK.hair}`, color: CK.inkSoft }}
+        style={hanging
+          ? { position: 'relative', border: 0, cursor: 'pointer', padding: 0, borderRadius: '50%', background: '#FFFFFF', lineHeight: 0, boxShadow: '0 0 0 3px #FFFFFF, 0 3px 9px rgba(27,56,40,0.28)' }
+          : { gap: 2, border: 0, cursor: 'pointer', padding: '2px 4px 2px 2px', borderRadius: 999, background: CK.card, boxShadow: `${CK.shadowSm}, inset 0 0 0 1px ${CK.hair}`, color: CK.inkSoft }}
       >
-        <StaffPic member={current} size={22} />
-        <ChevronDown size={12} strokeWidth={1.8} aria-hidden />
+        {hanging ? (
+          <>
+            <StaffPic member={current} size={30} />
+            <span aria-hidden style={{ position: 'absolute', right: -6, bottom: -5, width: 16, height: 16, borderRadius: '50%', background: '#FFFFFF', color: CK.inkSoft, display: 'grid', placeItems: 'center', boxShadow: '0 1px 4px rgba(27,56,40,0.3)' }}>
+              <ChevronDown size={11} strokeWidth={2} />
+            </span>
+          </>
+        ) : (
+          <>
+            <StaffPic member={current} size={22} />
+            <ChevronDown size={12} strokeWidth={1.8} aria-hidden />
+          </>
+        )}
       </button>
       {pos && (
         <Portal>
