@@ -10,14 +10,19 @@ import type { EffectsDraft } from './replyDraft';
 /** What the signed-in staffer may change from a reply (the director may change everything). */
 export interface ReplyPowers { resources: boolean; units: boolean; map: boolean; characters: boolean }
 
-/** Turns the staged changes into the effects of one answer. A section the staffer has no power over is left out. */
-export function effectsToAnswer(effects: EffectsDraft, powers: ReplyPowers): AnswerEffects {
+/**
+ * Turns the staged changes into the effects of one answer. A section the staffer has no power over is left out.
+ * `mapToDraft`: the map parts (unit moves and amounts, country holders, the map edit set) are left out because they
+ * were added to the shared unsent map instead (replyToDraft.ts); everything else still goes with the answer.
+ */
+export function effectsToAnswer(effects: EffectsDraft, powers: ReplyPowers, opts: { mapToDraft?: boolean } = {}): AnswerEffects {
   const out: AnswerEffects = {};
+  const live = !opts.mapToDraft;
   if (powers.resources) {
     const rows = Object.entries(effects.resources).filter(([, delta]) => delta !== 0).map(([id, delta]) => ({ id, delta }));
     if (rows.length) out.resources = rows;
   }
-  if (powers.units) {
+  if (live && powers.units) {
     const rows = Object.entries(effects.units).map(([id, u]) => ({
       id,
       lng: u.lng !== undefined && u.lat !== undefined ? u.lng : undefined,
@@ -26,12 +31,12 @@ export function effectsToAnswer(effects: EffectsDraft, powers: ReplyPowers): Ans
     }));
     if (rows.length) out.units = rows;
   }
-  if (powers.map) {
+  if (live && powers.map) {
     const rows = Object.entries(effects.regions).map(([key, owner]) => ({ key, owner_cabinet_id: owner }));
     if (rows.length) out.regions = rows;
   }
   // Border changes and drawn territory ride in the answer as one edit set, applied in the same transaction.
-  if (powers.map && !isEmptySet(effects.map)) out.map = effects.map as object;
+  if (live && powers.map && !isEmptySet(effects.map)) out.map = effects.map as object;
   // The database ignores character changes from a backroomer without the power, so they are not offered or sent.
   const chars = !powers.characters ? [] : Object.entries(effects.characters).map(([id, c]) => ({ id, status: c.status, status_note: c.note.trim() || null }));
   if (chars.length) out.characters = chars;

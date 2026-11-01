@@ -6,12 +6,13 @@
 // before Send reply except the "being written" mark (useDirectiveReply).
 
 import type { ReactNode } from 'react';
-import { Check, Pencil, Send } from 'lucide-react';
+import { Check, Map as MapIcon, Pencil, Send } from 'lucide-react';
 import { OUTCOME_LABEL, type Directive, type DirectiveOutcome } from '@/lib/crisis/types';
 import { Btn, CK, cabinetTint, fieldStyle } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { OUTCOME_STYLE, isBeingWritten, memberName, buildNames } from './directiveKit';
 import { StaffPic } from './directiveParts';
+import { MAP_WAITS_NOTE } from './replyToDraft';
 import { useNow } from './useNow';
 import type { DirectiveReply } from './useDirectiveReply';
 
@@ -78,6 +79,13 @@ export default function DirectiveComposer({ d, reply, who, effectsButton }: {
             </span>
           )}
         </div>
+      )}
+
+      {!answeredView && reply.mapToDraft && (
+        <p className="flex items-start" style={{ margin: 0, gap: 6, fontSize: 12, fontWeight: 600, lineHeight: 1.35, color: CK.inkSoft }}>
+          <MapIcon size={13} strokeWidth={1.5} aria-hidden style={{ color: CK.red, flex: 'none', marginTop: 2 }} />
+          <span>{MAP_WAITS_NOTE}</span>
+        </p>
       )}
 
       <div className="flex items-center flex-wrap" style={{ gap: 8 }}>

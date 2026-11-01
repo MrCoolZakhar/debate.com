@@ -803,22 +803,12 @@ export function ZoneEditor({
 
   return (
     <Shell title={title} onClose={onCancel}>
-      {!isNew && (
-        <Field label="Outline">
-          {infoOnly ? (
-            <p style={{ margin: 0, fontSize: 12.5, color: CK.inkSoft }}>
-              This zone is made of several pieces, so its outline stays as it is. Everything else can be edited here. To change its shape, delete it and draw it again.
-            </p>
-          ) : (
-            <>
-              <p style={{ margin: '0 0 8px', fontSize: 12.5, color: CK.inkSoft }}>
-                Drag a white corner to move it, or a small dot on a side to add a corner. Double-click a corner to remove it. The Move handle on the map, or the zone itself, carries the whole zone.
-              </p>
-              {onRedraw && <Btn size="sm" tone="ghost" icon={<Pencil size={14} strokeWidth={1.5} />} onClick={onRedraw}>Redraw the outline</Btn>}
-            </>
-          )}
-        </Field>
-      )}
+      <Field label="Description">
+        <textarea
+          style={{ ...fieldStyle, fontSize: 15, lineHeight: 1.45, minHeight: 84, resize: 'vertical' }} rows={3} value={f.description} maxLength={2000}
+          aria-label="Zone description" onChange={(e) => setF({ ...f, description: e.target.value }, false)} onBlur={form.flush}
+        />
+      </Field>
       <Field label="Name">
         <input
           style={fieldStyle} value={f.name} maxLength={ZONE_NAME_MAX} aria-label="Zone name" autoFocus={isNew}
@@ -831,12 +821,7 @@ export function ZoneEditor({
           options={[{ value: '', label: 'No type' }, ...types.map((t) => ({ value: t.id, label: t.name }))]}
           onChange={(v) => setF({ ...f, type: v || null })}
         />
-        {type ? (
-          <p className="flex items-start" style={{ margin: '6px 0 0', gap: 7, fontSize: 12.5, color: CK.inkSoft, overflowWrap: 'anywhere' }}>
-            <span style={{ marginTop: 2 }}><Swatch color={type.color} /></span>
-            <span>{type.description || type.name}</span>
-          </p>
-        ) : (
+        {type ? null : (
           <div style={{ marginTop: 8 }}>
             <Palette value={f.color} onChange={(c) => setF({ ...f, color: c })} />
             {types.length === 0 && (
@@ -847,9 +832,6 @@ export function ZoneEditor({
       </Field>
       <Field label="Controlled by">
         <OwnerPicker value={f.owner} cabinets={cabinets} withNobody ariaLabel="Who controls this zone" onChange={(id) => setF({ ...f, owner: id })} />
-      </Field>
-      <Field label="Description">
-        <textarea style={{ ...fieldStyle, minHeight: 60, resize: 'vertical' }} value={f.description} maxLength={2000} aria-label="Zone description" onChange={(e) => setF({ ...f, description: e.target.value }, false)} onBlur={form.flush} />
       </Field>
       <Field label="Seen by">
         <div role="radiogroup" aria-label="Who sees this zone" className="flex flex-wrap" style={{ background: CK.well, borderRadius: 11, padding: 3, gap: 2 }}>
@@ -875,6 +857,11 @@ export function ZoneEditor({
           </div>
         )}
       </Field>
+      {!isNew && !infoOnly && onRedraw && (
+        <Field label="Outline">
+          <Btn size="sm" tone="ghost" icon={<Pencil size={14} strokeWidth={1.5} />} onClick={onRedraw}>Redraw the outline</Btn>
+        </Field>
+      )}
       <p style={{ margin: '0 0 10px', fontSize: 12.5, color: CK.inkSoft }}>
         {isNew ? 'Drag a white corner to move it, a small dot on a side to add a corner, or the Move handle to carry the whole zone. ' : ''}A zone never changes who holds the land.
       </p>

@@ -176,6 +176,14 @@ export function makeGhost(): HTMLElement {
   return el;
 }
 
+/** The cursor while drawing an outline: a pen whose tip (bottom left) is the point that lands on the map. A white halo keeps it
+ *  readable over any colour; crosshair is the fallback. */
+const PEN_SVG = "<svg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 24 24' fill='none' stroke-linecap='round' stroke-linejoin='round'>"
+  + "<path d='M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z' stroke='white' stroke-width='4.5'/>"
+  + "<path d='M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z' fill='%23EED98A' stroke='%231C1410' stroke-width='1.6'/>"
+  + "<path d='m15 5 4 4' stroke='%231C1410' stroke-width='1.6'/></svg>";
+export const PEN_CURSOR = `url("data:image/svg+xml;utf8,${PEN_SVG}") 2 24, crosshair`;
+
 export const MAP_CSS = `
 .wm-root{display:flex;flex-direction:column;height:100%;min-height:380px;font-family:var(--font-brand),Inter,system-ui,sans-serif;color:#1C1410}
 .wm-root[data-compact]{flex:1 1 auto;min-height:0;min-width:0;width:100%}

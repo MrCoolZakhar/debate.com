@@ -9,6 +9,8 @@ import { CK } from '../../crisisKit';
 import { STATUS_META, place, round2, type CardEnv } from './effectCards';
 import { countChanges } from './replyDraft';
 import { setSize } from '../map/mapEdits';
+import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
+import { MAP_WAITS_NOTE, hasReplyMapParts } from './replyToDraft';
 
 interface Change { id: string; icon: LucideIcon; text: string; remove: () => void }
 
@@ -64,6 +66,8 @@ export function buildChanges(env: CardEnv): Change[] {
 export default function EffectsRecap({ env }: { env: CardEnv }) {
   const changes = buildChanges(env);
   const total = countChanges(env.effects);
+  const { settings } = useCrisis();
+  const mapWaits = settings.mapChangesWait && hasReplyMapParts(env.effects, env.powers);
   return (
     <section aria-label="Recap of the changes" aria-live="polite" style={{ flex: 'none', padding: '8px 14px 10px', background: CK.card, boxShadow: `0 -1px 0 ${CK.hair}`, fontFamily: CK.font }}>
       <p className="flex items-center" style={{ margin: 0, gap: 6 }}>
@@ -89,6 +93,9 @@ export default function EffectsRecap({ env }: { env: CardEnv }) {
             );
           })}
         </ul>
+      )}
+      {mapWaits && (
+        <p style={{ margin: '6px 0 0', fontSize: 11.5, lineHeight: 1.3, fontWeight: 600, color: CK.inkSoft }}>{MAP_WAITS_NOTE}</p>
       )}
     </section>
   );

@@ -213,7 +213,7 @@ function PopupBody({ directive: d, onClose, onChanged, notesVersion = 0, nav, on
     map: director || settings.backroomPowers.map,
     characters: director || !!settings.backroomPowers.characters,
   }), [director, settings.backroomPowers]);
-  const reply = useDirectiveReply(ref, d, who, powers, () => onChanged?.('answered'));
+  const reply = useDirectiveReply(ref, d, who, powers, () => onChanged?.('answered'), settings.mapChangesWait);
   const narrow = useNarrow();
   const [step, setStep] = useState<'main' | 'effects'>('main');
   /** The big map, shown in place of the whole pop-up while it is set. */

@@ -8,6 +8,7 @@ import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { answerDirective, crisisError, markDrafting, type AnswerEffects, type CrisisRef } from '@/lib/crisis/api';
 import type { Directive, DirectiveOutcome } from '@/lib/crisis/types';
 import { effectsToAnswer, type ReplyPowers } from './ReplyActions';
+import { addReplyMapToDraft, hasReplyMapParts } from './replyToDraft';
 import { emptyEffects, readReplyDraft, writeReplyDraft, type EffectsDraft } from './replyDraft';
 
 export interface DirectiveReply {
@@ -23,6 +24,8 @@ export interface DirectiveReply {
   startEditing: () => void;
   busy: boolean;
   canSend: boolean;
+  /** True when sending will put the reply's map changes into the shared unsent map (the setting is on and the reply holds some). */
+  mapToDraft: boolean;
   send: () => Promise<void>;
 }
 
@@ -32,9 +35,11 @@ export interface DirectiveReply {
  * earlier are internal notes, who the directive is with, and the "being written" mark (crisis_mark_drafting: once on
  * the first keystroke, then at most once a minute while typing, switched off when the draft is emptied or the pop-up
  * is closed with nothing written). The answer carries the border changes and the newsflash with its file in the same
- * call, and the database publishes the story itself when this person may.
+ * call, and the database publishes the story itself when this person may. When the crisis setting "Map changes wait
+ * until you send them" is on (`mapChangesWait`), the map parts of the reply (units, holders, borders) are NOT in that
+ * call: they are added to the team's shared unsent map first (replyToDraft.ts), and the answer follows without them.
  */
-export function useDirectiveReply(ref: CrisisRef, d: Directive, who: string, powers: ReplyPowers, onSent: () => void): DirectiveReply {
+export function useDirectiveReply(ref: CrisisRef, d: Directive, who: string, powers: ReplyPowers, onSent: () => void, mapChangesWait = false): DirectiveReply {
   const [stored] = useState(() => readReplyDraft(ref.id, d.id));
   const [outcome, setOutcome] = useState<DirectiveOutcome | null>(stored?.outcome ?? null);
   const [reply, setReplyText] = useState(stored?.reply ?? '');
@@ -99,6 +104,8 @@ export function useDirectiveReply(ref: CrisisRef, d: Directive, who: string, pow
   const startEditing = () => { requestId.current = null; touched.current = true; setOutcome(d.outcome); setReplyText(d.reply ?? ''); setSaved(false); setEditing(true); };
 
   const canSend = !!outcome && !!reply.trim() && !busy;
+  // Changing the words of an answered directive runs nothing, so it never touches the unsent map.
+  const mapToDraft = mapChangesWait && !(editing && d.status === 'answered') && hasReplyMapParts(effects, powers);
 
   const send = async () => {
     if (!outcome || !reply.trim() || busy) return;
@@ -106,13 +113,18 @@ export function useDirectiveReply(ref: CrisisRef, d: Directive, who: string, pow
     try {
       // Changing the words of an answered directive runs nothing again, so no staged change is sent with it.
       const isEdit = editing && d.status === 'answered';
-      const staged: AnswerEffects = isEdit ? {} : effectsToAnswer(effects, powers);
+      const toDraft = !isEdit && mapChangesWait && hasReplyMapParts(effects, powers);
+      // The map parts go into the shared unsent map FIRST. If that fails the answer is not sent and the reply is kept.
+      // Adding is idempotent, so a retry (or an answer that was lost on the way back) never duplicates anything.
+      if (toDraft) await addReplyMapToDraft(ref, effects, powers);
+      const staged: AnswerEffects = isEdit ? {} : effectsToAnswer(effects, powers, { mapToDraft: mapChangesWait });
       if (!requestId.current) requestId.current = newRequestId();
       const res = await answerDirective(ref, d.id, outcome, reply.trim(), { ...staged, request_id: requestId.current, ...(isEdit ? { edit: true } : {}) });
       if (!res.ok) {
         // Not a failure of the network: the directive is not in the state this reply was written for. Keep the text, refresh the view.
         requestId.current = null;
-        notifyErr(res.reason === 'already_answered' ? 'Someone already answered this directive' : 'This directive is not open any more', 'crisis-directive');
+        const why = res.reason === 'already_answered' ? 'Someone already answered this directive' : 'This directive is not open any more';
+        notifyErr(toDraft ? `${why}. The map changes you attached are already in the unsent map.` : why, 'crisis-directive');
         onSent();
         return;
       }
@@ -121,7 +133,10 @@ export function useDirectiveReply(ref: CrisisRef, d: Directive, who: string, pow
       requestId.current = null;
       writeReplyDraft(ref.id, d.id, null);
       // A repeat is a success: the first send landed. The database published the story itself when this person may; otherwise it waits for the director.
-      const notes = !isEdit && !!staged.news && res.news_published === false ? 'The story waits for the director on the News page.' : '';
+      const notes = [
+        !isEdit && !!staged.news && res.news_published === false ? 'The story waits for the director on the News page.' : '',
+        toDraft ? 'The map changes are waiting in the unsent map.' : '',
+      ].filter(Boolean).join(' ');
       notifyOk(notes ? `Reply sent to ${who}. ${notes}` : isEdit ? 'Reply changed' : `Reply sent to ${who}`, 'crisis-directive');
       setEditing(false);
       setSaved(false);
@@ -133,7 +148,7 @@ export function useDirectiveReply(ref: CrisisRef, d: Directive, who: string, pow
     } finally { setBusy(false); }
   };
 
-  return { outcome, toggleOutcome, reply, setReply, effects, setEffects, saved, editing, startEditing, busy, canSend, send };
+  return { outcome, toggleOutcome, reply, setReply, effects, setEffects, saved, editing, startEditing, busy, canSend, mapToDraft, send };
 }
 
 function hasStaged(e: EffectsDraft): boolean {

@@ -73,7 +73,7 @@ import {
   addPhysicalSources, createNameLabels, fillRegions, fillWater, loadRegions, loadWater, setRegionsVisible, setWaterVisible,
 } from './physical';
 import {
-  MAP_CSS, makeCorner, makeCountryLabel, makeGhost, makeMidpoint, makeShapeLabel, makeSightHandle, makeVertex,
+  MAP_CSS, PEN_CURSOR, makeCorner, makeCountryLabel, makeGhost, makeMidpoint, makeShapeLabel, makeSightHandle, makeVertex,
   paintCharacter, paintToken, safeColor,
 } from './tokens';
 
@@ -1882,25 +1882,24 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
 
   // Moving a whole shape: the Move handle on a selected area or zone (and the body of the selected shape in Select), or on
   // a shape being drawn or reshaped. A zone and an area are kept at once; a shape in hand moves its corners.
-  const moveDraftPts = draft && editable && canMap && draft.phase === 'refine' && !draft.infoOnly && draft.points.length >= MIN_POINTS ? draft.points : null;
-  const moveZoneRow = !draft && canZones && tool === 'select' ? selZoneRow : null;
-  const moveAreaOk = !draft && !moveZoneRow && canEditTerr && selTerr?.kind === 'area' && selValid;
+  const moveDraftPts = draft && draft.kind === 'zone' && editable && canMap && draft.phase === 'refine' && !draft.infoOnly && draft.points.length >= MIN_POINTS ? draft.points : null;
+  // A multi-piece or holed zone open for editing keeps its outline but can still be carried whole.
+  const infoZoneRow = draft && draft.kind === 'zone' && draft.infoOnly && draft.editId && draft.phase === 'refine' && editable && canMap
+    ? zones.find((z) => z.id === draft.editId) ?? null : null;
+  const moveZoneRow = (!draft && canZones && tool === 'select' ? selZoneRow : null) ?? infoZoneRow;
   const moveShape = useMemo<Multi | null>(() => {
     if (compact || stageKind === 'unit') return null;
     if (moveDraftPts) return [[[...moveDraftPts, moveDraftPts[0]]]];
     if (moveZoneRow) return toMulti(moveZoneRow.geometry);
-    if (moveAreaOk && selMulti.length) return selMulti;
     return null;
-  }, [compact, stageKind, moveDraftPts, moveZoneRow, moveAreaOk, selMulti]);
+  }, [compact, stageKind, moveDraftPts, moveZoneRow]);
   const mover = useShapeMover({
     ready: !!world, mapRef, mlRef, shape: moveShape, body: true,
-    hideId: moveZoneRow ? moveZoneRow.id : moveAreaOk && selTerr?.kind === 'area' ? selTerr.id : null,
-    // A press on the selected area's outline reshapes it instead.
-    blocked: (e) => !!(moveAreaOk && mapRef.current && edgeAt(mapRef.current, selMulti, e.point, e.lngLat)),
+    hideId: moveZoneRow ? moveZoneRow.id : null,
     preview: (moved) => {
       if (moveDraftPts) { setSource(SRC_DRAFT, draftFc(moved ? (moved[0][0].slice(0, -1) as LngLat[]) : moveDraftPts, draftColor)); return; }
       if (!moved) { resetEdit(); return; }
-      setSource(SRC_EDIT, multiFc(moved, moveAreaOk && selOwnerColor ? cabinetTint(selOwnerColor, 0.3) : null));
+      setSource(SRC_EDIT, multiFc(moved, null));
     },
     onMove: (moved) => {
       if (moveDraftPts) {
@@ -1909,7 +1908,6 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
         return;
       }
       if (moveZoneRow) { moveZone(moveZoneRow.id, moved); return; }
-      if (selTerr?.kind === 'area') stageOutline(selTerr, moved);
     },
   });
 
@@ -2098,7 +2096,8 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
           && ((!!sightCtl.current && sightCtl.current.hit(e.point)) || !!ringAt(map, e.point));
         map.getCanvasContainer().style.cursor = near ? 'grab'
           : onRing ? 'ew-resize'
-          : drawing || tool === 'paint' || tool === 'erase' || (tool === 'unit' && addKind) ? 'crosshair'
+          : drawing || tool === 'draw' ? PEN_CURSOR
+          : tool === 'paint' || tool === 'erase' || (tool === 'unit' && addKind) ? 'crosshair'
             : tool === 'give' ? 'pointer' : '';
       },
       onRelease: () => {
@@ -2404,7 +2403,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
     const el = map.getCanvasContainer();
     el.dataset.tool = canMap && editable ? tool : '';
     if (draft) el.dataset.busy = '1'; else delete el.dataset.busy;
-    el.style.cursor = tool === 'draw' || tool === 'paint' || tool === 'erase' || (tool === 'zones' && !!draft) || (tool === 'unit' && addKind) ? 'crosshair' : tool === 'give' ? 'pointer' : '';
+    el.style.cursor = tool === 'draw' || (tool === 'zones' && !!draft) ? PEN_CURSOR : tool === 'paint' || tool === 'erase' || (tool === 'unit' && addKind) ? 'crosshair' : tool === 'give' ? 'pointer' : '';
     if (draft || tool === 'draw' || tool === 'paint' || tool === 'erase') map.doubleClickZoom.disable(); else map.doubleClickZoom.enable();
     if (tool !== 'give' || draft) {
       whenStyleReady(map, () => {
