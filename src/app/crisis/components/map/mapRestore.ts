@@ -99,6 +99,7 @@ export function buildRestoreSet(
           id: `new-u-r${n++}`, name, kind: kind && KINDS.includes(kind) ? kind : 'custom',
           strength: typeof r.strength === 'number' ? r.strength : 1, owner_cabinet_id: str(r.owner_cabinet_id), note: str(r.note),
           revealed_to: ids(r.revealed_to), sight_km: typeof r.sight_km === 'number' ? r.sight_km : null, lng, lat,
+          custom_type: str(r.custom_type), picture_url: str(r.picture_url), details: str(r.details),
         };
         set.unitAdds?.push(add);
         continue;
@@ -117,6 +118,7 @@ export function buildRestoreSet(
         const sk = typeof r.sight_km === 'number' ? r.sight_km : null;
         if (sk !== (u.sight_km ?? null)) c.sight_km = sk;
       }
+      for (const k of ['custom_type', 'picture_url', 'details'] as const) if (k in r && str(r[k]) !== (u[k] ?? null)) c[k] = str(r[k]);
       if (Object.keys(c).length > 1) set.units.push(c);
       continue;
     }

@@ -1,8 +1,9 @@
 'use client';
-// Gavelling Crisis: the chair's "Directives" tab. Every directive the chair may read: their cabinet's cabinet directives and,
-// when the crisis allows it (settings.chairReadsPersonal), the personal and joint ones of their cabinet's characters. Filter by
-// state, newest first. A row opens the same pop-up the Front Room uses (ChairDirectivePrompt.tsx): a waiting directive shows
-// Approve, Request changes and Reject, any other opens read only. The page itself never decides anything.
+// Gavelling Crisis: the chair's "Directives" tab, the same one-by-one reader as the backroom (DirectiveReader) but READ ONLY. Every
+// directive the chair may read: their cabinet's cabinet directives and, when the Crisis Director allows it (settings.chairReadsPersonal),
+// the personal and joint ones of their cabinet's characters. Filter by state, newest first. Pressing the front directive opens the
+// same pop-up the Front Room uses (ChairDirectivePrompt.tsx): a waiting one shows Approve, Request changes and Reject, any other
+// opens read only. The page itself never decides anything and has no reply box.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollText } from 'lucide-react';
@@ -10,9 +11,12 @@ import { crisisError, DIRECTIVE_PAGE, listClosedDirectivesPage, listDirectives }
 import { useCrisisLive } from '@/lib/crisis/live';
 import type { Directive } from '@/lib/crisis/types';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
-import { Btn, CK, Skeleton, Tick } from '../../crisisKit';
+import { Btn, Card, CK, agoLabel, Skeleton, Tick } from '../../crisisKit';
 import DirectiveDeepLink from '../notifications/DirectiveDeepLink';
-import { chairGroup, ChairDirectiveRow, GROUP_WORDS, openChairDirective, type ChairGroup } from './chairDirectiveKit';
+import DirectiveReader, { type ReaderReadOnly } from '../directives/DirectiveReader';
+import { buildNames } from '../directives/directiveKit';
+import { useNow } from '../directives/useNow';
+import { chairGroup, chairVerdict, GROUP_WORDS, openChairDirective, useRequestedChairDirective, type ChairGroup } from './chairDirectiveKit';
 
 type Filter = 'waiting' | 'changes' | 'backroom' | 'answered' | 'rejected' | 'all';
 const FILTERS: Array<{ id: Filter; label: string }> = [
@@ -26,12 +30,23 @@ const FILTERS: Array<{ id: Filter; label: string }> = [
 
 const isClosed = (d: Directive): boolean => d.status === 'answered' || d.status === 'rejected' || d.status === 'withdrawn';
 
+/** How the reader says a directive's state to a chair, and what its button says. */
+const READ_ONLY: ReaderReadOnly = {
+  stateOf: (d) => chairVerdict(d, 16),
+  actionLabel: (d) => (d.status === 'awaiting_chair' ? 'Decide' : 'Open'),
+  when: (d, now) => (d.answered_at && (d.status === 'answered' || d.status === 'rejected') ? `Answered ${agoLabel(d.answered_at, now)}` : `Sent ${agoLabel(d.created_at, now)}`),
+};
+
 function newestFirst(a: Directive, b: Directive): number {
   return b.created_at.localeCompare(a.created_at) || b.no - a.no;
 }
 
 export default function ChairDirectivesPage() {
-  const { ref, cabinetId, settings } = useCrisis();
+  const { ref, cabinetId, settings, core } = useCrisis();
+  const names = useMemo(() => buildNames(core.cabinets, core.characters, core.members), [core]);
+  const now = useNow();
+  const requested = useRequestedChairDirective();
+  const [focusId, setFocusId] = useState<string | null>(null);
   const [rows, setRows] = useState<Directive[] | null>(null);
   const [more, setMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -115,6 +130,8 @@ export default function ChairDirectivesPage() {
     if (hit) openChairDirective(hit);
   }, [deepTick, rows]);
 
+  // The directive in front: the one picked, else the first of the filter.
+  const front = useMemo(() => shown.find((d) => d.id === focusId) ?? shown[0] ?? null, [shown, focusId]);
   const urgent = counts.waiting > 0;
 
   return (
@@ -160,16 +177,31 @@ export default function ChairDirectivesPage() {
         })}
       </div>
 
+      {rows !== null && !settings.chairReadsPersonal && (
+        <p style={{ margin: '0 0 12px', fontSize: 14, color: CK.inkSoft }}>You see the cabinet directives of your cabinet. The Crisis Director can let chairs see every directive of their cabinet.</p>
+      )}
+
       {rows === null ? (
-        <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 420px), 1fr))' }}>
-          <Skeleton h={78} r={16} /><Skeleton h={78} r={16} /><Skeleton h={78} r={16} />
-        </div>
+        <div aria-busy="true"><Skeleton h={520} r={24} /></div>
       ) : shown.length === 0 ? (
-        <p style={{ margin: 0, fontSize: 14, color: CK.inkSoft }}>{active === 'all' ? 'No directives yet.' : active === 'waiting' ? 'Nothing is waiting for you.' : 'No directive is in this state.'}</p>
+        <Card style={{ height: 'clamp(300px, calc(100dvh - 300px), 600px)', display: 'grid', placeItems: 'center', textAlign: 'center' }}>
+          <p style={{ margin: 0, fontSize: 18, fontWeight: 800, color: CK.ink }}>{active === 'all' ? 'No directives yet' : active === 'waiting' ? 'Nothing is waiting for you' : 'No directive is in this state'}</p>
+        </Card>
       ) : (
-        <div className="grid gap-3 items-start" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 420px), 1fr))' }}>
-          {shown.map((d) => <ChairDirectiveRow key={`${d.id}@${d.updated_at}`} d={d} variant="card" muted={chairGroup(d) === 'withdrawn'} />)}
-        </div>
+        <DirectiveReader
+          queue={shown}
+          focusId={front?.id ?? null}
+          onFocus={setFocusId}
+          onOpen={openChairDirective}
+          onTakeOver={openChairDirective}
+          active={!requested}
+          names={names}
+          lane={active === 'answered' ? 'answered' : 'open'}
+          now={now}
+          all={readable}
+          onChanged={() => { void read(); }}
+          readOnly={READ_ONLY}
+        />
       )}
 
       {more && (active === 'all' || active === 'answered' || active === 'rejected') && (

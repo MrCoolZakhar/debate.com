@@ -119,18 +119,32 @@ const minute = (iso: string) => Math.floor(new Date(iso).getTime() / 60000);
 /**
  * Queue order. Fair: longest wait first (to the minute); when two wait the same, the author who
  * heard back least recently goes first. Oldest / newest follow the day it was sent.
- * Answered and waiting lanes show the latest first.
+ * Answered and waiting lanes show the latest first; in the waiting lane cabinet directives always lead, newest first.
  */
 export function sortDirectives(list: Directive[], order: QueueOrder, lane: Lane, lastAnswered: Map<string, number>): Directive[] {
   const out = [...list];
   if (lane === 'answered' || lane === 'waiting') {
     // These lanes follow the day of the last answer: Fair and Newest show the latest first, Oldest the earliest.
     const at = (d: Directive) => new Date(d.answered_at ?? d.updated_at).getTime();
+    if (lane === 'waiting') {
+      // Waiting for a reply: cabinet directives ALWAYS come first, the newest arrival at the very top (owner, 1 Nov 2026), then the rest in the chosen order.
+      const cab = (d: Directive) => (d.kind === 'committee' ? 0 : 1);
+      return out.sort((a, b) => cab(a) - cab(b) || (cab(a) === 0 ? at(b) - at(a) : order === 'oldest' ? at(a) - at(b) : at(b) - at(a)));
+    }
     return out.sort((a, b) => (order === 'oldest' ? at(a) - at(b) : at(b) - at(a)));
   }
-  if (order === 'oldest') return out.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-  if (order === 'newest') return out.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  // Every lane still waiting for a staff reply: cabinet directives come first, the newest arrival at the very top (owner,
+  // 1 Nov 2026); the rest follow the chosen order.
+  const cabFirst = (a: Directive, b: Directive): number => {
+    const ca = a.kind === 'committee' ? 0 : 1; const cb = b.kind === 'committee' ? 0 : 1;
+    if (ca !== cb) return ca - cb;
+    return ca === 0 ? new Date(b.created_at).getTime() - new Date(a.created_at).getTime() : 0;
+  };
+  if (order === 'oldest') return out.sort((a, b) => cabFirst(a, b) || new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  if (order === 'newest') return out.sort((a, b) => cabFirst(a, b) || new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   return out.sort((a, b) => {
+    const c = cabFirst(a, b);
+    if (c !== 0) return c;
     const w = minute(a.waiting_since) - minute(b.waiting_since);
     if (w !== 0) return w;
     const la = a.author_member_id ? lastAnswered.get(a.author_member_id) ?? -Infinity : -Infinity;

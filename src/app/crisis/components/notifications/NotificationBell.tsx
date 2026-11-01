@@ -14,7 +14,7 @@ import { crisisError, listNotifications, markNotificationsRead } from '@/lib/cri
 import { useCrisisLive } from '@/lib/crisis/live';
 import { crisisBase, useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { CK } from '../../crisisKit';
-import NotificationDetail, { changesStampOf, hasMapDetail } from './NotificationDetail';
+import NotificationDetail, { hasMapDetail, mapNoticeOf } from './NotificationDetail';
 import { serverNow } from '@/lib/serverClock';
 
 const POPUP_MS = 6000;
@@ -156,8 +156,8 @@ export default function NotificationBell() {
       void markNotificationsRead(v.ref, [n.id]).catch(() => void load());
     }
     // "N changes to the map" opens the map with a pop-up of exactly what happened (replay and breakdown).
-    const stamp = changesStampOf(n);
-    if (stamp !== null) { router.push(`${base}/map?changes=${stamp}`); return; }
+    const notice = mapNoticeOf(n);
+    if (notice) { router.push(`${base}/map?${notice.since ? 'since' : 'changes'}=${notice.stamp}`); return; }
     // A map change opens a picture of what changed first; "Open the map" is a button inside it.
     if (hasMapDetail(n)) { setDetail(n); return; }
     const link = (n.link ?? '').trim().replace(/^\/+/, '');

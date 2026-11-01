@@ -5,10 +5,10 @@
 import {
   CheckCircle2, CircleDot, CircleHelp, Clock, Contrast, Gavel, Hourglass, PencilLine, Undo2, UserRoundCog, XCircle,
 } from 'lucide-react';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { OUTCOME_LABEL, type Directive, type DirectiveKind, type DirectiveOutcome, type DirectiveStatus } from '@/lib/crisis/types';
 import { CHAIR_SEND_BACK_WORD, isChairSendBack, timeAgo } from '@/lib/crisis/format';
-import { CK, THEME_STYLE } from '../../crisisKit';
+import { CK, fieldStyle, THEME_STYLE } from '../../crisisKit';
 import { KIND_ICON } from '../directives/directiveKit';
 
 export const STATUS_WORDS: Record<DirectiveStatus, string> = {
@@ -118,3 +118,9 @@ export function themeIcon(theme: string, size = 16): ReactNode {
   const I = t?.Icon ?? CircleDot;
   return <span style={{ color: t?.color ?? CK.muted, lineHeight: 0 }}><I size={size} strokeWidth={1.5} aria-hidden /></span>;
 }
+
+/**
+ * The delegate's writing fields (a directive's title and text, a clarification): 15.5px text and roomy padding, so everything typed is easy
+ * to read (owner, 1 Nov 2026: small text fields are a mistake). One line fields are at least 46px tall; text boxes set their own height.
+ */
+export const bigField: CSSProperties = { ...fieldStyle, fontSize: 15.5, lineHeight: 1.55, padding: '11px 14px', minHeight: 46, borderRadius: 14 };

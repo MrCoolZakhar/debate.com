@@ -5,7 +5,7 @@
 // single-cabinet crisis) are hidden.
 
 import { useState } from 'react';
-import { Award, Hexagon, Map as MapIcon, Newspaper, Presentation, ScrollText, ShieldCheck, Siren, UsersRound } from 'lucide-react';
+import { Award, Hexagon, Map as MapIcon, Shield, Newspaper, Presentation, ScrollText, ShieldCheck, Siren, UsersRound } from 'lucide-react';
 import GSelect from '@/components/GSelect';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { crisisError, patchCrisis, patchSettings } from '@/lib/crisis/api';
@@ -15,6 +15,7 @@ import { Btn, Card, CardTitle, CK, fieldStyle, Segmented } from '../../crisisKit
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { ChoiceRow, DirectorOnlyCard, Hint, PageHeading, ToggleRow } from './setupKit';
 import ZoneTypesEditor from '../map/ZoneTypesEditor';
+import CustomTroopsEditor from './CustomTroopsEditor';
 
 const COOLDOWNS = [
   { value: '0', label: 'Off' }, { value: '60', label: '1 minute' }, { value: '120', label: '2 minutes' },
@@ -130,6 +131,16 @@ function SettingsBody() {
           </Card>
         )}
 
+        {full && (
+          <Card>
+            <CardTitle icon={<Shield size={16} strokeWidth={1.5} />}>Custom Troops</CardTitle>
+            <p style={{ margin: '-4px 0 6px', fontSize: 13, color: CK.inkSoft }}>
+              Troops of your own, such as partisans or a fleet with its own picture. They appear next to Army and Navy when you add a unit. Up to 30.
+            </p>
+            <CustomTroopsEditor types={s.customUnitTypes} onSave={(next) => save('customUnitTypes', next)} />
+          </Card>
+        )}
+
         <Card>
           <CardTitle icon={<Award size={16} strokeWidth={1.5} />}>Points</CardTitle>
           <p style={{ margin: '-4px 0 6px', fontSize: 13, color: CK.inkSoft }}>What each action is worth outside the room. A character&apos;s total adds these to the points from the committee room, set by the chairs in the room&apos;s own scoring.</p>
@@ -165,7 +176,7 @@ function SettingsBody() {
 
         <Card>
           <CardTitle icon={<Presentation size={16} strokeWidth={1.5} />}>Committee Room</CardTitle>
-          <ToggleRow title="Chair can read personal directives" checked={s.chairReadsPersonal} onChange={(on) => save('chairReadsPersonal', on)} hint="Off keeps personal directives between the delegate and the backroom." />
+          <ToggleRow title="Chairs see every directive of their cabinet" checked={s.chairReadsPersonal} onChange={(on) => save('chairReadsPersonal', on)} hint="On: the chair's Directives page shows every directive of their cabinet, personal and joint ones too, like the backroom. Off: only cabinet directives." />
         </Card>
 
         <Card>

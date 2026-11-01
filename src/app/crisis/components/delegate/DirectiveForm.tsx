@@ -12,9 +12,9 @@ import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { crisisError, editDirective, resendDirective, submitDirective, type CrisisRef, type DirectiveDraft } from '@/lib/crisis/api';
 import { dirNumber, timeAgo } from '@/lib/crisis/format';
 import { THEMES, type Character, type DirectiveKind } from '@/lib/crisis/types';
-import { Btn, Card, CK, FieldLabel, fieldStyle, Segmented } from '../../crisisKit';
+import { Btn, Card, CK, FieldLabel, Segmented } from '../../crisisKit';
 import MultiSelect, { type MultiOption } from './MultiSelect';
-import { KIND_WORD, kindIcon, themeIcon } from './directiveUi';
+import { bigField, KIND_WORD, kindIcon, themeIcon } from './directiveUi';
 import { AttachBar, useImageAttach } from './ImageAttach';
 import { withAttached } from '../directives/attachedImage';
 
@@ -453,28 +453,29 @@ export default function DirectiveForm({
       <div
         className="flex items-center justify-between gap-3 flex-wrap"
         style={{
-          margin: '-14px -18px 12px', padding: '12px 18px', minHeight: 68,
+          // As tall as its content in every mode: the icon / logo disc is the same size in both, and the cabinet line sits in the same row, so nothing jumps.
+          margin: '-14px -18px 12px', padding: '10px 18px',
           background: isCab ? `linear-gradient(135deg, ${CK.red2}, ${CK.red} 70%, ${band})` : 'transparent',
           color: isCab ? '#FFF4E6' : CK.ink,
           transition: 'background 220ms ease, color 220ms ease',
         }}
       >
-        <h2 className="flex items-center gap-2.5 min-w-0" style={{ margin: 0, fontSize: 17, fontWeight: 800, color: isCab ? '#FFF4E6' : CK.ink }}>
+        <h2 className="flex items-center gap-2.5 min-w-0" style={{ margin: 0, fontSize: 17, lineHeight: 1.25, fontWeight: 800, color: isCab ? '#FFF4E6' : CK.ink }}>
           {isCab ? (
             cabinet?.logo_url ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={cabinet.logo_url} alt="" width={34} height={34} style={{ width: 34, height: 34, borderRadius: 999, objectFit: 'cover', background: '#fff', boxShadow: '0 0 0 2px rgba(255,244,230,0.85)', flexShrink: 0 }} />
+              <img src={cabinet.logo_url} alt="" width={30} height={30} style={{ width: 30, height: 30, borderRadius: 999, objectFit: 'cover', background: '#fff', boxShadow: '0 0 0 2px rgba(255,244,230,0.85)', flexShrink: 0 }} />
             ) : (
-              <span aria-hidden className="grid place-items-center" style={{ width: 34, height: 34, borderRadius: 999, background: 'rgba(255,244,230,0.16)', boxShadow: '0 0 0 2px rgba(255,244,230,0.7)', flexShrink: 0 }}>
+              <span aria-hidden className="grid place-items-center" style={{ width: 30, height: 30, borderRadius: 999, background: 'rgba(255,244,230,0.16)', boxShadow: '0 0 0 2px rgba(255,244,230,0.7)', flexShrink: 0 }}>
                 <Landmark size={18} strokeWidth={1.5} />
               </span>
             )
           ) : (
-            <span style={{ color: CK.red, lineHeight: 0 }}><Send size={18} strokeWidth={1.5} aria-hidden /></span>
+            <span aria-hidden className="grid place-items-center" style={{ width: 30, height: 30, color: CK.red, flexShrink: 0 }}><Send size={18} strokeWidth={1.5} aria-hidden /></span>
           )}
-          <span style={{ overflowWrap: 'anywhere' }}>
-            {editing ? `${changing ? 'Edit' : 'Resend'} Directive ${editing.label}` : isCab ? 'Send a Cabinet Directive' : 'Send a Directive'}
-            {isCab && cabinetName && <span style={{ display: 'block', fontSize: 12.5, fontWeight: 600, opacity: 0.85 }}>In the name of {cabinetName}</span>}
+          <span className="flex flex-wrap items-baseline" style={{ gap: '0 10px', overflowWrap: 'anywhere' }}>
+            <span>{editing ? `${changing ? 'Edit' : 'Resend'} Directive ${editing.label}` : isCab ? 'Send a Cabinet Directive' : 'Send a Directive'}</span>
+            {isCab && cabinetName && <span style={{ fontSize: 12.5, fontWeight: 600, opacity: 0.85 }}>In the name of {cabinetName}</span>}
           </span>
         </h2>
         {editing && (
@@ -619,7 +620,7 @@ export default function DirectiveForm({
 
         <div>
           <FieldLabel htmlFor="dir-title">Title</FieldLabel>
-          <input id="dir-title" value={d.title} onChange={(e) => set('title', e.target.value)} maxLength={160} style={fieldStyle} placeholder="A short name for it" />
+          <input id="dir-title" value={d.title} onChange={(e) => set('title', e.target.value)} maxLength={160} style={{ ...bigField, height: 48 }} placeholder="A short name for it" />
         </div>
 
         <div>
@@ -631,7 +632,7 @@ export default function DirectiveForm({
           </div>
           <div style={{ position: 'relative' }}>
             <textarea id="dir-body" value={d.body} onChange={(e) => set('body', e.target.value)} rows={13}
-              style={{ ...fieldStyle, minHeight: 280, resize: 'vertical', paddingBottom: 50, boxShadow: over ? 'inset 0 0 0 2px rgba(163,65,47,0.6)' : fieldStyle.boxShadow }}
+              style={{ ...bigField, minHeight: 280, resize: 'vertical', paddingBottom: 50, boxShadow: over ? 'inset 0 0 0 2px rgba(163,65,47,0.6)' : bigField.boxShadow }}
               placeholder="Say what you do, how, and when." />
             <div style={{ position: 'absolute', left: 10, bottom: 9 }}>
               <AttachBar url={attach.url} uploading={attach.uploading} onPick={(f) => { setProblem(null); void attach.pick(f); }} onClear={() => attach.setUrl(null)} disabled={sending} />

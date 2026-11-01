@@ -7,10 +7,11 @@
 // Clicking one brings it to the front; pressing the front one, its Respond button or Enter opens the directive
 // pop-up to answer it. The left and right arrow keys move along. The lane and the filters above decide which
 // directives are in the stack, in queue order. Presentation and choices only: nothing here writes except the
-// character's backroomer (CharacterBackroomer).
+// character's backroomer (CharacterBackroomer). With `readOnly` (the chair's Directives page) the same reader shows each directive's
+// state instead of the backroomer picker and "Take over", and its button only opens the directive.
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { ChevronLeft, ChevronRight, Clock, MessageCircle, Pencil, Reply } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clock, Eye, MessageCircle, Pencil, Reply } from 'lucide-react';
 import { dirNumber } from '@/lib/crisis/format';
 import { KIND_LABEL, type Directive } from '@/lib/crisis/types';
 import { Avatar, Btn, CK, agoLabel, cabinetTint, waitLabel, waitSeverity } from '../../crisisKit';
@@ -20,6 +21,14 @@ import { CabinetLogo, NameStack, NumberBadge, StaffPic, ThemeTags, shortName } f
 import { KIND_ICON, authorName, isBeingWritten, memberName, outcomeView, writingAge, writtenByOther, type Lane, type Names } from './directiveKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { DirectiveBody, plainText } from './attachedImage';
+
+/** What the chair's page tells the reader: how to say a directive's state, and what its button says. */
+export interface ReaderReadOnly {
+  stateOf: (d: Directive) => { word: string; color: string; icon: ReactNode };
+  actionLabel: (d: Directive) => string;
+  /** When it was sent or answered, in the chair's words (the backroom's wait clock means nothing to a chair). */
+  when: (d: Directive, now: number) => string;
+}
 
 const WAIT_COLOR = { ok: CK.ink, late: CK.goldDeep, very: CK.danger } as const;
 
@@ -44,7 +53,8 @@ function typingTarget(t: EventTarget | null): boolean {
 }
 
 /** When a directive was sent or answered, in the words of its lane. */
-function whenOf(d: Directive, lane: Lane, now: number): { text: string; sev: 'ok' | 'late' | 'very' | null } {
+function whenOf(d: Directive, lane: Lane, now: number, readOnly?: ReaderReadOnly): { text: string; sev: 'ok' | 'late' | 'very' | null } {
+  if (readOnly) return { text: readOnly.when(d, now), sev: null };
   if (lane === 'answered') return { text: `Answered ${agoLabel(d.answered_at, now)}`, sev: null };
   if (lane === 'waiting') return { text: `Asked ${agoLabel(d.answered_at, now)}`, sev: null };
   return { text: waitLabel(d.waiting_since, now), sev: waitSeverity(d.waiting_since, now) };
@@ -66,14 +76,14 @@ function Writing({ d, names, now, small }: { d: Directive; names: Names; now: nu
  * A smaller copy of the front card, further back in the stack: badge, title, character, the start of the text.
  * It sits BEHIND the card before it; only its right part shows (STRIP wide), and its content starts there.
  */
-function NextCard({ d, k, fw, names, lane, now, onPick }: { d: Directive; k: number; fw: number; names: Names; lane: Lane; now: number; onPick: () => void }) {
+function NextCard({ d, k, fw, names, lane, now, onPick, readOnly }: { d: Directive; k: number; fw: number; names: Names; lane: Lane; now: number; onPick: () => void; readOnly?: ReaderReadOnly }) {
   const { memberId } = useCrisis();
   const grey = writtenByOther(d, memberId, now);
   const cab = d.cabinet_id ? names.cabinets.get(d.cabinet_id) : undefined;
   const ch = d.author_character_id ? names.characters.get(d.author_character_id) : undefined;
   const who = authorName(d, names);
   const color = cab?.color ?? CK.red;
-  const when = whenOf(d, lane, now);
+  const when = whenOf(d, lane, now, readOnly);
   const KindIcon = KIND_ICON[d.kind];
   const pct = HEIGHTS[k - 1];
   const left = fw + (k - 1) * STRIP - HIDDEN;
@@ -103,6 +113,9 @@ function NextCard({ d, k, fw, names, lane, now, onPick }: { d: Directive; k: num
               <Clock size={12} strokeWidth={1.6} aria-hidden />{when.text}
             </span>
           </span>
+          {readOnly && (() => { const st = readOnly.stateOf(d); return (
+            <span className="inline-flex items-center" style={{ flex: 'none', gap: 5, marginTop: 8, fontSize: 12, fontWeight: 800, color: st.color }}>{st.icon}{st.word}</span>
+          ); })()}
           {isBeingWritten(d, now) && <span style={{ flex: 'none', marginTop: 8 }}><Writing d={d} names={names} now={now} small /></span>}
           {/* The start of the text, fading out where the card ends. */}
           <span className="rd-fade" style={{ display: 'block', flex: 1, minHeight: 0, overflow: 'hidden', marginTop: 11, fontSize: 14, lineHeight: 1.55, fontWeight: 500, color: CK.inkSoft, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{plainText(d.body)}</span>
@@ -113,18 +126,19 @@ function NextCard({ d, k, fw, names, lane, now, onPick }: { d: Directive; k: num
 }
 
 /** The directive in front: large, with its text, a few facts, who looks after the character, and Respond. */
-function FrontCard({ d, names, lane, now, all, index, total, onPrev, onNext, onRespond, onTakeOver, onChanged }: {
+function FrontCard({ d, names, lane, now, all, index, total, onPrev, onNext, onRespond, onTakeOver, onChanged, readOnly }: {
   d: Directive; names: Names; lane: Lane; now: number; all: Directive[]; index: number; total: number;
-  onPrev: () => void; onNext: () => void; onRespond: () => void; onTakeOver: () => void; onChanged: () => void;
+  onPrev: () => void; onNext: () => void; onRespond: () => void; onTakeOver: () => void; onChanged: () => void; readOnly?: ReaderReadOnly;
 }) {
   const { memberId } = useCrisis();
-  const takeable = writtenByOther(d, memberId, now) && (d.status === 'queued' || d.status === 'claimed');
+  const takeable = !readOnly && writtenByOther(d, memberId, now) && (d.status === 'queued' || d.status === 'claimed');
+  const state = readOnly ? readOnly.stateOf(d) : null;
   const cab = d.cabinet_id ? names.cabinets.get(d.cabinet_id) : undefined;
   const ch = d.author_character_id ? names.characters.get(d.author_character_id) : undefined;
   const who = authorName(d, names);
   const color = cab?.color ?? CK.red;
   const KindIcon = KIND_ICON[d.kind];
-  const when = whenOf(d, lane, now);
+  const when = whenOf(d, lane, now, readOnly);
   const open = d.status === 'queued' || d.status === 'claimed';
   const outcome = outcomeView(d);
   const responsible = d.assigned_member_id ?? ch?.owner_member_id ?? null;
@@ -204,7 +218,9 @@ function FrontCard({ d, names, lane, now, all, index, total, onPrev, onNext, onR
       {/* The footer: who looks after the character on the left; the arrows, "3 of 12" and Respond on the right. */}
       <div className="flex items-center flex-wrap" data-no-open style={{ flex: 'none', gap: '8px 16px', padding: '12px 20px 14px 30px', boxShadow: `0 -1px 0 ${CK.hair}`, borderRadius: '0 0 24px 24px', background: CK.card }}>
         <div style={{ flex: '1 1 260px', minWidth: 0 }}>
-          {ch && <CharacterBackroomer character={ch} names={names} all={all} onChanged={onChanged} />}
+          {state ? (
+            <span className="inline-flex items-center" style={{ gap: 7, fontSize: 15, fontWeight: 800, color: state.color, overflowWrap: 'anywhere' }}>{state.icon}{state.word}</span>
+          ) : ch && <CharacterBackroomer character={ch} names={names} all={all} onChanged={onChanged} />}
         </div>
         <span className="inline-flex items-center" style={{ gap: 8 }}>
           <button type="button" onClick={onPrev} disabled={total < 2} aria-label="Previous directive" title="Previous directive (left arrow)"
@@ -220,13 +236,13 @@ function FrontCard({ d, names, lane, now, all, index, total, onPrev, onNext, onR
             <ChevronRight size={19} strokeWidth={1.6} />
           </button>
         </span>
-        <Btn tone="green" icon={<Reply size={16} strokeWidth={1.5} />} onClick={onRespond}>{open ? 'Respond' : 'Open'}</Btn>
+        <Btn tone="green" icon={readOnly ? <Eye size={16} strokeWidth={1.5} /> : <Reply size={16} strokeWidth={1.5} />} onClick={onRespond}>{readOnly ? readOnly.actionLabel(d) : open ? 'Respond' : 'Open'}</Btn>
       </div>
     </article>
   );
 }
 
-export default function DirectiveReader({ queue, focusId, onFocus, onOpen, onTakeOver, active, names, lane, now, all, onChanged }: {
+export default function DirectiveReader({ queue, focusId, onFocus, onOpen, onTakeOver, active, names, lane, now, all, onChanged, readOnly }: {
   /** The lane, filtered and in queue order. */
   queue: Directive[];
   focusId: string | null;
@@ -242,6 +258,8 @@ export default function DirectiveReader({ queue, focusId, onFocus, onOpen, onTak
   now: number;
   all: Directive[];
   onChanged: () => void;
+  /** The chair's read-only reader: states instead of the backroomer picker, no "Take over". */
+  readOnly?: ReaderReadOnly;
 }) {
   const at = Math.max(0, queue.findIndex((x) => x.id === focusId));
   const front = queue[at];
@@ -302,10 +320,10 @@ export default function DirectiveReader({ queue, focusId, onFocus, onOpen, onTak
       `}</style>
       <FrontCard
         key={front.id} d={front} names={names} lane={lane} now={now} all={all} index={at} total={total}
-        onPrev={() => move(-1)} onNext={() => move(1)} onRespond={() => onOpen(front)} onTakeOver={() => onTakeOver(front)} onChanged={onChanged}
+        onPrev={() => move(-1)} onNext={() => move(1)} onRespond={() => onOpen(front)} onTakeOver={() => onTakeOver(front)} onChanged={onChanged} readOnly={readOnly}
       />
       {stack.map((d, i) => (
-        <NextCard key={d.id} d={d} k={i + 1} fw={fw} names={names} lane={lane} now={now} onPick={() => onFocus(d.id)} />
+        <NextCard key={d.id} d={d} k={i + 1} fw={fw} names={names} lane={lane} now={now} onPick={() => onFocus(d.id)} readOnly={readOnly} />
       ))}
     </div>
   );

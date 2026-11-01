@@ -25,6 +25,10 @@ export interface TokenSpec {
   selected: boolean;
   size: number;
   name: string;
+  /** A round picture drawn in place of the glyph (a custom troop), inside the owner's colour ring. */
+  picture?: string | null;
+  /** Set when the viewer sees this unit only because it was revealed to them: the words for the mark and the tooltip. */
+  revealed?: string | null;
 }
 
 /** (Re)draws a unit token into its marker element. */
@@ -37,13 +41,19 @@ export function paintToken(el: HTMLElement, t: TokenSpec): void {
   el.style.height = `${size}px`;
   el.tabIndex = 0;
   el.setAttribute('role', 'button');
-  el.title = t.name;
-  el.setAttribute('aria-label', t.name);
+  const label = t.revealed ? `${t.name} (${t.revealed})` : t.name;
+  el.title = label;
+  el.setAttribute('aria-label', label);
   const c = safeColor(t.color);
+  const pic = t.picture && /^(https?:\/\/[^\s"'<>]+|\/[^/\s"'<>][^\s"'<>]*)$/.test(t.picture) ? t.picture : null;
+  const mark = t.revealed
+    ? `<span class="wm-rev" title="${t.revealed.replace(/[<>&"]/g, '')}">${glyphSvg('spy', Math.round(size * 0.36), '#1B3828')}</span>`
+    : '';
   el.innerHTML =
-    `<div class="wm-tok" style="width:${size}px;height:${size}px;background:${c}">` +
-    glyphSvg(t.kind, Math.round(size * 0.52)) +
+    `<div class="wm-tok${pic ? ' wm-tok-pic' : ''}" style="width:${size}px;height:${size}px;background:${c}${pic ? `;border-color:${c}` : ''}">` +
+    (pic ? `<img class="wm-tok-img" src="${pic}" alt="" draggable="false">` : glyphSvg(t.kind, Math.round(size * 0.52))) +
     `<span class="wm-badge" style="color:${c};border-color:${c}">${shortNumber(t.strength)}</span>` +
+    mark +
     `</div>`;
 }
 
@@ -244,6 +254,9 @@ export const MAP_CSS = `
 .wm-unit:focus{outline:none}
 .wm-unit:focus-visible .wm-tok{box-shadow:0 0 0 3px #1B3828}
 .wm-sel .wm-tok{box-shadow:0 0 0 3px #EED98A,0 2px 9px rgba(0,0,0,0.4)}
+.wm-tok-pic{border-width:3px}
+.wm-tok-img{width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;pointer-events:none;background:#fff}
+.wm-rev{position:absolute;left:-7px;bottom:-6px;width:17px;height:17px;border-radius:50%;background:#EED98A;border:1.3px solid #1B3828;box-sizing:border-box;display:grid;place-items:center;pointer-events:none}
 .wm-badge{position:absolute;top:-9px;right:-13px;min-width:19px;height:17px;padding:0 4px;border-radius:9px;background:#fff;border:1.3px solid;box-sizing:border-box;font:800 10.5px/14px var(--font-brand),Inter,sans-serif;text-align:center;font-variant-numeric:tabular-nums}
 .wm-char-disc{display:grid;place-items:center;border-radius:50%;border:3px solid;box-sizing:border-box;overflow:hidden;background:#fff;box-shadow:0 2px 7px rgba(27,56,40,0.35)}
 .wm-char-disc img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}

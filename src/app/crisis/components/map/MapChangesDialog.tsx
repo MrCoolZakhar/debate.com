@@ -1,17 +1,20 @@
 'use client';
 // Gavelling Crisis: "N changes to the map". One notification per send says how many things changed; this is what opens
-// from it (the map page with ?changes=<epoch ms of the send>). A small map plays the send like a short video (units
+// from it (the map page with ?changes=<epoch ms of the send>, or ?since=<epoch ms> for the one growing notice that bundles
+// every change since that moment). A small map plays the send like a short video (units
 // glide from where they were, new ones appear, borders and areas change; Play, Pause, a scrubber to rewind and replay),
 // and under it a breakdown of every change with an icon per kind. A row closes the pop-up and flies the real map to that
-// item. Only the rows of that one send are used: crisis_history returns what this viewer may see, and rows made at the
-// moment of the send share its time. A pop-up never opens another: a row leaves this one.
+// item. With ?changes= only the rows of that one send are used (rows made at the moment of the send share its time); with
+// ?since= every row from that moment until now is used. crisis_history returns only what this viewer may see. The breakdown
+// is grouped by troops, borders, areas and characters, oldest first so the newest sits last. A pop-up never opens another:
+// a row leaves this one.
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { LocateFixed, Pause, Play, RotateCcw } from 'lucide-react';
+import { Flag, LocateFixed, Pause, PenTool, Play, RotateCcw, Shield, UserRound, type LucideIcon } from 'lucide-react';
 import { crisisError } from '@/lib/crisis/api';
 import { crisisHistory } from '@/lib/crisis/history';
 import { timeAgo } from '@/lib/crisis/format';
-import { Btn, CK, Segmented, Skeleton } from '../../crisisKit';
+import { Btn, CK, Skeleton } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import CrisisDialog from '../delegate/CrisisDialog';
 import ChangesReplay, { progressOf, startOf } from '../history/ChangesReplay';
@@ -20,15 +23,24 @@ import { ChangeDisc, PieceLine, describe, useChangeCtx, type ChangeCtx, type Des
 import { prefersReducedMotion } from './mapAnimate';
 import type { FocusRequest } from './mapFocusFly';
 
-type Filter = 'all' | AnyFilter;
+/** The groups of the breakdown, in the order they are listed. */
+const GROUPS: Array<{ filter: AnyFilter; label: string; Icon: LucideIcon }> = [
+  { filter: 'troops', label: 'Troops', Icon: Shield },
+  { filter: 'borders', label: 'Borders', Icon: Flag },
+  { filter: 'areas', label: 'Areas', Icon: PenTool },
+  { filter: 'characters', label: 'Characters', Icon: UserRound },
+];
 /** Rows made by one send share its time; a second either way covers rounding. */
 const SAME_SEND_MS = 1000;
 
-/** The epoch ms in `?changes=`, or null when it is not one. */
+/** The epoch ms in `?changes=` or `?since=`, or null when it is not one. */
 export function readChangesStamp(raw: string | null | undefined): number | null {
   const n = raw ? Number(raw) : NaN;
   return Number.isFinite(n) && n > 1e12 ? Math.round(n) : null;
 }
+
+/** The most rows one look back reads (the history function's own cap). */
+const SINCE_LIMIT = 3000;
 
 const countText = (n: number) => `${n} ${n === 1 ? 'Change' : 'Changes'} to the Map`;
 
@@ -59,21 +71,23 @@ const ChangeList = memo(function ChangeList({ rows, ctx, onPick, onHot }: {
   );
 });
 
-export default function MapChangesDialog({ stamp, onClose, onPick }: { stamp: number; onClose: () => void; onPick: (req: Omit<FocusRequest, 'n'>) => void }) {
+export default function MapChangesDialog({ stamp, since = false, onClose, onPick }: { stamp: number; /** true: every change from `stamp` until now; false: the one send made at `stamp`. */ since?: boolean; onClose: () => void; onPick: (req: Omit<FocusRequest, 'n'>) => void }) {
   const { ref, staff } = useCrisis();
   const ctx = useChangeCtx();
   const [changes, setChanges] = useState<AnyChange[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<Filter>('all');
   const [hot, setHot] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    crisisHistory(ref, { until: new Date(stamp).toISOString(), limit: 500 })
+    crisisHistory(ref, since ? { limit: SINCE_LIMIT } : { until: new Date(stamp).toISOString(), limit: 500 })
       .then((rows) => {
         if (cancelled) return;
         const mine = rows
-          .filter((r) => Math.abs(new Date(r.created_at).getTime() - stamp) <= SAME_SEND_MS)
+          .filter((r) => {
+            const at = new Date(r.created_at).getTime();
+            return since ? at >= stamp - SAME_SEND_MS : Math.abs(at - stamp) <= SAME_SEND_MS;
+          })
           .map(parseAnyChange)
           .filter((c): c is AnyChange => !!c)
           .reverse();   // oldest first: the order they play in
@@ -81,7 +95,7 @@ export default function MapChangesDialog({ stamp, onClose, onPick }: { stamp: nu
       })
       .catch((e) => { if (!cancelled) setError(crisisError(e, 'Could not load these changes.')); });
     return () => { cancelled = true; };
-  }, [ref, stamp]);
+  }, [ref, stamp, since]);
 
   // ── the video: t from 0 (before the send) to 1 (now) ──
   const [t, setT] = useState(0);
@@ -129,16 +143,10 @@ export default function MapChangesDialog({ stamp, onClose, onPick }: { stamp: nu
   }, [changes, t]);
 
   const rows = useMemo(() => (changes ?? []).map((c) => ({ c, d: describe(c, ctx) })), [changes, ctx]);
-  const kinds = useMemo(() => new Set((changes ?? []).map((c) => c.filter)), [changes]);
-  const shown = useMemo(() => rows.filter((r) => filter === 'all' || r.c.filter === filter), [rows, filter]);
-  const options = useMemo(() => {
-    const all: Array<{ value: Filter; label: string }> = [{ value: 'all', label: 'All' }];
-    if (kinds.has('troops')) all.push({ value: 'troops', label: 'Troops' });
-    if (kinds.has('borders')) all.push({ value: 'borders', label: 'Borders' });
-    if (kinds.has('areas')) all.push({ value: 'areas', label: 'Areas' });
-    if (kinds.has('characters')) all.push({ value: 'characters', label: 'Characters' });
-    return all;
-  }, [kinds]);
+  const groups = useMemo(
+    () => GROUPS.map((g) => ({ ...g, rows: rows.filter((r) => r.c.filter === g.filter) })).filter((g) => g.rows.length > 0),
+    [rows],
+  );
 
   const pick = useCallback((c: AnyChange) => {
     const f = focusForAny(c);
@@ -146,7 +154,7 @@ export default function MapChangesDialog({ stamp, onClose, onPick }: { stamp: nu
   }, [onPick]);
 
   const by = staff ? changes?.find((c) => c.by)?.by ?? null : null;
-  const eyebrow = `${timeAgo(new Date(stamp).toISOString())}${by ? ` · by ${by}` : ''}`;
+  const eyebrow = `${since ? 'Started ' : ''}${timeAgo(new Date(stamp).toISOString())}${by ? ` · by ${by}` : ''}`;
   const title = changes && changes.length ? countText(changes.length) : 'Changes to the Map';
 
   return (
@@ -192,11 +200,17 @@ export default function MapChangesDialog({ stamp, onClose, onPick }: { stamp: nu
             <span>Now</span>
           </div>
 
-          <div className="flex items-center justify-between flex-wrap" style={{ gap: 8, margin: '18px 0 4px' }}>
-            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: CK.ink }}>Everything That Changed</h3>
-            {options.length > 2 && <Segmented<Filter> ariaLabel="Show" value={filter} onChange={setFilter} options={options} />}
-          </div>
-          <ChangeList rows={shown} ctx={ctx} onPick={pick} onHot={setHot} />
+          <h3 style={{ margin: '18px 0 0', fontSize: 15, fontWeight: 800, color: CK.ink }}>Everything That Changed</h3>
+          {groups.map((g) => (
+            <section key={g.filter} aria-label={g.label} style={{ marginTop: 12 }}>
+              <h4 className="flex items-center" style={{ gap: 7, margin: '0 0 2px', fontSize: 13, fontWeight: 800, color: CK.inkSoft }}>
+                <g.Icon size={16} strokeWidth={1.5} aria-hidden />
+                <span>{g.label}</span>
+                <span style={{ fontWeight: 600, color: CK.muted, fontVariantNumeric: 'tabular-nums' }}>{g.rows.length}</span>
+              </h4>
+              <ChangeList rows={g.rows} ctx={ctx} onPick={pick} onHot={setHot} />
+            </section>
+          ))}
           <div style={{ marginTop: 14 }}><Btn tone="ghost" onClick={onClose}>Close</Btn></div>
         </div>
       )}

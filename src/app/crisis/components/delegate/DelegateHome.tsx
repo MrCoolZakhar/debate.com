@@ -143,16 +143,6 @@ export default function DelegateHome() {
     document.getElementById('crisis-send-directive')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, []);
 
-  // "Edit" on a directive nobody has answered yet: the form opens it in edit mode (Save changes).
-  const editOwn = useCallback((d: Directive) => {
-    const { text, image } = splitAttached(d.body);
-    setResend({
-      token: Date.now(), directiveId: d.id, label: String(dirNumber(d)), note: null, title: d.title, body: text, image: image ?? null,
-      themes: d.themes, receiver: d.receiver, covert: d.covert, mode: 'edit', kind: d.kind,
-    });
-    document.getElementById('crisis-send-directive')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, []);
-
   const goalsFresh = goalsRead !== null && goalsRead.forCharacter === characterId;
   const goals = goalsFresh ? goalsRead.text.trim() : '';
   const myResources = (res?.resources ?? []).filter((r) => (cabinetId && r.cabinet_id === cabinetId) || (characterId && r.character_id === characterId));
@@ -252,7 +242,6 @@ export default function DelegateHome() {
               onChanged={() => { void readDirectives(ref); }}
               onSendAgain={sendAgain}
               onEditReturned={editReturned}
-              onEditOwn={editOwn}
             />
           </div>
         </div>

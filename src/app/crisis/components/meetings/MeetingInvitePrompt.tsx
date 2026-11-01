@@ -8,6 +8,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CalendarClock, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import PopBanner from '../directives/PopBanner';
 import Portal from '@/components/Portal';
 import { listMeetings } from '@/lib/crisis/api';
 import { useCrisisLive } from '@/lib/crisis/live';
@@ -156,6 +157,7 @@ export default function MeetingInvitePrompt() {
           className="meeting-invite focus:outline-none"
           style={{ position: 'relative', width: 'min(540px, 100%)', maxHeight: 'calc(100dvh - 56px)' }}
         >
+          <PopBanner icon={<CalendarClock size={26} strokeWidth={1.6} />}>Meeting Request!</PopBanner>
           <div key={m.id} className={pending.length > 1 ? (dir === 'prev' ? 'cm-prev' : 'cm-next') : undefined}>
           <OverhangCard
             name={askerName}

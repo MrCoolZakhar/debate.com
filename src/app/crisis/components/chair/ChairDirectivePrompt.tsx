@@ -13,7 +13,7 @@
 // read only.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
-import { ArrowLeft, Check, ChevronLeft, ChevronRight, Gavel, PencilLine, X, XCircle } from 'lucide-react';
+import { ArrowLeft, Check, ChevronLeft, ChevronRight, Gavel, PencilLine, ScrollText, X, XCircle } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { crisisError, listDirectives, requestDirectiveChanges, reviewDirectiveAsChair, type CrisisRef } from '@/lib/crisis/api';
@@ -24,6 +24,7 @@ import { Btn, CK, fieldStyle, OverhangCard, useScrollLock } from '../../crisisKi
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { whenLabel, whenTitle } from '../delegate/directiveUi';
 import { DirectiveBody } from '../directives/attachedImage';
+import PopBanner from '../directives/PopBanner';
 import { CabinetLogo, NumberBadge, ThemeTags } from '../directives/directiveParts';
 import { chairGroup, chairVerdict, closeChairDirective, directiveAuthor, useRequestedChairDirective, type DirectiveAuthor } from './chairDirectiveKit';
 
@@ -180,11 +181,11 @@ export function ChairDirectiveCard({ d, author, cabinet, cref, readOnly = false,
               id={`chair-note-${d.id}`}
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              rows={3}
+              rows={5}
               maxLength={500}
               autoFocus
               placeholder={mode === 'changes' ? 'Say what to change' : 'Say why'}
-              style={{ ...fieldStyle, resize: 'vertical' }}
+              style={{ ...fieldStyle, fontSize: 15.5, padding: '12px 14px', minHeight: 120, resize: 'vertical' }}
             />
             <div className="flex flex-wrap" style={{ gap: 8, marginTop: 10 }}>
               <Btn
@@ -368,6 +369,7 @@ export default function ChairDirectivePrompt() {
           className="chair-pop focus:outline-none"
           style={{ position: 'relative', width: 'min(620px, 100%)', maxHeight: 'calc(100dvh - 56px)' }}
         >
+          {!readOnly && <PopBanner icon={<ScrollText size={26} strokeWidth={1.6} />}>New Cabinet Directive!</PopBanner>}
           <div key={stamp(d)} className={queue > 1 ? (dir === 'prev' ? 'cm-prev' : 'cm-next') : undefined}>
             <ChairDirectiveCard
               d={d}

@@ -52,3 +52,11 @@
 -- 31 crisis_log_character_move (trigger on crisis_characters location): every character move is a map history row,
 --   action 'crisis_characters:update', payload/before { id, name, kind 'character', lng, lat, owner_cabinet_id, picture_url },
 --   seen by the character's cabinet, so History and the "N changes" replay can animate it.
+-- 32 crisis_map_notice_bundles_custom_units (1 Nov 2026):
+--   crisis_notifications.bundle_count; crisis_bundle_map_notice(crisis, member, n): one growing unread map notice per
+--   person (younger than 15 min), title "N changes to the map", ref_key 'since:<ms>', link 'map?since=<ms>'; used by
+--   crisis_notify_cabinets (unit/reveal/territory), crisis_notify_region and crisis_notify_map_batch, so live one-by-one
+--   saves bundle too. crisis_units.custom_type / picture_url / details (custom troops; types live in
+--   settings.customUnitTypes), written by crisis_apply_map_set_v2; crisis_history_safe passes custom_type and picture_url.
+-- Data, 1 Nov 2026 (owner): the test crisis map (gavelling-test-mun-2027 / jcc) was reset to its seed of 25 Oct
+--   (9 units, 4 countries, no areas or zones, history and draft cleared, map notices removed).

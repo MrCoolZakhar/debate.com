@@ -1,6 +1,7 @@
 // Gavelling Crisis: row types (mirror docs/crisis/sql/*.sql) and settings with their defaults.
 
 import { readZoneTypes, type ZoneType } from './zones';
+import { readCustomUnitTypes, type CustomUnitType } from './unitTypes';
 
 export type CrisisRole = 'director' | 'assistant_director' | 'backroomer' | 'chair' | 'press' | 'delegate' | 'organiser';
 
@@ -40,6 +41,8 @@ export interface CrisisSettings {
   delegatesSeeOtherCharacters: boolean;
   /** The zone types the Crisis Director defined (at most 20): a name, a colour and a description each. */
   zoneTypes: ZoneType[];
+  /** Custom troop types (a name, a picture, a sight range, details) a unit on the map can be made from (docs/crisis/sql/029, part 32). */
+  customUnitTypes: CustomUnitType[];
 }
 
 export const DEFAULT_SETTINGS: CrisisSettings = {
@@ -57,6 +60,7 @@ export const DEFAULT_SETTINGS: CrisisSettings = {
   mapChangesWait: true,
   delegatesSeeOtherCharacters: false,
   zoneTypes: [],
+  customUnitTypes: [],
 };
 
 export function readSettings(raw: unknown): CrisisSettings {
@@ -68,6 +72,7 @@ export function readSettings(raw: unknown): CrisisSettings {
     otherCabinets: other === 'names' ? 'names' : other === 'profiles' || other === 'full' ? 'profiles' : 'hidden',
     backroomPowers: { ...DEFAULT_SETTINGS.backroomPowers, ...(s.backroomPowers ?? {}) },
     zoneTypes: readZoneTypes(s),
+    customUnitTypes: readCustomUnitTypes(s),
   };
 }
 
@@ -276,6 +281,10 @@ export interface MapUnit {
   suspected_by: string[];
   /** How far it sees, in km (0..5000); null = the default for its kind (docs/crisis/sql/019). */
   sight_km?: number | null;
+  /** Custom troops (docs/crisis/sql/029, part 32): a key into settings.customUnitTypes, its own picture and details. */
+  custom_type?: string | null;
+  picture_url?: string | null;
+  details?: string | null;
 }
 
 export interface MapShape {

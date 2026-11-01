@@ -21,16 +21,21 @@ import { useChangeCtx } from '../history/changeKit';
 /** The notification kinds that show a picture. */
 export const MAP_KINDS: ReadonlyArray<CrisisNotification['kind']> = ['unit', 'reveal', 'territory'];
 /**
- * "N changes to the map": the database writes ONE of these per send per cabinet, linked 'map?changes=<epoch ms>' (its ref_key is
- * the same number). It opens the map page's pop-up (MapChangesDialog) instead of the single-change picture below.
+ * "N changes to the map": the database keeps ONE growing unread notice per person, linked 'map?since=<epoch ms>' (its ref_key is
+ * 'since:<epoch ms>'); older ones are linked 'map?changes=<epoch ms>' (a single send). Either opens the map page's pop-up
+ * (MapChangesDialog) instead of the single-change picture below.
  */
-export function changesStampOf(n: CrisisNotification): number | null {
+export function mapNoticeOf(n: CrisisNotification): { stamp: number; since: boolean } | null {
   if (n.kind !== 'unit') return null;
+  const since = /[?&]since=(\d{13,})/.exec(n.link ?? '')?.[1] ?? /^since:(\d{13,})$/.exec(n.ref_key ?? '')?.[1];
+  if (since) return { stamp: Number(since), since: true };
   const fromLink = /[?&]changes=(\d{13,})/.exec(n.link ?? '')?.[1];
   const fromKey = n.ref_key && /^\d{13,}$/.test(n.ref_key) && /to the map/i.test(n.title) ? n.ref_key : undefined;
   const stamp = Number(fromLink ?? fromKey ?? NaN);
-  return Number.isFinite(stamp) ? stamp : null;
+  return Number.isFinite(stamp) ? { stamp, since: false } : null;
 }
+/** The epoch ms of a map notice (either kind), or null. */
+export const changesStampOf = (n: CrisisNotification): number | null => mapNoticeOf(n)?.stamp ?? null;
 export const hasMapDetail = (n: CrisisNotification) => changesStampOf(n) === null && MAP_KINDS.includes(n.kind) && !!(n.ref_key || n.ref_id);
 
 export default function NotificationDetail({ n, kindLabel, onClose }: { n: CrisisNotification; kindLabel: string; onClose: () => void }) {

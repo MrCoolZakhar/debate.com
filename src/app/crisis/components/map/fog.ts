@@ -1,12 +1,14 @@
 'use client';
 // Gavelling Crisis map: the fog of war. A canvas sits over the map, filled with a hatch and
 // then "cut open" with destination-out around what the viewing cabinet can see: its own
-// countries, its own areas and a small sight circle around each of its own units (drawn as a soft
-// ring so players see how far their troops can see). Redrawn on every map move.
+// countries, its own areas and a sight circle around each of its own units. The circle is a true circle on the ground
+// (the same distance the database uses to decide who sees a unit), drawn with a soft inner edge and a dashed ring at
+// exactly its range, so players see how far their troops can see. Redrawn on every map move.
 
 import type { Map as MLMap } from 'maplibre-gl';
 import type { Geometry } from 'geojson';
 import type { LngLat } from './mapData';
+import { sightPoints } from './sight';
 
 export interface FogHoles {
   geometries: Geometry[];
@@ -51,6 +53,33 @@ function hatchTile(dpr: number): HTMLCanvasElement {
   }
   tile = { dpr, canvas: c };
   return c;
+}
+
+/** A sight circle as screen points: the ground circle of `km` around the unit, never smaller than 8 px across. */
+export function sightRingPx(map: MLMap, c: { lng: number; lat: number; km: number }): Array<{ x: number; y: number }> {
+  const centre = map.project([c.lng, c.lat]);
+  const pts = sightPoints(c.lng, c.lat, c.km, 72).map((p) => map.project(p));
+  let r = 0;
+  for (const p of pts) r = Math.max(r, Math.hypot(p.x - centre.x, p.y - centre.y));
+  if (r < 0.5) {
+    return Array.from({ length: 25 }, (_, i) => ({ x: centre.x + Math.cos((i / 24) * Math.PI * 2) * 8, y: centre.y + Math.sin((i / 24) * Math.PI * 2) * 8 }));
+  }
+  if (r >= 8) return pts;
+  const k = 8 / r;
+  return pts.map((p) => ({ x: centre.x + (p.x - centre.x) * k, y: centre.y + (p.y - centre.y) * k }));
+}
+
+/** How far a point of the screen is from a ring of screen points (the nearest bit of the line). */
+export function distToRingPx(ring: Array<{ x: number; y: number }>, pt: { x: number; y: number }): number {
+  let best = Infinity;
+  for (let i = 0; i < ring.length - 1; i++) {
+    const a = ring[i]; const b = ring[i + 1];
+    const dx = b.x - a.x; const dy = b.y - a.y;
+    const len2 = dx * dx + dy * dy;
+    const t = len2 > 0 ? Math.max(0, Math.min(1, ((pt.x - a.x) * dx + (pt.y - a.y) * dy) / len2)) : 0;
+    best = Math.min(best, Math.hypot(a.x + dx * t - pt.x, a.y + dy * t - pt.y));
+  }
+  return best;
 }
 
 export function drawFog(canvas: HTMLCanvasElement, map: MLMap, holes: FogHoles | null): void {
@@ -133,21 +162,26 @@ export function drawFog(canvas: HTMLCanvasElement, map: MLMap, holes: FogHoles |
     ctx.globalCompositeOperation = 'destination-out';
   }
 
-  const seen: Array<{ x: number; y: number; r: number; ring?: boolean }> = [];
+  const seen: Array<{ pts: Array<{ x: number; y: number }>; ring?: boolean }> = [];
   for (const c of holes.circles) {
-    const p = map.project([c.lng, c.lat]);
-    // The radius in km, measured north-south on screen (Mercator grows it towards the poles, like the land).
-    const q = map.project([c.lng, Math.min(84, c.lat + c.km / 111.2)]);
-    const r = Math.max(8, Math.abs(p.y - q.y));
-    if (p.x + r < 0 || p.y + r < 0 || p.x - r > w || p.y - r > h) continue;
+    const pts = sightRingPx(map, c);
+    let minX = Infinity; let minY = Infinity; let maxX = -Infinity; let maxY = -Infinity;
+    for (const p of pts) { minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x); minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y); }
+    if (maxX < 0 || maxY < 0 || minX > w || minY > h) continue;
     if (withFog) {
-      const grad = ctx.createRadialGradient(p.x, p.y, r * 0.84, p.x, p.y, r);
-      grad.addColorStop(0, 'rgba(0,0,0,1)');
-      grad.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = grad;
-      ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.fill();
+      // A soft inner edge: three nested cuts, so everything inside the range is clear and the fog thins out at its rim.
+      const cx = (minX + maxX) / 2; const cy = (minY + maxY) / 2;
+      ctx.fillStyle = '#000';
+      for (const [k, a] of [[1, 0.35], [0.97, 0.5], [0.93, 1]]) {
+        ctx.globalAlpha = a;
+        ctx.beginPath();
+        pts.forEach((p, i) => { const x = cx + (p.x - cx) * k; const y = cy + (p.y - cy) * k; if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); });
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
     }
-    seen.push({ x: p.x, y: p.y, r, ring: c.ring });
+    seen.push({ pts, ring: c.ring });
   }
   // The sight rings, drawn over the cleared fog.
   ctx.globalCompositeOperation = 'source-over';
@@ -155,6 +189,11 @@ export function drawFog(canvas: HTMLCanvasElement, map: MLMap, holes: FogHoles |
   ctx.lineWidth = 1.4;
   ctx.strokeStyle = 'rgba(142,36,36,0.5)';
   if (holes.showRings !== false) for (const s of seen) {
-    if (s.ring === false) continue; ctx.beginPath(); ctx.arc(s.x, s.y, s.r * 0.97, 0, Math.PI * 2); ctx.stroke(); }
+    if (s.ring === false) continue;
+    ctx.beginPath();
+    s.pts.forEach((p, i) => { if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); });
+    ctx.closePath();
+    ctx.stroke();
+  }
   ctx.setLineDash([]);
 }

@@ -107,7 +107,7 @@ function Row({ m, refx, people, cabinets, members, canDecide, compact, now, onDe
             placeholder="Note to the delegates (optional)"
             aria-label="Note to the delegates"
             autoFocus
-            style={{ ...fieldStyle, flex: '1 1 180px', minWidth: 0, padding: '6px 10px', fontSize: 13, borderRadius: 10 }}
+            style={{ ...fieldStyle, flex: '1 1 220px', minWidth: 0, padding: '9px 12px', fontSize: 14.5, minHeight: 42, borderRadius: 11 }}
           />
           <Btn size="sm" tone="red" disabled={busy} onClick={() => decide('declined')}>Decline meeting</Btn>
           <Btn size="sm" tone="ghost" onClick={() => { setDeclining(false); setNote(''); }}>Back</Btn>
@@ -139,14 +139,20 @@ export function MeetingRequestRows({ pending, compact = true, now, onDecided }: 
 }
 
 /** Self-contained: loads, stays live, draws nothing when no request waits (and nothing for delegates and press). */
-export default function MeetingRequestsStrip({ compact = false, bottomGap = 0 }: { compact?: boolean; bottomGap?: number }) {
+export default function MeetingRequestsStrip({ compact = false, bottomGap = 0, only, title }: {
+  compact?: boolean; bottomGap?: number;
+  /** Show only the requests this returns true for (the backroom's top strip shows the characters a backroomer looks after). */
+  only?: (m: Meeting) => boolean;
+  /** A different heading (default "Meeting Requests"). */
+  title?: string;
+}) {
   const { ref, role, staff } = useCrisis();
   const canDecide = useCanDecideMeeting();
   const mayLook = staff || role === 'chair';
   const { pending, reload } = usePendingMeetings(ref, mayLook);
   const [now, setNow] = useState(() => serverNow());
   useEffect(() => { const t = window.setInterval(() => setNow(serverNow()), 30_000); return () => window.clearInterval(t); }, []);
-  const list = useMemo(() => pending ?? [], [pending]);
+  const list = useMemo(() => (only ? (pending ?? []).filter(only) : pending ?? []), [pending, only]);
   if (!mayLook || list.length === 0) return null;
 
   return (
@@ -157,7 +163,7 @@ export default function MeetingRequestsStrip({ compact = false, bottomGap = 0 }:
       <div className="flex items-center justify-between" style={{ gap: 8, paddingBottom: 6 }}>
         <h2 className="flex items-center" style={{ gap: 7, margin: 0, fontSize: compact ? 14 : 15, fontWeight: 800, color: CK.ink }}>
           <span style={{ color: CK.red, lineHeight: 0 }}><Hourglass size={compact ? 15 : 17} strokeWidth={1.5} aria-hidden /></span>
-          Meeting Requests
+          {title ?? 'Meeting Requests'}
         </h2>
         <span className="inline-flex items-baseline" style={{ gap: 5 }}>
           <b style={{ fontSize: 20, fontWeight: 800, lineHeight: 1, fontVariantNumeric: 'tabular-nums', color: CK.ink }}>{list.length}</b>

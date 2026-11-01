@@ -12,7 +12,7 @@ import GSelect from '@/components/GSelect';
 import { notifyErr } from '@/lib/appNotify';
 import { CLOSED_DIRECTIVE_STATUSES, countDirectives, crisisError, listClosedDirectivesPage, listDirectives, markDrafting } from '@/lib/crisis/api';
 import { useCrisisLive, useSingleFlight } from '@/lib/crisis/live';
-import { KIND_LABEL, THEMES, type Directive } from '@/lib/crisis/types';
+import { KIND_LABEL, THEMES, type Directive, type Meeting } from '@/lib/crisis/types';
 import { Btn, Card, CK, Segmented, fieldStyle } from '../../crisisKit';
 import DirectiveReader from './DirectiveReader';
 import MeetingRequestsStrip from '../meetings/MeetingRequestsStrip';
@@ -68,8 +68,18 @@ function FilterBox({ icon, width, children }: { icon: LucideIcon; width: number;
 }
 
 export default function BackroomInbox() {
-  const { ref, staff, director, memberId, core, settings } = useCrisis();
+  const { ref, staff, director, role, memberId, core, settings } = useCrisis();
   const names = useMemo(() => buildNames(core.cabinets, core.characters, core.members), [core]);
+
+  // A backroomer's meeting requests are the ones that involve characters they look after (they sit at the very top, easy to answer);
+  // the director and the assistant director see every request there. The rest of a backroomer's requests stay in the strip lower down.
+  const lookedAfter = useMemo(() => new Set(core.characters.filter((c) => !!memberId && c.owner_member_id === memberId).map((c) => c.id)), [core.characters, memberId]);
+  const isBackroomer = role === 'backroomer';
+  const involvesMine = useCallback(
+    (m: Meeting) => (!!m.requested_by_character && lookedAfter.has(m.requested_by_character)) || m.character_ids.some((id) => lookedAfter.has(id)),
+    [lookedAfter],
+  );
+  const notMine = useCallback((m: Meeting) => !involvesMine(m), [involvesMine]);
 
   const [directives, setDirectives] = useState<Directive[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -226,6 +236,8 @@ export default function BackroomInbox() {
   return (
     <div className="flex flex-col" style={{ gap: 10, marginTop: 6, width: '100%' }}>
       <DirectiveDeepLink onId={setLinkedId} />
+      {/* Meeting requests first, at the very top: a quick yes or no, ahead of everything. Renders nothing when none wait. */}
+      <MeetingRequestsStrip compact only={isBackroomer ? involvesMine : undefined} title={isBackroomer ? 'Meeting Requests for Your Characters' : undefined} />
       <div className="flex items-center justify-between flex-wrap" style={{ gap: 10 }}>
         <h1 className="flex items-center" style={{ margin: 0, gap: 8, fontSize: 22, fontWeight: 800, color: CK.ink }}><ListChecks size={22} strokeWidth={1.5} aria-hidden style={{ color: CK.red }} />Directives</h1>
         <div className="flex items-center flex-wrap" style={{ gap: 8, maxWidth: '100%' }}>
@@ -255,8 +267,7 @@ export default function BackroomInbox() {
         />
       )}
 
-      {/* Meeting requests first: a quick yes or no, ahead of directives. Renders nothing when none wait. */}
-      <MeetingRequestsStrip compact />
+      {isBackroomer && <MeetingRequestsStrip compact only={notMine} title="Other Meeting Requests" />}
 
       <div className="flex items-center flex-wrap" style={{ gap: 8 }}>
         <FilterBox icon={Landmark} width={185}><GSelect size="sm" aria-label="Cabinet" value={filters.cabinet} options={cabinetOptions} onChange={(v) => setF({ cabinet: v })} /></FilterBox>
@@ -264,9 +275,9 @@ export default function BackroomInbox() {
         <FilterBox icon={Palette} width={175}><GSelect size="sm" aria-label="Theme" value={filters.theme} options={themeOptions} onChange={(v) => setF({ theme: v })} /></FilterBox>
         <FilterBox icon={Tag} width={195}><GSelect size="sm" aria-label="Kind" value={filters.kind} options={kindOptions} onChange={(v) => setF({ kind: v })} /></FilterBox>
         <label className="relative" style={{ flex: '1 1 200px', maxWidth: 360 }}>
-          <Search size={15} strokeWidth={1.5} aria-hidden style={{ position: 'absolute', left: 10, top: 9, color: CK.muted }} />
+          <Search size={15} strokeWidth={1.5} aria-hidden style={{ position: 'absolute', left: 10, top: 12, color: CK.muted }} />
           <input value={filters.search} onChange={(e) => setF({ search: e.target.value })} aria-label="Search directives"
-            placeholder="Search number, title, author, text" style={{ ...fieldStyle, padding: '6px 10px 6px 31px', fontSize: 13, minHeight: 30 }} />
+            placeholder="Search number, title, author, text" style={{ ...fieldStyle, padding: '8px 10px 8px 32px', fontSize: 14.5, minHeight: 38 }} />
         </label>
         <span className="flex-1" />
         <Segmented ariaLabel="Queue order" value={order} onChange={(o) => { setOrder(o); setFocusId(null); }}

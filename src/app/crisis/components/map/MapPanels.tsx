@@ -4,13 +4,15 @@
 // area: who holds it, and how to reshape it), drawing new territory, and a character's card.
 // Each panel keeps its own form state; the caller gives it a `key` so a new subject starts clean.
 
-import { useEffect, useState, type ReactNode } from 'react';
-import { Check, Pencil, Plus, RotateCcw, Trash2, X, Undo2 } from 'lucide-react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Check, ChevronDown, Eye, ImagePlus, Pencil, Plus, RotateCcw, Trash2, X, Undo2 } from 'lucide-react';
 import GSelect from '@/components/GSelect';
+import { crisisError } from '@/lib/crisis/api';
 import { amount as fmtAmount } from '@/lib/crisis/format';
 import { Btn, CK, FieldLabel, fieldStyle } from '../../crisisKit';
 import type { Character, MapShape, MapUnit, UnitKind } from '@/lib/crisis/types';
 import { ZONE_COLORS, ZONE_NAME_MAX, ZONE_NO_TYPE_COLOR, type ZoneType } from '@/lib/crisis/zones';
+import { CUSTOM_UNIT_DETAILS_MAX, safePictureUrl, unitDetailsOf, unitPictureOf, type CustomUnitType } from '@/lib/crisis/unitTypes';
 import { KIND_META, KIND_ORDER } from './mapData';
 import { glyphSvg } from './glyphs';
 
@@ -26,6 +28,10 @@ export interface UnitDraft {
   revealed: string[];
   /** How far it sees, in km; null = the default for its kind. */
   sight: number | null;
+  /** A custom troop type (a key into the crisis settings), its own picture and its details. */
+  customType: string | null;
+  picture: string | null;
+  details: string;
 }
 
 function Shell({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
@@ -86,6 +92,16 @@ export function KindGlyph({ kind, size = 22 }: { kind: UnitKind; size?: number }
   return <span aria-hidden style={{ display: 'inline-flex', lineHeight: 0 }} dangerouslySetInnerHTML={{ __html: glyphSvg(kind, size, CK.ink) }} />;
 }
 
+/** A round picture (a custom troop's or a unit's), or the custom glyph when there is none. */
+export function PictureDisc({ src, size = 26, ring }: { src: string | null; size?: number; ring?: string }) {
+  const url = safePictureUrl(src);
+  return url ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={url} alt="" draggable={false} style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flex: 'none', display: 'block', boxShadow: ring ? `0 0 0 3px ${ring}` : `0 0 0 1px ${CK.hair}`, background: '#fff' }} />
+  ) : <KindGlyph kind="custom" size={Math.round(size * 0.9)} />;
+}
+function TypeDisc({ type, size }: { type: CustomUnitType; size: number }) { return <PictureDisc src={type.picture_url ?? null} size={size} />; }
+
 /** One row of choices that wraps: the cabinets, and optionally "Nobody". */
 export function OwnerPicker({ value, cabinets, withNobody, disabled, ariaLabel, onChange }: {
   /** undefined: nobody has been chosen yet (not even "Nobody"). */
@@ -119,7 +135,7 @@ export function OwnerPicker({ value, cabinets, withNobody, disabled, ariaLabel, 
 }
 
 /** Step 1 of adding a unit: choose what kind it is. */
-export function KindPicker({ onPick, onClose }: { onPick: (k: UnitKind) => void; onClose: () => void }) {
+export function KindPicker({ customTypes = [], onPick, onClose }: { customTypes?: CustomUnitType[]; onPick: (k: UnitKind, custom?: CustomUnitType) => void; onClose: () => void }) {
   return (
     <Shell title="Add a Unit" onClose={onClose}>
       <p style={{ margin: '0 0 10px', fontSize: 13, color: CK.inkSoft }}>Choose what kind of unit, then click the map to place it.</p>
@@ -135,17 +151,34 @@ export function KindPicker({ onPick, onClose }: { onPick: (k: UnitKind) => void;
           </button>
         ))}
       </div>
+      {customTypes.length > 0 && (
+        <>
+          <p style={{ margin: '12px 0 6px', fontSize: 12, fontWeight: 700, color: CK.inkSoft }}>Your custom troops</p>
+          <div className="grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
+            {customTypes.map((t) => (
+              <button
+                key={t.key} type="button" onClick={() => onPick('custom', t)} title={t.name}
+                className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] flex flex-col items-center justify-center active:scale-[0.97] transition-transform"
+                style={{ gap: 4, border: 0, borderRadius: 12, padding: '10px 4px 7px', background: CK.well, color: CK.ink, cursor: 'pointer', fontFamily: CK.font, fontSize: 11, fontWeight: 700, minWidth: 0 }}
+              >
+                <TypeDisc type={t} size={26} />
+                <span style={{ overflowWrap: 'anywhere', textAlign: 'center', lineHeight: 1.15 }}>{t.name}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
     </Shell>
   );
 }
 
 /** Step 2 of adding a unit: the kind is chosen, now the map is clicked. */
-export function PlaceUnitPanel({ kind, onBack, onClose }: { kind: UnitKind; onBack: () => void; onClose: () => void }) {
+export function PlaceUnitPanel({ kind, custom, onBack, onClose }: { kind: UnitKind; custom?: CustomUnitType | null; onBack: () => void; onClose: () => void }) {
   return (
     <Shell title="Place the Unit" onClose={onClose}>
       <div className="flex items-center" style={{ gap: 8, marginBottom: 10 }}>
-        <KindGlyph kind={kind} size={22} />
-        <b style={{ fontSize: 14 }}>{KIND_META[kind].label}</b>
+        {custom ? <PictureDisc src={custom.picture_url ?? null} size={26} /> : <KindGlyph kind={kind} size={22} />}
+        <b style={{ fontSize: 14, overflowWrap: 'anywhere' }}>{custom ? custom.name : KIND_META[kind].label}</b>
       </div>
       <p style={{ margin: '0 0 10px', fontSize: 13, color: CK.inkSoft }}>Click the map where it should go.</p>
       <Btn size="sm" tone="ghost" onClick={onBack}>Change kind</Btn>
@@ -155,13 +188,28 @@ export function PlaceUnitPanel({ kind, onBack, onClose }: { kind: UnitKind; onBa
 
 /** The editor for a unit (staff) and for a unit about to be added. */
 export function UnitEditor({
-  isNew, initial, cabinets, busy, onSubmit, onDelete, onClose,
+  isNew, initial, cabinets, busy, customTypes = [], onUploadPicture, onSubmit, onDelete, onClose,
 }: {
   isNew: boolean; initial: UnitDraft; cabinets: PanelCabinet[]; busy: boolean;
+  customTypes?: CustomUnitType[]; onUploadPicture?: (file: File) => Promise<string>;
   onSubmit: (d: UnitDraft) => void; onDelete?: () => void; onClose: () => void;
 }) {
   const [d, setD] = useState<UnitDraft>(initial);
   const [confirm, setConfirm] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(!!initial.picture || !!initial.details.trim());
+  const [uploading, setUploading] = useState(false);
+  const [picErr, setPicErr] = useState('');
+  const fileInput = useRef<HTMLInputElement | null>(null);
+  const type = d.customType ? customTypes.find((t) => t.key === d.customType) ?? null : null;
+  const shownPicture = safePictureUrl(d.picture) ?? safePictureUrl(type?.picture_url);
+  const pickPicture = async (file: File | undefined) => {
+    if (fileInput.current) fileInput.current.value = '';
+    if (!file || !onUploadPicture) return;
+    setUploading(true); setPicErr('');
+    try { const url = await onUploadPicture(file); setD((x) => ({ ...x, picture: url })); }
+    catch (e) { setPicErr(crisisError(e, 'Could not upload the picture.')); }
+    finally { setUploading(false); }
+  };
   // The amount stays text while it is typed (so the 0 can be cleared); it is checked when the unit is saved.
   const [amountText, setAmountText] = useState(String(Number.isFinite(initial.strength) ? initial.strength : 0));
   const [amountErr, setAmountErr] = useState(false);
@@ -184,6 +232,42 @@ export function UnitEditor({
     </Field>
   );
   const amountMsg = amountErr ? <p role="alert" style={{ margin: '-4px 0 8px', fontSize: 12, fontWeight: 600, color: CK.red }}>Enter a whole number from 0 to 1,000,000.</p> : null;
+  const more = (
+    <div style={{ marginBottom: 10 }}>
+      <button
+        type="button" aria-expanded={moreOpen} onClick={() => setMoreOpen((o) => !o)}
+        className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] inline-flex items-center"
+        style={{ gap: 4, border: 0, background: 'transparent', cursor: 'pointer', color: CK.forest, fontSize: 13, fontWeight: 700, padding: '2px 0', fontFamily: CK.font }}
+      >
+        <ChevronDown size={15} strokeWidth={1.5} style={{ transform: moreOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />More
+      </button>
+      {moreOpen && (
+        <div style={{ marginTop: 8 }}>
+          <Field label="Picture">
+            <input ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden onChange={(e) => { void pickPicture(e.target.files?.[0]); }} />
+            <div className="flex items-center flex-wrap" style={{ gap: 10 }}>
+              <PictureDisc src={shownPicture} size={44} />
+              {onUploadPicture && (
+                <Btn size="sm" tone="ghost" disabled={uploading} icon={<ImagePlus size={14} strokeWidth={1.5} />} onClick={() => fileInput.current?.click()}>
+                  {uploading ? 'Uploading' : d.picture ? 'Change picture' : 'Add a picture'}
+                </Btn>
+              )}
+              {d.picture && <Btn size="sm" tone="ghost" onClick={() => setD({ ...d, picture: null })}>Remove picture</Btn>}
+            </div>
+            {!d.picture && type?.picture_url && <p style={{ margin: '6px 0 0', fontSize: 12, color: CK.inkSoft }}>It uses the picture of {type.name}.</p>}
+            {picErr && <p role="alert" style={{ margin: '6px 0 0', fontSize: 12, fontWeight: 600, color: CK.red }}>{picErr}</p>}
+          </Field>
+          <Field label="Details">
+            <textarea
+              style={{ ...fieldStyle, minHeight: 64, resize: 'vertical' }} value={d.details} maxLength={CUSTOM_UNIT_DETAILS_MAX} aria-label="Details"
+              placeholder={type?.details ? type.details : 'What it is and what it can do (optional)'}
+              onChange={(e) => setD({ ...d, details: e.target.value })}
+            />
+          </Field>
+        </div>
+      )}
+    </div>
+  );
   const ownerField = (
     <Field label="Owner">
       <GSelect
@@ -196,8 +280,8 @@ export function UnitEditor({
     <Shell title={isNew ? 'Add a Unit' : 'Unit'} onClose={onClose}>
       {isNew && (
         <div className="flex items-center" style={{ gap: 8, marginBottom: 10 }}>
-          <KindGlyph kind={d.kind} size={20} />
-          <b style={{ fontSize: 13.5 }}>{KIND_META[d.kind].label}</b>
+          {type ? <PictureDisc src={type.picture_url ?? null} size={24} /> : <KindGlyph kind={d.kind} size={20} />}
+          <b style={{ fontSize: 13.5, overflowWrap: 'anywhere' }}>{type ? type.name : KIND_META[d.kind].label}</b>
         </div>
       )}
       <Field label="Name">
@@ -214,12 +298,22 @@ export function UnitEditor({
             {ownerField}
           </div>
           {amountMsg}
+          {more}
         </>
       ) : (
         <>
           <div className="grid" style={{ gridTemplateColumns: '1fr 96px', gap: 8 }}>
             <Field label="Kind">
-              <GSelect size="sm" value={d.kind} onChange={(v) => setD({ ...d, kind: v as UnitKind })} options={KIND_ORDER.map((k) => ({ value: k, label: KIND_META[k].label }))} aria-label="Kind" />
+              <GSelect
+                size="sm" value={type ? `c:${type.key}` : d.kind} aria-label="Kind"
+                options={[...KIND_ORDER.map((k) => ({ value: k, label: KIND_META[k].label })), ...customTypes.map((t) => ({ value: `c:${t.key}`, label: t.name }))]}
+                onChange={(v) => {
+                  if (v.startsWith('c:')) {
+                    const t = customTypes.find((x) => x.key === v.slice(2));
+                    setD({ ...d, kind: 'custom', customType: t?.key ?? null, sight: d.sight === null && typeof t?.sight_km === 'number' ? t.sight_km : d.sight });
+                  } else setD({ ...d, kind: v as UnitKind, customType: null });
+                }}
+              />
             </Field>
             {amount}
           </div>
@@ -238,6 +332,7 @@ export function UnitEditor({
                 : 'You can also drag the round handle on its sight ring on the map. Other sides see this unit when it is inside one of their sight circles.'}
             </p>
           </Field>
+          {more}
           {others.length > 0 && (
             <Field label="Known to">
               {others.map((c) => (
@@ -274,18 +369,36 @@ export function UnitEditor({
 }
 
 /** What a cabinet (or a delegate) is allowed to see about a unit. */
-export function UnitViewer({ unit, cabinets, onClose }: { unit: MapUnit; cabinets: PanelCabinet[]; onClose: () => void }) {
+export function UnitViewer({ unit, cabinets, customTypes = [], revealed, onClose }: {
+  unit: MapUnit; cabinets: PanelCabinet[]; customTypes?: CustomUnitType[];
+  /** Set when the viewer sees this unit because it was revealed to them: "Revealed to you", or "Revealed to ExComm" for staff looking as a cabinet. */
+  revealed?: string | null; onClose: () => void;
+}) {
   const owner = cabinets.find((c) => c.id === unit.owner_cabinet_id);
+  const type = customTypes.find((t) => t.key === unit.custom_type) ?? null;
+  const picture = unitPictureOf(unit, customTypes);
+  const details = unitDetailsOf(unit, customTypes);
   return (
     <Shell title={unit.name} onClose={onClose}>
+      {picture && (
+        <div className="flex justify-center" style={{ marginBottom: 12 }}>
+          <PictureDisc src={picture} size={96} ring={owner?.color} />
+        </div>
+      )}
+      {revealed && (
+        <p className="inline-flex items-center" style={{ margin: '0 0 10px', gap: 6, padding: '4px 10px', borderRadius: 9, background: '#EED98A', color: CK.forest, fontSize: 12.5, fontWeight: 800 }}>
+          <Eye size={14} strokeWidth={1.5} />{revealed}
+        </p>
+      )}
       <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '6px 12px', fontSize: 13.5 }}>
-        <dt style={{ color: CK.muted }}>Kind</dt><dd style={{ margin: 0 }}>{KIND_META[unit.kind].label}</dd>
+        <dt style={{ color: CK.muted }}>Kind</dt><dd style={{ margin: 0, overflowWrap: 'anywhere' }}>{type ? type.name : KIND_META[unit.kind].label}</dd>
         <dt style={{ color: CK.muted }}>Amount</dt><dd style={{ margin: 0, fontVariantNumeric: 'tabular-nums' }}>{fmtAmount(unit.strength)}</dd>
         <dt style={{ color: CK.muted }}>Held by</dt>
         <dd className="flex items-center" style={{ margin: 0, gap: 6, overflowWrap: 'anywhere' }}>
           {owner ? (<><Dot color={owner.color} />{owner.name}</>) : 'Nobody'}
         </dd>
       </dl>
+      {details && <p style={{ margin: '10px 0 0', fontSize: 13.5, color: CK.ink, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{details}</p>}
     </Shell>
   );
 }
@@ -416,7 +529,7 @@ export function NewTerritoryPanel({
     return (
       <Shell title="New Territory" onClose={onClose}>
         <p style={{ margin: '0 0 10px', fontSize: 13, color: CK.inkSoft }}>
-          Click the map to add points, or press and drag to draw the outline freehand. Double-click, or click the first point, to close the shape.
+          Press and drag on the map to draw the outline freehand: it stays open while you draw and letting go closes it. Or click points one by one, then click the first point or double-click to close the shape.
         </p>
         <p style={{ margin: '0 0 10px', fontSize: 13.5 }}>
           <b style={{ fontSize: 20, fontVariantNumeric: 'tabular-nums' }}>{pointCount}</b> <span style={{ color: CK.inkSoft }}>{pointCount === 1 ? 'point' : 'points'}</span>
@@ -505,11 +618,15 @@ function Palette({ value, onChange }: { value: string; onChange: (c: string) => 
  * who sees it are set here, Save keeps all of it and Cancel puts everything back.
  */
 export function ZoneEditor({
-  isNew, phase, initial, types, cabinets, pointCount, minPoints, canUndo, outlineDirty, busy,
+  isNew, phase, initial, types, cabinets, pointCount, minPoints, canUndo, outlineDirty, busy, infoOnly, onRedraw,
   onColor, onUndo, onFinish, onSave, onCancel, onDelete,
 }: {
   isNew: boolean; phase: 'draw' | 'refine'; initial: ZoneForm; types: ZoneType[]; cabinets: PanelCabinet[]; pointCount: number; minPoints: number;
   canUndo: boolean; outlineDirty: boolean; busy: boolean;
+  /** The zone's shape has several pieces or holes: its details can be edited here, its outline cannot. */
+  infoOnly?: boolean;
+  /** Starts the outline again from nothing (drawn freehand or point by point). */
+  onRedraw?: () => void;
   /** The colour the zone is drawn in now (so the map's preview follows the type or the swatch). */
   onColor: (c: string) => void;
   onUndo: () => void; onFinish: () => void; onSave: (f: ZoneForm) => void; onCancel: () => void; onDelete?: () => void;
@@ -527,7 +644,7 @@ export function ZoneEditor({
     return (
       <Shell title={title} onClose={onCancel}>
         <p style={{ margin: '0 0 10px', fontSize: 13, color: CK.inkSoft }}>
-          Click the map to add points, or press and drag to draw the outline freehand. Double-click, or click the first point, to close the shape.
+          Press and drag on the map to draw the outline freehand: it stays open while you draw and letting go closes it. Or click points one by one, then click the first point or double-click to close the shape.
         </p>
         <p style={{ margin: '0 0 10px', fontSize: 13.5 }}>
           <b style={{ fontSize: 20, fontVariantNumeric: 'tabular-nums' }}>{pointCount}</b> <span style={{ color: CK.inkSoft }}>{pointCount === 1 ? 'point' : 'points'}</span>
@@ -543,6 +660,22 @@ export function ZoneEditor({
 
   return (
     <Shell title={title} onClose={onCancel}>
+      {!isNew && (
+        <Field label="Outline">
+          {infoOnly ? (
+            <p style={{ margin: 0, fontSize: 12.5, color: CK.inkSoft }}>
+              This zone is made of several pieces, so its outline stays as it is. Everything else can be edited here. To change its shape, delete it and draw it again.
+            </p>
+          ) : (
+            <>
+              <p style={{ margin: '0 0 8px', fontSize: 12.5, color: CK.inkSoft }}>
+                Drag a white corner to move it, or a small dot on a side to add a corner. Double-click a corner to remove it. The Move handle on the map, or the zone itself, carries the whole zone.
+              </p>
+              {onRedraw && <Btn size="sm" tone="ghost" icon={<Pencil size={14} strokeWidth={1.5} />} onClick={onRedraw}>Redraw the outline</Btn>}
+            </>
+          )}
+        </Field>
+      )}
       <Field label="Name">
         <input
           style={fieldStyle} value={f.name} maxLength={ZONE_NAME_MAX} aria-label="Zone name" autoFocus={isNew}
@@ -600,7 +733,7 @@ export function ZoneEditor({
         )}
       </Field>
       <p style={{ margin: '0 0 10px', fontSize: 12.5, color: CK.inkSoft }}>
-        Drag a white corner to move it, or drag a small dot on a side to add a corner. Double-click a corner to remove it. A zone never changes who holds the land.
+        {isNew ? 'Drag a white corner to move it, a small dot on a side to add a corner, or the Move handle to carry the whole zone. ' : ''}A zone never changes who holds the land.
       </p>
       <div className="flex flex-wrap items-center" style={{ gap: 8 }}>
         <Btn size="sm" disabled={busy || !valid || (!isNew && !dirty)} icon={<Check size={14} strokeWidth={1.5} />} onClick={() => onSave(f)}>Save zone</Btn>

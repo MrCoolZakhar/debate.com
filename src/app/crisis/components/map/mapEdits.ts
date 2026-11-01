@@ -36,12 +36,14 @@ const INFO_KEYS = ['label', 'color', 'description', 'zone_type', 'public', 'reve
 export interface UnitChange {
   id: string; lng?: number; lat?: number; strength?: number; sight_km?: number | null;
   name?: string; kind?: UnitKind; owner_cabinet_id?: string | null; note?: string | null; revealed_to?: string[];
+  custom_type?: string | null; picture_url?: string | null; details?: string | null;
 }
 
 /** A unit added in a set. `id` is local ('new-u-...'); the database gives the real one when the set is sent. */
 export interface NewUnit {
   id: string; name: string; kind: UnitKind; strength: number; owner_cabinet_id: string | null; note: string | null;
   revealed_to: string[]; sight_km: number | null; lng: number; lat: number;
+  custom_type?: string | null; picture_url?: string | null; details?: string | null;
 }
 
 /** A character moved to an exact spot. */
@@ -110,6 +112,7 @@ export function applyLocal(d: MapData, s: EditSet, crisisId: string): MapData {
     units = [...units, ...adds.map((a): MapUnit => ({
       id: a.id, crisis_id: crisisId, owner_cabinet_id: a.owner_cabinet_id, kind: a.kind, name: a.name, strength: a.strength, lng: a.lng, lat: a.lat,
       note: a.note, revealed_to: a.revealed_to, suspected_by: [], sight_km: a.sight_km,
+      custom_type: a.custom_type ?? null, picture_url: a.picture_url ?? null, details: a.details ?? null,
     }))];
   }
   return { ...d, regions, units, shapes: [...shapes, ...s.addShapes] };
@@ -130,7 +133,7 @@ export function setPayload(s: EditSet): Record<string, unknown> {
     units: s.units ?? [],
     addUnits: (s.unitAdds ?? []).map((a) => ({
       name: a.name, kind: a.kind, strength: a.strength, owner_cabinet_id: a.owner_cabinet_id, note: a.note, revealed_to: a.revealed_to,
-      sight_km: a.sight_km, lng: a.lng, lat: a.lat,
+      sight_km: a.sight_km, lng: a.lng, lat: a.lat, custom_type: a.custom_type ?? null, picture_url: a.picture_url ?? null, details: a.details ?? null,
     })),
     removeUnits: s.unitRemoves ?? [],
     chars: s.chars ?? [],
@@ -139,7 +142,7 @@ export function setPayload(s: EditSet): Record<string, unknown> {
 
 /** The unit fields the first version of the database function knows. */
 const BASE_UNIT_KEYS = ['lng', 'lat', 'strength', 'sight_km'] as const;
-const EXTRA_UNIT_KEYS = ['name', 'kind', 'owner_cabinet_id', 'note', 'revealed_to'] as const;
+const EXTRA_UNIT_KEYS = ['name', 'kind', 'owner_cabinet_id', 'note', 'revealed_to', 'custom_type', 'picture_url', 'details'] as const;
 
 /** True when the set holds anything the first version of the database function cannot apply. */
 export function hasExtras(s: EditSet): boolean {
@@ -216,7 +219,7 @@ export async function sendSet(ref: Parameters<typeof applyMapSet>[0], input: Edi
     for (const a of [...(left.unitAdds ?? [])]) {
       const id = await saveUnit(ref, {
         name: a.name, kind: a.kind, strength: a.strength, owner_cabinet_id: a.owner_cabinet_id, note: a.note, revealed_to: a.revealed_to,
-        sight_km: a.sight_km, lng: a.lng, lat: a.lat,
+        sight_km: a.sight_km, lng: a.lng, lat: a.lat, custom_type: a.custom_type ?? null, picture_url: a.picture_url ?? null, details: a.details ?? null,
       });
       addedUnits.push(id);
       left.unitAdds = (left.unitAdds ?? []).filter((x) => x.id !== a.id);
@@ -281,6 +284,7 @@ export function parseSet(raw: unknown): EditSet | null {
     if ('owner_cabinet_id' in r && (r.owner_cabinet_id === null || typeof r.owner_cabinet_id === 'string')) u.owner_cabinet_id = r.owner_cabinet_id as string | null;
     if ('note' in r && (r.note === null || typeof r.note === 'string')) u.note = r.note as string | null;
     if (Array.isArray(r.revealed_to)) u.revealed_to = r.revealed_to.filter((x): x is string => typeof x === 'string');
+    for (const k of ['custom_type', 'picture_url', 'details'] as const) if (k in r && (r[k] === null || typeof r[k] === 'string')) u[k] = r[k] as string | null;
     out.units.push(u);
   }
   for (const r of arr(raw.unitAdds)) {
@@ -290,6 +294,8 @@ export function parseSet(raw: unknown): EditSet | null {
       owner_cabinet_id: typeof r.owner_cabinet_id === 'string' ? r.owner_cabinet_id : null, note: typeof r.note === 'string' ? r.note : null,
       revealed_to: Array.isArray(r.revealed_to) ? r.revealed_to.filter((x): x is string => typeof x === 'string') : [],
       sight_km: typeof r.sight_km === 'number' ? r.sight_km : null, lng: r.lng, lat: r.lat,
+      custom_type: typeof r.custom_type === 'string' ? r.custom_type : null, picture_url: typeof r.picture_url === 'string' ? r.picture_url : null,
+      details: typeof r.details === 'string' ? r.details : null,
     });
   }
   for (const r of arr(raw.unitRemoves)) if (typeof r === 'string') out.unitRemoves?.push(r);
@@ -337,6 +343,7 @@ export function diffData(base: MapData, next: MapData): EditSet {
       out.unitAdds?.push({
         id: u.id, name: u.name, kind: u.kind, strength: u.strength, owner_cabinet_id: u.owner_cabinet_id, note: u.note ?? null,
         revealed_to: u.revealed_to ?? [], sight_km: u.sight_km ?? null, lng: u.lng, lat: u.lat,
+        custom_type: u.custom_type ?? null, picture_url: u.picture_url ?? null, details: u.details ?? null,
       });
       continue;
     }
@@ -349,6 +356,7 @@ export function diffData(base: MapData, next: MapData): EditSet {
     if ((was.owner_cabinet_id ?? null) !== (u.owner_cabinet_id ?? null)) c.owner_cabinet_id = u.owner_cabinet_id ?? null;
     if ((was.note ?? null) !== (u.note ?? null)) c.note = u.note ?? null;
     if ([...(was.revealed_to ?? [])].sort().join() !== [...(u.revealed_to ?? [])].sort().join()) c.revealed_to = u.revealed_to ?? [];
+    for (const k of ['custom_type', 'picture_url', 'details'] as const) if ((was[k] ?? null) !== (u[k] ?? null)) c[k] = u[k] ?? null;
     if (Object.keys(c).length > 1) out.units.push(c);
   }
   for (const u of base.units) if (!nextIds.has(u.id)) out.unitRemoves?.push(u.id);

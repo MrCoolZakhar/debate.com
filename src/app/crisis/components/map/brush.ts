@@ -14,6 +14,7 @@ import {
   type ClaimPlan, type ClaimTerr, type Multi, type Pt, type Ring,
 } from '@/lib/crisis/geo';
 import { clampLat } from './mapData';
+import { cleanTolFor, clipOutOf, dropSmallParts, fillSmallHoles, snapToNeighbours, tidyCuts, tidyLand } from './geomClean';
 
 const D2R = Math.PI / 180;
 /** Degrees of latitude in one km (the same constant the sight circle uses, so a brush and a sight ring agree). */
@@ -184,28 +185,43 @@ export interface PaintPlan {
   plan: ClaimPlan;
   /** True when the stroke adds no land (everything under it already belongs to the painter). */
   nothing: boolean;
+  /** True when the area the stroke grows has no land left of its own (it lay inside a country the painter holds whole). */
+  targetEmptied: boolean;
 }
 
 /**
  * Adds `stroke` to `owner`'s land. `areas` are all the drawn areas; `ownCountries` the countries the painter already
- * holds (land under the stroke that is already theirs adds nothing). Other cabinets' countries are not passed in, so a
- * brush never changes a country.
+ * holds (land under the stroke that is already theirs adds nothing, and an area of theirs never lies inside such a
+ * country). Other cabinets' countries are not passed in, so a brush never changes a country. Afterwards the land is
+ * tidied (small holes closed, gaps against the painter's own land closed, specks dropped), scaled by the pen's size `km`.
  */
-export function planPaint(stroke: Multi, owner: string, areas: ClaimTerr[], ownCountries: ClaimTerr[]): PaintPlan {
-  const target = pickClaimTarget(stroke, owner, areas);
-  const growth = target ? differenceM(stroke, target.multi) : stroke;
+export function planPaint(stroke: Multi, owner: string, areas: ClaimTerr[], ownCountries: ClaimTerr[], km = BRUSH_DEFAULT_KM): PaintPlan {
+  const tol = cleanTolFor(km);
+  const own = [...areas.filter((a) => a.owner === owner), ...ownCountries];
+  const ownCountryShapes = ownCountries.map((c) => c.multi);
+  let s = stroke;
+  try { s = dropSmallParts(snapToNeighbours(stroke, own.map((o) => o.multi), tol), tol, null, true); } catch { s = stroke; }
+  const target = pickClaimTarget(s, owner, areas);
+  const growth = target ? differenceM(s, target.multi) : s;
   const plan = planClaim(growth, owner, target ? { id: target.id, multi: target.multi } : null, [...areas, ...ownCountries], true);
   const added = dropSlivers(plan.gained);
-  const nothing = !plan.land.length || !added.length || areaOf(added) <= AREA_EPS;
-  return { target, plan: roundPlan(plan), nothing };
+  // The painter's area never overlaps a country the painter holds whole, and what is left is tidied.
+  const theirs = areas.filter((a) => a.owner !== owner).map((a) => a.multi);
+  const land = tidyLand(ownCountryShapes.length ? clipOutOf(plan.land, ownCountryShapes) : plan.land, own.map((o) => o.multi).filter((m) => m !== target?.multi), theirs, km);
+  const cuts = tidyCuts(plan.cuts, bboxOf(plan.gained), km);
+  const tidy: ClaimPlan = { ...plan, land, cuts };
+  const nothing = !plan.land.length || !added.length || areaOf(added) <= AREA_EPS || (!target && !land.length);
+  return { target, plan: roundPlan(tidy), nothing, targetEmptied: !!target && !land.length };
 }
 
-/** Takes `stroke` out of every drawn area it covers; an area left with no land is marked emptied. */
-export function planErase(stroke: Multi, areas: ClaimTerr[]): ClaimPlan {
+/** Takes `stroke` out of every drawn area it covers; an area left with nothing is marked emptied. Leftovers are tidied. */
+export function planErase(stroke: Multi, areas: ClaimTerr[], km = BRUSH_DEFAULT_KM): ClaimPlan {
   const sb = bboxOf(stroke);
   const near = sb ? areas.filter((a) => a.bbox && bboxHit(a.bbox, sb)) : [];
+  const tol = cleanTolFor(km);
   const cuts = cutOverlaps(stroke, null, near).map((c) => {
-    const left = dropSlivers(c.multi);
+    let left = dropSlivers(c.multi);
+    try { left = dropSmallParts(fillSmallHoles(left, tol.hole, sb), tol, sb); } catch { /* keep what the cut left */ }
     return { id: c.id, multi: roundMulti(left), emptied: !left.length };
   });
   return { land: [], absorbed: [], cuts, gained: [] };

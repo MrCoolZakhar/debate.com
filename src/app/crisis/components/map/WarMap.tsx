@@ -21,8 +21,9 @@ import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { amount as fmtAmount } from '@/lib/crisis/format';
 import { readMapFocus, type MapFocus } from '@/lib/crisis/mapFocus';
 import {
-  clearMapDraftVersioned, crisisError, loadMap, loadMapDraftVersioned, saveCharacter, saveMapDraftVersioned, saveUnit,
+  clearMapDraftVersioned, crisisError, loadMap, loadMapDraftVersioned, saveCharacter, saveMapDraftVersioned, saveUnit, uploadCrisisImage,
 } from '@/lib/crisis/api';
+import { customTypeOf, unitPictureOf } from '@/lib/crisis/unitTypes';
 import { UserFacingError } from '@/lib/friendlyError';
 import { deleteUnitChecked } from '@/lib/crisis/mapApi';
 import {
@@ -40,13 +41,15 @@ import { ZONE_NO_TYPE_COLOR } from '@/lib/crisis/zones';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { Btn, CK, Segmented, cabinetTint } from '../../crisisKit';
 import { mayEditCharacters } from '../character/characterStatus';
-import { drawFog, type FogHoles } from './fog';
+import { distToRingPx, drawFog, sightRingPx, type FogHoles } from './fog';
 import { createMapAnimator, diffMapData, mixHex, prefersReducedMotion, pulseToken, type GrowItem, type PendingAnim } from './mapAnimate';
 import { createCharGlider, useCharGlide } from './charGlide';
 import { charAsMover, type MoveLook } from './charMoveArrow';
 import { mergeDrafts } from './draftMerge';
 import { FLY_MS, type FocusRequest } from './mapFocusFly';
 import { freehandCorners, type FreePt } from './freehand';
+import { TIDY_KM, absorbIntoCountry, areaClaimOthers, snapToNeighbours, cleanTolFor, tidyAreaClaim } from './geomClean';
+import { useShapeMover } from './shapeMove';
 import { SIGHT_MAX_KM, kmFromPointer, kmText, sightHandleAt, sightKmOf, sightRing } from './sight';
 import {
   addCityLayers, createCityLabels, fillCities, loadCities, setCitiesVisible, type City,
@@ -83,6 +86,8 @@ interface Draft {
   kind: 'area' | 'zone';
   editId?: string;
   phase: 'draw' | 'refine';
+  /** A zone whose shape has several pieces or holes: its details can be edited but not its outline (the Move handle and corners are off). */
+  infoOnly?: boolean;
   points: LngLat[];
   /** The point lists before each change made in the refine step, newest last (what Undo steps back through). */
   trail: LngLat[][];
@@ -173,10 +178,11 @@ function whenStyleReady(map: MLMap, fn: () => void): void {
 function round5(n: number): number { return Math.round(n * 1e5) / 1e5; }
 
 /** The new-territory preview: filled and outlined in the owner's colours, exactly like that cabinet's countries. */
-function draftFc(pts: LngLat[], color: string | null): FeatureCollection {
+function draftFc(pts: LngLat[], color: string | null, open = false): FeatureCollection {
   if (pts.length < 2) return emptyFc;
   const props = color ? { tint: cabinetTint(color, 0.27), edge: cabinetTint(color, 0.95) } : {};
-  const f: Feature = pts.length >= 3
+  // While the outline is being drawn it is an open line (it is not joined back to the start); letting go closes it.
+  const f: Feature = pts.length >= 3 && !open
     ? { type: 'Feature', properties: props, geometry: { type: 'Polygon', coordinates: [[...pts, pts[0]]] } }
     : { type: 'Feature', properties: props, geometry: { type: 'LineString', coordinates: pts } };
   return { type: 'FeatureCollection', features: [f] };
@@ -249,7 +255,7 @@ function renameLocalIds(d: MapData, shapeIds: Map<string, string>, unitIds: Map<
 /** The saved row of a unit, as the database takes it (for putting an edit back). */
 const unitRow = (u: MapUnit) => ({
   name: u.name, kind: u.kind, strength: u.strength, owner_cabinet_id: u.owner_cabinet_id, note: u.note, revealed_to: u.revealed_to,
-  sight_km: u.sight_km ?? null,
+  sight_km: u.sight_km ?? null, custom_type: u.custom_type ?? null, picture_url: u.picture_url ?? null, details: u.details ?? null,
 });
 
 /** A unit as a set adds it (for putting a removed one back, or adding a new one). */
@@ -449,6 +455,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
   );
 
   const zoneTypes = settings.zoneTypes;
+  const customTypes = settings.customUnitTypes;
   const zoneTypeById = useMemo(() => new Map(zoneTypes.map((t) => [t.id, t])), [zoneTypes]);
   const zones = useMemo(() => shownShapes.filter((s) => s.kind === 'zone'), [shownShapes]);
 
@@ -462,6 +469,9 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
   const stageUnitId = stage?.unitId ?? null;
   useEffect(() => { if (stageKind === 'unit') setSelUnit(stageUnitId); }, [stageKind, stageUnitId]);
   const [addKind, setAddKind] = useState<UnitKind | null>(null);
+  /** The custom troop type being placed (a key into the crisis settings); only read while addKind is 'custom'. */
+  const [addCustomKey, setAddCustomKey] = useState<string | null>(null);
+  const addCustom = addKind === 'custom' && addCustomKey ? customTypes.find((t) => t.key === addCustomKey) ?? null : null;
   const [newUnit, setNewUnit] = useState<{ lng: number; lat: number } | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   /** The colour a zone being drawn takes (its type's, or the swatch picked). */
@@ -929,11 +939,19 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
       if (t.kind === 'area' && !shape) return false;
       const owner = t.kind === 'country' ? row?.owner_cabinet_id ?? null : shape?.owner_cabinet_id ?? null;
       const growth = knownGrowth ?? differenceM(next, prev);
-      const plan = planClaim(growth, owner, { id: t.kind === 'country' ? `c:${t.key}` : `a:${t.id}`, multi: next }, othersFor(t, d), !reset && !!owner && areaOf(growth) > AREA_EPS);
+      // A drawn area only ever cuts other areas: a country it lies on keeps its own outline and colour.
+      const allOthers = othersFor(t, d);
+      const others = t.kind === 'area' ? areaClaimOthers(allOthers, owner) : allOthers;
+      let plan = planClaim(growth, owner, { id: t.kind === 'country' ? `c:${t.key}` : `a:${t.id}`, multi: next }, others, !reset && !!owner && areaOf(growth) > AREA_EPS);
+      if (t.kind === 'area') plan = tidyAreaClaim(plan, owner, others, null);
       gone = writePlan(plan, d, set, back);
       if (t.kind === 'country') {
         set.regions.push({ key: t.key, owner_cabinet_id: owner, geometry: reset ? null : toGeometry(plan.land) });
         back.regions.push({ key: t.key, owner_cabinet_id: owner, geometry: row?.geometry ?? null });
+      } else if (shape && !plan.land.length) {
+        // The area now lies wholly inside a country its cabinet holds: nothing of it is left to draw.
+        set.removeShapes.push(t.id);
+        back.addShapes.push(shape);
       } else if (shape) {
         set.shapes.push({ id: t.id, geometry: areaGeometry(plan.land) });
         back.shapes.push({ id: t.id, geometry: shape.geometry });
@@ -997,6 +1015,16 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
       if (current === owner) return;
       set.regions.push({ key: t.key, owner_cabinet_id: owner, geometry: row?.geometry ?? null });
       back.regions.push({ key: t.key, owner_cabinet_id: current, geometry: row?.geometry ?? null });
+      // Handing a whole country to a cabinet takes in that cabinet's own drawn areas inside it, so the country shows one
+      // colour with no overlap. Another cabinet's areas stay (that is occupation).
+      const outline = storedOutline(d, t.key) ?? baseRef.current.get(t.key)?.multi ?? [];
+      if (owner && outline.length) {
+        try {
+          const areas = d.shapes.filter((x) => x.kind === 'area').map((x) => ({ id: x.id, owner: x.owner_cabinet_id, multi: toMulti(x.geometry) }));
+          const cuts = absorbIntoCountry(areas, owner, outline, TIDY_KM);
+          if (cuts.length) writePlan({ land: [], absorbed: [], cuts, gained: [] }, d, set, back);
+        } catch { /* the country is still handed over; the areas stay as they were */ }
+      }
     } else {
       const shape = d.shapes.find((s) => s.id === t.id);
       if (!shape || shape.owner_cabinet_id === owner) return;
@@ -1004,7 +1032,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
       back.owners.push({ id: t.id, owner_cabinet_id: shape.owner_cabinet_id });
     }
     void applyEdits(set, `You gave ${name} to ${who}`, () => back);
-  }, [cabById, nameOf, applyEdits]);
+  }, [cabById, nameOf, applyEdits, writePlan]);
 
   /**
    * Saves a newly drawn territory. It joins the territory of its cabinet that it touches or overlaps (building on
@@ -1019,14 +1047,20 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
     let text = 'You drew new territory';
     let grown = false;
     try {
-      const multi = clean(toMulti({ type: 'Polygon', coordinates: [[...dr.points, dr.points[0]]] }));
+      let multi = clean(toMulti({ type: 'Polygon', coordinates: [[...dr.points, dr.points[0]]] }));
       if (areaOf(multi) <= AREA_EPS) { notifyErr('That shape has no area. Draw at least three points apart.', 'crisis-map'); return; }
-      const others = othersFor(null, d);
-      const target = pickClaimTarget(multi, dr.owner, others);
+      const allOthers = othersFor(null, d);
+      // A corner a hair away from the cabinet's own land is snapped onto it, so no gap is left between them.
+      if (dr.owner) multi = snapToNeighbours(multi, allOthers.filter((o) => o.owner === dr.owner).map((o) => o.multi), cleanTolFor(TIDY_KM));
+      const target = pickClaimTarget(multi, dr.owner, allOthers);
+      // An area never cuts a country: it lies on top of it. Only extending the cabinet's own country moves a country's border.
+      const others = target?.kind === 'country' ? allOthers : areaClaimOthers(allOthers, dr.owner);
       const growth = target ? differenceM(multi, target.multi) : multi;
       const holder = dr.owner ? cabById.get(dr.owner)?.name ?? 'that cabinet' : 'nobody';
       if (target && areaOf(growth) <= AREA_EPS) { notifyErr(`That land already belongs to ${holder}.`, 'crisis-map'); return; }
-      const plan = planClaim(growth, dr.owner, target ? { id: target.id, multi: target.multi } : null, others, !!dr.owner);
+      let plan = planClaim(growth, dr.owner, target ? { id: target.id, multi: target.multi } : null, others, !!dr.owner);
+      if (target?.kind !== 'country') plan = tidyAreaClaim(plan, dr.owner, others, null);
+      if (!plan.land.length && !target) { notifyErr(`That land already belongs to ${holder}.`, 'crisis-map'); return; }
       if (!plan.land.length) { notifyErr('That shape has no land of its own to claim. Draw it over land nobody holds.', 'crisis-map'); return; }
       gone = writePlan(plan, d, set, back);
       if (target) {
@@ -1098,12 +1132,14 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
   const editZone = useCallback((id: string) => {
     const z = dataRef.current?.shapes.find((x) => x.id === id && x.kind === 'zone');
     if (!z) return;
+    // A zone of one plain ring has corners to drag. One with several pieces or holes (a freehand loop can make one) opens
+    // with everything else editable (name, type, who controls it, who sees it) and its outline left as it is.
     const rings = z.geometry.type === 'Polygon' ? (z.geometry.coordinates as unknown[]).length : 0;
     const pts = shapePoints(z.geometry);
-    if (rings !== 1 || pts.length < MIN_POINTS) { notifyErr('This zone has a shape that cannot be reshaped here. Delete it and draw it again.', 'crisis-map'); return; }
+    if (pts.length < MIN_POINTS) { notifyErr('This zone has no outline to edit. Delete it and draw it again.', 'crisis-map'); return; }
     setSelZone(null);
     setZoneColor(zoneColorOf(z, zoneTypes));
-    setDraft({ sid: new Date().getTime(), kind: 'zone', editId: id, phase: 'refine', points: pts, owner: null, ownerChosen: true, trail: [] });
+    setDraft({ sid: new Date().getTime(), kind: 'zone', editId: id, phase: 'refine', points: pts, owner: null, ownerChosen: true, trail: [], ...(rings === 1 ? {} : { infoOnly: true }) });
   }, [zoneTypes]);
 
   const submitZone = useCallback((dr: Draft, f: ZoneForm) => {
@@ -1115,7 +1151,8 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
     try {
       const multi = clean(toMulti({ type: 'Polygon', coordinates: [[...dr.points, dr.points[0]]] }));
       if (areaOf(multi) <= AREA_EPS) { notifyErr('That shape has no area. Draw at least three points apart.', 'crisis-map'); return; }
-      geometry = areaGeometry(multi);
+      // A zone whose outline cannot be edited here keeps the outline it has.
+      geometry = dr.infoOnly && dr.editId ? d.shapes.find((x) => x.id === dr.editId)?.geometry ?? areaGeometry(multi) : areaGeometry(multi);
     } catch {
       notifyErr('That shape could not be worked out. Try drawing it again.', 'crisis-map');
       return;
@@ -1163,6 +1200,16 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
     void applyEdits(set, `You removed the zone ${shape.label || ''}`.trim(), () => back, null, { fail: 'Could not remove the zone.' });
   }, [applyEdits]);
 
+  /** A zone carried somewhere else with its Move handle: one change, one undo step. */
+  const moveZone = useCallback((id: string, moved: Multi) => {
+    const z = dataRef.current?.shapes.find((x) => x.id === id && x.kind === 'zone');
+    if (!z || !moved.length) return;
+    const set = emptySet(); const back = emptySet();
+    set.shapes.push({ id, geometry: areaGeometry(moved) });
+    back.shapes.push({ id, geometry: z.geometry });
+    void applyEdits(set, `You moved the zone ${z.label?.trim() || ''}`.trim(), () => back, null, { fail: 'Could not move the zone.' });
+  }, [applyEdits]);
+
   // ── Give land, Paint and Erase ──
   // Drawn areas (and the countries one cabinet holds) as the clipper takes them. A brush or a province never changes a
   // country's outline: land of another cabinet's country is only covered by an area on top, and a country the painter
@@ -1183,7 +1230,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
   }, []);
 
   /** Adds land to a cabinet: it joins the cabinet's own area it touches (else becomes a new one) and is cut out of other areas. */
-  const paintLand = useCallback((stroke: Multi, owner: string, label: string | null, text: string) => {
+  const paintLand = useCallback((stroke: Multi, owner: string, label: string | null, text: string, km = BRUSH_DEFAULT_KM) => {
     const d = dataRef.current;
     if (!d) return;
     const holder = cabById.get(owner)?.name ?? 'that cabinet';
@@ -1191,7 +1238,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
     let gone: string[] = [];
     let grown = false;
     try {
-      const res = planPaint(stroke, owner, areaTerrs(d), countryTerrsOf(d, owner));
+      const res = planPaint(stroke, owner, areaTerrs(d), countryTerrsOf(d, owner), km);
       if (res.nothing) { notifyErr(`That land already belongs to ${holder}.`, 'crisis-map'); return; }
       gone = writePlan(res.plan, d, set, back);
       if (res.target) {
@@ -1199,8 +1246,13 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
         const shape = d.shapes.find((x) => x.id === id);
         if (!shape) return;
         grown = true;
-        set.shapes.push({ id, geometry: areaGeometry(res.plan.land) });
-        back.shapes.push({ id, geometry: shape.geometry });
+        if (res.targetEmptied) {
+          set.removeShapes.push(id);
+          back.addShapes.push(shape);
+        } else {
+          set.shapes.push({ id, geometry: areaGeometry(res.plan.land) });
+          back.shapes.push({ id, geometry: shape.geometry });
+        }
       } else {
         set.addShapes.push({
           id: `new-b${new Date().getTime().toString(36)}${Math.random().toString(36).slice(2, 6)}`, crisis_id: ref.id, kind: 'area',
@@ -1215,14 +1267,14 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
   }, [ref.id, cabById, areaTerrs, countryTerrsOf, writePlan, applyEdits]);
 
   /** Takes land out of drawn areas (every one under it, or only `only`'s); an area left with nothing is removed. */
-  const eraseLand = useCallback((stroke: Multi, text: string, only: string | null, none: string) => {
+  const eraseLand = useCallback((stroke: Multi, text: string, only: string | null, none: string, km = BRUSH_DEFAULT_KM) => {
     const d = dataRef.current;
     if (!d) return;
     const set = emptySet(); const back = emptySet();
     let gone: string[] = [];
     try {
       const areas = areaTerrs(d).filter((a) => !only || a.owner === only);
-      const plan = planErase(stroke, areas);
+      const plan = planErase(stroke, areas, km);
       if (!plan.cuts.length) { notifyErr(none, 'crisis-map'); return; }
       gone = writePlan(plan, d, set, back);
     } catch {
@@ -1236,12 +1288,12 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
   const strokeDone = useCallback((mode: BrushMode, stroke: Multi) => {
     if (!(editable && canMap)) return;
     if (mode === 'erase') {
-      eraseLand(stroke, 'You erased land', null, 'There is no drawn land under the brush. Erase takes away painted and drawn land, not whole countries.');
+      eraseLand(stroke, 'You erased land', null, 'There is no drawn land under the brush. Erase takes away painted and drawn land, not whole countries.', brushKm);
       return;
     }
     if (!chipOwner) { notifyErr('Pick a cabinet to paint with, or use Erase to take land away.', 'crisis-map'); return; }
-    paintLand(stroke, chipOwner, null, `You painted land for ${cabById.get(chipOwner)?.name ?? 'a cabinet'}`);
-  }, [editable, canMap, chipOwner, cabById, eraseLand, paintLand]);
+    paintLand(stroke, chipOwner, null, `You painted land for ${cabById.get(chipOwner)?.name ?? 'a cabinet'}`, brushKm);
+  }, [editable, canMap, chipOwner, cabById, eraseLand, paintLand, brushKm]);
 
   /** Who controls a zone (null: nobody). */
   const setZoneController = useCallback((id: string, owner: string | null) => {
@@ -1285,9 +1337,10 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
           pv.multi, owner ? `You gave ${pv.name} back to nobody` : `You took ${pv.name} away from whoever held it`, owner,
           owner ? `${who} holds ${pv.name} as part of a whole country. Turn the Regions layer off and click the country to give it back.`
             : `${pv.name} is not drawn land. To take a whole country away, turn the Regions layer off and click the country.`,
+          TIDY_KM,
         );
       } else {
-        paintLand(pv.multi, owner, pv.name, `You gave ${pv.name} to ${who}`);
+        paintLand(pv.multi, owner, pv.name, `You gave ${pv.name} to ${who}`, TIDY_KM);
       }
       return;
     }
@@ -1358,6 +1411,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
       name: dd.name.trim(), kind: dd.kind, strength: dd.strength, owner_cabinet_id: dd.owner,
       note: dd.note.trim() ? dd.note.trim() : null, revealed_to: dd.revealed,
       ...(existing || dd.sight !== null ? { sight_km: dd.sight } : {}),
+      custom_type: dd.kind === 'custom' ? dd.customType : null, picture_url: dd.picture, details: dd.details.trim() ? dd.details.trim() : null,
     };
     // While changes wait to be sent, adding and editing a unit wait with the moves.
     if (!isStage && draftModeRef.current) {
@@ -1371,6 +1425,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
         if ((patch.note ?? null) !== (existing.note ?? null)) { c.note = patch.note; b.note = existing.note ?? null; }
         if ([...patch.revealed_to].sort().join() !== [...existing.revealed_to].sort().join()) { c.revealed_to = patch.revealed_to; b.revealed_to = existing.revealed_to; }
         if ('sight_km' in patch && (patch.sight_km ?? null) !== (existing.sight_km ?? null)) { c.sight_km = patch.sight_km ?? null; b.sight_km = existing.sight_km ?? null; }
+        for (const k of ['custom_type', 'picture_url', 'details'] as const) if ((patch[k] ?? null) !== (existing[k] ?? null)) { c[k] = patch[k] ?? null; b[k] = existing[k] ?? null; }
         if (Object.keys(c).length > 1) {
           set.units.push(c); back.units.push(b);
           await applyEdits(set, `You updated ${patch.name}`, () => back, null, { fail: 'Could not save the unit.' });
@@ -1705,10 +1760,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
     let best: string | null = null; let bestD = RING_HIT_PX;
     for (const c of h.circles) {
       if (!c.id) continue;
-      const p = map.project([c.lng, c.lat]);
-      const q = map.project([c.lng, Math.min(84, c.lat + c.km / 111.2)]);
-      const r = Math.max(8, Math.abs(p.y - q.y)) * 0.97;
-      const d = Math.abs(Math.hypot(pt.x - p.x, pt.y - p.y) - r);
+      const d = distToRingPx(sightRingPx(map, c), pt);
       if (d <= bestD) { bestD = d; best = c.id; }
     }
     return best;
@@ -1754,6 +1806,38 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
     ready: !!world, mapRef, setSource,
     mode: editable && canMap && (tool === 'paint' || tool === 'erase') ? tool : null,
     km: brushKm, color: chipColor, onStroke: strokeDone,
+  });
+
+  // Moving a whole shape: the Move handle on a selected area or zone (and the body of the selected shape in Select), or on
+  // a shape being drawn or reshaped. A zone moves at once; an area waits in its card for Save; a shape in hand moves its corners.
+  const moveDraftPts = draft && editable && canMap && draft.phase === 'refine' && !draft.infoOnly && draft.points.length >= MIN_POINTS ? draft.points : null;
+  const moveZoneRow = !draft && canZones && tool === 'select' ? selZoneRow : null;
+  const moveAreaOk = !draft && !moveZoneRow && canEditTerr && selTerr?.kind === 'area' && selValid;
+  const moveShape = useMemo<Multi | null>(() => {
+    if (compact || stageKind === 'unit') return null;
+    if (moveDraftPts) return [[[...moveDraftPts, moveDraftPts[0]]]];
+    if (moveZoneRow) return toMulti(moveZoneRow.geometry);
+    if (moveAreaOk && selMulti.length) return selMulti;
+    return null;
+  }, [compact, stageKind, moveDraftPts, moveZoneRow, moveAreaOk, selMulti]);
+  const mover = useShapeMover({
+    ready: !!world, mapRef, mlRef, shape: moveShape, body: true,
+    // A press on the selected area's outline reshapes it instead.
+    blocked: (e) => !!(moveAreaOk && mapRef.current && edgeAt(mapRef.current, selMulti, e.point, e.lngLat)),
+    preview: (moved) => {
+      if (moveDraftPts) { setSource(SRC_DRAFT, draftFc(moved ? (moved[0][0].slice(0, -1) as LngLat[]) : moveDraftPts, draftColor)); return; }
+      if (!moved) { resetEdit(); return; }
+      setSource(SRC_EDIT, multiFc(moved, moveAreaOk && selOwnerColor ? cabinetTint(selOwnerColor, 0.3) : null));
+    },
+    onMove: (moved) => {
+      if (moveDraftPts) {
+        const sid = draft?.sid; const pts = moved[0][0].slice(0, -1) as LngLat[];
+        setDraft((d) => (d && d.sid === sid ? withPoints(d, pts) : d));
+        return;
+      }
+      if (moveZoneRow) { moveZone(moveZoneRow.id, moved); return; }
+      if (selTerr?.kind === 'area') stageOutline(selTerr, moved);
+    },
   });
 
   // ── map events read the latest state through this ──
@@ -1842,6 +1926,8 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
         const map = mapRef.current;
         // Paint and Erase: press and drag makes a stroke (hold Shift to move the map instead).
         if (map && editable && canMap && !dragRef.current && !freeRef.current && brush.press(e)) return;
+        // A shape in hand, or the selected area or zone: pressing inside it carries it (the Move handle does the same).
+        if (map && editable && canMap && !dragRef.current && !freeRef.current && mover.press(e)) return;
         // Draw: press and drag draws an outline freehand (hold Shift to move the map instead).
         if (map && editable && canMap && !dragRef.current && !freeRef.current
           && (tool === 'draw' || (tool === 'zones' && draft?.phase === 'draw')) && (!draft || draft.phase === 'draw')) {
@@ -1891,6 +1977,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
         if (!map) return;
         if (sightCtl.current?.active) { sightCtl.current.move([e.lngLat.lng, e.lngLat.lat]); return; }
         if (brush.move(e)) return;
+        if (mover.move(e)) return;
         const fh = freeRef.current;
         if (fh) {
           const last = fh.pts[fh.pts.length - 1];
@@ -1900,7 +1987,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
               freeFrame.current = window.requestAnimationFrame(() => {
                 freeFrame.current = null;
                 const cur = freeRef.current;
-                if (cur) setSource(SRC_DRAFT, draftFc(cur.pts.map((p) => p.ll), draftColor));
+                if (cur) setSource(SRC_DRAFT, draftFc(cur.pts.map((p) => p.ll), draftColor, true));
               });
             }
           }
@@ -1945,12 +2032,13 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
         if (sightCtl.current?.active) { suppressClickUntil.current = performance.now() + 400; sightCtl.current.end(); return; }
         if (ringBegin.current) { ringBegin.current = null; suppressClickUntil.current = performance.now() + 400; return; }
         if (brush.release()) { suppressClickUntil.current = performance.now() + 400; return; }
+        if (mover.release()) { suppressClickUntil.current = performance.now() + 400; return; }
         const fh = freeRef.current;
         if (fh) {
           freeRef.current = null;
           if (freeFrame.current !== null) { window.cancelAnimationFrame(freeFrame.current); freeFrame.current = null; }
           const corners = freehandCorners(fh.pts);
-          setSource(SRC_DRAFT, draft ? draftFc(draft.points, draftColor) : emptyFc);
+          setSource(SRC_DRAFT, draft ? draftFc(draft.points, draftColor, draft.phase === 'draw') : emptyFc);
           if (fh.pts.length > 2) suppressClickUntil.current = performance.now() + 400;
           if (!corners) {
             if (fh.pts.length > 2) notifyErr('Draw a bigger shape, or click points one by one.', 'crisis-map');
@@ -2016,9 +2104,10 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
       brushDown: () => brush.isDown(),
       escape: () => {
         if (brush.cancel()) return true;
+        if (mover.cancel()) return true;
         if (freeRef.current) {
           freeRef.current = null;
-          setSource(SRC_DRAFT, draft ? draftFc(draft.points, draftColor) : emptyFc);
+          setSource(SRC_DRAFT, draft ? draftFc(draft.points, draftColor, draft.phase === 'draw') : emptyFc);
           return true;
         }
         if (dragRef.current) {
@@ -2331,7 +2420,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
 
   // ── shapes ──
   const shapeLabels = useRef(new Map<string, MLMarker>());
-  const editingZoneId = draft?.kind === 'zone' ? draft.editId ?? null : null;
+  const editingZoneId = draft?.kind === 'zone' && !draft.infoOnly ? draft.editId ?? null : null;
   useEffect(() => {
     const map = mapRef.current; const ml = mlRef.current;
     if (!world || !map || !ml) return;
@@ -2468,7 +2557,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
   // New territory preview, in its owner's colours.
   useEffect(() => {
     if (!world) return;
-    setSource(SRC_DRAFT, draft ? draftFc(draft.points, draftColor) : emptyFc);
+    setSource(SRC_DRAFT, draft && !draft.infoOnly ? draftFc(draft.points, draftColor, draft.phase === 'draw') : emptyFc);
   }, [world, draft, draftColor, setSource]);
 
   // Who a new shape belongs to: the cabinet whose land it touches, when it touches exactly one. Otherwise it asks.
@@ -2490,7 +2579,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
   const handles = useRef<MLMarker[]>([]);
   const dSid = draft?.sid ?? null;
   const dPhase = draft?.phase ?? null;
-  const dPoints = draft?.points ?? null;
+  const dPoints = draft && !draft.infoOnly ? draft.points : null;
   useEffect(() => {
     const map = mapRef.current; const ml = mlRef.current;
     if (!world || !map || !ml) return;
@@ -2506,7 +2595,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
       mk.on('drag', () => {
         const ll = mk.getLngLat();
         live[i] = [ll.lng, ll.lat];
-        setSource(SRC_DRAFT, draftFc(live, draftColor));
+        setSource(SRC_DRAFT, draftFc(live, draftColor, phase === 'draw'));
       });
       mk.on('dragend', () => {
         const ll = mk.getLngLat();
@@ -2648,13 +2737,17 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
       }
       m.marker.setDraggable(canDrag && (stageKind !== 'unit' || !stageUnitId || u.id === stageUnitId));
       const selected = u.id === selUnit;
-      const sig = `${u.kind}|${u.strength}|${color}|${selected}|${size}|${u.name}`;
+      const picture = unitPictureOf(u, customTypes);
+      // Seen only because it was revealed to the viewer: marked, so a unit inside their fog never looks like a leak.
+      const revealed = viewer && u.owner_cabinet_id !== viewer && u.revealed_to.includes(viewer)
+        ? (staff ? `Revealed to ${cabById.get(viewer)?.short ?? 'this side'}` : 'Revealed to you') : null;
+      const sig = `${u.kind}|${u.strength}|${color}|${selected}|${size}|${u.name}|${picture ?? ''}|${revealed ?? ''}`;
       if (m.sig !== sig) {
-        paintToken(m.el, { kind: u.kind, color, strength: u.strength, selected, size, name: u.name });
+        paintToken(m.el, { kind: u.kind, color, strength: u.strength, selected, size, name: u.name, picture, revealed });
         m.sig = sig;
       }
     }
-  }, [world, shownUnits, cabById, selUnit, canDrag, compact, stageKind, stageUnitId]);
+  }, [world, shownUnits, cabById, selUnit, canDrag, compact, stageKind, stageUnitId, customTypes, viewer, staff]);
 
   // ── animation of map changes that arrived from the server (see queueAnim) ──
   const animator = useMemo(() => createMapAnimator(() => mapRef.current), []);
@@ -3127,6 +3220,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
   const unitDraftOf = (u: MapUnit): UnitDraft => ({
     name: u.name, kind: u.kind, strength: u.strength, owner: u.owner_cabinet_id, note: u.note ?? '', revealed: u.revealed_to,
     sight: typeof u.sight_km === 'number' ? u.sight_km : null,
+    customType: u.custom_type ?? null, picture: u.picture_url ?? null, details: u.details ?? '',
   });
 
   let panel: ReactNode = null;
@@ -3138,6 +3232,8 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
           key={draft.sid} isNew={!draft.editId} phase={draft.phase} types={zoneTypes} cabinets={cabinets}
           initial={was ? zoneFormOf(was, zoneTypes) : { name: '', type: zoneTypes[0]?.id ?? null, color: ZONE_NO_TYPE_COLOR, description: '', vis: 'public', revealed: [], owner: null }}
           pointCount={draft.points.length} minPoints={MIN_POINTS} canUndo={draft.trail.length > 0} outlineDirty={draft.trail.length > 0} busy={busy}
+          infoOnly={draft.infoOnly}
+          onRedraw={() => setDraft({ ...draft, phase: 'draw', points: [], trail: [...draft.trail.slice(-49), draft.points] })}
           onColor={setZoneColor} onUndo={undoDraft} onFinish={() => setDraft({ ...draft, phase: 'refine' })}
           onSave={(f) => submitZone(draft, f)} onCancel={() => setDraft(null)}
           onDelete={draft.editId ? () => removeZone(draft.editId as string) : undefined}
@@ -3190,25 +3286,33 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
         panel = (
           <UnitEditor
             key="new-unit" isNew busy={busy} cabinets={cabinets}
-            initial={{ name: '', kind: addKind, strength: 1, owner: defaultOwner, note: '', revealed: [], sight: null }}
+            customTypes={customTypes} onUploadPicture={(f) => uploadCrisisImage(ref, f)}
+            initial={{
+              name: addCustom?.name ?? '', kind: addKind, strength: 1, owner: defaultOwner, note: '', revealed: [],
+              sight: typeof addCustom?.sight_km === 'number' ? addCustom.sight_km : null,
+              customType: addCustom?.key ?? null, picture: null, details: '',
+            }}
             onSubmit={(d) => { void submitUnit(d, null); }} onClose={() => changeTool('select')}
           />
         );
       } else if (addKind) {
-        panel = <PlaceUnitPanel kind={addKind} onBack={() => setAddKind(null)} onClose={() => changeTool('select')} />;
+        panel = <PlaceUnitPanel kind={addKind} custom={addCustom} onBack={() => setAddKind(null)} onClose={() => changeTool('select')} />;
       } else {
-        panel = <KindPicker onPick={(k) => { setNewUnit(null); setAddKind(k); }} onClose={() => changeTool('select')} />;
+        panel = <KindPicker customTypes={customTypes} onPick={(k, t) => { setNewUnit(null); setAddCustomKey(t?.key ?? null); setAddKind(k); }} onClose={() => changeTool('select')} />;
       }
     } else if (selUnitRow) {
       const u = selUnitRow;
       panel = unitEditing ? (
         <UnitEditor
-          key={`${u.id}:${u.name}:${u.kind}:${u.strength}:${u.owner_cabinet_id}:${u.revealed_to.join()}:${u.note}:${u.sight_km ?? ''}`}
-          isNew={false} busy={busy} cabinets={cabinets} initial={unitDraftOf(u)}
+          key={`${u.id}:${u.name}:${u.kind}:${u.strength}:${u.owner_cabinet_id}:${u.revealed_to.join()}:${u.note}:${u.sight_km ?? ''}:${u.custom_type ?? ''}:${u.picture_url ?? ''}:${u.details ?? ''}`}
+          isNew={false} busy={busy} cabinets={cabinets} initial={unitDraftOf(u)} customTypes={customTypes} onUploadPicture={(f) => uploadCrisisImage(ref, f)}
           onSubmit={(d) => { void submitUnit(d, u); }} onDelete={() => { void removeUnit(u); }} onClose={() => setSelUnit(null)}
         />
       ) : (
-        <UnitViewer key={u.id} unit={u} cabinets={cabinets} onClose={() => setSelUnit(null)} />
+        <UnitViewer
+          key={u.id} unit={u} cabinets={cabinets} customTypes={customTypes} onClose={() => setSelUnit(null)}
+          revealed={viewer && u.owner_cabinet_id !== viewer && u.revealed_to.includes(viewer) ? (staff ? `Revealed to ${cabById.get(viewer)?.short ?? 'this side'}` : 'Revealed to you') : null}
+        />
       );
     } else if (selCharRow) {
       panel = (
@@ -3250,15 +3354,15 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
   }, [zonesOn, zones, zoneTypes]);
 
   const hint = compact ? null
-    : tool === 'unit' && addKind && !newUnit ? `Click the map to place the ${KIND_META[addKind].label.toLowerCase()}.`
+    : tool === 'unit' && addKind && !newUnit ? `Click the map to place the ${(addCustom ? addCustom.name : KIND_META[addKind].label).toLowerCase()}.`
       : draft ? null
       : sightUnit && canUnits && tool === 'select' ? 'Press anywhere on the dashed ring and drag, or drag its round handle, to change how far it sees.'
-        : canEditTerr && selTerr && selValid ? (selDetailed ? 'Press on the red outline and drag to bend the border, then save.' : 'Drag a corner or a small dot on a side to reshape it, then save.')
+        : canEditTerr && selTerr && selValid ? (selDetailed ? 'Press on the red outline and drag to bend the border, then save.' : 'Drag a corner or a small dot on a side to reshape it, then save.') + (selTerr.kind === 'area' ? ' Drag the Move handle, or the territory itself, to carry all of it.' : '')
           : null;
 
   const pendingUnit = pendingMove ? rawData?.units.find((u) => u.id === pendingMove.id) ?? null : null;
   const compactInfo = compact && selUnitRow
-    ? `${selUnitRow.name} · ${KIND_META[selUnitRow.kind].label} · ${fmtAmount(selUnitRow.strength)}`
+    ? `${selUnitRow.name} · ${customTypeOf(selUnitRow, customTypes)?.name ?? KIND_META[selUnitRow.kind].label} · ${fmtAmount(selUnitRow.strength)}`
     : null;
 
   const viewControl = staff && !isStage ? (
@@ -3453,6 +3557,9 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
             {cabinets.map((c) => <span key={c.id}><i style={{ background: c.color }} />{c.name}</span>)}
             {legendZoneTypes.map((t) => <span key={t.id} title={t.description || undefined}><i className="wm-zsw" style={{ background: `${t.color}33`, borderColor: t.color }} />{t.name}</span>)}
             {showRings && !compact && <span title="Spies are never spotted, even inside a sight range."><i style={{ border: `1.5px dashed ${CK.red}`, background: 'transparent' }} />Sight range (spies stay hidden)</span>}
+            {viewer && !compact && shownUnits.some((u) => u.owner_cabinet_id !== viewer && u.revealed_to.includes(viewer)) && (
+              <span title="These units were shown to this side by the crisis team. They are not in its sight range."><i style={{ background: '#EED98A', border: `1.5px solid ${CK.forest}` }} />Revealed to {staff ? viewerCabinet?.short ?? 'this side' : 'you'}</span>
+            )}
             {compactInfo && <b style={{ color: CK.ink }}>{compactInfo}</b>}
           </div>
           {!compact && !isStage && <div>{last ? `Last change ${clock(last.at)} · ${last.text}` : staff ? 'No changes yet this visit' : 'Updates live'}</div>}

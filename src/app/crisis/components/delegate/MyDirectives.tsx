@@ -4,7 +4,7 @@
 // corner (as on the organiser Live Status card) with the kind as a small tag beneath it; the outcome (or
 // the status while there is no answer) is a coloured tag that sticks out on the very top edge. Small
 // beneath the title: when the reply came in, then the first lines of the reply (or of the directive).
-// A click opens the conversation.
+// A click opens the conversation, where the author can also edit or withdraw it in place while nobody has answered it.
 
 import { useState } from 'react';
 import { Clock, Undo2, Pencil } from 'lucide-react';
@@ -83,7 +83,7 @@ function DirectiveCard({ d, author, onOpen }: { d: Directive; author: PersonRef;
 }
 
 export default function MyDirectives({
-  cref, directives, notes, coauthors, personOf, memberName, myMemberId, onChanged, onSendAgain, onEditReturned, onEditOwn,
+  cref, directives, notes, coauthors, personOf, memberName, myMemberId, onChanged, onSendAgain, onEditReturned,
 }: {
   cref: CrisisRef;
   directives: Directive[] | null;
@@ -97,8 +97,6 @@ export default function MyDirectives({
   onSendAgain?: (d: Directive) => void;
   /** Open a directive the chair asked changes for in the send form, in edit mode. */
   onEditReturned?: (d: Directive) => void;
-  /** Open a directive nobody has answered yet in the send form, to change it. */
-  onEditOwn?: (d: Directive) => void;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
   const returned = (directives ?? []).filter((d) => d.status === 'changes_requested' && d.author_member_id === myMemberId && !!myMemberId);
@@ -152,7 +150,6 @@ export default function MyDirectives({
           onChanged={onChanged}
           onClose={() => setOpenId(null)}
           onSendAgain={onSendAgain ? () => { setOpenId(null); onSendAgain(openOne); } : undefined}
-          onEdit={onEditOwn ? () => { setOpenId(null); onEditOwn(openOne); } : undefined}
         />
       )}
     </section>

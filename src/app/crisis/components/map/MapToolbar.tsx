@@ -107,9 +107,9 @@ function hintFor(p: MapToolbarProps, ownerName: string): string {
     case 'erase':
       return 'Press and drag to erase drawn and painted land, whoever holds it. Whole countries stay as they are: use Give land for those. [ and ] change the brush size.';
     case 'draw':
-      return `Press and drag to draw an outline, or click points one by one. The land is ${p.owner ? `${ownerName}'s` : 'nobody\'s'} unless you change it before saving.`;
+      return `Press and drag to draw an outline: it stays open while you draw and letting go closes it. Or click points one by one. The land is ${p.owner ? `${ownerName}'s` : 'nobody\'s'} unless you change it before saving.`;
     case 'zones':
-      return 'Click a zone to reshape it, or press Draw a new zone. A zone never changes who holds the land. Give land hands a zone to a cabinet.';
+      return 'Click a zone to edit it: its details, its corners, or the Move handle to carry all of it. Or press Draw a new zone, then press and drag to draw it freehand. A zone never changes who holds the land.';
     case 'unit':
       return 'Choose a kind of unit, then click the map where it should go.';
     default:
