@@ -15,7 +15,7 @@ export const CHAIR_SEND_BACK_WORD = 'Sent back by your chair';
 
 /** True for a directive its chair sent back (never a real denial). */
 export function isChairSendBack(d: Pick<Directive, 'status' | 'reply'>): boolean {
-  return d.status === 'answered' && (d.reply ?? '').trim() === CHAIR_SEND_BACK_REPLY;
+  return d.status === 'answered' && (d.reply ?? '').trim().startsWith(CHAIR_SEND_BACK_REPLY);
 }
 
 /** A real denial: the backroom said no (a chair's send-back does not count). */

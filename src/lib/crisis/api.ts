@@ -272,6 +272,28 @@ export async function reviewDirectiveAsChair(ref: CrisisRef, directiveId: string
   return res.data === true;
 }
 
+/** The chair asks for changes on a waiting cabinet directive (docs/crisis/sql/028): it goes back to its author as a draft,
+ *  with the note. False means it was no longer waiting. Reject is reviewDirectiveAsChair(..., false). */
+export async function requestDirectiveChanges(ref: CrisisRef, directiveId: string, note?: string | null): Promise<boolean> {
+  const client = await c(ref);
+  const res = await client.rpc('crisis_chair_request_changes', { p_directive: directiveId, p_note: note?.trim() ? note.trim() : null });
+  if (res.error) throw new UserFacingError(crisisError(res.error, 'Could not send it back. Try again.'));
+  return res.data === true;
+}
+
+export type ResendResult =
+  | { ok: true; id: string; awaiting_chair: boolean }
+  | { ok: false; reason: 'not_returned' }
+  | { ok: false; reason: 'paused'; note?: string | null }
+  | { ok: false; reason: 'too_long'; limit: number };
+
+/** The author sends a directive the chair returned (status changes_requested) again, edited. It keeps its number. */
+export async function resendDirective(ref: CrisisRef, directiveId: string, d: Pick<DirectiveDraft, 'title' | 'body' | 'themes' | 'receiver' | 'covert'>): Promise<ResendResult> {
+  const client = await c(ref);
+  const res = await client.rpc('crisis_resend_directive', { p_directive: directiveId, p: d });
+  return must(res, 'Could not send the directive. Your text is kept, try again.') as ResendResult;
+}
+
 /** Claim for yourself (memberId omitted) or hand to another staff member. */
 export async function assignDirective(ref: CrisisRef, directiveId: string, memberId?: string | null): Promise<void> {
   const client = await c(ref);

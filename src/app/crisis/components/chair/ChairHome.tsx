@@ -1,21 +1,26 @@
 'use client';
-// Gavelling Crisis: the chair's home, "Front Room". The live chair console, the in-world date,
-// the news, the directives the chair may read and the cabinet's resources.
+// Gavelling Crisis: the chair's home, "Front Room". First the cabinet directives waiting for the chair's decision, then
+// the meeting requests, then the live chair console, the cabinet's meetings, resources, the news and the directive list.
 
 import { dirNumber } from '@/lib/crisis/format';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Boxes, CalendarClock, MonitorPlay, Newspaper, ScrollText } from 'lucide-react';
-import { crisisError, listDirectives, loadResources, type CrisisRef } from '@/lib/crisis/api';
+import { Boxes, CalendarCheck, CalendarClock, ChevronRight, MonitorPlay, Newspaper, ScrollText } from 'lucide-react';
+import { crisisError, listDirectives, listMeetings, loadResources, type CrisisRef } from '@/lib/crisis/api';
 import { getCrisisClient } from '@/lib/crisis/client';
 import { useCrisisLive } from '@/lib/crisis/live';
-import { KIND_LABEL, type Directive, type Resource, type ResourceType } from '@/lib/crisis/types';
-import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
+import { meetingInProgress } from '@/lib/crisis/meetings';
+import { useClockOverlay } from '@/lib/crisis/meetingClockStore';
+import { KIND_LABEL, type Directive, type Meeting, type Resource, type ResourceType } from '@/lib/crisis/types';
+import { serverNow } from '@/lib/serverClock';
+import { crisisBase, useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { BigCount, Card, CardTitle, CK, scenarioLabel, Skeleton } from '../../crisisKit';
 import { StatusLine, whenLabel } from '../delegate/directiveUi';
 import ChairApproval from './ChairApproval';
 import { CharacterName } from '../character/CharacterProfileHost';
-import MeetingRequestsStrip from '../meetings/MeetingRequestsStrip';
+import MeetingHistory from '../meetings/MeetingHistory';
+import MeetingRequestsStrip, { useMeetingPeople } from '../meetings/MeetingRequestsStrip';
+import StaffMeetingCard from '../meetings/StaffMeetingCard';
 import { useCrisisNews } from '../news/useCrisisNews';
 import { plainText } from '../directives/attachedImage';
 import { CabinetDirectivesList, CrisisNewsList } from '../command/cabinetFeeds';
@@ -46,6 +51,77 @@ async function loadRooms(ref: CrisisRef, cabinets: Array<{ id: string; name: str
     const room = link?.session_id ? rooms.get(link.session_id) : undefined;
     return { cabinetId: c.id, name: c.name, code: room?.code ?? link?.session_code ?? null, chairPassword: room?.chairPassword ?? null };
   });
+}
+
+/** The cabinet's meetings on the Front Room: approved ones (the one running first, with its clock) and, collapsed, what was held.
+ *  Requests still waiting for a yes or no are the strip above. A chair sees these and may run the clock; the backroom decides. */
+function ChairMeetings() {
+  const { ref, core, cabinetId } = useCrisis();
+  const people = useMeetingPeople(ref, true);
+  const [fetched, setFetched] = useState<Meeting[] | null>(null);
+  const meetings = useClockOverlay(fetched);
+  const [now, setNow] = useState(() => serverNow());
+  const seq = useRef(0);
+
+  const load = useCallback(async () => {
+    const mine = ++seq.current;
+    try { const r = await listMeetings(ref); if (mine === seq.current) setFetched(r); }
+    catch { /* a failed re-read keeps what is on screen; the next ping or poll tries again */ }
+  }, [ref]);
+  useEffect(() => {
+    const t = window.setTimeout(() => { void load(); }, 0);
+    const tick = window.setInterval(() => setNow(serverNow()), 30_000);
+    return () => { window.clearTimeout(t); window.clearInterval(tick); };
+  }, [load]);
+  useCrisisLive(ref.id, ['crisis_meetings'], () => { void load(); });
+
+  // Only meetings that involve a character of this cabinet.
+  const mine = useMemo(() => (meetings ?? []).filter((m) => {
+    if (!cabinetId) return true;
+    const ids = [...m.character_ids, ...(m.requested_by_character ? [m.requested_by_character] : [])];
+    return ids.some((id) => (people.get(id)?.cabinet_id ?? core.characters.find((c) => c.id === id)?.cabinet_id) === cabinetId);
+  }), [meetings, cabinetId, people, core.characters]);
+  const approved = useMemo(
+    () => mine.filter((m) => m.status === 'approved').sort((x, y) => Number(meetingInProgress(y)) - Number(meetingInProgress(x)) || new Date(y.decided_at ?? y.created_at).getTime() - new Date(x.decided_at ?? x.created_at).getTime()),
+    [mine],
+  );
+  const past = useMemo(() => mine.filter((m) => m.status !== 'pending' && m.status !== 'approved'), [mine]);
+  const running = approved.filter(meetingInProgress).length;
+
+  return (
+    <Card warm>
+      <CardTitle
+        icon={<CalendarCheck size={18} strokeWidth={1.5} />}
+        sub="Approved meetings, and what was held."
+        right={
+          <Link
+            href={`${crisisBase(ref)}/meetings`}
+            className="inline-flex items-center gap-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+            style={{ fontSize: 13, fontWeight: 800, color: CK.forest, textDecoration: 'underline' }}
+          >
+            All meetings<ChevronRight size={14} strokeWidth={1.6} aria-hidden />
+          </Link>
+        }
+      >
+        Meetings
+      </CardTitle>
+      {meetings === null ? <Skeleton h={90} r={18} /> : (
+        <>
+          {approved.length > 0 && (
+            <p className="flex items-baseline gap-2" style={{ margin: 0 }}>
+              <b style={{ fontSize: 24, lineHeight: 1, fontVariantNumeric: 'tabular-nums', color: CK.ok }}>{approved.length}</b>
+              <span style={{ fontSize: 13, fontWeight: 700, color: CK.inkSoft }}>approved{running > 0 ? `, ${running} running now` : ''}</span>
+            </p>
+          )}
+          {approved.length === 0 && <p style={{ margin: 0, fontSize: 13.5, color: CK.inkSoft }}>No meetings are approved yet.</p>}
+          {approved.map((m) => (
+            <StaffMeetingCard key={m.id} m={m} refx={ref} people={people} cabinets={core.cabinets} members={core.members} canAct={false} canClock onChanged={() => void load()} now={now} />
+          ))}
+          <MeetingHistory meetings={past} people={people} now={now} />
+        </>
+      )}
+    </Card>
+  );
 }
 
 export default function ChairHome() {
@@ -107,8 +183,6 @@ export default function ChairHome() {
         {error && <p role="status" style={{ margin: '6px 0 0', fontSize: 13, color: CK.danger }}>{error}</p>}
       </header>
 
-      <MeetingRequestsStrip bottomGap={16} />
-
       <div style={{ marginBottom: 16 }}>
         <ChairApproval
           cref={ref}
@@ -120,6 +194,8 @@ export default function ChairHome() {
           onChanged={() => { void readDirectives(); }}
         />
       </div>
+
+      <MeetingRequestsStrip bottomGap={16} />
 
       <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3 items-start">
         <div className="grid gap-4">
@@ -150,6 +226,8 @@ export default function ChairHome() {
               </div>
             )}
           </Card>
+
+          <ChairMeetings />
 
           <Card>
             <CardTitle icon={<Boxes size={18} strokeWidth={1.5} />}>Cabinet Resources</CardTitle>

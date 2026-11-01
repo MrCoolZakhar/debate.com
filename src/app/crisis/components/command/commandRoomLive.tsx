@@ -7,16 +7,54 @@
 //   useNowTick            the one shared 1 s tick, so countdowns move without any write.
 // The clock reads the DATABASE clock (serverNow, src/lib/serverClock.ts) at each tick. Nothing here writes.
 
-import { useEffect } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { CircleFlag } from '@/components/CircleFlag';
 import { ensureServerClock, serverNow } from '@/lib/serverClock';
 import type { LiveCommittee } from '@/app/manage/[slug]/live/LiveModals';
 import { AMBER_INK, GREEN_INK, SOFT, nowPlaying, type NowPlaying } from '@/app/manage/[slug]/live/cardModel';
 import { useNowTick } from '@/app/manage/[slug]/live/PhaseVariants';
-import { CK } from '../../crisisKit';
+import type { Character } from '@/lib/crisis/types';
+import { Avatar, CK } from '../../crisisKit';
+import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 
 const toneInk = (t: NowPlaying['tone']) => (t === 'live' ? GREEN_INK : t === 'warn' ? AMBER_INK : SOFT);
 const toneDot = (t: NowPlaying['tone']) => (t === 'live' ? '#3D7A52' : t === 'warn' ? '#B6871F' : '#9A9084');
+
+// In a crisis room the seats are CHARACTER names, so a seat is drawn as the character's portrait (on the cabinet's colour when there
+// is no picture), never as a country flag. The match is by name, case and spaces ignored; one map per characters array.
+const seatKey = (name: string) => name.toLowerCase().replace(/\s+/g, '');
+const seatMaps = new WeakMap<Character[], Map<string, Character[]>>();
+function seatMapOf(characters: Character[]): Map<string, Character[]> {
+  let m = seatMaps.get(characters);
+  if (!m) {
+    m = new Map();
+    for (const c of characters) {
+      const k = seatKey(c.name);
+      const list = m.get(k);
+      if (list) list.push(c); else m.set(k, [c]);
+    }
+    seatMaps.set(characters, m);
+  }
+  return m;
+}
+
+/** The character who sits in a seat of that name (the one in `cabinetId` first), or null when the seat is not a character. */
+export function useSeatCharacter(name: string | null | undefined, cabinetId?: string | null): { char: Character; color: string } | null {
+  const { core } = useCrisis();
+  if (!name) return null;
+  const list = seatMapOf(core.characters).get(seatKey(name));
+  if (!list || list.length === 0) return null;
+  const char = (cabinetId && list.find((c) => c.cabinet_id === cabinetId)) || list[0];
+  const color = core.cabinets.find((c) => c.id === char.cabinet_id)?.color || CK.red;
+  return { char, color };
+}
+
+/** A seat as a round portrait. `fallback` (default: the organiser's country flag) is drawn only when no character has that name. */
+export function SeatPortrait({ name, size, cabinetId, fallback }: { name: string; size: number; cabinetId?: string | null; fallback?: ReactNode }) {
+  const seat = useSeatCharacter(name, cabinetId);
+  if (!seat) return <>{fallback ?? <CircleFlag country={name} size={size} decorative />}</>;
+  return <Avatar name={seat.char.name} src={seat.char.picture_url} size={size} color={seat.color} />;
+}
 
 /** The room's NowPlaying, recomputed every second from the stored anchors against the database clock. */
 export function useRoomNow(live: LiveCommittee | null): NowPlaying | null {
@@ -27,7 +65,7 @@ export function useRoomNow(live: LiveCommittee | null): NowPlaying | null {
 }
 
 /** The larger version at the top of the room pop-up (the organiser's NOW PLAYING panel, in crisis colours). */
-export function RoomStagePanel({ live }: { live: LiveCommittee }) {
+export function RoomStagePanel({ live, cabinetId }: { live: LiveCommittee; cabinetId?: string | null }) {
   const np = useRoomNow(live);
   if (!np) return null;
   const started = np.kind !== 'not-started';
@@ -39,7 +77,7 @@ export function RoomStagePanel({ live }: { live: LiveCommittee }) {
       </p>
       <div className="flex items-center justify-between" style={{ gap: 10 }}>
         <span className="inline-flex items-center" style={{ gap: 8, minWidth: 0 }}>
-          {started && np.flag && <CircleFlag country={np.flag} size={30} decorative />}
+          {started && np.flag && <SeatPortrait name={np.flag} size={30} cabinetId={cabinetId} />}
           <b style={{ fontSize: 19, color: np.dim ? SOFT : CK.ink, overflowWrap: 'anywhere' }}>{np.headline}</b>
         </span>
         {started && <b style={{ flex: 'none', fontSize: 24, fontVariantNumeric: 'tabular-nums', color: toneInk(np.tone) }}>{np.right}</b>}
@@ -55,7 +93,7 @@ export function RoomStagePanel({ live }: { live: LiveCommittee }) {
           <b>{np.next.label}:</b>
           {np.next.all.map((n, i) => (
             <span key={`${n}:${i}`} className="inline-flex items-center" style={{ gap: 4 }}>
-              <CircleFlag country={n} size={16} decorative /><span style={{ color: CK.ink, fontWeight: 600 }}>{n}</span>
+              <SeatPortrait name={n} size={18} cabinetId={cabinetId} /><span style={{ color: CK.ink, fontWeight: 600 }}>{n}</span>
             </span>
           ))}
         </p>

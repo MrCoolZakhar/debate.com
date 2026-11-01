@@ -146,7 +146,7 @@ export interface CharacterSecret {
 }
 
 export type DirectiveKind = 'personal' | 'joint' | 'committee' | 'press_release' | 'communique';
-export type DirectiveStatus = 'awaiting_chair' | 'queued' | 'claimed' | 'clarify' | 'answered' | 'withdrawn';
+export type DirectiveStatus = 'awaiting_chair' | 'changes_requested' | 'queued' | 'claimed' | 'clarify' | 'answered' | 'withdrawn';
 export type DirectiveOutcome = 'approved' | 'partial' | 'denied' | 'clarify' | 'later';
 
 export const KIND_LABEL: Record<DirectiveKind, string> = {

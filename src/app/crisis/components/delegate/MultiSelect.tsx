@@ -15,7 +15,7 @@ export interface MultiOption {
 
 interface Pos { left: number; width: number; top?: number; bottom?: number; maxHeight: number }
 
-export default function MultiSelect({ id, ariaLabel, options, value, onChange, placeholder, searchable, emptyText }: {
+export default function MultiSelect({ id, ariaLabel, options, value, onChange, placeholder, searchable, emptyText, iconsOnlyAfter }: {
   id?: string;
   ariaLabel: string;
   options: MultiOption[];
@@ -24,6 +24,8 @@ export default function MultiSelect({ id, ariaLabel, options, value, onChange, p
   placeholder: string;
   searchable?: boolean;
   emptyText?: string;
+  /** Opt in: with more than this many chosen, the trigger shows their icons only (names in the tooltip), so it never grows. */
+  iconsOnlyAfter?: number;
 }) {
   const trigger = useRef<HTMLButtonElement>(null);
   const pop = useRef<HTMLDivElement>(null);
@@ -93,7 +95,7 @@ export default function MultiSelect({ id, ariaLabel, options, value, onChange, p
         className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] flex items-center justify-between gap-2"
         style={{ ...fieldStyle, cursor: 'pointer', textAlign: 'left', minHeight: 44 }}
       >
-        <span className="flex flex-wrap items-center gap-x-3 gap-y-1 min-w-0">
+        <span className="flex flex-wrap items-center gap-x-3 gap-y-1 min-w-0" style={iconsOnlyAfter !== undefined && chosen.length > iconsOnlyAfter ? { columnGap: 10 } : undefined}>
           {chosen.length === 0 ? (
             <span style={{ color: CK.muted }}>{placeholder}</span>
           ) : chosen.some((o) => o.person) ? (
@@ -107,7 +109,11 @@ export default function MultiSelect({ id, ariaLabel, options, value, onChange, p
                 {chosen.map((o) => o.person?.name ?? o.label).join(', ')}
               </span>
             </>
-          ) : chosen.map((o) => (
+          ) : iconsOnlyAfter !== undefined && chosen.length > iconsOnlyAfter ? chosen.map((o) => (
+            <span key={o.value} role="img" title={o.label} aria-label={o.label} className="inline-flex items-center" style={{ lineHeight: 0 }}>
+              {o.icon ?? o.label}
+            </span>
+          )) : chosen.map((o) => (
             <span key={o.value} className="inline-flex items-center gap-1.5" style={{ fontWeight: 700, color: CK.forest, overflowWrap: 'anywhere' }}>
               {o.icon}{o.label}
             </span>

@@ -6,7 +6,7 @@ import { seatFitFontPx } from '@/lib/seatName';
 import type { CSSProperties, ReactNode } from 'react';
 import { UserRound } from 'lucide-react';
 import type { Cabinet, Member } from '@/lib/crisis/types';
-import { Avatar, CK, initialsOf } from '../../crisisKit';
+import { Avatar, CK, ThemeTag, initialsOf } from '../../crisisKit';
 import { CharacterName } from '../character/CharacterProfileHost';
 
 /** A cabinet's logo in a round near-white disc; with no logo, a disc in the cabinet colour with the short name's initials. */
@@ -102,4 +102,20 @@ export function NumberBadge({ n, color = CK.red, style }: { n: number; color?: s
       No. {n}
     </span>
   );
+}
+
+/** Themes as icons only, side by side on ONE line (never wraps). Each icon carries the theme's name as its title. */
+export function ThemeIcons({ themes, size = 'sm' }: { themes: string[]; size?: 'sm' | 'md' }) {
+  return (
+    <span className="inline-flex items-center" style={{ gap: 4, flexWrap: 'nowrap', flex: 'none' }}>
+      {themes.map((t) => <ThemeTag key={t} theme={t} size={size} iconOnly />)}
+    </span>
+  );
+}
+
+/** A directive's themes: up to `maxChips` as labelled chips; more than that, icons only on one line, so the layout never moves. */
+export function ThemeTags({ themes, size = 'sm', maxChips = 2 }: { themes: string[]; size?: 'sm' | 'md'; maxChips?: number }) {
+  if (themes.length === 0) return null;
+  if (themes.length > maxChips) return <ThemeIcons themes={themes} size={size} />;
+  return <>{themes.map((t) => <ThemeTag key={t} theme={t} size={size} />)}</>;
 }

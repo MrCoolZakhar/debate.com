@@ -20,6 +20,7 @@ import { CK, Btn } from '../../crisisKit';
 import { CrisisProvider, crisisBase, useCrisisGate, type CrisisContextValue } from './CrisisContext';
 import NewsPopup from '../../components/news/NewsPopup';
 import CabinetDirectivePrompt from '../../components/directives/CabinetDirectivePrompt';
+import ChairDirectivePrompt from '../../components/chair/ChairDirectivePrompt';
 import NotificationBell from '../../components/notifications/NotificationBell';
 import { CharacterProfileProvider } from '../../components/character/CharacterProfileHost';
 
@@ -97,7 +98,7 @@ function Rail({ v, items }: { v: CrisisContextValue; items: NavItem[] }) {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={v.conference.logo_url || '/committee-emblems/crisis.svg'} alt="" width={40} height={40} style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover' }} />
         </span>
-        <div style={{ opacity: open ? 1 : 0, transition: 'opacity 200ms ease 60ms', whiteSpace: 'nowrap', minWidth: 0 }}>
+        <div style={{ opacity: open ? 1 : 0, transition: 'opacity 200ms ease 60ms', whiteSpace: open ? 'normal' : 'nowrap', overflowWrap: 'anywhere', minWidth: 0 }}>
           <b style={{ display: 'block', fontSize: 15, fontWeight: 800, color: '#FFF4E6' }}>{v.core.crisis.name}</b>
           <span style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'rgba(255,232,214,0.7)' }}>
             {v.core.crisis.kind === 'joint' ? `Joint crisis · ${v.core.cabinets.length} cabinets` : 'Single cabinet'}
@@ -294,6 +295,7 @@ export default function CrisisLayout({ children }: { children: React.ReactNode }
         </main>
         <NewsPopup />
         <CabinetDirectivePrompt />
+        <ChairDirectivePrompt />
       </div>
       </CharacterProfileProvider>
     </CrisisProvider>

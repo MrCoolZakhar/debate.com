@@ -7,11 +7,11 @@
 // A click opens the conversation.
 
 import { useState } from 'react';
-import { Clock } from 'lucide-react';
+import { Clock, Undo2, Pencil } from 'lucide-react';
 import { dirNumber, isChairSendBack, timeAgo } from '@/lib/crisis/format';
 import type { Directive, DirectiveNote } from '@/lib/crisis/types';
 import type { CrisisRef } from '@/lib/crisis/api';
-import { Avatar, Card, CK, Skeleton } from '../../crisisKit';
+import { Avatar, Btn, Card, CK, Skeleton } from '../../crisisKit';
 import DirectiveDialog from './DirectiveDialog';
 import DirectiveDeepLink from '../notifications/DirectiveDeepLink';
 import { KIND_WORD, kindIcon, verdictOf } from './directiveUi';
@@ -83,7 +83,7 @@ function DirectiveCard({ d, author, onOpen }: { d: Directive; author: PersonRef;
 }
 
 export default function MyDirectives({
-  cref, directives, notes, coauthors, personOf, memberName, myMemberId, onChanged, onSendAgain,
+  cref, directives, notes, coauthors, personOf, memberName, myMemberId, onChanged, onSendAgain, onEditReturned,
 }: {
   cref: CrisisRef;
   directives: Directive[] | null;
@@ -95,14 +95,35 @@ export default function MyDirectives({
   onChanged: () => void;
   /** Copy a directive its chair sent back into the Send a Directive form. */
   onSendAgain?: (d: Directive) => void;
+  /** Open a directive the chair asked changes for in the send form, in edit mode. */
+  onEditReturned?: (d: Directive) => void;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
+  const returned = (directives ?? []).filter((d) => d.status === 'changes_requested' && d.author_member_id === myMemberId && !!myMemberId);
   const openOne = openId ? (directives ?? []).find((d) => d.id === openId) ?? null : null;
 
   return (
     <section aria-labelledby="my-directives-title">
       <DirectiveDeepLink onId={setOpenId} />
       <h2 id="my-directives-title" style={{ margin: '0 0 16px', fontSize: 17, fontWeight: 800, color: CK.ink }}>My Directives</h2>
+      {returned.length > 0 && onEditReturned && (
+        <div className="grid" style={{ gap: 12, marginBottom: 24 }}>
+          {returned.map((d) => (
+            <div key={d.id} role="alert" style={{ background: CK.redWash, borderRadius: 18, padding: '12px 14px', boxShadow: `${CK.shadow}, 0 0 0 2px rgba(142,36,36,0.55)` }}>
+              <p className="flex items-center gap-2" style={{ margin: 0, fontSize: 14.5, fontWeight: 800, color: CK.red }}>
+                <Undo2 size={18} strokeWidth={1.5} aria-hidden />Your chair asked for changes
+              </p>
+              <p style={{ margin: '6px 0 0', fontSize: 14, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{dirNumber(d)}: {d.title}</p>
+              {d.reply?.trim() && (
+                <p style={{ margin: '4px 0 0', fontSize: 13.5, lineHeight: 1.45, color: CK.inkSoft, overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}>{d.reply.trim()}</p>
+              )}
+              <div style={{ marginTop: 10 }}>
+                <Btn tone="red" icon={<Pencil size={16} strokeWidth={1.5} />} onClick={() => onEditReturned(d)}>Edit and send again</Btn>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
       {directives === null ? (
         <div className="grid gap-6"><Skeleton h={CARD_HEIGHT} r={20} /><Skeleton h={CARD_HEIGHT} r={20} /></div>
       ) : directives.length === 0 ? (

@@ -16,8 +16,9 @@ import { useCrisisLive } from '@/lib/crisis/live';
 import type { CharacterSecret, Directive, DirectiveNote, News, Resource, ResourceType } from '@/lib/crisis/types';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { Card, CK } from '../../crisisKit';
-import DirectiveForm, { type DirectivePrefill, type WorldCharacter } from './DirectiveForm';
+import DirectiveForm, { type DirectivePrefill, type DirectiveResend, type WorldCharacter } from './DirectiveForm';
 import { splitAttached } from '../directives/attachedImage';
+import { dirNumber } from '@/lib/crisis/format';
 import MyDirectives, { type PersonRef } from './MyDirectives';
 import RoomActions from './RoomActions';
 import CharacterDialog from './CharacterDialog';
@@ -50,6 +51,7 @@ export default function DelegateHome() {
   const [dialog, setDialog] = useState<'character' | 'news' | 'chat' | null>(null);
   const [story, setStory] = useState<News | null>(null);
   const [prefill, setPrefill] = useState<DirectivePrefill | null>(null);
+  const [resend, setResend] = useState<DirectiveResend | null>(null);
   const news = useCrisisNews(ref);
   const seq = useRef<Record<string, number>>({});
 
@@ -119,6 +121,16 @@ export default function DelegateHome() {
     document.getElementById('crisis-send-directive')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [coauthors]);
 
+  // "Edit and send again" on a directive the chair asked changes for: the form opens it in edit mode.
+  const editReturned = useCallback((d: Directive) => {
+    const { text, image } = splitAttached(d.body);
+    setResend({
+      token: Date.now(), directiveId: d.id, label: String(dirNumber(d)), note: d.reply?.trim() || null, title: d.title, body: text, image: image ?? null,
+      themes: d.themes, receiver: d.receiver, covert: d.covert,
+    });
+    document.getElementById('crisis-send-directive')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, []);
+
   const goals = secrets?.find((s) => s.character_id === characterId)?.goals?.trim() || '';
   const myResources = (res?.resources ?? []).filter((r) => (cabinetId && r.cabinet_id === cabinetId) || (characterId && r.character_id === characterId));
   const open = crisis.directives_open;
@@ -169,6 +181,9 @@ export default function DelegateHome() {
             pausedNote={crisis.directives_paused_note}
             onSent={() => { void readDirectives(ref); }}
             prefill={prefill}
+            cabinet={cabinet ? { name: cabinet.name, logo_url: cabinet.logo_url, color: cabinet.color } : null}
+            resend={resend}
+            onResendDone={() => setResend(null)}
           />
         </div>
 
@@ -193,6 +208,7 @@ export default function DelegateHome() {
               myMemberId={memberId}
               onChanged={() => { void readDirectives(ref); }}
               onSendAgain={sendAgain}
+              onEditReturned={editReturned}
             />
           </div>
         </div>

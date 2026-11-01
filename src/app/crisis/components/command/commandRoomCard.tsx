@@ -19,7 +19,7 @@ import {
   AMBER_INK, GREEN_INK, SOFT, STATUS_META, cardFacts, firstName, roomStatus, type NowPlaying,
 } from '@/app/manage/[slug]/live/cardModel';
 import { CARD_BORDER_COLOR, CARD_SHADOW, CARD_SHADOW_HOVER } from '@/app/manage/[slug]/live/tokens';
-import { useRoomNow } from './commandRoomLive';
+import { SeatPortrait, useRoomNow } from './commandRoomLive';
 
 export const ROOM_LOGO = 44;
 /** How far the emblem hangs over the card's top edge. The slot reserves this above the card. */
@@ -44,14 +44,22 @@ const toneInk = (t: NowPlaying['tone']) => (t === 'live' ? GREEN_INK : t === 'wa
 const toneFill = (t: NowPlaying['tone']): [string, string] => (t === 'warn' ? NEU_GRADIENTS.amber : NEU_GRADIENTS.sage);
 const headlineSize = (text: string) => (text.length > 46 ? 14 : text.length > 30 ? 16 : 18);
 
-function Mark({ country, size }: { country: string; size: number }) {
+function Mark({ country, size, cabinetId }: { country: string; size: number; cabinetId?: string }) {
+  // A crisis seat is a character: its portrait first, the organiser's seat flag only when no character has that name.
   return (
-    <SeatCircleFlag
-      country={country}
+    <SeatPortrait
+      name={country}
       size={size}
-      decorative
-      monogramColors={{ bg: 'rgba(27,56,40,0.07)', fg: NEU.forest }}
-      fallback={<UserRound size={Math.round(size * 0.6)} strokeWidth={1.5} style={{ color: NEU.forest }} />}
+      cabinetId={cabinetId}
+      fallback={(
+        <SeatCircleFlag
+          country={country}
+          size={size}
+          decorative
+          monogramColors={{ bg: 'rgba(27,56,40,0.07)', fg: NEU.forest }}
+          fallback={<UserRound size={Math.round(size * 0.6)} strokeWidth={1.5} style={{ color: NEU.forest }} />}
+        />
+      )}
     />
   );
 }
@@ -142,7 +150,7 @@ function CardInner({ cab, live, placeholder, onOpen, onChat }: { cab: Cabinet; l
                     background: np.flag ? 'transparent' : 'rgba(27,56,40,0.06)', boxShadow: '0 1px 2px rgba(27,56,40,0.10), 0 6px 14px -6px rgba(27,56,40,0.30)',
                   }}
                 >
-                  {np.flag ? <Mark country={np.flag} size={40} /> : <UserRound size={20} strokeWidth={1.5} style={{ color: np.tone === 'off' ? SOFT : ink }} />}
+                  {np.flag ? <Mark country={np.flag} size={40} cabinetId={cab.id} /> : <UserRound size={20} strokeWidth={1.5} style={{ color: np.tone === 'off' ? SOFT : ink }} />}
                 </span>
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <p style={{ margin: 0, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.075em', textTransform: 'uppercase', lineHeight: 1.25, color: ink, overflowWrap: 'anywhere' }}>{np.context}</p>
@@ -168,7 +176,7 @@ function CardInner({ cab, live, placeholder, onOpen, onChat }: { cab: Cabinet; l
                   <p style={{ ...label, margin: '0 0 3px', fontSize: 9.5, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', lineHeight: 1.3 }}>{np.next.label}</p>
                   <div className="flex flex-wrap items-center" style={{ gap: 4 }}>
                     {np.next.all.slice(0, FLAGS_SHOWN).map((n, i) => (
-                      <span key={`${n}-${i}`} style={{ lineHeight: 0 }} title={`${n}, ${i === 0 ? 'next to speak' : `number ${i + 1} in the queue`}`}><Mark country={n} size={18} /></span>
+                      <span key={`${n}-${i}`} style={{ lineHeight: 0 }} title={`${n}, ${i === 0 ? 'next to speak' : `number ${i + 1} in the queue`}`}><Mark country={n} size={18} cabinetId={cab.id} /></span>
                     ))}
                     {np.next.all.length > FLAGS_SHOWN && (
                       <b style={{ ...label, fontSize: 11, fontVariantNumeric: 'tabular-nums' }} title={np.next.all.slice(FLAGS_SHOWN).join(', ')}>+{np.next.all.length - FLAGS_SHOWN}</b>

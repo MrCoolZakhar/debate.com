@@ -13,10 +13,10 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperti
 import { ChevronLeft, ChevronRight, Clock, MessageCircle, Pencil, Reply } from 'lucide-react';
 import { dirNumber } from '@/lib/crisis/format';
 import { KIND_LABEL, type Directive } from '@/lib/crisis/types';
-import { Avatar, Btn, CK, ThemeTag, agoLabel, cabinetTint, waitLabel, waitSeverity } from '../../crisisKit';
+import { Avatar, Btn, CK, agoLabel, cabinetTint, waitLabel, waitSeverity } from '../../crisisKit';
 import { CharacterLink } from '../character/CharacterProfileHost';
 import CharacterBackroomer from './CharacterBackroomer';
-import { CabinetLogo, NameStack, NumberBadge, StaffPic, shortName } from './directiveParts';
+import { CabinetLogo, NameStack, NumberBadge, StaffPic, ThemeTags, shortName } from './directiveParts';
 import { KIND_ICON, authorName, isBeingWritten, memberName, outcomeView, type Lane, type Names } from './directiveKit';
 import { DirectiveBody, plainText } from './attachedImage';
 
@@ -153,7 +153,7 @@ function FrontCard({ d, names, lane, now, all, index, total, onPrev, onNext, onR
       <div style={{ flex: 'none', padding: '24px 26px 0 30px' }}>
         <p className="flex items-center flex-wrap" style={{ margin: 0, gap: '4px 12px', fontSize: 12.5, fontWeight: 700, color: CK.inkSoft }}>
           <span className="inline-flex items-center" style={{ gap: 6 }}><KindIcon size={15} strokeWidth={1.5} aria-hidden style={{ color: CK.red }} />{KIND_LABEL[d.kind]}</span>
-          {d.themes.slice(0, 3).map((t) => <ThemeTag key={t} theme={t} />)}
+          <ThemeTags themes={d.themes} />
           <span className="flex-1" />
           <span className="inline-flex items-center" style={{ gap: 4, fontSize: 13, fontWeight: 800, color: when.sev ? WAIT_COLOR[when.sev] : CK.inkSoft, fontVariantNumeric: 'tabular-nums' }}>
             <Clock size={14} strokeWidth={1.6} aria-hidden />{when.text}

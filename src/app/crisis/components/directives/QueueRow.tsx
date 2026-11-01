@@ -9,10 +9,10 @@
 import { Clock, MessageCircle, Pencil } from 'lucide-react';
 import type { Directive } from '@/lib/crisis/types';
 import { dirNumber } from '@/lib/crisis/format';
-import { Avatar, CK, ThemeTag } from '../../crisisKit';
+import { Avatar, CK } from '../../crisisKit';
 import { CharacterLink, CharacterName } from '../character/CharacterProfileHost';
 import { seatFitFontPx } from '@/lib/seatName';
-import { CabinetLogo, NumberBadge, shortName, StaffPic } from './directiveParts';
+import { CabinetLogo, NumberBadge, shortName, StaffPic, ThemeTags } from './directiveParts';
 import { KIND_ICON, authorName, writerOf, type Names } from './directiveKit';
 import { useNow } from './useNow';
 
@@ -91,7 +91,7 @@ export default function QueueRow({ d, names, whenLabel, sev, selected, delegateN
           </span>
           <span className="flex flex-wrap items-center justify-end" style={{ gap: '4px 8px', marginLeft: 'auto' }}>
             {delegateNote && <MessageCircle size={14} strokeWidth={1.5} aria-label="The delegate sent a note" style={{ color: '#3E6A9A' }} />}
-            {d.themes[0] && <ThemeTag theme={d.themes[0]} />}
+            {d.themes.length > 0 && <ThemeTags themes={d.themes} maxChips={1} />}
             <KindIcon size={14} strokeWidth={1.5} aria-label={d.kind} style={{ flex: 'none', color: CK.red }} />
             <CabinetLogo cabinet={cab} size={compact ? 16 : 18} />
             <span className="inline-flex items-center" style={{ gap: 3, fontSize: 12, fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: waitColor, flex: 'none' }}>
@@ -102,7 +102,6 @@ export default function QueueRow({ d, names, whenLabel, sev, selected, delegateN
                 {backroomer ? backroomer.display_name : 'Unclaimed'}
               </span>
             )}
-            <StaffPic member={backroomer} size={compact ? 20 : 24} />
           </span>
         </span>
         {writer && (

@@ -313,10 +313,19 @@ export const THEME_STYLE: Record<string, { Icon: typeof CircleDot; color: string
   Covert: { Icon: VenetianMask, color: '#3A0E0F' },
 };
 
-/** A theme as a small coloured chip: icon + word (not a status pill; it labels content). */
-export function ThemeTag({ theme, size = 'sm' }: { theme: string; size?: 'sm' | 'md' }) {
+/** A theme as a small coloured chip: icon + word (not a status pill; it labels content). `iconOnly` draws just the icon in the
+ *  same tinted square (the theme's name is its title and accessible name), for places where several themes must stay on one line. */
+export function ThemeTag({ theme, size = 'sm', iconOnly = false }: { theme: string; size?: 'sm' | 'md'; iconOnly?: boolean }) {
   const t = THEME_STYLE[theme] ?? { Icon: CircleDot, color: CK.muted };
   const I = t.Icon;
+  if (iconOnly) {
+    const box = size === 'sm' ? 22 : 26;
+    return (
+      <span role="img" aria-label={theme} title={theme} className="inline-flex items-center justify-center" style={{ width: box, height: box, flex: 'none', color: t.color, background: cabinetTint(t.color, 0.1), borderRadius: 8 }}>
+        <I size={size === 'sm' ? 13 : 15} strokeWidth={1.6} aria-hidden />
+      </span>
+    );
+  }
   return (
     <span className="inline-flex items-center" style={{ gap: 4, fontSize: size === 'sm' ? 11.5 : 12.5, fontWeight: 700, color: t.color, background: cabinetTint(t.color, 0.1), borderRadius: 8, padding: size === 'sm' ? '2px 7px' : '3px 9px' }}>
       <I size={size === 'sm' ? 12 : 14} strokeWidth={1.6} aria-hidden />{theme}

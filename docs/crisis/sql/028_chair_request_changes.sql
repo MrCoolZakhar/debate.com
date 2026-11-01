@@ -1,0 +1,13 @@
+-- Gavelling Crisis, SQL part 28 (applied 1 Nov 2026 as migration crisis_chair_request_changes).
+-- A chair can ask for changes on a cabinet directive waiting for them. It goes back to its author as a draft:
+--   status changes_requested (added to crisis_directives_status_check), the chair's note in reply, nobody assigned,
+--   one notification to the author ("Your chair asked for changes: <title>").
+-- crisis_chair_request_changes(p_directive, p_note)  chair of that cabinet or the director; only from awaiting_chair.
+-- crisis_resend_directive(p_directive, p jsonb)      the author only; only from changes_requested. Takes title, body,
+--   themes, receiver, covert; checks the word limit and the paused switch (no cooldown: it is the same directive);
+--   keeps its number; goes back to the chair (and notifies them) while chair approval applies, else to the backroom
+--   with the same assignee rule as crisis_submit_directive (crisis_cabinet_directive_assignee for cabinet ones).
+-- Reject is unchanged: crisis_chair_review_directive(p_directive, false, note) answers it as denied.
+-- Both functions are SECURITY DEFINER, executable by anon and authenticated like the other crisis directive RPCs
+-- (personal-code users call as anon; crisis_me decides who they are).
+-- The full body is in the migration; read it with pg_get_functiondef.

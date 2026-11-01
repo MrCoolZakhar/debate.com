@@ -7,15 +7,16 @@
 // Handing over is the one thing here that writes at once (it is who the directive is with, not part of the reply);
 // the reply itself, with its outcome and every change, goes out only on Send reply.
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ChevronDown, Clock, FileText, Lock, Pencil, UserRound, VenetianMask } from 'lucide-react';
 import GSelect from '@/components/GSelect';
+import Portal from '@/components/Portal';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { assignDirective, crisisError, loadSecrets } from '@/lib/crisis/api';
 import { ROLE_LABEL, type Directive } from '@/lib/crisis/types';
 import { Btn, CK, ThemeTag, agoLabel, cabinetTint, waitLabel, waitSeverity } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
-import { StaffPic } from './directiveParts';
+import { StaffPic, ThemeIcons } from './directiveParts';
 import { isBeingWritten, memberName, type Names } from './directiveKit';
 import { useNow } from './useNow';
 
@@ -94,10 +95,15 @@ export default function DirectiveFacts({ d, names, editing, onChanged }: {
     {(d.themes.length > 0 || covertShown) && (
       <div className="flex flex-col" style={{ flex: '0 1 150px', minWidth: 110, paddingTop: 12 }}>
         <Fact icon={<VenetianMask size={13} strokeWidth={1.6} />} label={covertShown && d.themes.length === 0 ? 'Covert' : 'Themes'}>
-          <span className="flex flex-col items-start" style={{ gap: 4 }}>
-            {d.themes.map((t) => <ThemeTag key={t} theme={t} size="md" />)}
-            {covertShown && <span style={{ fontSize: 12, fontWeight: 800, color: CK.redDeep, background: cabinetTint(CK.redDeep, 0.08), borderRadius: 8, padding: '2px 9px' }}>Covert</span>}
-          </span>
+          {d.themes.length + (covertShown ? 1 : 0) > 2 ? (
+            // More than two: icons only on one line, so the band never grows (each icon's title is the theme).
+            <ThemeIcons themes={covertShown ? [...d.themes, 'Covert'] : d.themes} size="md" />
+          ) : (
+            <span className="flex flex-col items-start" style={{ gap: 4 }}>
+              {d.themes.map((t) => <ThemeTag key={t} theme={t} size="md" />)}
+              {covertShown && <span style={{ fontSize: 12, fontWeight: 800, color: CK.redDeep, background: cabinetTint(CK.redDeep, 0.08), borderRadius: 8, padding: '2px 9px' }}>Covert</span>}
+            </span>
+          )}
         </Fact>
       </div>
     )}
@@ -145,7 +151,7 @@ export default function DirectiveFacts({ d, names, editing, onChanged }: {
 }
 
 /** The author's secret goals (staff only; the read is refused for anyone else). Shown as a chip beside the character's
- *  name in the pop-up, opening a panel under the band (owner, 30 Oct 2026). */
+ *  name in the pop-up, opening a POPOVER anchored to the chip (it no longer expands the band and pushes the layout). */
 export function useSecretGoals(d: Directive): string | null {
   const { ref } = useCrisis();
   const [goals, setGoals] = useState<string | null>(null);
@@ -160,23 +166,87 @@ export function useSecretGoals(d: Directive): string | null {
   return d.author_character_id ? goals : null;
 }
 
-export function SecretGoalsChip({ open, onToggle }: { open: boolean; onToggle: () => void }) {
-  return (
-    <button type="button" onClick={onToggle} aria-expanded={open} title="Only staff see this"
-      className="inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
-      style={{ gap: 5, border: 0, cursor: 'pointer', fontFamily: CK.font, fontSize: 12, fontWeight: 700, color: CK.goldDeep, background: cabinetTint(CK.gold, 0.45), borderRadius: 9, padding: '3px 9px', boxShadow: `inset 0 0 0 1px ${cabinetTint(CK.goldDeep, 0.25)}`, flex: 'none' }}>
-      <Lock size={12} strokeWidth={1.8} aria-hidden />
-      Secret goals
-      <ChevronDown size={13} strokeWidth={1.8} aria-hidden style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 160ms' }} />
-    </button>
-  );
-}
+const GOALS_W = 340;
 
-export function SecretGoalsPanel({ goals }: { goals: string }) {
+/** The chip and its popover. The popover is portaled at fixed coordinates from the chip's rectangle, follows scroll and resize,
+ *  flips above the chip near the bottom edge, closes on an outside press or Escape (Escape closes only the popover, so the
+ *  directive pop-up underneath stays), and sits above the directive pop-up (z-index 200). */
+export function SecretGoalsChip({ goals }: { goals: string }) {
+  const [open, setOpen] = useState(false);
+  const chip = useRef<HTMLButtonElement>(null);
+  const pop = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ left: number; top?: number; bottom?: number; width: number; maxH: number } | null>(null);
+
+  const place = () => {
+    const el = chip.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const width = Math.min(GOALS_W, vw - 16);
+    const left = Math.max(8, Math.min(r.left, vw - width - 8));
+    const below = vh - r.bottom - 14;
+    const above = r.top - 14;
+    if (below < 170 && above > below) setPos({ left, bottom: vh - r.top + 6, width, maxH: Math.min(300, above) });
+    else setPos({ left, top: r.bottom + 6, width, maxH: Math.min(300, Math.max(120, below)) });
+  };
+
+  useLayoutEffect(() => {
+    if (!open) return undefined;
+    place();
+    const on = () => place();
+    window.addEventListener('scroll', on, true);
+    window.addEventListener('resize', on);
+    return () => { window.removeEventListener('scroll', on, true); window.removeEventListener('resize', on); };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as Node;
+      if (pop.current?.contains(t) || chip.current?.contains(t)) return;
+      setOpen(false);
+    };
+    // Capture phase on the window: this Escape closes the popover and goes no further.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopPropagation();
+      setOpen(false);
+      chip.current?.focus();
+    };
+    document.addEventListener('pointerdown', onDown, true);
+    window.addEventListener('keydown', onKey, true);
+    return () => { document.removeEventListener('pointerdown', onDown, true); window.removeEventListener('keydown', onKey, true); };
+  }, [open]);
+
   return (
-    <div style={{ maxHeight: 120, overflowY: 'auto', background: `linear-gradient(180deg, ${cabinetTint(CK.gold, 0.5)}, ${cabinetTint(CK.gold, 0.26)})`, borderRadius: 14, padding: '9px 12px', boxShadow: `inset 0 0 0 1px ${cabinetTint(CK.goldDeep, 0.25)}` }}>
-      <span style={{ display: 'block', fontSize: 11.5, fontWeight: 800, color: CK.goldDeep }}>Secret goals, only staff see this</span>
-      <b style={{ display: 'block', fontSize: 13.5, marginTop: 3, fontWeight: 600, lineHeight: 1.5, whiteSpace: 'pre-wrap', overflowWrap: 'break-word', color: CK.ink }}>{goals}</b>
-    </div>
+    <>
+      <button ref={chip} type="button" onClick={() => setOpen((x) => !x)} aria-expanded={open} aria-haspopup="dialog" title="Only staff see this"
+        className="inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+        style={{ gap: 5, border: 0, cursor: 'pointer', fontFamily: CK.font, fontSize: 12, fontWeight: 700, color: CK.goldDeep, background: cabinetTint(CK.gold, 0.45), borderRadius: 9, padding: '3px 9px', boxShadow: `inset 0 0 0 1px ${cabinetTint(CK.goldDeep, 0.25)}`, flex: 'none' }}>
+        <Lock size={12} strokeWidth={1.8} aria-hidden />
+        Secret goals
+        <ChevronDown size={13} strokeWidth={1.8} aria-hidden style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 160ms' }} />
+      </button>
+      {open && pos && (
+        <Portal>
+          <div
+            ref={pop}
+            data-crisis-popover
+            role="dialog"
+            aria-label="Secret goals"
+            style={{
+              position: 'fixed', zIndex: 210, left: pos.left, top: pos.top, bottom: pos.bottom, width: pos.width, maxHeight: pos.maxH, overflowY: 'auto',
+              background: `linear-gradient(180deg, ${cabinetTint(CK.gold, 0.5)}, ${cabinetTint(CK.gold, 0.26)}), ${CK.card}`, borderRadius: 14, padding: '10px 13px',
+              boxShadow: `inset 0 0 0 1px ${cabinetTint(CK.goldDeep, 0.3)}, 0 14px 34px rgba(58,14,15,0.28)`, fontFamily: CK.font,
+            }}
+          >
+            <span style={{ display: 'block', fontSize: 11.5, fontWeight: 800, color: CK.goldDeep }}>Secret goals, only staff see this</span>
+            <b style={{ display: 'block', fontSize: 13.5, marginTop: 3, fontWeight: 600, lineHeight: 1.5, whiteSpace: 'pre-wrap', overflowWrap: 'break-word', color: CK.ink }}>{goals}</b>
+          </div>
+        </Portal>
+      )}
+    </>
   );
 }

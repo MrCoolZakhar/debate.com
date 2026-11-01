@@ -145,7 +145,7 @@ export default function CommandRoomDialog({ cab, room, conferenceId, initialTab 
               <LinkBtn href={`/chair/${code}?secretariat=1`} newTab title="Read only: you can watch the room but not change anything" icon={<Eye size={13} strokeWidth={1.5} />}>Watch only</LinkBtn>
             </div>
           )}
-          <div className="mb-5" style={{ color: CK.ink, fontFamily: CK.font }}><RoomStagePanel live={data} /></div>
+          <div className="mb-5" style={{ color: CK.ink, fontFamily: CK.font }}><RoomStagePanel live={data} cabinetId={cab.id} /></div>
           <FloorDetail data={data} />
         </>
       )}
