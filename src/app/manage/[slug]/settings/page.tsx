@@ -4709,6 +4709,7 @@ export default function SettingsPage() {
           : view.platform_collects || view.payment_method === 'stripe' ? 'Card payments'
           : !view.external_payment_url && note.startsWith('this conference is free') ? 'It is free'
           : view.manual_kind === 'qr' ? 'Payment QR code'
+          : view.manual_kind === 'phone' ? 'Phone number'
           : view.manual_kind === 'bank' ? 'Bank transfer'
           : view.manual_kind === 'in_person' ? 'In-person payment'
           : 'Payment link';

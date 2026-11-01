@@ -31,7 +31,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
-  ArrowLeft, Building2, Check, CircleCheck, Coins, CreditCard, Gift, HandCoins, ImageUp, Link2, QrCode, ReceiptText, Wallet, X,
+  ArrowLeft, Building2, Check, CircleCheck, Coins, CreditCard, Gift, HandCoins, ImageUp, Link2, Phone, QrCode, ReceiptText, Wallet, X,
 } from 'lucide-react';
 import type { Conference } from '@/app/manage/[slug]/layout';
 import { PurchaseShell, PURCHASE_CSS } from '@/components/purchase/purchaseKit';
@@ -104,7 +104,7 @@ export const FLOW_CSS = `
 `;
 
 type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
-type FieldErrs = Partial<Record<'country' | 'method' | 'manual_kind' | 'url' | 'qr' | 'note' | 'account_name' | 'account_number' | 'swift' | 'bank_name' | 'reference', string>>;
+type FieldErrs = Partial<Record<'country' | 'method' | 'manual_kind' | 'url' | 'qr' | 'phone' | 'note' | 'account_name' | 'account_number' | 'swift' | 'bank_name' | 'reference', string>>;
 
 const METHOD_CARDS: { key: MethodKey; title: string; desc: string; icon: React.ReactNode }[] = [
   { key: 'card', title: 'Pay by card', icon: <CreditCard size={24} strokeWidth={2.2} />,
@@ -113,6 +113,8 @@ const METHOD_CARDS: { key: MethodKey; title: string; desc: string; icon: React.R
     desc: 'Send payers to your own payment page. You confirm payments by reviewing the proofs payers upload.' },
   { key: 'qr', title: 'Payment QR code', icon: <QrCode size={24} strokeWidth={2.2} />,
     desc: 'Show a QR code payers scan with their banking app (for example UPI). You confirm payments by reviewing the proofs payers upload.' },
+  { key: 'phone', title: 'Phone number', icon: <Phone size={24} strokeWidth={2.2} />,
+    desc: 'Show a phone number payers send money to (for example a mobile money or bank app number). You confirm payments by reviewing the proofs payers upload.' },
   { key: 'bank', title: 'Bank transfer', icon: <Building2 size={24} strokeWidth={2.2} />,
     desc: 'Show your bank details with copy buttons. You confirm payments by reviewing the proofs payers upload.' },
   { key: 'in_person', title: 'In-person payment', icon: <HandCoins size={24} strokeWidth={2.2} />,
@@ -146,6 +148,7 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
   const [url, setUrl] = useState(conference.external_payment_url ?? '');
   const [note, setNote] = useState(conference.external_payment_note ?? '');
   const [qrPath, setQrPath] = useState<string | null>(conference.payment_qr_path ?? null);
+  const [phone, setPhone] = useState(conference.payment_phone ?? '');
   const [qrFile, setQrFile] = useState<File | null>(null);
   const [qrPreview, setQrPreview] = useState<string | null>(null);
   const b = conference.bank_details ?? {};
@@ -222,6 +225,12 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
       else if (!/^https:\/\/\S+\.\S+$/i.test(u)) e.url = 'The link must start with https:// and be a full web address.';
     }
     if (method === 'qr' && !qrPath && !qrFile) e.qr = 'Upload your payment QR code image.';
+    if (method === 'phone') {
+      const ph = phone.trim();
+      const digits = ph.replace(/\D/g, '').length;
+      if (!ph) e.phone = 'Add the phone number people pay to.';
+      else if (ph.length > 40 || !/^\+?[0-9 ()./-]+$/.test(ph) || digits < 6 || digits > 20) e.phone = 'Enter a phone number with digits only, for example +44 7700 900123.';
+    }
     if (method === 'bank') {
       if (!bank.account_name.trim()) e.account_name = 'Add the name on the account.';
       if (!bank.account_number.trim()) e.account_number = 'Add the IBAN or account number.';
@@ -248,7 +257,7 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
       setQrFile(null);
     }
     const r = await setPaymentSetup({
-      conferenceId: conference.id, country, method, url, note, qrPath: path,
+      conferenceId: conference.id, country, method, url, note, qrPath: path, phone,
       bank: { ...bank, swift: bank.swift.trim().toUpperCase() },
     });
     if (!r.ok) {
@@ -490,6 +499,20 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
               </button>
             </div>
             {fieldErr('qr')}
+          </div>
+          {notesField}
+        </div>
+      );
+      primary = { label: 'Save', onClick: () => { void continueSetup(); } };
+    } else if (method === 'phone') {
+      title = 'Phone Number';
+      body = (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div>
+            <label className="gv-fd-label" htmlFor="gv-pf-phone">Phone number people pay to</label>
+            <input id="gv-pf-phone" className="gv-pf-input" type="tel" inputMode="tel" autoComplete="off" placeholder="+44 7700 900123" value={phone} disabled={readOnly}
+              maxLength={40} aria-invalid={!!errs.phone} onChange={e => { setPhone(e.target.value); setErrs(x => ({ ...x, phone: undefined })); }} />
+            {fieldErr('phone')}
           </div>
           {notesField}
         </div>

@@ -172,6 +172,18 @@ export async function qrLink(path: string): Promise<string | null> {
   }
 }
 
+/** manual kind 'phone' (1 Nov 2026): the number people pay to, read on its own so my_pay_overview stays as it is. */
+export async function readPaymentPhone(conferenceId: string): Promise<string | null> {
+  try {
+    const c = await client();
+    const { data, error } = await c.rpc('payment_phone_for', { p_conference: conferenceId });
+    if (error || typeof data !== 'string') return null;
+    return data.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
 /** "2 days left to send your proof", or null once it has lapsed. */
 export function timeLeft(expiresAt: string | null, now: number): string | null {
   if (!expiresAt) return null;

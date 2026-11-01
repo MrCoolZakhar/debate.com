@@ -52,7 +52,7 @@ export interface FinancialsDashboard {
     is_free?: boolean;
     has_qr?: boolean;
     has_bank?: boolean;
-    manual_kind?: 'link' | 'qr' | 'bank' | 'in_person' | null;
+    manual_kind?: 'link' | 'qr' | 'bank' | 'in_person' | 'phone' | null;
     /** Prompt 114: the conference has payment instructions (what in-person payment needs). */
     has_instructions?: boolean;
     registration_fee: null | { label: string | null; amount_cents: number; currency: string; applies_to: string | null; active: boolean };
