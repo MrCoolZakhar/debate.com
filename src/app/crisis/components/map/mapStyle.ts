@@ -24,6 +24,8 @@ export const SRC_BASE = 'base-outline';
 /** Moves a directive reply plans (dashed trajectories), and the sight ring of the selected unit. */
 export const SRC_PLANS = 'planned-moves';
 export const SRC_SIGHT = 'sight-ring';
+/** The Paint and Erase brush: a round cursor the size of the pen, and the stroke being dragged. */
+export const SRC_BRUSH = 'brush';
 /** Capitals and big cities (public/crisis/world-cities.json). */
 export const SRC_CITIES = 'cities';
 /** Offline water and regions (public/crisis/world-water.json, world-regions.json): lakes, rivers (coarse and fine), first-level borders. */
@@ -108,6 +110,11 @@ export function mapLayers(): AddLayerObject[] {
     },
     // Zones: overlays that are not territory. They sit over the territory and never cut it.
     { id: L_ZONE_FILL, type: 'fill', source: SRC_SHAPES, filter: ['==', ['get', 'kind'], 'zone'], paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.2 } },
+    // Who controls a zone: a solid outline in the controller's colour under the zone type's dashed one.
+    {
+      id: 'zone-control', type: 'line', source: SRC_SHAPES, filter: ['all', ['==', ['get', 'kind'], 'zone'], ['has', 'ctl']], layout: { 'line-join': 'round' },
+      paint: { 'line-color': ['get', 'ctl'], 'line-width': ['interpolate', ['linear'], ['zoom'], 0, 3.6, 6, 6], 'line-opacity': 0.95 },
+    },
     {
       id: 'zone-line', type: 'line', source: SRC_SHAPES, filter: ['==', ['get', 'kind'], 'zone'], layout: { 'line-join': 'round' },
       paint: { 'line-color': ['get', 'color'], 'line-width': ['interpolate', ['linear'], ['zoom'], 0, 1.4, 6, 2.6], 'line-dasharray': [3, 1.6] },
@@ -141,6 +148,18 @@ export function editLayers(): AddLayerObject[] {
       paint: { 'fill-color': ['coalesce', ['get', 'tint'], DRAFT], 'fill-opacity': ['case', ['has', 'tint'], 1, 0.2] },
     },
     { id: 'edit-line', type: 'line', source: SRC_EDIT, layout: { 'line-join': 'round' }, paint: { 'line-color': DRAFT, 'line-width': 2.4, 'line-dasharray': [2, 1.5] } },
+    // The brush: the stroke being dragged (in the painter's colours, or red when erasing) and the round pen under the pointer.
+    {
+      id: 'brush-stroke-fill', type: 'fill', source: SRC_BRUSH, filter: ['==', ['get', 'part'], 'stroke'],
+      paint: { 'fill-color': ['coalesce', ['get', 'tint'], DRAFT], 'fill-opacity': ['case', ['has', 'tint'], 1, 0.3] },
+    },
+    {
+      id: 'brush-stroke-line', type: 'line', source: SRC_BRUSH, filter: ['==', ['get', 'part'], 'stroke'], layout: { 'line-join': 'round' },
+      paint: { 'line-color': ['coalesce', ['get', 'edge'], DRAFT], 'line-width': 2, 'line-dasharray': [2, 1.5] },
+    },
+    { id: 'brush-cursor-fill', type: 'fill', source: SRC_BRUSH, filter: ['==', ['get', 'part'], 'cursor'], paint: { 'fill-color': ['coalesce', ['get', 'edge'], DRAFT], 'fill-opacity': 0.08 } },
+    { id: 'brush-cursor-halo', type: 'line', source: SRC_BRUSH, filter: ['==', ['get', 'part'], 'cursor'], paint: { 'line-color': '#FFFFFF', 'line-width': 4.5, 'line-opacity': 0.85 } },
+    { id: 'brush-cursor-line', type: 'line', source: SRC_BRUSH, filter: ['==', ['get', 'part'], 'cursor'], paint: { 'line-color': ['coalesce', ['get', 'edge'], DRAFT], 'line-width': 2 } },
     // The sight ring of the selected unit (staff can drag its handle).
     { id: 'sight-fill', type: 'fill', source: SRC_SIGHT, paint: { 'fill-color': DRAFT, 'fill-opacity': 0.05 } },
     { id: 'sight-line', type: 'line', source: SRC_SIGHT, layout: { 'line-join': 'round' }, paint: { 'line-color': DRAFT, 'line-width': 1.8, 'line-dasharray': [3, 2] } },

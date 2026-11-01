@@ -456,6 +456,8 @@ export interface ZoneForm {
   description: string;
   vis: 'public' | 'cabinets' | 'staff';
   revealed: string[];
+  /** The cabinet that controls the zone; null is nobody. */
+  owner: string | null;
 }
 
 /** A zone's visibility as the database columns hold it. */
@@ -467,7 +469,7 @@ export function zoneFormOf(z: MapShape, types: ZoneType[]): ZoneForm {
   const typed = z.zone_type && types.some((t) => t.id === z.zone_type) ? z.zone_type : null;
   return {
     name: z.label ?? '', type: typed, color: z.color ?? ZONE_NO_TYPE_COLOR, description: z.description ?? '',
-    vis: z.public ? 'public' : z.revealed_to.length ? 'cabinets' : 'staff', revealed: z.revealed_to,
+    vis: z.public ? 'public' : z.revealed_to.length ? 'cabinets' : 'staff', revealed: z.revealed_to, owner: z.owner_cabinet_id ?? null,
   };
 }
 
@@ -567,6 +569,9 @@ export function ZoneEditor({
           </div>
         )}
       </Field>
+      <Field label="Controlled by">
+        <OwnerPicker value={f.owner} cabinets={cabinets} withNobody ariaLabel="Who controls this zone" onChange={(id) => setF({ ...f, owner: id })} />
+      </Field>
       <Field label="Description">
         <textarea style={{ ...fieldStyle, minHeight: 60, resize: 'vertical' }} value={f.description} maxLength={2000} aria-label="Zone description" onChange={(e) => setF({ ...f, description: e.target.value })} />
       </Field>
@@ -612,9 +617,13 @@ export function ZoneEditor({
 }
 
 /** A zone's card for everyone who can see it: its name, type, description. Staff can open it for editing. */
-export function ZoneInfoCard({ zone, type, cabinets, staff, canEdit, onEdit, onClose }: {
-  zone: MapShape; type: ZoneType | null; cabinets: PanelCabinet[]; staff: boolean; canEdit: boolean; onEdit: () => void; onClose: () => void;
+export function ZoneInfoCard({ zone, type, cabinets, staff, canEdit, canControl, onControl, onEdit, onClose }: {
+  zone: MapShape; type: ZoneType | null; cabinets: PanelCabinet[]; staff: boolean; canEdit: boolean;
+  /** Staff with map power can change who controls the zone with one click. */
+  canControl: boolean; onControl: (id: string | null) => void;
+  onEdit: () => void; onClose: () => void;
 }) {
+  const controller = cabinets.find((c) => c.id === zone.owner_cabinet_id) ?? null;
   const color = type?.color ?? zone.color ?? ZONE_NO_TYPE_COLOR;
   const seen = zone.public ? 'Everyone' : zone.revealed_to.length
     ? zone.revealed_to.map((id) => cabinets.find((c) => c.id === id)?.name ?? 'A cabinet').join(', ') : 'Staff only';
@@ -626,6 +635,15 @@ export function ZoneInfoCard({ zone, type, cabinets, staff, canEdit, onEdit, onC
       </p>
       {zone.description?.trim() ? (
         <p style={{ margin: '0 0 10px', fontSize: 13.5, color: CK.ink, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{zone.description}</p>
+      ) : null}
+      {canControl ? (
+        <Field label="Controlled by">
+          <OwnerPicker value={zone.owner_cabinet_id ?? null} cabinets={cabinets} withNobody ariaLabel="Who controls this zone" onChange={onControl} />
+        </Field>
+      ) : controller ? (
+        <p className="flex items-center" style={{ margin: '0 0 10px', gap: 6, fontSize: 13.5, color: CK.ink, overflowWrap: 'anywhere' }}>
+          <span style={{ color: CK.muted }}>Controlled by</span><Dot color={controller.color} /><b>{controller.name}</b>
+        </p>
       ) : null}
       {staff && (
         <p style={{ margin: '0 0 10px', fontSize: 12.5, color: CK.inkSoft, overflowWrap: 'anywhere' }}><span style={{ color: CK.muted }}>Seen by</span> {seen}</p>
@@ -639,7 +657,6 @@ export function ZoneInfoCard({ zone, type, cabinets, staff, canEdit, onEdit, onC
 export function ZonesPanel({ zones, types, cabinets, onDraw, onPick, onClose }: {
   zones: MapShape[]; types: ZoneType[]; cabinets: PanelCabinet[]; onDraw: () => void; onPick: (id: string) => void; onClose: () => void;
 }) {
-  void cabinets;
   return (
     <Shell title="Zones" onClose={onClose}>
       <p style={{ margin: '0 0 10px', fontSize: 13, color: CK.inkSoft }}>
@@ -654,6 +671,7 @@ export function ZonesPanel({ zones, types, cabinets, onDraw, onPick, onClose }: 
         <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 2 }}>
           {zones.map((z) => {
             const t = types.find((x) => x.id === z.zone_type);
+            const ctl = cabinets.find((c) => c.id === z.owner_cabinet_id);
             return (
               <li key={z.id}>
                 <button
@@ -665,7 +683,7 @@ export function ZonesPanel({ zones, types, cabinets, onDraw, onPick, onClose }: 
                   <span style={{ minWidth: 0 }}>
                     <b style={{ display: 'block', fontSize: 13.5, color: CK.ink, overflowWrap: 'anywhere' }}>{z.label?.trim() || 'Zone'}</b>
                     <span style={{ display: 'block', fontSize: 12, color: CK.inkSoft, overflowWrap: 'anywhere' }}>
-                      {t ? t.name : 'No type'}{z.public ? '' : z.revealed_to.length ? ' · Some cabinets' : ' · Staff only'}
+                      {t ? t.name : 'No type'}{ctl ? ` · Controlled by ${ctl.short}` : ''}{z.public ? '' : z.revealed_to.length ? ' · Some cabinets' : ' · Staff only'}
                     </span>
                   </span>
                 </button>

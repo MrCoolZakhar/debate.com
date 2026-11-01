@@ -14,7 +14,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import type { GeoJSONSource, Map as MLMap, MapMouseEvent, Marker as MLMarker } from 'maplibre-gl';
 import type { Feature, FeatureCollection, Geometry } from 'geojson';
-import { Building2, Cloud, Droplets, Eye, Flag, Hexagon, Layers, Maximize2, MousePointer2, Pencil, Plus, Send, Ship, SquareDashed, Undo2, UserRound, Users } from 'lucide-react';
+import { Building2, Cloud, Droplets, Eye, Layers, Send, SquareDashed, UserRound, Users } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import GSelect from '@/components/GSelect';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
@@ -55,9 +55,13 @@ import {
   KIND_META, centroidOf, clampLat, clampLng, loadWorldData, shapePoints, type CountryLabel, type LngLat, type WorldData,
 } from './mapData';
 import {
-  BLANK_STYLE, DRAFT, L_BASE_FILL, L_LAND, L_SHAPE_FILL, L_ZONE_FILL, NOBODY, SRC_BASE, SRC_COUNTRIES, SRC_DRAFT, SRC_EDIT, SRC_HOVER, SRC_PLANS,
+  BLANK_STYLE, DRAFT, L_BASE_FILL, L_LAND, L_SHAPE_FILL, L_ZONE_FILL, NOBODY, SRC_BASE, SRC_BRUSH, SRC_COUNTRIES, SRC_DRAFT, SRC_EDIT, SRC_HOVER, SRC_PLANS,
   SRC_SEL, SRC_SHAPES, SRC_SIGHT, editLayers, mapLayers,
 } from './mapStyle';
+import { BRUSH_DEFAULT_KM, brushKmForPixels, planErase, planPaint } from './brush';
+import { useBrush, type BrushMode } from './brushTool';
+import MapToolbar, { TOOLBAR_CSS, type Tool } from './MapToolbar';
+import { loadProvinces, provinceAt, type Province } from './provinces';
 import {
   CharacterCard, KindPicker, NewTerritoryPanel, PlaceUnitPanel, TerritoryCard, UnitEditor, UnitViewer, ZoneEditor, ZoneInfoCard, ZonesPanel,
   zoneColorOf, zoneFormOf, zoneVisibility, type PanelCabinet, type TerritoryInfo, type UnitDraft, type ZoneForm,
@@ -70,7 +74,6 @@ import {
   paintCharacter, paintToken, safeColor,
 } from './tokens';
 
-type Tool = 'select' | 'borders' | 'draw' | 'unit' | 'zones';
 type TerrRef = { kind: 'country'; key: string } | { kind: 'area'; id: string };
 
 /** A new territory being drawn with the Borders tool. */
@@ -113,8 +116,8 @@ interface OutlineDrag {
 
 interface UndoChip { sid: number; text: string; note: string | null }
 
-/** One step Go back can undo. */
-interface HistoryStep { text: string; undo: () => void | Promise<void> }
+/** One step Undo can take back, and (when it can) Redo can do again. */
+interface HistoryStep { text: string; undo: () => void | Promise<void>; redo?: () => void | Promise<void> }
 
 const HISTORY_MAX = 60;
 
@@ -134,6 +137,8 @@ interface Live {
   onCharDrag: (id: string, lng: number, lat: number) => void;
   redrawFog: () => void;
   regroupChars: () => void;
+  /** A brush stroke is being dragged. */
+  brushDown: () => boolean;
   /** Backs out of whatever is open; answers whether it did anything. */
   escape: () => boolean;
 }
@@ -478,6 +483,21 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
   const defaultOwner = viewer ?? cabinets[0]?.id ?? null;
   const draftColor = draft?.kind === 'zone' ? zoneColor : draft && draft.owner ? cabById.get(draft.owner)?.color ?? null : null;
 
+  // The owner chip: the one cabinet Give land, Paint, Draw area and zone control work for (null is Nobody). Until someone
+  // picks, it is the cabinet being viewed, else the first cabinet.
+  const [chipPick, setChipOwner] = useState<string | null | undefined>(undefined);
+  const chipOwner: string | null = chipPick === undefined ? defaultOwner : chipPick === null || cabById.has(chipPick) ? chipPick : defaultOwner;
+  const chipColor = chipOwner ? cabById.get(chipOwner)?.color ?? null : null;
+  // The brush: its size in km. The first time a brush is picked the size suits how far the map is zoomed.
+  const [brushKm, setBrushKm] = useState(BRUSH_DEFAULT_KM);
+  const brushTouched = useRef(false);
+  // The states and provinces for Give land, fetched the first time that tool is picked. The Regions layer is switched on
+  // for the tool and back off when it ends, unless the person switched it themselves meanwhile.
+  const provincesRef = useRef<Province[] | null>(null);
+  const [provincesReady, setProvincesReady] = useState(false);
+  const regionsAuto = useRef(false);
+  const regionsOnRef = useRef(false);
+
   const setPending = useCallback((p: PendingMove | null) => {
     pendingMoveRef.current = p;
     setPendingMove(p);
@@ -500,14 +520,34 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
     setTool(t);
     clearSelection();
     setNewUnit(null); setAddKind(null); setDraft(null);
+    if (t === 'zones') setZonesOn(true);
+    if (t === 'give' && !regionsOnRef.current) { regionsAuto.current = true; setRegionsOn(true); }
+    else if (t !== 'give' && regionsAuto.current) { regionsAuto.current = false; setRegionsOn(false); }
+    const map = mapRef.current;
+    if ((t === 'paint' || t === 'erase') && !brushTouched.current && map) {
+      const c = map.getCenter();
+      setBrushKm(brushKmForPixels(Math.abs(map.project(c).y - map.project([c.lng, Math.min(84, c.lat + 1)]).y)));
+    }
   }, [cancelMove, clearSelection]);
+
+  useEffect(() => { regionsOnRef.current = regionsOn; });
+  useEffect(() => {
+    if (tool !== 'give' || provincesRef.current) return;
+    let dead = false;
+    loadProvinces().then((list) => {
+      if (dead) return;
+      provincesRef.current = list;
+      setProvincesReady(true);
+    }).catch(() => { if (!dead) notifyErr('The states and provinces could not be loaded. Give land still works for countries and territories.', 'crisis-map'); });
+    return () => { dead = true; };
+  }, [tool]);
 
   // Looking through another cabinet's eyes starts again from Select.
   const changeView = useCallback((val: string) => { setViewAs(val); changeTool('select'); }, [changeTool]);
 
   // Staff can still add units and change borders while looking through a cabinet's eyes.
   const editable = stage ? stage.kind === 'border' : staff && !compact;
-  const canEditTerr = editable && canMap && tool !== 'unit' && tool !== 'draw' && tool !== 'zones' && !draft;
+  const canEditTerr = editable && canMap && tool === 'select' && !draft;
   // Zones: drawn and reshaped on the main map by staff with map power (never inside a directive's reply).
   const canZones = editable && canMap && !isStage && !compact;
   // Units can be edited, added and removed on the main map; a directive reply only plans moves (nothing is saved before it is sent).
@@ -662,20 +702,37 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
   }, [cabById]);
 
   // ── actions ──
-  const pushHistory = useCallback((step: HistoryStep) => {
+  // Steps taken back that Redo can do again, newest last. A new action empties it, and so does taking back a step that
+  // cannot be done again (the steps after it would no longer fit).
+  const redoRef = useRef<HistoryStep[]>([]);
+  const [redoN, setRedoN] = useState(0);
+  const pushHistory = useCallback((step: HistoryStep, keepRedo = false) => {
     historyRef.current = [...historyRef.current, step].slice(-HISTORY_MAX);
     setHistoryN(historyRef.current.length);
+    if (!keepRedo && redoRef.current.length) { redoRef.current = []; setRedoN(0); }
   }, []);
-  const clearHistory = useCallback(() => { historyRef.current = []; setHistoryN(0); setUndo(null); }, []);
+  const clearHistory = useCallback(() => { historyRef.current = []; setHistoryN(0); redoRef.current = []; setRedoN(0); setUndo(null); }, []);
 
-  /** Go back: undoes the last thing done (several steps). */
+  /** Undo: takes back the last thing done (several steps). */
   const goBack = useCallback(() => {
     const step = historyRef.current[historyRef.current.length - 1];
     if (!step) return;
     historyRef.current = historyRef.current.slice(0, -1);
     setHistoryN(historyRef.current.length);
+    redoRef.current = step.redo ? [...redoRef.current, step].slice(-HISTORY_MAX) : [];
+    setRedoN(redoRef.current.length);
     setUndo(null);
     void step.undo();
+  }, []);
+
+  /** Redo: does again what Undo just took back. */
+  const goForward = useCallback(() => {
+    const step = redoRef.current[redoRef.current.length - 1];
+    if (!step?.redo) return;
+    redoRef.current = redoRef.current.slice(0, -1);
+    setRedoN(redoRef.current.length);
+    setUndo(null);
+    void step.redo();
   }, []);
 
   /** The shared draft is written one request at a time, in order, so the last change is the one that stays. */
@@ -731,7 +788,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
    */
   const applyEdits = useCallback(async (
     set: EditSet, text: string, undoOf: ((ids: string[]) => EditSet) | null, note: string | null = null,
-    opts: { noHistory?: boolean; fail?: string } = {},
+    opts: { noHistory?: boolean; fail?: string; redoing?: boolean } = {},
   ) => {
     const before = dataRef.current;
     if (!before || isEmptySet(set)) return;
@@ -740,7 +797,12 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
       setLast({ at: new Date().getTime(), text });
       if (undoOf && !opts.noHistory) {
         const back = undoOf(ids);
-        pushHistory({ text, undo: () => applyEdits(back, 'You went back', null, null, { noHistory: true, fail }) });
+        pushHistory({
+          text,
+          undo: () => applyEdits(back, 'You went back', null, null, { noHistory: true, fail }),
+          // Live saves give a removed shape a new id when Undo puts it back, so that step cannot be done again.
+          redo: draftModeRef.current || isStage || !back.addShapes.length ? () => applyEdits(set, text, undoOf, note, { fail, redoing: true }) : undefined,
+        }, !!opts.redoing);
         setUndo({ sid: new Date().getTime(), text, note });
       } else setUndo(null);
     };
@@ -1066,7 +1128,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
     let text: string;
     if (!dr.editId) {
       set.addShapes.push({
-        id: `new-${dr.sid}`, crisis_id: ref.id, kind: 'zone', owner_cabinet_id: null, label: name, color, geometry,
+        id: `new-${dr.sid}`, crisis_id: ref.id, kind: 'zone', owner_cabinet_id: f.owner, label: name, color, geometry,
         public: vis.public, revealed_to: vis.revealed_to, description, zone_type: type?.id ?? null,
       });
       text = `You drew the zone ${name}`;
@@ -1082,6 +1144,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
       if (vis.public !== was.public) { i.public = vis.public; b.public = was.public; }
       if ([...vis.revealed_to].sort().join() !== [...(was.revealed_to ?? [])].sort().join()) { i.revealed_to = vis.revealed_to; b.revealed_to = was.revealed_to ?? []; }
       if (Object.keys(i).length > 1) { set.shapeInfo?.push(i); back.shapeInfo?.push(b); }
+      if ((f.owner ?? null) !== (was.owner_cabinet_id ?? null)) { set.owners.push({ id: was.id, owner_cabinet_id: f.owner ?? null }); back.owners.push({ id: was.id, owner_cabinet_id: was.owner_cabinet_id ?? null }); }
       if (isEmptySet(set)) { setDraft(null); return; }
       text = `You changed the zone ${name}`;
     }
@@ -1099,6 +1162,143 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
     back.addShapes.push(shape);
     void applyEdits(set, `You removed the zone ${shape.label || ''}`.trim(), () => back, null, { fail: 'Could not remove the zone.' });
   }, [applyEdits]);
+
+  // ── Give land, Paint and Erase ──
+  // Drawn areas (and the countries one cabinet holds) as the clipper takes them. A brush or a province never changes a
+  // country's outline: land of another cabinet's country is only covered by an area on top, and a country the painter
+  // already holds adds nothing.
+  const areaTerrs = useCallback((d: MapData): ClaimTerr[] => d.shapes.filter((s) => s.kind === 'area').map((s) => {
+    const m = toMulti(s.geometry);
+    return { id: `a:${s.id}`, kind: 'area' as const, owner: s.owner_cabinet_id, multi: m, bbox: bboxOf(m) };
+  }), []);
+  const countryTerrsOf = useCallback((d: MapData, owner: string): ClaimTerr[] => {
+    const list: ClaimTerr[] = [];
+    for (const r of d.regions) {
+      if (r.owner_cabinet_id !== owner) continue;
+      const o = storedOutline(d, r.region_key);
+      const b = baseRef.current.get(r.region_key);
+      list.push({ id: `c:${r.region_key}`, kind: 'country', owner, multi: o ?? b?.multi ?? [], bbox: o ? bboxOf(o) : b?.bbox ?? null });
+    }
+    return list;
+  }, []);
+
+  /** Adds land to a cabinet: it joins the cabinet's own area it touches (else becomes a new one) and is cut out of other areas. */
+  const paintLand = useCallback((stroke: Multi, owner: string, label: string | null, text: string) => {
+    const d = dataRef.current;
+    if (!d) return;
+    const holder = cabById.get(owner)?.name ?? 'that cabinet';
+    const set = emptySet(); const back = emptySet();
+    let gone: string[] = [];
+    let grown = false;
+    try {
+      const res = planPaint(stroke, owner, areaTerrs(d), countryTerrsOf(d, owner));
+      if (res.nothing) { notifyErr(`That land already belongs to ${holder}.`, 'crisis-map'); return; }
+      gone = writePlan(res.plan, d, set, back);
+      if (res.target) {
+        const id = res.target.id.slice(2);
+        const shape = d.shapes.find((x) => x.id === id);
+        if (!shape) return;
+        grown = true;
+        set.shapes.push({ id, geometry: areaGeometry(res.plan.land) });
+        back.shapes.push({ id, geometry: shape.geometry });
+      } else {
+        set.addShapes.push({
+          id: `new-b${new Date().getTime().toString(36)}${Math.random().toString(36).slice(2, 6)}`, crisis_id: ref.id, kind: 'area',
+          owner_cabinet_id: owner, label, color: null, geometry: areaGeometry(res.plan.land), public: true, revealed_to: [],
+        });
+      }
+    } catch {
+      notifyErr('That land could not be worked out. Try a smaller stroke.', 'crisis-map');
+      return;
+    }
+    void applyEdits(set, text, grown ? () => back : (ids) => ({ ...back, removeShapes: [...back.removeShapes, ...ids] }), goneNote(gone));
+  }, [ref.id, cabById, areaTerrs, countryTerrsOf, writePlan, applyEdits]);
+
+  /** Takes land out of drawn areas (every one under it, or only `only`'s); an area left with nothing is removed. */
+  const eraseLand = useCallback((stroke: Multi, text: string, only: string | null, none: string) => {
+    const d = dataRef.current;
+    if (!d) return;
+    const set = emptySet(); const back = emptySet();
+    let gone: string[] = [];
+    try {
+      const areas = areaTerrs(d).filter((a) => !only || a.owner === only);
+      const plan = planErase(stroke, areas);
+      if (!plan.cuts.length) { notifyErr(none, 'crisis-map'); return; }
+      gone = writePlan(plan, d, set, back);
+    } catch {
+      notifyErr('That land could not be worked out. Try a smaller stroke.', 'crisis-map');
+      return;
+    }
+    void applyEdits(set, text, () => back, goneNote(gone));
+  }, [areaTerrs, writePlan, applyEdits]);
+
+  /** A brush stroke is finished (one undo step). */
+  const strokeDone = useCallback((mode: BrushMode, stroke: Multi) => {
+    if (!(editable && canMap)) return;
+    if (mode === 'erase') {
+      eraseLand(stroke, 'You erased land', null, 'There is no drawn land under the brush. Erase takes away painted and drawn land, not whole countries.');
+      return;
+    }
+    if (!chipOwner) { notifyErr('Pick a cabinet to paint with, or use Erase to take land away.', 'crisis-map'); return; }
+    paintLand(stroke, chipOwner, null, `You painted land for ${cabById.get(chipOwner)?.name ?? 'a cabinet'}`);
+  }, [editable, canMap, chipOwner, cabById, eraseLand, paintLand]);
+
+  /** Who controls a zone (null: nobody). */
+  const setZoneController = useCallback((id: string, owner: string | null) => {
+    const z = dataRef.current?.shapes.find((x) => x.id === id && x.kind === 'zone');
+    if (!z || (z.owner_cabinet_id ?? null) === owner) return;
+    const set = emptySet(); const back = emptySet();
+    set.owners.push({ id, owner_cabinet_id: owner });
+    back.owners.push({ id, owner_cabinet_id: z.owner_cabinet_id ?? null });
+    const name = z.label?.trim() || 'the zone';
+    const was = z.owner_cabinet_id ? cabById.get(z.owner_cabinet_id)?.name ?? 'a cabinet' : 'nobody';
+    const text = owner ? `You gave control of ${name} to ${cabById.get(owner)?.name ?? 'a cabinet'}` : `You took control of ${name} away from ${was}`;
+    void applyEdits(set, text, () => back, null, { fail: 'Could not change who controls the zone.' });
+  }, [cabById, applyEdits]);
+
+  /** A click with Give land: a zone, a province, a drawn area or a country goes to the cabinet in the chip (again: back to nobody). */
+  const giveClick = useCallback((map: MLMap, e: MapMouseEvent) => {
+    const d = dataRef.current;
+    if (!d) return;
+    const owner = chipOwner;
+    const toggle = (cur: string | null): string | null => (owner === null || cur === owner ? null : owner);
+    const who = owner ? cabById.get(owner)?.name ?? 'a cabinet' : 'nobody';
+    // A zone sits over the land: a click on one gives its control. Alt goes through zones and provinces to the area or country under them.
+    const through = (e.originalEvent as MouseEvent).altKey;
+    if (zonesOn && !through) {
+      const zid = zoneAt(map, e.point);
+      const z = zid ? d.shapes.find((x) => x.id === zid && x.kind === 'zone') : null;
+      if (z) { setZoneController(z.id, toggle(z.owner_cabinet_id ?? null)); return; }
+    }
+    const here: [number, number] = [e.lngLat.lng, e.lngLat.lat];
+    const f = map.queryRenderedFeatures(e.point, { layers: [L_LAND] })[0] ?? map.queryRenderedFeatures(e.point, { layers: [L_BASE_FILL] })[0];
+    const countryKey = f?.properties?.key as string | undefined;
+    const areas = areaTerrs(d);
+    const areaHere = areas.find((a) => a.multi.length > 0 && pointIn(here, a.multi)) ?? null;
+    // A state or province (when that layer is on and loaded): its exact polygon joins the cabinet's land.
+    const provinces = provincesRef.current;
+    const pv = !through && regionsOn && provinces ? provinceAt(provinces, here[0], here[1]) : null;
+    if (pv) {
+      const holder = areaHere ? areaHere.owner : countryKey ? d.regions.find((r) => r.region_key === countryKey)?.owner_cabinet_id ?? null : null;
+      if (owner === null || holder === owner) {
+        eraseLand(
+          pv.multi, owner ? `You gave ${pv.name} back to nobody` : `You took ${pv.name} away from whoever held it`, owner,
+          owner ? `${who} holds ${pv.name} as part of a whole country. Turn the Regions layer off and click the country to give it back.`
+            : `${pv.name} is not drawn land. To take a whole country away, turn the Regions layer off and click the country.`,
+        );
+      } else {
+        paintLand(pv.multi, owner, pv.name, `You gave ${pv.name} to ${who}`);
+      }
+      return;
+    }
+    const sid = map.queryRenderedFeatures(e.point, { layers: [L_SHAPE_FILL] })[0]?.properties?.id as string | undefined;
+    const area = sid ? d.shapes.find((x) => x.id === sid && x.kind === 'area') : null;
+    if (area) { pickOwner({ kind: 'area', id: area.id }, toggle(area.owner_cabinet_id)); return; }
+    if (countryKey && world?.byKey.has(countryKey)) {
+      const cur = d.regions.find((r) => r.region_key === countryKey)?.owner_cabinet_id ?? null;
+      pickOwner({ kind: 'country', key: countryKey }, toggle(cur));
+    }
+  }, [chipOwner, cabById, zonesOn, regionsOn, world, zoneAt, areaTerrs, eraseLand, paintLand, setZoneController, pickOwner]);
 
   /** Undo in the editor: one step back through the corners just changed (or, while drawing, the last point). */
   const undoDraft = useCallback(() => {
@@ -1366,6 +1566,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
     setConfirmDiscard(false);
     draftRef.current = null; setDraftSet(null);
     historyRef.current = []; setHistoryN(0); setUndo(null);
+    redoRef.current = []; setRedoN(0);
     setSelUnit(null); setSelTerr(null);
     await run(async () => {
       try {
@@ -1548,6 +1749,13 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
     });
   }, [compact]);
 
+  // The Paint and Erase brushes (the pen under the pointer and the stroke being dragged).
+  const brush = useBrush({
+    ready: !!world, mapRef, setSource,
+    mode: editable && canMap && (tool === 'paint' || tool === 'erase') ? tool : null,
+    km: brushKm, color: chipColor, onStroke: strokeDone,
+  });
+
   // ── map events read the latest state through this ──
   useEffect(() => {
     liveRef.current = {
@@ -1566,7 +1774,12 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
           }
           return;
         }
-        if ((tool === 'borders' || tool === 'draw' || tool === 'zones') && draft) {
+        if (tool === 'paint' || tool === 'erase') return;   // a stroke is made on release
+        if (tool === 'give') {
+          if (editable && canMap) giveClick(map, e);
+          return;
+        }
+        if ((tool === 'draw' || tool === 'zones') && draft) {
           if (draft.phase !== 'draw') return;
           const pts = draft.points;
           const lastPt = pts[pts.length - 1];
@@ -1585,7 +1798,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
         if (tool === 'draw') {
           if (editable && canMap) {
             setSelTerr(null); setSelUnit(null); setSelChar(null);
-            setDraft({ sid: new Date().getTime(), kind: 'area', phase: 'draw', points: [[round5(clampLng(e.lngLat.lng)), round5(clampLat(e.lngLat.lat))]], owner: viewer, ownerChosen: !!viewer, trail: [] });
+            setDraft({ sid: new Date().getTime(), kind: 'area', phase: 'draw', points: [[round5(clampLng(e.lngLat.lng)), round5(clampLat(e.lngLat.lat))]], owner: chipOwner, ownerChosen: true, trail: [] });
           }
           return;
         }
@@ -1601,7 +1814,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
           const zid = zoneAt(map, e.point);
           if (zid) { setSelUnit(null); setSelChar(null); setSelTerr(null); setSelZone(zid); return; }
         }
-        // Select and Borders: a click picks a territory (a drawn area sits on top of a country).
+        // Select: a click picks a territory (a drawn area sits on top of a country).
         const area = map.queryRenderedFeatures(e.point, { layers: [L_SHAPE_FILL] })[0];
         const sid = area?.properties?.id as string | undefined;
         if (sid && dataRef.current?.shapes.some((s) => s.id === sid && s.kind === 'area')) {
@@ -1616,11 +1829,8 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
           setSelUnit(null); setSelChar(null); setSelZone(null); setSelTerr({ kind: 'country', key });
           return;
         }
-        // Open sea: let go of what is selected; with nothing selected, Borders starts new territory here.
-        if (selTerr || selUnit || selChar || selZone) { clearSelection(); return; }
-        if (tool === 'borders' && editable && canMap) {
-          setDraft({ sid: new Date().getTime(), kind: 'area', phase: 'draw', points: [[round5(clampLng(e.lngLat.lng)), round5(clampLat(e.lngLat.lat))]], owner: viewer, ownerChosen: !!viewer, trail: [] });
-        }
+        // Open sea: let go of what is selected.
+        if (selTerr || selUnit || selChar || selZone) clearSelection();
       },
       onMapDblClick: (e) => {
         if (draft && draft.phase === 'draw' && draft.points.length >= MIN_POINTS) {
@@ -1630,9 +1840,11 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
       },
       onPress: (e) => {
         const map = mapRef.current;
+        // Paint and Erase: press and drag makes a stroke (hold Shift to move the map instead).
+        if (map && editable && canMap && !dragRef.current && !freeRef.current && brush.press(e)) return;
         // Draw: press and drag draws an outline freehand (hold Shift to move the map instead).
         if (map && editable && canMap && !dragRef.current && !freeRef.current
-          && (tool === 'draw' || (tool === 'borders' && draft?.phase === 'draw') || (tool === 'zones' && draft?.phase === 'draw')) && (!draft || draft.phase === 'draw')) {
+          && (tool === 'draw' || (tool === 'zones' && draft?.phase === 'draw')) && (!draft || draft.phase === 'draw')) {
           const oe = e.originalEvent as MouseEvent;
           const tg = e.originalEvent.target as HTMLElement | null;
           if (oe.shiftKey || oe.button > 0 || tg?.closest('.wm-marker')) return;
@@ -1678,6 +1890,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
         const map = mapRef.current;
         if (!map) return;
         if (sightCtl.current?.active) { sightCtl.current.move([e.lngLat.lng, e.lngLat.lat]); return; }
+        if (brush.move(e)) return;
         const fh = freeRef.current;
         if (fh) {
           const last = fh.pts[fh.pts.length - 1];
@@ -1720,17 +1933,18 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
         }
         if (!near && hoverShown.current) setSource(SRC_HOVER, emptyFc);
         hoverShown.current = near;
-        const drawing = (tool === 'borders' || tool === 'zones') && !!draft;
+        const drawing = tool === 'zones' && !!draft;
         const onRing = !near && canUnits && editable && !compact && tool === 'select'
           && ((!!sightCtl.current && sightCtl.current.hit(e.point)) || !!ringAt(map, e.point));
         map.getCanvasContainer().style.cursor = near ? 'grab'
           : onRing ? 'ew-resize'
-          : drawing || (tool === 'unit' && addKind) ? 'crosshair'
-            : tool === 'borders' ? 'pointer' : '';
+          : drawing || tool === 'paint' || tool === 'erase' || (tool === 'unit' && addKind) ? 'crosshair'
+            : tool === 'give' ? 'pointer' : '';
       },
       onRelease: () => {
         if (sightCtl.current?.active) { suppressClickUntil.current = performance.now() + 400; sightCtl.current.end(); return; }
         if (ringBegin.current) { ringBegin.current = null; suppressClickUntil.current = performance.now() + 400; return; }
+        if (brush.release()) { suppressClickUntil.current = performance.now() + 400; return; }
         const fh = freeRef.current;
         if (fh) {
           freeRef.current = null;
@@ -1742,7 +1956,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
             if (fh.pts.length > 2) notifyErr('Draw a bigger shape, or click points one by one.', 'crisis-map');
             return;
           }
-          const from: Draft = draft ?? { sid: new Date().getTime(), kind: 'area', phase: 'draw', points: [], owner: viewer, ownerChosen: !!viewer, trail: [] };
+          const from: Draft = draft ?? { sid: new Date().getTime(), kind: 'area', phase: 'draw', points: [], owner: chipOwner, ownerChosen: true, trail: [] };
           setDraft({ ...from, phase: 'refine', points: from.points.length >= 2 ? [...from.points, ...corners] : corners });
           return;
         }
@@ -1799,7 +2013,9 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
       onCharMoved: (id, lng, lat) => { showMove(null, null); void moveChar(id, lng, lat); },
       redrawFog,
       regroupChars,
+      brushDown: () => brush.isDown(),
       escape: () => {
+        if (brush.cancel()) return true;
         if (freeRef.current) {
           freeRef.current = null;
           setSource(SRC_DRAFT, draft ? draftFc(draft.points, draftColor) : emptyFc);
@@ -1822,6 +2038,8 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
         }
         const had = !!(selTerr || selUnit || selChar || selZone) && stageKind !== 'unit';
         if (stageKind !== 'unit') clearSelection();
+        // Nothing left to back out of: a tool other than Select goes back to Select.
+        if (!had && tool !== 'select' && stageKind !== 'unit') { changeTool('select'); return true; }
         return had;
       },
     };
@@ -1900,6 +2118,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
           m.addSource(SRC_HOVER, { type: 'geojson', data: emptyFc });
           m.addSource(SRC_PLANS, { type: 'geojson', data: emptyFc });
           m.addSource(SRC_SIGHT, { type: 'geojson', data: emptyFc });
+          m.addSource(SRC_BRUSH, { type: 'geojson', data: emptyFc });
           addPhysicalSources(m);
           for (const layer of mapLayers()) m.addLayer(layer);
           addCityLayers(m);
@@ -1923,7 +2142,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
           m.on('dblclick', (e) => liveRef.current?.onMapDblClick(e));
           m.on('mousedown', (e) => liveRef.current?.onPress(e));
           m.on('touchstart', (e) => { if (e.points.length === 1) liveRef.current?.onPress(e); });
-          m.on('touchmove', (e) => { if ((dragRef.current || freeRef.current || sightCtl.current?.active) && e.points.length === 1) liveRef.current?.onPointerMove(e); });
+          m.on('touchmove', (e) => { if ((dragRef.current || freeRef.current || sightCtl.current?.active || liveRef.current?.brushDown()) && e.points.length === 1) liveRef.current?.onPointerMove(e); });
           let hover: string | null = null;
           let moveFrame: number | null = null;
           let lastMove: MapMouseEvent | null = null;
@@ -1935,9 +2154,9 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
               const ev = lastMove;
               if (!ev || cancelled) return;
               liveRef.current?.onPointerMove(ev);
-              // The country under the pointer lights up while the Borders tool waits for a click.
+              // The country under the pointer lights up while Give land waits for a click.
               const el = m.getCanvasContainer();
-              const want = el.dataset.tool === 'borders' && !el.dataset.busy && !dragRef.current;
+              const want = el.dataset.tool === 'give' && !el.dataset.busy && !dragRef.current;
               const f = want ? m.queryRenderedFeatures(ev.point, { layers: [L_LAND] })[0] : undefined;
               const key = (f?.properties?.key as string | undefined) ?? null;
               if (key === hover) return;
@@ -1986,16 +2205,16 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
     };
   }, []);
 
-  // The Borders hover reads the tool from the map element (the handler is made once).
+  // The Give land hover reads the tool from the map element (the handler is made once).
   useEffect(() => {
     const map = mapRef.current;
     if (!world || !map) return;
     const el = map.getCanvasContainer();
     el.dataset.tool = canMap && editable ? tool : '';
     if (draft) el.dataset.busy = '1'; else delete el.dataset.busy;
-    el.style.cursor = tool === 'draw' || ((tool === 'borders' || tool === 'zones') && !!draft) || (tool === 'unit' && addKind) ? 'crosshair' : tool === 'borders' ? 'pointer' : '';
-    if (draft || tool === 'draw') map.doubleClickZoom.disable(); else map.doubleClickZoom.enable();
-    if (tool !== 'borders' || draft) {
+    el.style.cursor = tool === 'draw' || tool === 'paint' || tool === 'erase' || (tool === 'zones' && !!draft) || (tool === 'unit' && addKind) ? 'crosshair' : tool === 'give' ? 'pointer' : '';
+    if (draft || tool === 'draw' || tool === 'paint' || tool === 'erase') map.doubleClickZoom.disable(); else map.doubleClickZoom.enable();
+    if (tool !== 'give' || draft) {
       whenStyleReady(map, () => {
         for (const key of world.byKey.keys()) map.setFeatureState({ source: SRC_COUNTRIES, id: key }, { hi: false });
       });
@@ -2119,15 +2338,18 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
     // Zones follow the Zones switch; a zone being reshaped is drawn by the editor instead.
     const drawn = shownShapes.filter((s) => s.kind !== 'zone' || (zonesOn && s.id !== editingZoneId));
     const colorOf = (s: MapShape) => (s.kind === 'zone' ? safeColor(zoneColorOf(s, zoneTypes)) : shapeColor(s, cabById));
+    // A zone keeps its type's fill and dashes; the cabinet that controls it outlines it in its own colour.
+    const controllerOf = (s: MapShape) => (s.kind === 'zone' && s.owner_cabinet_id ? cabById.get(s.owner_cabinet_id) ?? null : null);
     const fc: FeatureCollection = {
       type: 'FeatureCollection',
       features: drawn.map((s) => {
         const color = colorOf(s);
         // Territory is filled and outlined exactly like the cabinet's countries.
         const props = s.kind === 'area' ? { tint: cabinetTint(color, 0.27), edge: cabinetTint(color, 0.95) } : {};
+        const ctl = controllerOf(s);
         return {
           type: 'Feature' as const,
-          properties: { id: s.id, kind: s.kind, color, ...props },
+          properties: { id: s.id, kind: s.kind, color, ...props, ...(ctl ? { ctl: safeColor(ctl.color) } : {}) },
           geometry: s.geometry as unknown as Feature['geometry'],
         };
       }),
@@ -2141,7 +2363,8 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
       const at = centroidOf(shapePoints(s.geometry));
       const old = shapeLabels.current.get(s.id);
       if (old) old.remove();
-      shapeLabels.current.set(s.id, new ml.Marker({ element: makeShapeLabel(s.label, color), anchor: 'center' }).setLngLat(at).addTo(map));
+      const ctl = controllerOf(s);
+      shapeLabels.current.set(s.id, new ml.Marker({ element: makeShapeLabel(s.label, color, ctl ? { text: ctl.short, color: ctl.color } : undefined), anchor: 'center' }).setLngLat(at).addTo(map));
     }
     for (const [id, mk] of [...shapeLabels.current]) {
       if (!wanted.has(id)) { mk.remove(); shapeLabels.current.delete(id); }
@@ -2913,7 +3136,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
       panel = (
         <ZoneEditor
           key={draft.sid} isNew={!draft.editId} phase={draft.phase} types={zoneTypes} cabinets={cabinets}
-          initial={was ? zoneFormOf(was, zoneTypes) : { name: '', type: zoneTypes[0]?.id ?? null, color: ZONE_NO_TYPE_COLOR, description: '', vis: 'public', revealed: [] }}
+          initial={was ? zoneFormOf(was, zoneTypes) : { name: '', type: zoneTypes[0]?.id ?? null, color: ZONE_NO_TYPE_COLOR, description: '', vis: 'public', revealed: [], owner: null }}
           pointCount={draft.points.length} minPoints={MIN_POINTS} canUndo={draft.trail.length > 0} outlineDirty={draft.trail.length > 0} busy={busy}
           onColor={setZoneColor} onUndo={undoDraft} onFinish={() => setDraft({ ...draft, phase: 'refine' })}
           onSave={(f) => submitZone(draft, f)} onCancel={() => setDraft(null)}
@@ -2932,7 +3155,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
                   : 'It does not touch any cabinet\'s land. Choose who holds it.'
           }
           canSave={draft.ownerChosen || draft.owner !== null}
-          onOwner={(id) => setDraft((d) => (d ? { ...d, owner: id, ownerChosen: true } : d))}
+          onOwner={(id) => { setChipOwner(id); setDraft((d) => (d ? { ...d, owner: id, ownerChosen: true } : d)); }}
           canUndo={draft.trail.length > 0}
           onUndo={undoDraft}
           onFinish={() => setDraft({ ...draft, phase: 'refine' })}
@@ -2957,7 +3180,8 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
       panel = (
         <ZoneInfoCard
           key={selZoneRow.id} zone={selZoneRow} type={selZoneRow.zone_type ? zoneTypeById.get(selZoneRow.zone_type) ?? null : null} cabinets={cabinets}
-          staff={staff && !staffViewer} canEdit={canZones}
+          staff={staff && !staffViewer} canEdit={canZones} canControl={canZones}
+          onControl={(id) => setZoneController(selZoneRow.id, id)}
           onEdit={() => { changeTool('zones'); editZone(selZoneRow.id); }} onClose={() => setSelZone(null)}
         />
       );
@@ -3017,7 +3241,6 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
   // ── controls ──
   const viewOptions = [{ value: 'all', label: 'Crisis team' }, ...cabinets.map((c) => ({ value: c.id, label: c.short }))];
   const viewerCabinet = viewer ? cabById.get(viewer) : null;
-  const showAdd = unitEditing;
 
   // The zone types that have a zone on the map right now (while Zones is on).
   const legendZoneTypes = useMemo(() => {
@@ -3029,12 +3252,9 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
   const hint = compact ? null
     : tool === 'unit' && addKind && !newUnit ? `Click the map to place the ${KIND_META[addKind].label.toLowerCase()}.`
       : draft ? null
-      : tool === 'zones' && canZones ? 'Click a zone to reshape it, or press Draw a new zone. A zone never changes who holds the land.'
-      : tool === 'draw' && editable && canMap ? 'Press and drag to draw an outline, or click points one by one. Hold Shift and drag to move the map.'
       : sightUnit && canUnits && tool === 'select' ? 'Press anywhere on the dashed ring and drag, or drag its round handle, to change how far it sees.'
         : canEditTerr && selTerr && selValid ? (selDetailed ? 'Press on the red outline and drag to bend the border, then save.' : 'Drag a corner or a small dot on a side to reshape it, then save.')
-          : tool === 'borders' && editable && canMap ? 'Click a country to select it, or click the sea to draw new territory.'
-            : null;
+          : null;
 
   const pendingUnit = pendingMove ? rawData?.units.find((u) => u.id === pendingMove.id) ?? null : null;
   const compactInfo = compact && selUnitRow
@@ -3055,6 +3275,57 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
   ) : viewerCabinet ? (
     <span style={{ fontSize: 12.5, fontWeight: 700, color: CK.inkSoft }}>Viewing as {viewerCabinet.name}</span>
   ) : null;
+
+  // The map's show-and-hide switches: tucked behind "Show on the map" in the toolbar.
+  const viewTools = (
+    <>
+
+        {staff && !isStage && (
+          <button
+            type="button" className="wm-tool" aria-pressed={fogOn && !!staffViewer} disabled={!staffViewer}
+            onClick={() => setFogOn((f) => !f)}
+            title={staffViewer
+              ? 'Hatched ground is what this side cannot see. It sees its own land and a circle around each of its units, and still sees who holds every country. Spies are never spotted.'
+              : 'Pick a side next to "See the map as" to see its fog of war'}
+          >
+            <Cloud size={17} strokeWidth={1.5} /><span>Fog of war</span>
+          </button>
+        )}
+        {(staff || !!viewer) && !isStage && (
+          <button
+            type="button" className="wm-tool" aria-pressed={rangesOn && !!viewer} disabled={!viewer}
+            onClick={() => setRangesOn((r) => !r)}
+            title={viewer
+              ? 'The dashed circle around each unit shows how far it sees. Select a unit to drag its circle bigger or smaller. Spies are never spotted.'
+              : 'Pick a side next to "See the map as" to see how far its units see'}
+          >
+            <Eye size={17} strokeWidth={1.5} /><span>Sight ranges</span>
+          </button>
+        )}
+        {(staff || !!cabinetId) && !isStage && (
+          <button
+            type="button" className="wm-tool" aria-pressed={charsOn} onClick={() => setCharsOn((c) => !c)}
+            title={visibleChars.length ? (staff ? 'Show or hide where the characters are. Crisis team can drag them to a new spot.' : 'Show or hide where the characters are') : 'No character has a place on the map yet'}
+          >
+            <UserRound size={17} strokeWidth={1.5} /><span>Characters</span>
+          </button>
+        )}
+        <button type="button" className="wm-tool" aria-pressed={citiesOn} onClick={() => setCitiesOn((c) => !c)} title="Show or hide capitals and big cities">
+          <Building2 size={17} strokeWidth={1.5} /><span>Cities</span>
+        </button>
+        {!compact && (
+          <button type="button" className="wm-tool" aria-pressed={zonesOn} onClick={() => setZonesOn((z) => !z)} title="Show or hide zones: blockade lines, no-fly zones and other areas that are not territory">
+            <Layers size={17} strokeWidth={1.5} /><span>Zones</span>
+          </button>
+        )}
+        <button type="button" className="wm-tool" aria-pressed={waterOn} onClick={() => setWaterOn((w) => !w)} title="Show or hide rivers, lakes and the names of seas and oceans">
+          <Droplets size={17} strokeWidth={1.5} /><span>Water</span>
+        </button>
+        <button type="button" className="wm-tool" aria-pressed={regionsOn} onClick={() => { regionsAuto.current = false; setRegionsOn((r) => !r); }} title="Show or hide states and provinces (United States, Canada, Brazil and Australia)">
+          <SquareDashed size={17} strokeWidth={1.5} /><span>Regions</span>
+        </button>
+    </>
+  );
 
   // The unsent changes: in the header, outside the map, so they never cover it.
   const draftBar = draftCount > 0 && staff && !isStage ? (
@@ -3083,7 +3354,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
       className="wm-root" data-compact={compact ? '1' : undefined} data-stage={isStage ? '1' : undefined}
       style={stage ? ({ '--wm-stage-h': `${stage.height}px` } as CSSProperties) : undefined}
     >
-      <style>{MAP_CSS}</style>
+      <style>{MAP_CSS + TOOLBAR_CSS}</style>
 
       {compact ? (
         <div className="wm-top">
@@ -3103,99 +3374,15 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
               </div>
             </div>
           )}
-          <div className="wm-tools" role="toolbar" aria-label="Map tools">
-            <div className="wm-group">
-              <span className="wm-group-label">Tools</span>
-              <div className="wm-group-row">
-                <button type="button" className="wm-tool" aria-pressed={tool === 'select'} onClick={() => changeTool('select')} title="Select a unit, a country or a territory">
-                  <MousePointer2 size={17} strokeWidth={1.5} /><span>Select</span>
-                </button>
-                {editable && canMap && (
-                  <button type="button" className="wm-tool" aria-pressed={tool === 'borders'} onClick={() => changeTool('borders')} title="Change who holds land and where borders run">
-                    <Flag size={17} strokeWidth={1.5} /><span>Borders</span>
-                  </button>
-                )}
-                {editable && canMap && (
-                  <button type="button" className="wm-tool" aria-pressed={tool === 'draw'} onClick={() => changeTool(tool === 'draw' ? 'select' : 'draw')} title="Draw a new territory by dragging, or by clicking points">
-                    <Pencil size={17} strokeWidth={1.5} /><span>Draw area</span>
-                  </button>
-                )}
-                {canZones && (
-                  <button
-                    type="button" className="wm-tool" aria-pressed={tool === 'zones'}
-                    onClick={() => { if (tool !== 'zones') setZonesOn(true); changeTool(tool === 'zones' ? 'select' : 'zones'); }}
-                    title="Draw and reshape zones: blockade lines, no-fly zones and other areas that are not territory"
-                  >
-                    <Hexagon size={17} strokeWidth={1.5} /><span>Zones</span>
-                  </button>
-                )}
-                {editable && (canMap || canUnits || canChars) && (
-                  <button
-                    type="button" className="wm-tool" aria-pressed={false} disabled={!historyN || busy} onClick={goBack}
-                    title={historyN ? 'Undo the last thing you did. Press again to go back further.' : 'Nothing to go back to yet'}
-                  >
-                    <Undo2 size={17} strokeWidth={1.5} /><span>Go back</span>
-                  </button>
-                )}
-              </div>
-            </div>
-            <div className="wm-group wm-group-end">
-              <span className="wm-group-label">Show on the map</span>
-              <div className="wm-group-row">
-                {staff && !isStage && (
-                  <button
-                    type="button" className="wm-tool" aria-pressed={fogOn && !!staffViewer} disabled={!staffViewer}
-                    onClick={() => setFogOn((f) => !f)}
-                    title={staffViewer
-                      ? 'Hatched ground is what this side cannot see. It sees its own land and a circle around each of its units, and still sees who holds every country. Spies are never spotted.'
-                      : 'Pick a side next to "See the map as" to see its fog of war'}
-                  >
-                    <Cloud size={17} strokeWidth={1.5} /><span>Fog of war</span>
-                  </button>
-                )}
-                {(staff || !!viewer) && !isStage && (
-                  <button
-                    type="button" className="wm-tool" aria-pressed={rangesOn && !!viewer} disabled={!viewer}
-                    onClick={() => setRangesOn((r) => !r)}
-                    title={viewer
-                      ? 'The dashed circle around each unit shows how far it sees. Select a unit to drag its circle bigger or smaller. Spies are never spotted.'
-                      : 'Pick a side next to "See the map as" to see how far its units see'}
-                  >
-                    <Eye size={17} strokeWidth={1.5} /><span>Sight ranges</span>
-                  </button>
-                )}
-                {(staff || !!cabinetId) && !isStage && (
-                  <button
-                    type="button" className="wm-tool" aria-pressed={charsOn} onClick={() => setCharsOn((c) => !c)}
-                    title={visibleChars.length ? (staff ? 'Show or hide where the characters are. Crisis team can drag them to a new spot.' : 'Show or hide where the characters are') : 'No character has a place on the map yet'}
-                  >
-                    <UserRound size={17} strokeWidth={1.5} /><span>Characters</span>
-                  </button>
-                )}
-                <button type="button" className="wm-tool" aria-pressed={citiesOn} onClick={() => setCitiesOn((c) => !c)} title="Show or hide capitals and big cities">
-                  <Building2 size={17} strokeWidth={1.5} /><span>Cities</span>
-                </button>
-                {!compact && (
-                  <button type="button" className="wm-tool" aria-pressed={zonesOn} onClick={() => setZonesOn((z) => !z)} title="Show or hide zones: blockade lines, no-fly zones and other areas that are not territory">
-                    <Layers size={17} strokeWidth={1.5} /><span>Zones</span>
-                  </button>
-                )}
-                <button type="button" className="wm-tool" aria-pressed={waterOn} onClick={() => setWaterOn((w) => !w)} title="Show or hide rivers, lakes and the names of seas and oceans">
-                  <Droplets size={17} strokeWidth={1.5} /><span>Water</span>
-                </button>
-                <button type="button" className="wm-tool" aria-pressed={regionsOn} onClick={() => setRegionsOn((r) => !r)} title="Show or hide states and provinces (United States, Canada, Brazil and Australia)">
-                  <SquareDashed size={17} strokeWidth={1.5} /><span>Regions</span>
-                </button>
-                <span className="wm-tool-sep" aria-hidden />
-                <button type="button" className="wm-tool" aria-pressed={false} onClick={fitView} title="Zoom to fit all the units on screen">
-                  <Maximize2 size={17} strokeWidth={1.5} /><span>Fit view</span>
-                </button>
-              </div>
-            </div>
-            {editable && canMap && (
-              <p className="wm-toolhint">Land belongs to one cabinet: draw or drag a border outward from its land to extend it. New ground is cut out of everyone else&apos;s, so territories never overlap.</p>
-            )}
-          </div>
+          <MapToolbar
+            tool={tool} onTool={changeTool}
+            allowed={{ give: editable && canMap, paint: editable && canMap, erase: editable && canMap, draw: editable && canMap, zones: canZones, unit: unitEditing }}
+            cabinets={cabinets} owner={chipOwner} onOwner={setChipOwner}
+            brushKm={brushKm} onBrushKm={(km) => { brushTouched.current = true; setBrushKm(km); }}
+            history={editable && (canMap || canUnits || canChars)} canUndo={historyN > 0} canRedo={redoN > 0} busy={busy}
+            onUndo={goBack} onRedo={goForward} onFit={fitView}
+            viewTools={viewTools} editable={editable && (canMap || canUnits)} provincesReady={provincesReady}
+          />
         </>
       )}
 
@@ -3227,7 +3414,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
                 <span style={{ display: 'block', fontSize: 13, fontWeight: 700, color: CK.ink, overflowWrap: 'anywhere' }}>{undo.text}</span>
                 {undo.note && <span style={{ display: 'block', fontSize: 12, color: CK.inkSoft, overflowWrap: 'anywhere' }}>{undo.note}</span>}
               </span>
-              <Btn size="sm" tone="ghost" disabled={busy} onClick={goBack}>Go back</Btn>
+              <Btn size="sm" tone="ghost" disabled={busy} onClick={goBack}>Undo</Btn>
             </div>
           )}
           <svg ref={arrowSvg} className="wm-arrow" aria-hidden>
@@ -3241,15 +3428,6 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
             <div className="wm-topleft">
               <div className="wm-hint">{hint}</div>
             </div>
-          )}
-          {showAdd && (
-            <button
-              type="button" className="wm-add" aria-pressed={tool === 'unit'} title="Add a unit"
-              onClick={() => changeTool(tool === 'unit' ? 'select' : 'unit')}
-            >
-              <span className="wm-add-icons"><Plus size={26} strokeWidth={1.5} /><Ship size={19} strokeWidth={1.5} /></span>
-              <span>Add unit</span>
-            </button>
           )}
           {pendingMove && (
             <div ref={moveCard} className="wm-move" role="group" aria-label="Confirm the move" style={{ fontFamily: CK.font }}>
@@ -3268,7 +3446,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
           )}
         </div>
 
-        {panel && <div className="wm-drawer" data-add={showAdd ? '' : undefined}>{panel}</div>}
+        {panel && <div className="wm-drawer">{panel}</div>}
 
         <div className="wm-legend">
           <div>

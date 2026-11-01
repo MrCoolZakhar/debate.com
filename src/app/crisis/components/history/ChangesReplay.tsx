@@ -10,7 +10,7 @@ import { memo, useMemo, type ReactElement } from 'react';
 import type { Geometry } from 'geojson';
 import type { LngLat } from '@/lib/crisis/history';
 import type { UnitKind } from '@/lib/crisis/types';
-import { easeInOut } from '../map/mapAnimate';
+import { easeInOut, mixHex } from '../map/mapAnimate';
 import { GLYPH_MARKUP } from '../map/glyphs';
 import { LAND, LAND_LINE, SEA, type WorldData } from '../map/mapData';
 import { safeColor } from '../map/tokens';
@@ -184,11 +184,13 @@ export default function ChangesReplay({ world, changes, ctx, t, hot }: {
     if (p.c.type === 'shape') {
       const from = p.ptsFrom; const to = p.ptsTo;
       const sw = isHot ? 4.4 : 2.4;
+      // A shape that changed hands (a zone's controller, an area's holder) blends its colour from the old holder's to the new one's.
+      const hue = p.fromColor && p.toColor && p.fromColor !== p.toColor ? mixHex(p.fromColor, p.toColor, e) : p.color;
       const draw = (key: string, pts: Array<[number, number]>, op: number, ghost?: boolean) => {
         const str = pts.map((q) => `${q[0].toFixed(1)},${q[1].toFixed(1)}`).join(' ');
         shapes.push(p.polygon
-          ? <polygon key={key} points={str} fill={p.color} fillOpacity={0.28 * op} stroke={p.color} strokeOpacity={op} strokeWidth={sw} strokeDasharray={ghost ? '6 5' : undefined} strokeLinejoin="round" />
-          : <polyline key={key} points={str} fill="none" stroke={p.color} strokeOpacity={op} strokeWidth={isHot ? 4.4 : 3.2} strokeDasharray="7 5" />);
+          ? <polygon key={key} points={str} fill={hue} fillOpacity={0.28 * op} stroke={hue} strokeOpacity={op} strokeWidth={sw} strokeDasharray={ghost ? '6 5' : undefined} strokeLinejoin="round" />
+          : <polyline key={key} points={str} fill="none" stroke={hue} strokeOpacity={op} strokeWidth={isHot ? 4.4 : 3.2} strokeDasharray="7 5" />);
       };
       if (from && to && from.length === to.length) draw(p.c.rowId, from.map((q, j) => [lerp(q[0], to[j][0], e), lerp(q[1], to[j][1], e)] as [number, number]), 1);
       else {

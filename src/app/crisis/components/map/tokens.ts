@@ -109,11 +109,19 @@ export function makeCountryLabel(name: string, area: number): HTMLElement {
   return el;
 }
 
-export function makeShapeLabel(text: string, color: string): HTMLElement {
+export function makeShapeLabel(text: string, color: string, badge?: { text: string; color: string }): HTMLElement {
   const el = document.createElement('div');
   el.className = 'wm-slabel';
   el.textContent = text;
   el.style.color = safeColor(color);
+  // A zone's controller: a small badge in the cabinet's colour after the name.
+  if (badge) {
+    const b = document.createElement('span');
+    b.className = 'wm-slabel-ctl';
+    b.textContent = badge.text;
+    b.style.background = safeColor(badge.color);
+    el.appendChild(b);
+  }
   return el;
 }
 
@@ -249,6 +257,7 @@ export const MAP_CSS = `
 .wm-clabel{pointer-events:none;white-space:nowrap;font:700 10.5px/1 var(--font-brand),Inter,sans-serif;letter-spacing:0.1em;text-transform:uppercase;color:#8C806C;text-shadow:0 0 3px #F5F0E4,0 0 3px #F5F0E4}
 .wm-clabel-big{font-size:13px;letter-spacing:0.16em;color:#7E7260}
 .wm-slabel{pointer-events:none;white-space:nowrap;font:800 11.5px/1 var(--font-brand),Inter,sans-serif;text-shadow:0 0 3px #fff,0 0 3px #fff,0 0 5px #fff}
+.wm-slabel-ctl{display:inline-block;margin-left:6px;padding:2px 6px;border-radius:7px;font:800 10px/1.1 var(--font-brand),Inter,sans-serif;color:#fff;text-shadow:none;vertical-align:1px;box-shadow:0 1px 3px rgba(27,56,40,0.3)}
 .wm-vtx{width:16px;height:16px;border-radius:50%;background:#fff;border:2.5px solid #8E2424;box-sizing:border-box;box-shadow:0 1px 4px rgba(0,0,0,0.35);cursor:grab}
 .wm-mid{width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,0.85);border:1.5px solid #8E2424;box-sizing:border-box;opacity:0.8;cursor:grab}
 .wm-mid:hover{opacity:1;background:#fff;box-shadow:0 0 0 3px rgba(142,36,36,0.25)}
