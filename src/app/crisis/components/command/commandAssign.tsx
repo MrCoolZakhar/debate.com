@@ -15,16 +15,21 @@ import { StaffPic } from '../directives/directiveParts';
 
 const W = 252;
 
-export default function AssignControl({ cref, directive, staff, openCounts, onChanged, hanging }: {
+export default function AssignControl({ cref, directive, staff, openCounts, onChanged, hanging, foot, currentId }: {
   cref: CrisisRef; directive: Directive; staff: Member[]; openCounts: Map<string, number>; onChanged: () => void;
   /** The avatar alone, bigger, with a white ring and a tiny chevron badge on its corner: it hangs over a card's border (a cabinet directive). */
   hanging?: boolean;
+  /** The avatar with the person's name small beside it ("Unassigned" with a dashed avatar when nobody): the bottom of a card on the Directives page. */
+  foot?: boolean;
+  /** Who is shown as responsible when that is not just `assigned_member_id` (the character's owner stands in until someone is assigned). */
+  currentId?: string | null;
 }) {
   const btn = useRef<HTMLButtonElement>(null);
   const box = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ top?: number; bottom?: number; left: number; maxHeight: number } | null>(null);
   const [busy, setBusy] = useState(false);
-  const current = staff.find((m) => m.id === directive.assigned_member_id) ?? null;
+  const curId = currentId !== undefined ? currentId : directive.assigned_member_id;
+  const current = staff.find((m) => m.id === curId) ?? null;
 
   const place = useCallback(() => {
     const b = btn.current;
@@ -35,9 +40,9 @@ export default function AssignControl({ cref, directive, staff, openCounts, onCh
     const wanted = Math.min(320, 12 + staff.length * 46);
     const up = below < wanted && above > below;
     const maxHeight = Math.max(120, Math.min(wanted, up ? above : below));
-    const left = Math.max(8, Math.min(r.right - W, window.innerWidth - W - 8));
+    const left = Math.max(8, Math.min(foot ? r.left : r.right - W, window.innerWidth - W - 8));
     setPos(up ? { bottom: window.innerHeight - r.top + 6, left, maxHeight } : { top: r.bottom + 6, left, maxHeight });
-  }, [staff.length]);
+  }, [staff.length, foot]);
 
   useLayoutEffect(() => {
     if (!pos) return;
@@ -63,7 +68,7 @@ export default function AssignControl({ cref, directive, staff, openCounts, onCh
 
   const pick = async (m: Member) => {
     if (busy) return;
-    if (m.id === directive.assigned_member_id) { setPos(null); return; }
+    if (m.id === curId) { setPos(null); return; }
     setBusy(true);
     try {
       await assignDirective(cref, directive.id, m.id);
@@ -86,11 +91,19 @@ export default function AssignControl({ cref, directive, staff, openCounts, onCh
         aria-label={`Change who has this directive. Now ${current ? current.display_name : 'nobody'}`}
         title={current ? `With ${current.display_name}. Change` : 'Nobody has it. Pick someone'}
         className="inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] active:scale-[0.96] transition-transform"
-        style={hanging
+        style={foot
+          ? { gap: 7, maxWidth: '100%', border: 0, cursor: 'pointer', padding: '3px 9px 3px 3px', borderRadius: 999, background: CK.card, boxShadow: `${CK.shadowSm}, inset 0 0 0 1px ${CK.hair}`, color: CK.inkSoft, fontFamily: CK.font, textAlign: 'left' }
+          : hanging
           ? { position: 'relative', border: 0, cursor: 'pointer', padding: 0, borderRadius: '50%', background: '#FFFFFF', lineHeight: 0, boxShadow: '0 0 0 3px #FFFFFF, 0 3px 9px rgba(27,56,40,0.28)' }
           : { gap: 2, border: 0, cursor: 'pointer', padding: '2px 4px 2px 2px', borderRadius: 999, background: CK.card, boxShadow: `${CK.shadowSm}, inset 0 0 0 1px ${CK.hair}`, color: CK.inkSoft }}
       >
-        {hanging ? (
+        {foot ? (
+          <>
+            <StaffPic member={current} size={28} />
+            <span style={{ fontSize: 12.5, fontWeight: 700, lineHeight: 1.2, color: current ? CK.ink : CK.muted, overflowWrap: 'anywhere', minWidth: 0 }}>{current ? current.display_name : 'Unassigned'}</span>
+            <ChevronDown size={13} strokeWidth={1.8} aria-hidden style={{ flex: 'none' }} />
+          </>
+        ) : hanging ? (
           <>
             <StaffPic member={current} size={30} />
             <span aria-hidden style={{ position: 'absolute', right: -6, bottom: -5, width: 16, height: 16, borderRadius: '50%', background: '#FFFFFF', color: CK.inkSoft, display: 'grid', placeItems: 'center', boxShadow: '0 1px 4px rgba(27,56,40,0.3)' }}>
@@ -109,6 +122,7 @@ export default function AssignControl({ cref, directive, staff, openCounts, onCh
           <div
             ref={box}
             role="listbox"
+            data-crisis-popover=""
             aria-label="Backroom"
             style={{
               position: 'fixed', left: pos.left, top: pos.top, bottom: pos.bottom, width: W, maxHeight: pos.maxHeight, overflowY: 'auto', zIndex: 300,
@@ -118,7 +132,7 @@ export default function AssignControl({ cref, directive, staff, openCounts, onCh
           >
             {staff.length === 0 && <p style={{ margin: 8, fontSize: 13, color: CK.inkSoft }}>No backroomers yet.</p>}
             {staff.map((m) => {
-              const here = m.id === directive.assigned_member_id;
+              const here = m.id === curId;
               return (
                 <button
                   key={m.id}

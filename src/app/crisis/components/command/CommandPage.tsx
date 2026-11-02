@@ -31,7 +31,7 @@ const WarMap = dynamic(() => import('../map/WarMap'), {
 // Left: Waiting for a Reply (tall, its list scrolls inside) over Needs Your Approval. Middle: the Map card filling the
 // height, with Cabinet Resources directly under it, as tall as its tinted cabinet bands and no taller. Right: Front Rooms
 // (the organiser's Live Status cards, smaller; they share the card's height and drop their small rows when short) over
-// Needs Attention, which takes whatever is left (meeting requests, the rebalance suggestion, the oldest late directive,
+// Needs Attention, which takes whatever is left (the rebalance suggestion, the oldest late directive,
 // a room with no chair). Every card is flex with min-height 0, so there are no empty bands. Below 1100px the cards stack
 // and the page scrolls. Height maths: 56px top bar + 4px main top padding + 18px main bottom padding = 78px, plus 2px of slack.
 const GRID_CSS = `

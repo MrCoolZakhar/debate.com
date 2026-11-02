@@ -1,14 +1,14 @@
 'use client';
 // Gavelling Crisis: the Crisis Director's prompt for a new cabinet directive. Cabinet directives are assigned to the Director by
 // the database (docs/crisis/sql/027); whenever one is waiting for them this big centred pop-up opens over a dimmed page on any staff
-// page, under a playful "New Cabinet Directive!" banner: Review (opens it the way a notification does), Allocate to someone else
+// page, under a playful "New Cabinet Directive!" banner that sits OUTSIDE the card, above it, on one line (the chair's prompt has the same shape; owner, 2 Nov 2026): Review (opens it the way a notification does), Allocate to someone else
 // (the second step replaces the pop-up's content, never a second pop-up) or X. What was handled or dismissed is remembered on this
 // device. The directive is drawn as design B (cabinetStamp.tsx): a card framed in its cabinet's colour with the seal and the number
 // on its top border, the name a small label, the title large; the sender is only a small "From" fact beside "Sent" (owner, 1 Nov 2026), the text 15px. It waits while any dialog is open and never shows what was already waiting for more than 30 minutes when the page opened.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, ChevronRight, ScrollText, X } from 'lucide-react';
+import { ArrowLeft, ChevronRight, Gavel, ScrollText, X } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { assignDirective, crisisError, listDirectives, listQueuedCabinetDirectivesFor } from '@/lib/crisis/api';
@@ -16,13 +16,13 @@ import { dirNumber } from '@/lib/crisis/format';
 import { useCrisisLive } from '@/lib/crisis/live';
 import type { Directive } from '@/lib/crisis/types';
 import { serverNow } from '@/lib/serverClock';
-import { agoLabel, Avatar, CK, useScrollLock } from '../../crisisKit';
+import { agoLabel, Avatar, Btn, CK, useScrollLock } from '../../crisisKit';
 import { crisisBase, useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { staffLoads } from '../command/commandData';
 import { responsibleMembers } from '../command/setupKit';
 import { authorName, buildNames } from './directiveKit';
 import { StaffPic } from './directiveParts';
-import { CARD_GAP_BELOW, CabinetCrest, CabinetHead, CabinetName, SEAL_POP, cabinetColorOf, cabinetRing, cabinetWash, crestIndent } from './cabinetStamp';
+import { CARD_GAP_BELOW, CabinetCrest, CabinetFoot, CabinetHead, CabinetName, SEAL_POP, cabinetColorOf, cabinetRing, cabinetWash, crestIndent } from './cabinetStamp';
 import { plainText } from './attachedImage';
 import PopBanner from './PopBanner';
 import { useNow } from './useNow';
@@ -192,11 +192,9 @@ export default function CabinetDirectivePrompt() {
   const cabinet = d.cabinet_id ? names.cabinets.get(d.cabinet_id) ?? null : null;
   const picking = pickFor === d.id;
   const arrived = agoLabel(d.waiting_since || d.created_at, now);
-  const bigBtn = { border: 0, borderRadius: 13, padding: '12px 22px', fontSize: 15, fontWeight: 700, cursor: 'pointer', fontFamily: CK.font } as const;
-
   return (
     <Portal>
-      <div className="cd-wrap" style={{ position: 'fixed', inset: 0, zIndex: 240, display: 'grid', placeItems: 'center', padding: '16px 12px', fontFamily: CK.font }}>
+      <div className="cd-wrap" style={{ position: 'fixed', inset: 0, zIndex: 240, display: 'grid', placeItems: 'center', padding: '44px 12px 12px', fontFamily: CK.font }}>
         <style>{`
           @keyframes cd-pop-in { from { opacity: 0; transform: translateY(16px) scale(0.96); } to { opacity: 1; transform: none; } }
           .cd-panel { animation: cd-pop-in 260ms cubic-bezier(0.22,1,0.36,1); }
@@ -211,119 +209,121 @@ export default function CabinetDirectivePrompt() {
           aria-label={picking ? 'Allocate this directive' : 'New cabinet directive'}
           tabIndex={-1}
           className="cd-panel focus:outline-none"
-          style={{ position: 'relative', width: 'min(600px, 100%)', maxHeight: 'calc(100dvh - 32px)', display: 'flex', flexDirection: 'column', background: CK.surface, color: CK.ink, borderRadius: 26, padding: 14, boxShadow: '0 28px 70px rgba(42,10,12,0.5)' }}
+          style={{ position: 'relative', width: 'min(620px, 100%)', maxHeight: 'calc(100dvh - 56px)' }}
         >
+          {/* The banner sits OUTSIDE the card, above it, on one line: the same shape as the chair's prompt (owner, 2 Nov 2026). */}
           <PopBanner icon={<ScrollText size={26} strokeWidth={1.6} />}>New Cabinet Directive!</PopBanner>
 
-          <div className="flex items-center" style={{ gap: 8, minHeight: 36, marginTop: 10, marginBottom: picking ? 0 : 4 }}>
-            {picking ? (
-              <button
-                type="button"
-                onClick={() => setPickFor(null)}
-                aria-label="Back"
-                className="inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
-                style={{ gap: 4, border: 0, background: 'transparent', cursor: 'pointer', padding: '5px 8px 5px 2px', borderRadius: 8, fontFamily: CK.font, fontSize: 14, fontWeight: 700, color: CK.forest }}
-              >
-                <ArrowLeft size={17} strokeWidth={1.5} aria-hidden />Back
-              </button>
-            ) : (
-              <span style={{ fontSize: 13, fontWeight: 700, color: CK.inkSoft }}>Waiting for you to review it</span>
-            )}
-            <span className="flex-1" />
-            {!picking && pending.length > 1 && (
-              <button
-                type="button"
-                onClick={() => setCursor((c) => c + 1)}
-                aria-label="Show the next waiting directive"
-                className="inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
-                style={{ gap: 2, border: 0, background: 'transparent', cursor: 'pointer', padding: '4px 4px 4px 8px', borderRadius: 8, fontFamily: CK.font, fontSize: 14, fontWeight: 700, color: CK.inkSoft }}
-              >
-                {(cursor % pending.length) + 1} of {pending.length}<ChevronRight size={16} strokeWidth={1.5} aria-hidden />
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => markHandled(d.id)}
-              aria-label="Close"
-              className="grid place-items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
-              style={{ border: 0, background: CK.well, color: CK.inkSoft, borderRadius: 999, width: 34, height: 34, cursor: 'pointer', flex: 'none' }}
-            >
-              <X size={17} strokeWidth={1.5} aria-hidden />
-            </button>
-          </div>
-
           {!picking && (
-            <div key={d.id} className={cursor > 0 ? 'cm-next' : undefined} style={{ flex: 'none', minHeight: 0 }}>
-              <div style={{ position: 'relative', overflow: 'visible', background: cabinetWash(cabinetColorOf(cabinet)), borderRadius: 20, padding: '22px 18px 16px', boxShadow: cabinetRing(cabinetColorOf(cabinet), 3, CK.shadow), margin: `${SEAL_POP / 2 + 6}px 6px ${CARD_GAP_BELOW}px` }}>
-                {/* The seal, the number and the small stamp sit on the card's top border; who sent it is only a small fact under the title. */}
-                <CabinetCrest cabinet={cabinet} n={dirNumber(d)} sealSize={SEAL_POP} left={18} stamp="pop" />
-                <CabinetName cabinet={cabinet} size={14.5} indent={crestIndent(SEAL_POP)} />
-                <b style={{ display: 'block', marginTop: 10, fontSize: 25, lineHeight: 1.2, overflowWrap: 'anywhere' }}>{d.title}</b>
-                <p className="flex items-center flex-wrap" style={{ margin: '8px 0 0', gap: '2px 7px', fontSize: 13, fontWeight: 600, color: CK.inkSoft }}>
-                  <span style={{ color: CK.muted }}>From</span>
-                  <Avatar name={author} src={character?.picture_url ?? null} size={20} color={cabinetColorOf(cabinet)} />
-                  <b style={{ color: CK.ink, fontWeight: 800, overflowWrap: 'anywhere' }}>{author}</b>
-                  <span style={{ color: CK.muted }}>· Sent {arrived || 'just now'}</span>
-                </p>
-                <p key="body" className="cm-fade" style={{ margin: '10px 0 0', maxHeight: 'min(30dvh, 250px)', overflowY: 'auto', background: CK.well, borderRadius: 14, padding: '11px 14px', fontSize: 15, lineHeight: 1.6, color: CK.ink, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+            <div key={d.id} className={cursor > 0 ? 'cm-next' : undefined} style={{ minHeight: 0 }}>
+              <div style={{ position: 'relative', overflow: 'visible', minWidth: 0, background: cabinetWash(cabinetColorOf(cabinet)), borderRadius: 22, padding: '26px 20px 18px', margin: `${SEAL_POP / 2 + 6}px 0 ${CARD_GAP_BELOW}px`, boxShadow: cabinetRing(cabinetColorOf(cabinet), 3, `${CK.shadow}, 0 24px 60px rgba(58,14,15,0.4)`) }}>
+                {/* The seal, the number and the small stamp sit on the card's top border; the name beside them with the state under it, the
+                    navigation and X top right; who sent it is only a small fact under the title. */}
+                <CabinetCrest cabinet={cabinet} n={dirNumber(d)} sealSize={SEAL_POP} left={20} stamp="pop" />
+                <div className="flex items-start justify-between" style={{ gap: 8 }}>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <CabinetName cabinet={cabinet} size={14.5} indent={crestIndent(SEAL_POP)} />
+                    <span className="inline-flex items-center" style={{ gap: 5, marginTop: 6, fontSize: 12, fontWeight: 800, color: CK.red }}>
+                      <Gavel size={15} strokeWidth={1.5} aria-hidden />Waiting for your review
+                    </span>
+                  </div>
+                  <div className="flex items-center" style={{ gap: 4, flex: 'none' }}>
+                    {pending.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => setCursor((c) => c + 1)}
+                        aria-label="Show the next waiting directive"
+                        className="inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+                        style={{ gap: 2, border: 0, background: 'transparent', cursor: 'pointer', padding: '4px 4px 4px 8px', borderRadius: 8, fontFamily: CK.font, fontSize: 13, fontWeight: 700, color: CK.inkSoft, fontVariantNumeric: 'tabular-nums' }}
+                      >
+                        {(cursor % pending.length) + 1} of {pending.length}<ChevronRight size={16} strokeWidth={1.5} aria-hidden />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => markHandled(d.id)}
+                      aria-label="Close"
+                      className="grid place-items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+                      style={{ border: 0, background: CK.well, color: CK.inkSoft, borderRadius: 999, width: 30, height: 30, cursor: 'pointer', flex: 'none', marginLeft: 4 }}
+                    >
+                      <X size={16} strokeWidth={1.5} aria-hidden />
+                    </button>
+                  </div>
+                </div>
+                <h3 style={{ margin: '14px 0 0', fontSize: 25, lineHeight: 1.2, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{d.title}</h3>
+                <div className="flex flex-wrap items-center" style={{ gap: '4px 12px', marginTop: 8, fontSize: 13, fontWeight: 600, color: CK.muted }}>
+                  <span className="inline-flex items-center" style={{ gap: 6 }}>
+                    From
+                    <Avatar name={author} src={character?.picture_url ?? null} size={20} color={cabinetColorOf(cabinet)} />
+                    <b style={{ color: CK.ink, fontWeight: 800, overflowWrap: 'anywhere' }}>{author}</b>
+                  </span>
+                  <span>Sent {arrived || 'just now'}</span>
+                </div>
+                <p key="body" className="cm-fade" style={{ margin: '10px 0 0', maxHeight: 'min(42dvh, 380px)', overflowY: 'auto', background: CK.well, borderRadius: 14, padding: '10px 12px', fontSize: 15, lineHeight: 1.6, color: CK.ink, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
                   {plainText(d.body)}
                 </p>
+                <CabinetFoot marginTop={12}>
+                  <Btn tone="red" onClick={() => review(d)}>Review</Btn>
+                  <Btn tone="ghost" onClick={() => openAllocate(d)}>Allocate to someone else</Btn>
+                </CabinetFoot>
               </div>
             </div>
           )}
 
           {picking && (
-          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', marginTop: 6 }}>
-            <div key={d.id} className="flex items-center" style={{ gap: 10 }}>
-              <CabinetHead cabinet={cabinet} n={dirNumber(d)} sealSize={32} nameSize={13.5} />
-            </div>
-            <b style={{ display: 'block', marginTop: 8, fontSize: 18, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{d.title}</b>
+            <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', minHeight: 0, maxHeight: 'calc(100dvh - 150px)', background: CK.surface, color: CK.ink, borderRadius: 22, padding: 14, boxShadow: CK.shadow }}>
+              <div className="flex items-center" style={{ gap: 8, minHeight: 36 }}>
+                <button
+                  type="button"
+                  onClick={() => setPickFor(null)}
+                  aria-label="Back"
+                  className="inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+                  style={{ gap: 4, border: 0, background: 'transparent', cursor: 'pointer', padding: '5px 8px 5px 2px', borderRadius: 8, fontFamily: CK.font, fontSize: 14, fontWeight: 700, color: CK.forest }}
+                >
+                  <ArrowLeft size={17} strokeWidth={1.5} aria-hidden />Back
+                </button>
+                <span className="flex-1" />
+                <button
+                  type="button"
+                  onClick={() => markHandled(d.id)}
+                  aria-label="Close"
+                  className="grid place-items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+                  style={{ border: 0, background: CK.well, color: CK.inkSoft, borderRadius: 999, width: 34, height: 34, cursor: 'pointer', flex: 'none' }}
+                >
+                  <X size={17} strokeWidth={1.5} aria-hidden />
+                </button>
+              </div>
+              <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', marginTop: 6 }}>
+                <div key={d.id} className="flex items-center" style={{ gap: 10 }}>
+                  <CabinetHead cabinet={cabinet} n={dirNumber(d)} sealSize={32} nameSize={13.5} />
+                </div>
+                <b style={{ display: 'block', marginTop: 8, fontSize: 18, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{d.title}</b>
 
-            <div role="listbox" aria-label="Staff" className="cm-fade" style={{ marginTop: 14, maxHeight: 'min(320px, 44dvh)', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
-                {others.length === 0 && <p style={{ margin: 8, fontSize: 14, color: CK.inkSoft }}>There is nobody else on the staff yet</p>}
-                {others.map((m, i) => (
-                  <button
-                    key={m.id}
-                    type="button"
-                    role="option"
-                    aria-selected={false}
-                    disabled={busy}
-                    onClick={() => void allocate(d, m)}
-                    className="cm-slide-in flex items-center w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] disabled:opacity-60"
-                    style={{ ['--i' as string]: i, gap: 12, border: 0, cursor: busy ? 'default' : 'pointer', padding: '8px 10px', borderRadius: 12, background: 'transparent', fontFamily: CK.font }}
-                  >
-                    <StaffPic member={m} size={36} />
-                    <span style={{ flex: 1, minWidth: 0 }}>
-                      <b style={{ display: 'block', fontSize: 15, color: CK.ink, overflowWrap: 'anywhere', lineHeight: 1.2 }}>{m.display_name}</b>
-                      <span style={{ fontSize: 12.5, color: CK.inkSoft }}>
-                        {m.role === 'backroomer' ? 'Backroomer' : m.role === 'director' ? 'Crisis Director' : 'Assistant Crisis Director'}
-                        {counts ? `, ${counts.get(m.id) ?? 0} open` : ''}
+                <div role="listbox" aria-label="Staff" className="cm-fade" style={{ marginTop: 14, maxHeight: 'min(320px, 44dvh)', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  {others.length === 0 && <p style={{ margin: 8, fontSize: 14, color: CK.inkSoft }}>There is nobody else on the staff yet</p>}
+                  {others.map((m, i) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      role="option"
+                      aria-selected={false}
+                      disabled={busy}
+                      onClick={() => void allocate(d, m)}
+                      className="cm-slide-in flex items-center w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] disabled:opacity-60"
+                      style={{ ['--i' as string]: i, gap: 12, border: 0, cursor: busy ? 'default' : 'pointer', padding: '8px 10px', borderRadius: 12, background: 'transparent', fontFamily: CK.font }}
+                    >
+                      <StaffPic member={m} size={36} />
+                      <span style={{ flex: 1, minWidth: 0 }}>
+                        <b style={{ display: 'block', fontSize: 15, color: CK.ink, overflowWrap: 'anywhere', lineHeight: 1.2 }}>{m.display_name}</b>
+                        <span style={{ fontSize: 12.5, color: CK.inkSoft }}>
+                          {m.role === 'backroomer' ? 'Backroomer' : m.role === 'director' ? 'Crisis Director' : 'Assistant Crisis Director'}
+                          {counts ? `, ${counts.get(m.id) ?? 0} open` : ''}
+                        </span>
                       </span>
-                    </span>
-                  </button>
-                ))}
-            </div>
-          </div>
-          )}
-
-          {!picking && (
-            <div key="actions" className="cm-fade flex items-center flex-wrap" style={{ gap: 10, marginTop: 14 }}>
-              <button
-                type="button"
-                onClick={() => review(d)}
-                className="inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] cm-btn"
-                style={{ ...bigBtn, background: CK.redBtn, color: '#FFF4E6', boxShadow: CK.shadowSm }}
-              >
-                Review
-              </button>
-              <button
-                type="button"
-                onClick={() => openAllocate(d)}
-                className="inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] cm-btn"
-                style={{ ...bigBtn, padding: '12px 18px', background: CK.card, color: CK.forest, boxShadow: `inset 0 0 0 1px ${CK.hair}` }}
-              >
-                Allocate to someone else
-              </button>
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
         </div>

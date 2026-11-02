@@ -3,9 +3,15 @@
 // characters that need replacing (InboxExtraCards) wear exactly the same shells as the directive cards: the big front card
 // and the smaller cards stepping off to its right, plus the previous / next controls.
 
-import type { CSSProperties, ReactNode } from 'react';
+import { useMemo, type CSSProperties, type ReactNode } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import type { Directive } from '@/lib/crisis/types';
 import { CK } from '../../crisisKit';
+import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
+import AssignControl from '../command/commandAssign';
+import { isStaffRow } from '../command/commandData';
+import { StaffPic } from './directiveParts';
+import { isOpenStatus } from './directiveKit';
 
 /** How tall each card in the stack is, as a share of the front card's height (shorter, one step at a time). */
 export const HEIGHTS = [0.88, 0.77, 0.67, 0.58];
@@ -70,9 +76,11 @@ export function FrontShell({ color, ring, tint, label, onActivate, children }: {
  * A smaller card further back in the stack. It sits BEHIND the card before it; only its right part shows (STRIP wide) and its content
  * starts there. `ring` frames it in `color` (a cabinet directive), `grey` mutes it. `badge` hangs on its top edge.
  */
-export function NextShell({ k, fw, grey, ring, tint, padBottom = 14, color, label, onPick, badge, stamp, children }: {
+export function NextShell({ k, fw, grey, ring, tint, padBottom = 14, color, label, onPick, badge, stamp, foot, children }: {
   k: number; fw: number; grey?: boolean; ring?: boolean; /** A faint wash over the whole card (a cabinet directive). */ tint?: string; /** The button's bottom padding. */ padBottom?: number;
-  color: string; label: string; onPick: () => void; badge?: ReactNode; stamp?: ReactNode; children: ReactNode;
+  color: string; label: string; onPick: () => void; badge?: ReactNode; stamp?: ReactNode;
+  /** A control on the card's bottom row (who is responsible). A sibling of the card's button, never inside it; leave `padBottom` room for it. */
+  foot?: ReactNode; children: ReactNode;
 }) {
   const pct = HEIGHTS[k - 1];
   const left = fw + (k - 1) * STRIP - HIDDEN;
@@ -94,7 +102,35 @@ export function NextShell({ k, fw, grey, ring, tint, padBottom = 14, color, labe
           style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%', textAlign: 'left', border: 0, background: 'transparent', cursor: 'pointer', borderRadius: 'inherit', padding: `20px 16px ${padBottom}px ${HIDDEN + 14}px`, fontFamily: CK.font, color: CK.ink, overflow: 'hidden' }}>
           {children}
         </button>
+        {foot && (
+          <div data-no-open style={{ position: 'absolute', zIndex: 3, left: HIDDEN + 14, right: 14, bottom: 9, display: 'flex', minWidth: 0, pointerEvents: 'none' }}>
+            <div style={{ pointerEvents: 'auto', maxWidth: '100%', minWidth: 0 }}>{foot}</div>
+          </div>
+        )}
       </div>
     </div>
+  );
+}
+
+/**
+ * Who is responsible for a directive, as a round picture with their name small. On an OPEN directive it is the control that hands the
+ * directive to someone else (a Portal list of the backroom; the database moves it, then `onChanged` re-reads). On any other directive it is
+ * the same picture and name, read only; nothing at all when nobody is responsible. `ownerId` (the author character's owner) stands in
+ * until someone is assigned.
+ */
+export function ResponsibleFoot({ d, ownerId, openCounts, onChanged }: { d: Directive; ownerId?: string | null; openCounts: Map<string, number>; onChanged: () => void }) {
+  const { ref, core } = useCrisis();
+  const staff = useMemo(() => core.members.filter(isStaffRow), [core.members]);
+  const responsible = d.assigned_member_id ?? ownerId ?? null;
+  if (isOpenStatus(d)) {
+    return <AssignControl cref={ref} directive={d} staff={staff} openCounts={openCounts} onChanged={onChanged} foot currentId={responsible} />;
+  }
+  const m = responsible ? core.members.find((x) => x.id === responsible) ?? null : null;
+  if (!m) return null;
+  return (
+    <span className="inline-flex items-center" style={{ gap: 7, minWidth: 0, fontSize: 12.5, fontWeight: 700, color: CK.inkSoft }}>
+      <StaffPic member={m} size={28} />
+      <span style={{ overflowWrap: 'anywhere' }}>{m.display_name}</span>
+    </span>
   );
 }

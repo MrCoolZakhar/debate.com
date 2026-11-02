@@ -50,6 +50,8 @@ import { FLY_MS, type FocusRequest } from './mapFocusFly';
 import { freehandCorners, type FreePt } from './freehand';
 import { TIDY_KM, absorbIntoCountry, areaClaimOthers, snapToNeighbours, cleanTolFor, tidyAreaClaim } from './geomClean';
 import { useShapeMover } from './shapeMove';
+import { FULLSCREEN_CSS, useFullscreen } from './fullscreen';
+import { NOTE_MS, useShortLived } from './shortLived';
 import { mountZoneHandles } from './zoneHandles';
 import { SIGHT_MAX_KM, kmFromPointer, kmText, sightHandleAt, sightKmOf, sightRing } from './sight';
 import {
@@ -63,6 +65,7 @@ import {
   SRC_SEL, SRC_SHAPES, SRC_SIGHT, editLayers, mapLayers,
 } from './mapStyle';
 import { BRUSH_DEFAULT_KM, brushKmForPixels, planErase, planPaint } from './brush';
+import { ownedCountryTerrs, planEraseCountries, writeCountryCuts } from './eraseCountries';
 import { useBrush, type BrushMode } from './brushTool';
 import MapToolbar, { TOOLBAR_CSS, type Tool } from './MapToolbar';
 import { loadProvinces, provinceAt, type Province } from './provinces';
@@ -221,6 +224,15 @@ function goneNote(gone: string[]): string | null {
   return gone.length ? `${gone.join(', ')} ${gone.length === 1 ? 'was' : 'were'} fully taken` : null;
 }
 
+/**
+ * Land could not be worked out. The stroke message shows only for the person's own paint or erase stroke; a click that
+ * gives a state or province says so in other words. Nothing else (a re-read, a merge, a selection) ever reaches this.
+ */
+function landFailed(e: unknown, fromStroke: boolean): void {
+  if (process.env.NODE_ENV !== 'production') console.warn('Crisis map: land could not be worked out', e);
+  notifyErr(fromStroke ? 'That land could not be worked out. Try a smaller stroke.' : 'That state or province could not be handed over. Try again.', 'crisis-map');
+}
+
 function areaGeometry(m: Multi): MapShape['geometry'] {
   return toGeometry(m) as MapShape['geometry'];
 }
@@ -347,6 +359,10 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
   const [busy, setBusy] = useState(false);
   const [mapReady, setMapReady] = useState(false);
   const [last, setLast] = useState<{ at: number; text: string } | null>(null);
+  // Change notes leave the screen after 3 seconds.
+  const lastShown = useShortLived(last);
+  const draftNote = useMemo(() => (draftBy ? { by: draftBy } : null), [draftBy, last]);
+  const draftNoteShown = useShortLived(draftNote);
 
   useEffect(() => { dataRef.current = data; rawRef.current = rawData; }, [data, rawData]);
 
@@ -615,6 +631,17 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
   // ── map plumbing ──
   const hostRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MLMap | null>(null);
+  // Full screen: the whole container (toolbar, map and panels). The map is resized after the browser has changed the size.
+  const rootRef = useRef<HTMLDivElement>(null);
+  const resizeSoon = useCallback(() => {
+    window.requestAnimationFrame(() => mapRef.current?.resize());
+    window.setTimeout(() => mapRef.current?.resize(), 250);
+  }, []);
+  const fs = useFullscreen(rootRef, resizeSoon);
+  const fsToggle = fs.toggle;
+  const toggleFullscreen = useCallback(() => {
+    void fsToggle().then((ok) => { if (!ok) notifyErr('Full screen is not available in this browser.', 'crisis-map'); });
+  }, [fsToggle]);
   const resizeObs = useRef<ResizeObserver | null>(null);
   const mlRef = useRef<typeof import('maplibre-gl') | null>(null);
   const fogCanvas = useRef<HTMLCanvasElement | null>(null);
@@ -672,7 +699,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
   const [historyN, setHistoryN] = useState(0);
   useEffect(() => {
     if (!undo) return;
-    const t = window.setTimeout(() => setUndo(null), 12000);
+    const t = window.setTimeout(() => setUndo(null), NOTE_MS);
     return () => window.clearTimeout(t);
   }, [undo]);
 
@@ -1305,7 +1332,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
   }, []);
 
   /** Adds land to a cabinet: it joins the cabinet's own area it touches (else becomes a new one) and is cut out of other areas. */
-  const paintLand = useCallback((stroke: Multi, owner: string, label: string | null, text: string, km = BRUSH_DEFAULT_KM) => {
+  const paintLand = useCallback((stroke: Multi, owner: string, label: string | null, text: string, km = BRUSH_DEFAULT_KM, fromStroke = false) => {
     const d = dataRef.current;
     if (!d) return;
     const holder = cabById.get(owner)?.name ?? 'that cabinet';
@@ -1334,15 +1361,15 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
           owner_cabinet_id: owner, label, color: null, geometry: areaGeometry(res.plan.land), public: true, revealed_to: [],
         });
       }
-    } catch {
-      notifyErr('That land could not be worked out. Try a smaller stroke.', 'crisis-map');
+    } catch (e) {
+      landFailed(e, fromStroke);
       return;
     }
     void applyEdits(set, text, grown ? () => back : (ids) => ({ ...back, removeShapes: [...back.removeShapes, ...ids] }), goneNote(gone));
   }, [ref.id, cabById, areaTerrs, countryTerrsOf, writePlan, applyEdits]);
 
   /** Takes land out of drawn areas (every one under it, or only `only`'s); an area left with nothing is removed. */
-  const eraseLand = useCallback((stroke: Multi, text: string, only: string | null, none: string, km = BRUSH_DEFAULT_KM) => {
+  const eraseLand = useCallback((stroke: Multi, text: string, only: string | null, none: string, km = BRUSH_DEFAULT_KM, fromStroke = false) => {
     const d = dataRef.current;
     if (!d) return;
     const set = emptySet(); const back = emptySet();
@@ -1350,24 +1377,27 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
     try {
       const areas = areaTerrs(d).filter((a) => !only || a.owner === only);
       const plan = planErase(stroke, areas, km);
-      if (!plan.cuts.length) { notifyErr(none, 'crisis-map'); return; }
+      // A brush stroke also takes land from the countries a cabinet holds: what it leaves becomes a drawn area of that cabinet.
+      const cuts = fromStroke && !only ? planEraseCountries(stroke, ownedCountryTerrs(d, baseRef.current), areaTerrs(d), km) : [];
+      if (!plan.cuts.length && !cuts.length) { notifyErr(none, 'crisis-map'); return; }
       gone = writePlan(plan, d, set, back);
-    } catch {
-      notifyErr('That land could not be worked out. Try a smaller stroke.', 'crisis-map');
+      gone.push(...writeCountryCuts(cuts, d, ref.id, (k) => world?.byKey.get(k)?.name ?? 'A country', set, back));
+    } catch (e) {
+      landFailed(e, fromStroke);
       return;
     }
-    void applyEdits(set, text, () => back, goneNote(gone));
-  }, [areaTerrs, writePlan, applyEdits]);
+    void applyEdits(set, text, set.addShapes.length ? (ids) => ({ ...back, removeShapes: [...back.removeShapes, ...ids] }) : () => back, goneNote(gone));
+  }, [ref.id, world, areaTerrs, writePlan, applyEdits]);
 
   /** A brush stroke is finished (one undo step). */
   const strokeDone = useCallback((mode: BrushMode, stroke: Multi) => {
     if (!(editable && canMap)) return;
     if (mode === 'erase') {
-      eraseLand(stroke, 'You erased land', null, 'There is no drawn land under the brush. Erase takes away painted and drawn land, not whole countries.', brushKm);
+      eraseLand(stroke, 'You erased land', null, 'There is no land held by a cabinet under the brush.', brushKm, true);
       return;
     }
     if (!chipOwner) { notifyErr('Pick a cabinet to paint with, or use Erase to take land away.', 'crisis-map'); return; }
-    paintLand(stroke, chipOwner, null, `You painted land for ${cabById.get(chipOwner)?.name ?? 'a cabinet'}`, brushKm);
+    paintLand(stroke, chipOwner, null, `You painted land for ${cabById.get(chipOwner)?.name ?? 'a cabinet'}`, brushKm, true);
   }, [editable, canMap, chipOwner, cabById, eraseLand, paintLand, brushKm]);
 
   /** Who controls a zone (null: nobody). */
@@ -1692,13 +1722,15 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
         if (fresh.chars?.length) {
           try { await v.reloadCore(); } finally { for (const c of fresh.chars) charOverride.current.delete(c.id); }
         }
+        // Sent: back to Select, with no brush stroke or drawing left in hand.
+        changeTool('select');
         notifyOk('Sent to delegates', 'crisis-map');
       } catch (e) {
         notifyErr(crisisError(e, 'Could not send the changes.'), 'crisis-map');
       }
     });
     setSending(false);
-  }, [ref, run, sending, canMap, canUnits, canChars, clearHistory, persistDraft, v, queueAnim, whoSaved, sentCharAt, charGlider]);
+  }, [ref, run, sending, canMap, canUnits, canChars, clearHistory, persistDraft, v, queueAnim, whoSaved, sentCharAt, charGlider, changeTool]);
 
   /** Throws the unsent changes away. Go back brings them back (with the steps Go back had before). */
   const discardDraft = useCallback(async () => {
@@ -1900,7 +1932,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
   // A multi-piece or holed zone open for editing keeps its outline but can still be carried whole.
   const infoZoneRow = draft && draft.kind === 'zone' && draft.infoOnly && draft.editId && draft.phase === 'refine' && editable && canMap
     ? zones.find((z) => z.id === draft.editId) ?? null : null;
-  const moveZoneRow = (!draft && canZones && tool === 'select' ? selZoneRow : null) ?? infoZoneRow;
+  const moveZoneRow = (!draft && canZones && (tool === 'select' || tool === 'zones') ? selZoneRow : null) ?? infoZoneRow;
   const moveShape = useMemo<Multi | null>(() => {
     if (compact || stageKind === 'unit') return null;
     if (moveDraftPts) return [[[...moveDraftPts, moveDraftPts[0]]]];
@@ -1974,7 +2006,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
         // Zones: a click picks a zone (to reshape it, for staff); the sea and the land under it are left alone.
         if (tool === 'zones') {
           const zid = zoneAt(map, e.point);
-          if (zid && canZones) editZone(zid);
+          if (zid && canZones) { setSelUnit(null); setSelChar(null); setSelTerr(null); setSelZone(zid); }
           else if (!zid) setSelZone(null);
           return;
         }
@@ -2673,7 +2705,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
 
   // A zone picked in Select shows the same handles (every piece and hole): drag a corner or a side's dot, double-click a
   // corner away. Each change is kept at once. A zone with a very detailed outline can only be carried (Move handle).
-  const zoneSelId = !draft && canZones && tool === 'select' && !compact ? selZoneRow?.id ?? null : null;
+  const zoneSelId = !draft && canZones && (tool === 'select' || tool === 'zones') && !compact ? selZoneRow?.id ?? null : null;
   useEffect(() => {
     const map = mapRef.current; const ml = mlRef.current;
     if (!world || !map || !ml || !zoneSelId || !selZoneMulti.length || vertexCount(selZoneMulti) > HANDLE_LIMIT) return;
@@ -3396,12 +3428,12 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
           onClose={() => setDraft(null)}
         />
       );
-    } else if (tool === 'zones' && canZones) {
+    } else if (tool === 'zones' && canZones && !selZoneRow) {
       panel = (
         <ZonesPanel
           zones={zones} types={zoneTypes} cabinets={cabinets} onDraw={beginZone} onClose={() => changeTool('select')}
           onPick={(id) => {
-            editZone(id);
+            setSelZone(id);
             const z = zones.find((x) => x.id === id);
             const b = z ? bboxOf(toMulti(z.geometry)) : null;
             const map = mapRef.current;
@@ -3573,7 +3605,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
   const draftBar = draftCount > 0 && staff && !isStage ? (
     <div className="wm-draftbar" role="status" style={{ fontFamily: CK.font }}>
       <span><b key={draftCount}>{draftCount} {draftCount === 1 ? 'change' : 'changes'}</b> not sent yet</span>
-      {draftBy && <span key={draftBy} className="wm-draftby"><Users size={14} strokeWidth={1.5} aria-hidden />{draftBy} changed the unsent map</span>}
+      {draftNoteShown && <span key={draftNoteShown.by} className="wm-draftby"><Users size={14} strokeWidth={1.5} aria-hidden />{draftNoteShown.by} changed the unsent map</span>}
       {compact ? null : confirmDiscard ? (
         <>
           <span>Throw away these changes?</span>
@@ -3593,10 +3625,10 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
 
   return (
     <div
-      className="wm-root" data-compact={compact ? '1' : undefined} data-stage={isStage ? '1' : undefined}
+      ref={rootRef} className="wm-root" data-compact={compact ? '1' : undefined} data-stage={isStage ? '1' : undefined} data-fs={fs.active ? '1' : undefined}
       style={stage ? ({ '--wm-stage-h': `${stage.height}px` } as CSSProperties) : undefined}
     >
-      <style>{MAP_CSS + TOOLBAR_CSS}</style>
+      <style>{MAP_CSS + TOOLBAR_CSS + FULLSCREEN_CSS}</style>
 
       {compact ? (
         <div className="wm-top">
@@ -3623,7 +3655,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
             brushKm={brushKm} onBrushKm={(km) => { brushTouched.current = true; setBrushKm(km); }}
             history={editable && (canMap || canUnits || canChars)} canUndo={panelCanUndo || (draftOn && draftCanUndo) || !!terrEdit || historyN > 0} canRedo={panelCanRedo || (draftOn ? draftCanRedo : redoN > 0)} busy={busy}
             undoLabel={undoLabel} redoLabel={redoLabel} undoInFields={draftOn && !!draft && draft.phase === 'draw' && draft.points.length > 0}
-            onUndo={mapUndo} onRedo={mapRedo} onFit={fitView}
+            onUndo={mapUndo} onRedo={mapRedo} fullscreen={fs.active} onFullscreen={toggleFullscreen}
             viewTools={viewTools} editable={editable && (canMap || canUnits)} provincesReady={provincesReady}
           />
         </>
@@ -3701,7 +3733,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
             )}
             {compactInfo && <b style={{ color: CK.ink }}>{compactInfo}</b>}
           </div>
-          {!compact && !isStage && <div>{last ? `Last change ${clock(last.at)} · ${last.text}` : staff ? 'No changes yet this visit' : 'Updates live'}</div>}
+          {!compact && !isStage && <div>{lastShown ? `Last change ${clock(lastShown.at)} · ${lastShown.text}` : staff && !last ? 'No changes yet this visit' : 'Updates live'}</div>}
         </div>
       </div>
     </div>

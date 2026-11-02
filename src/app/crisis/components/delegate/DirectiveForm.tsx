@@ -7,16 +7,20 @@
 // again. Every SubmitResult is handled: ok clears the form; paused, cooldown and too_long keep the text.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { Check, Landmark, PauseCircle, Plus, Send, Timer, Trash2, UserX, X } from 'lucide-react';
+import { Check, Landmark, NotebookPen, PauseCircle, Plus, Send, Tags, Timer, Trash2, UserPlus, UserX, X } from 'lucide-react';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { crisisError, editDirective, resendDirective, submitDirective, type CrisisRef, type DirectiveDraft } from '@/lib/crisis/api';
 import { dirNumber, timeAgo } from '@/lib/crisis/format';
 import { THEMES, type Character, type DirectiveKind } from '@/lib/crisis/types';
-import { Btn, Card, CK, FieldLabel, Segmented } from '../../crisisKit';
+import { Avatar, Btn, Card, CK, FieldLabel, Segmented } from '../../crisisKit';
 import MultiSelect, { type MultiOption } from './MultiSelect';
 import { bigField, KIND_WORD, kindIcon, themeIcon } from './directiveUi';
 import { AttachBar, useImageAttach } from './ImageAttach';
 import { withAttached } from '../directives/attachedImage';
+import {
+  announceDraftsChanged, draftLabel, draftListKey, draftOldKey, EMPTY, isEmptyDraft, newDraftId, onDraftsChanged, onOpenDraftRequest, readStore,
+  takePendingOpenDraft, upsertDraft, type Draft, type DraftEntry, type FormKind,
+} from './draftStore';
 
 /** A directive copied back into the form ("Edit and send again" after the chair sent it back). A new token = a new copy. */
 export interface DirectivePrefill { token: number; kind: DirectiveKind; title: string; body: string; image: string | null; themes: string[]; coauthors: string[] }
@@ -38,18 +42,6 @@ export interface FormCabinet { name: string; logo_url: string | null; color: str
 
 export type WorldCharacter = Pick<Character, 'id' | 'cabinet_id' | 'name' | 'status' | 'title'> & { picture_url?: string | null };
 
-type FormKind = 'personal' | 'joint' | 'committee';
-interface Draft {
-  kind: FormKind;
-  coauthors: string[];
-  title: string;
-  body: string;
-  themes: string[];
-  /** An optional picture, already uploaded; it goes in as the last line of the text. */
-  image: string | null;
-}
-const EMPTY: Draft = { kind: 'personal', coauthors: [], title: '', body: '', themes: [], image: null };
-
 /** The trailing attached-picture line, exactly as the database strips it (crisis_word_count): the picture never counts. */
 const PICTURE_LINE = /(?:\r?\n){0,2}\[image\]\((https:\/\/[^\s()]+)\)\s*$/;
 
@@ -70,91 +62,13 @@ function clock(totalSeconds: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
-/** A stored draft read leniently: anything that is not shaped like one becomes empty. */
-function sanitizeDraft(p: Partial<Draft> | null | undefined): Draft {
-  if (!p || typeof p !== 'object') return EMPTY;
-  const strings = (x: unknown) => (Array.isArray(x) ? x.filter((y): y is string => typeof y === 'string') : []);
-  return {
-    kind: p.kind === 'joint' || p.kind === 'committee' ? p.kind : 'personal',
-    coauthors: strings(p.coauthors),
-    title: typeof p.title === 'string' ? p.title : '',
-    body: typeof p.body === 'string' ? p.body : '',
-    themes: strings(p.themes).filter((t) => (THEMES as readonly string[]).includes(t)),
-    image: typeof p.image === 'string' && p.image.startsWith('https://') ? p.image : null,
-  };
-}
-
-/** The old single draft (before there could be several). */
-function readDraft(key: string): Draft {
-  try {
-    const raw = window.localStorage.getItem(key);
-    if (!raw) return EMPTY;
-    return sanitizeDraft(JSON.parse(raw) as Partial<Draft>);
-  } catch { return EMPTY; }
-}
-
-// ─────────── Several drafts on this device ───────────
-
-/** One unsent draft with when it last changed. */
-interface DraftEntry { id: string; at: number; draft: Draft }
-const MAX_DRAFTS = 30;
-
-const newDraftId = () => (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `d${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`);
-const isEmptyDraft = (d: Draft) => d.title.trim() === '' && d.body.trim() === '' && d.themes.length === 0 && d.coauthors.length === 0 && d.image === null;
-const sameDraft = (a: Draft, b: Draft) => a.kind === b.kind && a.title === b.title && a.body === b.body && a.image === b.image
-  && a.themes.join('|') === b.themes.join('|') && a.coauthors.join('|') === b.coauthors.join('|');
-
-/** The list with this draft saved in it (an empty draft is left out). Returns the SAME array when nothing changed. */
-function upsertDraft(list: DraftEntry[], id: string, draft: Draft): DraftEntry[] {
-  const at = list.findIndex((e) => e.id === id);
-  if (isEmptyDraft(draft)) return at < 0 ? list : list.filter((e) => e.id !== id);
-  if (at >= 0 && sameDraft(list[at].draft, draft)) return list;
-  const next = at >= 0 ? list.map((e) => (e.id === id ? { id, at: Date.now(), draft } : e)) : [...list, { id, at: Date.now(), draft }];
-  if (next.length <= MAX_DRAFTS) return next;
-  // Too many: the oldest one that is not this one goes.
-  const oldest = [...next].filter((e) => e.id !== id).sort((a, b) => a.at - b.at)[0];
-  return next.filter((e) => e !== oldest);
-}
-
-/** Reads the drafts of this person in this crisis; the old single draft is carried over into the list. */
-function readStore(listKey: string, oldKey: string): { active: string; items: DraftEntry[] } {
-  try {
-    const raw = window.localStorage.getItem(listKey);
-    if (raw) {
-      const p = JSON.parse(raw) as { active?: unknown; items?: unknown };
-      const items: DraftEntry[] = [];
-      if (Array.isArray(p.items)) {
-        for (const x of p.items as Array<{ id?: unknown; at?: unknown; draft?: unknown }>) {
-          if (!x || typeof x.id !== 'string') continue;
-          const draft = sanitizeDraft(x.draft as Partial<Draft>);
-          if (!isEmptyDraft(draft)) items.push({ id: x.id, at: typeof x.at === 'number' && Number.isFinite(x.at) ? x.at : 0, draft });
-        }
-      }
-      return { active: typeof p.active === 'string' ? p.active : '', items };
-    }
-  } catch { /* fall through to the old single draft */ }
-  const old = readDraft(oldKey);
-  if (isEmptyDraft(old)) return { active: '', items: [] };
-  const id = newDraftId();
-  return { active: id, items: [{ id, at: Date.now(), draft: old }] };
-}
-
-/** What a draft is called in the list: its title, else its first words. */
-function draftLabel(d: Draft): string {
-  const title = d.title.trim();
-  if (title) return title;
-  const words = d.body.trim().split(/\s+/).filter(Boolean);
-  if (words.length) return words.slice(0, 8).join(' ') + (words.length > 8 ? ' ...' : '');
-  return 'Untitled draft';
-}
-
 /** The small underlined text buttons in the form's header (light on the cabinet's red band, forest on the plain one). */
 function linkStyle(onRed: boolean): CSSProperties {
   return { border: 0, background: 'transparent', padding: 0, cursor: 'pointer', fontFamily: CK.font, fontSize: 12.5, fontWeight: 800, color: onRed ? '#FFF4E6' : CK.forest, textDecoration: 'underline' };
 }
 
 export default function DirectiveForm({
-  cref, memberId, characterId, world, ownCabinetId, cabinetNames, wordLimit, open, pausedNote, blockedReason, onSent, prefill, cabinet, resend, onResendDone,
+  cref, memberId, characterId, world, ownCabinetId, cabinetNames, wordLimit, open, pausedNote, blockedReason, onSent, prefill, cabinet, resend, onResendDone, onCooldown,
 }: {
   cref: CrisisRef;
   memberId: string | null;
@@ -173,9 +87,11 @@ export default function DirectiveForm({
   /** Set to edit a directive the chair returned; the form then has its own state and never touches the saved draft. */
   resend?: DirectiveResend | null;
   onResendDone?: () => void;
+  /** Tells the page when the cooldown before the next directive ends (a time in ms), or null when there is none. */
+  onCooldown?: (until: number | null) => void;
 }) {
-  const draftKey = `gavelling-crisis-draft:${cref.id}:${memberId ?? 'me'}`; // the old single draft, carried over into the list
-  const listKey = `gavelling-crisis-drafts:${cref.id}:${memberId ?? 'me'}`;
+  const draftKey = draftOldKey(cref.id, memberId); // the old single draft, carried over into the list
+  const listKey = draftListKey(cref.id, memberId);
   const [d, setD] = useState<Draft>(EMPTY);
   // The unsent drafts on this device and the one being written (it is in the list once it has anything in it).
   const [items, setItems] = useState<DraftEntry[]>([]);
@@ -257,6 +173,7 @@ export default function DirectiveForm({
       window.localStorage.setItem(listKey, JSON.stringify({ v: 1, active, items: list }));
       window.localStorage.removeItem(draftKey); // the old single draft now lives in the list
     } catch { /* private window: the drafts just are not kept */ }
+    announceDraftsChanged(listKey);
   }, [listKey, draftKey]);
   useEffect(() => {
     if (!loaded || editing || !activeId) return;
@@ -289,8 +206,9 @@ export default function DirectiveForm({
     attachSet(null);
   }, [attachSet]);
   const openDraft = (id: string) => {
-    const e = items.find((x) => x.id === id);
+    const e = itemsRef.current.find((x) => x.id === id);
     if (!e) return;
+    if (editingRef.current) { setEditing(null); onResendDone?.(); } // leaving an edit for a draft
     setProblem(null); setConfirmDiscard(false); setShowDrafts(false); setDeleting(null);
     requestRef.current = null;
     const next = fixKind(e.draft);
@@ -303,7 +221,34 @@ export default function DirectiveForm({
     if (id === activeId) { setProblem(null); setD(EMPTY); attachSet(null); requestRef.current = null; }
     else setItems((prev) => prev.filter((x) => x.id !== id));
   };
+  // "Save as draft": this draft is kept on purpose (it shows in My Directives) and the form starts a new blank one.
+  const saveAsDraft = () => {
+    if (editingRef.current || isEmptyDraft(latest.current)) return;
+    const id = activeRef.current;
+    const kept = latest.current;
+    setItems((prev) => upsertDraft(prev, id, kept).map((e) => (e.id === id ? { ...e, saved: true, at: Date.now() } : e)));
+    setProblem(null); setConfirmDiscard(false); setShowDrafts(false);
+    requestRef.current = null;
+    setActiveId(newDraftId());
+    setD(EMPTY);
+    attachSet(null);
+    notifyOk('Saved as a draft. You will find it in My Directives');
+  };
+  // Drafts opened or deleted from My Directives (the page or the full Directives page) reach the form here.
+  const actions = useRef<{ open: (id: string) => void; del: (id: string) => void }>({ open: () => {}, del: () => {} });
+  useEffect(() => { actions.current = { open: openDraft, del: deleteDraft }; });
+  useEffect(() => {
+    if (!loaded) return undefined;
+    const focusForm = () => document.getElementById('crisis-send-directive')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const pending = takePendingOpenDraft(cref.id, memberId);
+    if (pending) actions.current.open(pending);
+    const offOpen = onOpenDraftRequest(listKey, (id) => { takePendingOpenDraft(cref.id, memberId); actions.current.open(id); focusForm(); });
+    const offDel = onDraftsChanged(listKey, (removed) => { if (removed) actions.current.del(removed); });
+    return () => { offOpen(); offDel(); };
+  }, [loaded, listKey, cref.id, memberId]);
 
+  // The page shows the cooldown in its glance card.
+  useEffect(() => { onCooldown?.(until); }, [until, onCooldown]);
   // The countdown only ticks while a cooldown is running.
   useEffect(() => {
     if (until === null) return;
@@ -440,21 +385,61 @@ export default function DirectiveForm({
   };
 
   const band = cabinet?.color || red;
+
+  // The Themes picker is one small square; the co-authors picker is a few overlapping portraits. Both sit on the Kind row.
+  const SQUARE = 36;
+  const themeTrigger = (chosen: MultiOption[]) => {
+    const n = chosen.length;
+    return (
+      <span aria-hidden className="grid place-items-center" style={{ width: SQUARE, height: SQUARE, color: CK.red }}>
+        {n === 0 ? <Tags size={18} strokeWidth={1.5} /> : n === 1 ? themeIcon(chosen[0].value, 20) : (
+          <span className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 2, lineHeight: 0 }}>
+            {chosen.slice(0, n > 4 ? 3 : 4).map((o) => <span key={o.value}>{themeIcon(o.value, 12)}</span>)}
+            {n > 4 && <span style={{ fontSize: 10.5, fontWeight: 800, lineHeight: '12px', textAlign: 'center', color: CK.inkSoft }}>+{n - 3}</span>}
+          </span>
+        )}
+      </span>
+    );
+  };
+  const coTrigger = (chosen: MultiOption[]) => (
+    <span className="inline-flex items-center" style={{ gap: 7, height: SQUARE, padding: chosen.length ? '0 10px 0 6px' : '0 12px', color: CK.forest, fontSize: 12.5, fontWeight: 700, fontFamily: CK.font }}>
+      {chosen.length === 0 ? (
+        <><UserPlus size={16} strokeWidth={1.5} aria-hidden style={{ color: CK.red }} />Co-authors</>
+      ) : (
+        <>
+          <span className="inline-flex items-center" aria-hidden>
+            {chosen.slice(0, 4).map((o, i) => (
+              <Avatar key={o.value} name={o.person?.name ?? o.label} src={o.person?.picture_url} size={26} style={{ marginLeft: i === 0 ? 0 : -9, boxShadow: '0 0 0 2px #fff' }} />
+            ))}
+          </span>
+          {chosen.length > 4 && <b style={{ fontVariantNumeric: 'tabular-nums' }}>+{chosen.length - 4}</b>}
+          <span className="sr-only">{chosen.map((o) => o.person?.name ?? o.label).join(', ')}</span>
+        </>
+      )}
+    </span>
+  );
+  const chipBg = { background: CK.well, borderRadius: 11, boxShadow: `inset 0 0 0 1px ${CK.hair}` } as const;
+
   return (
     <Card
       warm={!isCab}
+      className="df-card"
       style={{
-        padding: '14px 18px 16px', overflow: 'hidden',
+        padding: '10px 18px 14px', overflow: 'hidden',
         background: isCab ? `linear-gradient(180deg, #FFF1EC 0%, ${CK.redWash} 38%, #FFF9F5 100%)` : CK.redWash,
         boxShadow: isCab ? `${CK.shadow}, 0 0 0 2px rgba(142,36,36,0.55)` : CK.shadow,
         transition: 'box-shadow 220ms ease, background 220ms ease',
       }}
     >
+      <style>{`
+        .df-card { display: flex; flex-direction: column; }
+        @media (min-width: 1280px) { .df-card { height: calc(100dvh - 92px); min-height: 520px; } }
+      `}</style>
       <div
         className="flex items-center justify-between gap-3 flex-wrap"
         style={{
           // As tall as its content in every mode: the icon / logo disc is the same size in both, and the cabinet line sits in the same row, so nothing jumps.
-          margin: '-14px -18px 12px', padding: '10px 18px',
+          margin: '-10px -18px 8px', padding: '8px 18px', flex: 'none',
           background: isCab ? `linear-gradient(135deg, ${CK.red2}, ${CK.red} 70%, ${band})` : 'transparent',
           color: isCab ? '#FFF4E6' : CK.ink,
           transition: 'background 220ms ease, color 220ms ease',
@@ -464,14 +449,14 @@ export default function DirectiveForm({
           {isCab ? (
             cabinet?.logo_url ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={cabinet.logo_url} alt="" width={30} height={30} style={{ width: 30, height: 30, borderRadius: 999, objectFit: 'cover', background: '#fff', boxShadow: '0 0 0 2px rgba(255,244,230,0.85)', flexShrink: 0 }} />
+              <img src={cabinet.logo_url} alt="" width={28} height={28} style={{ width: 28, height: 28, borderRadius: 999, objectFit: 'cover', background: '#fff', boxShadow: '0 0 0 2px rgba(255,244,230,0.85)', flexShrink: 0 }} />
             ) : (
-              <span aria-hidden className="grid place-items-center" style={{ width: 30, height: 30, borderRadius: 999, background: 'rgba(255,244,230,0.16)', boxShadow: '0 0 0 2px rgba(255,244,230,0.7)', flexShrink: 0 }}>
-                <Landmark size={18} strokeWidth={1.5} />
+              <span aria-hidden className="grid place-items-center" style={{ width: 28, height: 28, borderRadius: 999, background: 'rgba(255,244,230,0.16)', boxShadow: '0 0 0 2px rgba(255,244,230,0.7)', flexShrink: 0 }}>
+                <Landmark size={17} strokeWidth={1.5} />
               </span>
             )
           ) : (
-            <span aria-hidden className="grid place-items-center" style={{ width: 30, height: 30, color: CK.red, flexShrink: 0 }}><Send size={18} strokeWidth={1.5} aria-hidden /></span>
+            <span aria-hidden className="grid place-items-center" style={{ width: 28, height: 28, color: CK.red, flexShrink: 0 }}><Send size={18} strokeWidth={1.5} aria-hidden /></span>
           )}
           <span className="flex flex-wrap items-baseline" style={{ gap: '0 10px', overflowWrap: 'anywhere' }}>
             <span>{editing ? `${changing ? 'Edit' : 'Resend'} Directive ${editing.label}` : isCab ? 'Send a Cabinet Directive' : 'Send a Directive'}</span>
@@ -487,7 +472,7 @@ export default function DirectiveForm({
           <span className="inline-flex items-center flex-wrap" style={{ gap: 8, fontSize: 12.5, fontWeight: 600, color: isCab ? '#FFE9DC' : CK.inkSoft }}>
             {hasDraft && (
               <span className="inline-flex items-center" style={{ gap: 4 }}>
-                <Check size={14} strokeWidth={1.8} aria-hidden style={{ color: isCab ? '#FFF4E6' : CK.ok }} />Draft saved
+                <Check size={14} strokeWidth={1.8} aria-hidden style={{ color: isCab ? '#FFF4E6' : CK.ok }} />Autosaved
               </span>
             )}
             {items.length > 0 && (
@@ -508,7 +493,7 @@ export default function DirectiveForm({
       </div>
 
       {showDrafts && !editing && (
-        <div role="region" aria-label="Your drafts" style={{ margin: '0 0 12px', borderRadius: 14, background: 'rgba(255,255,255,0.9)', boxShadow: `inset 0 0 0 1px ${CK.hair}`, padding: '8px 10px', color: CK.ink }}>
+        <div role="region" aria-label="Your drafts" style={{ margin: '0 0 10px', flex: 'none', maxHeight: 220, overflowY: 'auto', borderRadius: 14, background: 'rgba(255,255,255,0.9)', boxShadow: `inset 0 0 0 1px ${CK.hair}`, padding: '8px 10px', color: CK.ink }}>
           <ul className="grid" style={{ gap: 4, margin: 0, padding: 0, listStyle: 'none' }}>
             {[...items].sort((x, y) => y.at - x.at).map((e) => {
               const on = e.id === activeId;
@@ -531,7 +516,7 @@ export default function DirectiveForm({
                       >
                         <b style={{ display: 'block', fontSize: 13.5, lineHeight: 1.3, fontWeight: 800, overflowWrap: 'anywhere' }}>{draftLabel(e.draft)}</b>
                         <span className="inline-flex items-center" style={{ gap: 5, fontSize: 12, fontWeight: 600, color: CK.muted }}>
-                          <span style={{ lineHeight: 0 }}>{kindIcon(e.draft.kind, 12)}</span>{KIND_WORD[e.draft.kind]}, {on ? 'writing now' : timeAgo(new Date(e.at).toISOString())}
+                          <span style={{ lineHeight: 0 }}>{kindIcon(e.draft.kind, 12)}</span>{KIND_WORD[e.draft.kind]}, {on ? 'writing now' : timeAgo(new Date(e.at).toISOString())}{e.saved ? ', saved' : ''}
                         </span>
                       </button>
                       <button type="button" onClick={() => setDeleting(e.id)} aria-label={`Delete draft ${draftLabel(e.draft)}`} title="Delete draft" className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]" style={{ border: 0, background: 'transparent', cursor: 'pointer', padding: 6, lineHeight: 0, color: CK.muted }}>
@@ -550,30 +535,30 @@ export default function DirectiveForm({
       )}
 
       {editing?.note && (
-        <div style={{ background: 'rgba(142,36,36,0.09)', borderRadius: 12, padding: '8px 11px', marginBottom: 12, color: CK.red2, fontSize: 13, fontWeight: 600, overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}>
+        <div style={{ flex: 'none', background: 'rgba(142,36,36,0.09)', borderRadius: 10, padding: '6px 10px', marginBottom: 8, color: CK.red2, fontSize: 12.5, fontWeight: 600, overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}>
           <b>Your chair asked for changes:</b> {editing.note}
         </div>
       )}
 
       {blocked && !changing && (
-        <div className="flex items-start gap-2" style={{ background: 'rgba(142,36,36,0.09)', borderRadius: 12, padding: '8px 11px', marginBottom: 12, color: CK.red2, fontSize: 13, fontWeight: 600 }}>
-          <UserX size={17} strokeWidth={1.5} style={{ flexShrink: 0, marginTop: 1 }} aria-hidden />
+        <div className="flex items-start gap-2" style={{ flex: 'none', background: 'rgba(142,36,36,0.09)', borderRadius: 10, padding: '6px 10px', marginBottom: 8, color: CK.red2, fontSize: 12.5, fontWeight: 600 }}>
+          <UserX size={16} strokeWidth={1.5} style={{ flexShrink: 0, marginTop: 1 }} aria-hidden />
           <span>{blocked}. You cannot send directives until the crisis team gives you a new character.</span>
         </div>
       )}
 
       {!open && !changing && (
-        <div className="flex items-start gap-2" style={{ background: 'rgba(142,36,36,0.09)', borderRadius: 12, padding: '8px 11px', marginBottom: 12, color: CK.red2, fontSize: 13, fontWeight: 600 }}>
-          <PauseCircle size={17} strokeWidth={1.5} style={{ flexShrink: 0, marginTop: 1 }} aria-hidden />
+        <div className="flex items-start gap-2" style={{ flex: 'none', background: 'rgba(142,36,36,0.09)', borderRadius: 10, padding: '6px 10px', marginBottom: 8, color: CK.red2, fontSize: 12.5, fontWeight: 600 }}>
+          <PauseCircle size={16} strokeWidth={1.5} style={{ flexShrink: 0, marginTop: 1 }} aria-hidden />
           <span>Directives are paused. {pausedNote || 'You can write one now and send it when they open.'}</span>
         </div>
       )}
 
-      <div className="grid gap-3">
-        <div>
-          <FieldLabel hint={isCab ? 'Sent in the name of the whole cabinet. Your chair may look at it first' : undefined}>Kind</FieldLabel>
+      <div className="flex flex-col gap-2.5" style={{ flex: 1, minHeight: 0 }}>
+        {/* ONE compact row: the kind, the themes (one small square) and, for a joint directive, the co-authors. */}
+        <div className="flex flex-wrap items-center" style={{ gap: 8, flex: 'none' }} title={isCab ? 'Sent in the name of the whole cabinet. Your chair may look at it first' : undefined}>
           {editing ? (
-            <span className="inline-flex items-center gap-1.5" style={{ fontSize: 13, fontWeight: 800, color: CK.red }}>
+            <span className="inline-flex items-center gap-1.5" style={{ fontSize: 13, fontWeight: 800, color: CK.red, height: SQUARE }}>
               {changing ? <>{kindIcon(d.kind, 15)}{KIND_WORD[d.kind]}</> : <><Landmark size={15} strokeWidth={1.5} aria-hidden />Cabinet</>}
             </span>
           ) : (
@@ -588,9 +573,6 @@ export default function DirectiveForm({
               onChange={(k) => set('kind', k)}
             />
           )}
-        </div>
-        <div>
-          <FieldLabel htmlFor="dir-themes" hint="Optional">Themes</FieldLabel>
           <MultiSelect
             id="dir-themes"
             ariaLabel="Themes"
@@ -598,13 +580,11 @@ export default function DirectiveForm({
             value={d.themes}
             onChange={(v) => set('themes', v)}
             placeholder="Pick any that fit"
-            iconsOnlyAfter={2}
+            renderTrigger={themeTrigger}
+            triggerStyle={{ ...chipBg, width: SQUARE, height: SQUARE, padding: 0, justifyContent: 'center' }}
+            triggerTitle={d.themes.length ? `Themes: ${d.themes.join(', ')}` : 'Themes (optional)'}
           />
-        </div>
-
-        {d.kind === 'joint' && !editing && (
-          <div>
-            <FieldLabel htmlFor="dir-co" hint="Anyone in the crisis, from any cabinet">Co-authors</FieldLabel>
+          {d.kind === 'joint' && !editing && (
             <MultiSelect
               id="dir-co"
               ariaLabel="Co-authors"
@@ -614,25 +594,28 @@ export default function DirectiveForm({
               placeholder="Pick who signs it with you"
               searchable
               emptyText="Nobody matches."
+              renderTrigger={coTrigger}
+              triggerStyle={{ ...chipBg, height: SQUARE, padding: 0, maxWidth: '100%' }}
+              triggerTitle="Co-authors: anyone in the crisis, from any cabinet"
             />
-          </div>
-        )}
-
-        <div>
-          <FieldLabel htmlFor="dir-title">Title</FieldLabel>
-          <input id="dir-title" value={d.title} onChange={(e) => set('title', e.target.value)} maxLength={160} style={{ ...bigField, height: 48 }} placeholder="A short name for it" />
+          )}
         </div>
 
-        <div>
-          <div className="flex items-baseline justify-between gap-3">
+        <div style={{ flex: 'none' }}>
+          <FieldLabel htmlFor="dir-title">Title</FieldLabel>
+          <input id="dir-title" value={d.title} onChange={(e) => set('title', e.target.value)} maxLength={160} style={{ ...bigField, height: 46 }} placeholder="A short name for it" />
+        </div>
+
+        <div className="flex flex-col" style={{ flex: 1, minHeight: 0 }}>
+          <div className="flex items-baseline justify-between gap-3" style={{ flex: 'none' }}>
             <FieldLabel htmlFor="dir-body">What do you want to happen?</FieldLabel>
             <span aria-live="polite" style={{ fontSize: 12.5, fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: over ? CK.danger : CK.muted, whiteSpace: 'nowrap' }}>
               {words}{wordLimit > 0 ? ` / ${wordLimit}` : ''} words
             </span>
           </div>
-          <div style={{ position: 'relative' }}>
-            <textarea id="dir-body" value={d.body} onChange={(e) => set('body', e.target.value)} rows={13}
-              style={{ ...bigField, minHeight: 280, resize: 'vertical', paddingBottom: 50, boxShadow: over ? 'inset 0 0 0 2px rgba(163,65,47,0.6)' : bigField.boxShadow }}
+          <div style={{ position: 'relative', flex: 1, minHeight: 230 }}>
+            <textarea id="dir-body" value={d.body} onChange={(e) => set('body', e.target.value)}
+              style={{ ...bigField, position: 'absolute', inset: 0, height: '100%', resize: 'none', paddingBottom: 50, boxShadow: over ? 'inset 0 0 0 2px rgba(163,65,47,0.6)' : bigField.boxShadow }}
               placeholder="Say what you do, how, and when." />
             <div style={{ position: 'absolute', left: 10, bottom: 9 }}>
               <AttachBar url={attach.url} uploading={attach.uploading} onPick={(f) => { setProblem(null); void attach.pick(f); }} onClear={() => attach.setUrl(null)} disabled={sending} />
@@ -640,14 +623,19 @@ export default function DirectiveForm({
           </div>
         </div>
 
-        {problem && <p role="alert" style={{ margin: 0, fontSize: 13.5, fontWeight: 600, color: CK.danger }}>{problem}</p>}
-        {over && !problem && <p style={{ margin: 0, fontSize: 13, color: CK.danger }}>That is {words - wordLimit} words over the limit.</p>}
-        {needsCo && <p style={{ margin: 0, fontSize: 13, color: CK.muted }}>Pick at least one co-author for a joint directive.</p>}
+        {problem && <p role="alert" style={{ flex: 'none', margin: 0, fontSize: 13.5, fontWeight: 600, color: CK.danger }}>{problem}</p>}
+        {over && !problem && <p style={{ flex: 'none', margin: 0, fontSize: 13, color: CK.danger }}>That is {words - wordLimit} words over the limit.</p>}
+        {needsCo && <p style={{ flex: 'none', margin: 0, fontSize: 13, color: CK.muted }}>Pick at least one co-author for a joint directive.</p>}
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2.5" style={{ flex: 'none' }}>
           <Btn tone={isCab ? 'red' : 'green'} icon={waitLeft > 0 && !editing ? <Timer size={16} strokeWidth={1.5} /> : changing ? <Check size={16} strokeWidth={1.5} /> : isCab ? <Landmark size={16} strokeWidth={1.5} /> : <Send size={16} strokeWidth={1.5} />} disabled={!canSend} onClick={send} style={isCab ? { padding: '10px 18px', fontSize: 14 } : undefined}>
             {sending ? (changing ? 'Saving' : 'Sending') : waitLeft > 0 && !editing ? `Wait ${clock(waitLeft)}` : changing ? 'Save changes' : editing ? 'Send again' : isCab ? 'Send cabinet directive' : 'Send directive'}
           </Btn>
+          {!editing && (
+            <span title="Drafts stay on this device. They are not sent to anyone until you send them">
+              <Btn tone="ghost" icon={<NotebookPen size={16} strokeWidth={1.5} />} disabled={!hasDraft || sending} onClick={saveAsDraft} style={isCab ? { padding: '10px 14px', fontSize: 14 } : undefined}>Save as draft</Btn>
+            </span>
+          )}
           {waitLeft > 0 && !editing && <span style={{ fontSize: 13, color: CK.inkSoft }}>You can send again in {clock(waitLeft)}.</span>}
         </div>
       </div>

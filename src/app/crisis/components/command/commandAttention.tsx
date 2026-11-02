@@ -1,8 +1,9 @@
 'use client';
 // Gavelling Crisis: "Needs Attention" on Crisis Command, a bento card under Front Rooms. It collects what the Crisis
-// Director can act on right now: meeting requests waiting for a yes or no, the backroom rebalance suggestion, the oldest
-// directive that has waited too long, cabinet directives still with their chair, and a room with no chair in it. When nothing needs attention it says so in one plain
-// line. Every item is derived from what Command already reads (nothing extra is loaded except the pending meetings).
+// Director can act on right now: the backroom rebalance suggestion, the oldest directive that has waited too long, cabinet
+// directives still with their chair, and a room with no chair in it. Meeting requests are NOT here any more (owner, 2 Nov 2026):
+// they sit in the backroom's to-reply lanes on the Directives page, on their own Meeting Request card. When nothing needs
+// attention it says so in one plain line. Every item is derived from what Command already reads (nothing extra is loaded).
 
 import { useMemo, useState } from 'react';
 import { BellRing, CircleCheck, Clock, DoorOpen, Gavel } from 'lucide-react';
@@ -11,7 +12,6 @@ import type { CrisisRef } from '@/lib/crisis/api';
 import type { Cabinet, Directive, Member } from '@/lib/crisis/types';
 import { Btn, Card, CardTitle, CK, waitLabel } from '../../crisisKit';
 import { isOpenStatus } from '../directives/directiveKit';
-import { MeetingRequestRows, usePendingMeetings } from '../meetings/MeetingRequestsStrip';
 import { beingWritten, type RoomState } from './commandData';
 import { RebalanceRow, useRebalanceTip } from './commandRebalance';
 
@@ -32,7 +32,6 @@ export function NeedsAttentionCard({ cref, cabinets, members, directives, rooms,
   cref: CrisisRef; cabinets: Cabinet[]; members: Member[]; directives: Directive[] | null; rooms: RoomState[] | null; now: number;
   onOpenDirective: (d: Directive) => void; onChanged: () => void;
 }) {
-  const { pending, reload } = usePendingMeetings(cref, true);
   const tip = useRebalanceTip(members, directives, now);
 
   const oldest = useMemo(() => {
@@ -56,9 +55,8 @@ export function NeedsAttentionCard({ cref, cabinets, members, directives, rooms,
     [directives],
   );
 
-  const meetings = pending ?? [];
-  const count = meetings.length + (tip ? 1 : 0) + (oldest ? 1 : 0) + (withChair.length > 0 ? 1 : 0) + noChair.length;
-  const loading = pending === null || directives === null;
+  const count = (tip ? 1 : 0) + (oldest ? 1 : 0) + (withChair.length > 0 ? 1 : 0) + noChair.length;
+  const loading = directives === null;
 
   return (
     <Card className="cmd-card cmd-attn" style={{ display: 'flex', flexDirection: 'column' }}>
@@ -80,10 +78,9 @@ export function NeedsAttentionCard({ cref, cabinets, members, directives, rooms,
         </p>
       ) : (
         <div style={{ flex: '1 1 auto', minHeight: 0, overflowY: 'auto' }}>
-          {meetings.length > 0 && <MeetingRequestRows pending={meetings} compact now={now} onDecided={() => { void reload(); }} />}
-          {tip && <div style={{ borderTop: meetings.length ? `1px solid ${CK.hair}` : 0 }}><RebalanceRow cref={cref} tip={tip} onChanged={onChanged} /></div>}
+          {tip && <div><RebalanceRow cref={cref} tip={tip} onChanged={onChanged} /></div>}
           {oldest && (
-            <div style={{ borderTop: meetings.length || tip ? `1px solid ${CK.hair}` : 0 }}>
+            <div style={{ borderTop: tip ? `1px solid ${CK.hair}` : 0 }}>
               <ItemRow
                 icon={<Clock size={17} strokeWidth={1.5} />}
                 color={CK.danger}
@@ -94,7 +91,7 @@ export function NeedsAttentionCard({ cref, cabinets, members, directives, rooms,
             </div>
           )}
           {withChair.length > 0 && (
-            <div style={{ borderTop: meetings.length || tip || oldest ? `1px solid ${CK.hair}` : 0 }}>
+            <div style={{ borderTop: tip || oldest ? `1px solid ${CK.hair}` : 0 }}>
               <ItemRow
                 icon={<Gavel size={17} strokeWidth={1.5} />}
                 color="#7B3F61"
@@ -124,7 +121,7 @@ export function NeedsAttentionCard({ cref, cabinets, members, directives, rooms,
             </div>
           )}
           {noChair.map((c, i) => (
-            <div key={c.id} style={{ borderTop: meetings.length || tip || oldest || withChair.length > 0 || i > 0 ? `1px solid ${CK.hair}` : 0 }}>
+            <div key={c.id} style={{ borderTop: tip || oldest || withChair.length > 0 || i > 0 ? `1px solid ${CK.hair}` : 0 }}>
               <ItemRow icon={<DoorOpen size={17} strokeWidth={1.5} />} color={CK.goldDeep}>
                 <b>{c.short_name || c.name}</b> has no chair in its committee room
               </ItemRow>

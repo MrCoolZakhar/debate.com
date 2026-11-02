@@ -21,6 +21,7 @@ import { CrisisProvider, crisisBase, useCrisisGate, type CrisisContextValue } fr
 import NewsPopup from '../../components/news/NewsPopup';
 import CabinetDirectivePrompt from '../../components/directives/CabinetDirectivePrompt';
 import ChairDirectivePrompt from '../../components/chair/ChairDirectivePrompt';
+import DelegateReplyPrompt from '../../components/delegate/DelegateReplyPrompt';
 import MeetingInvitePrompt from '../../components/meetings/MeetingInvitePrompt';
 import ViewingAsBanner from '../../components/command/ViewingAsBanner';
 import NotificationBell from '../../components/notifications/NotificationBell';
@@ -323,6 +324,7 @@ export default function CrisisLayout({ children }: { children: React.ReactNode }
         <NewsPopup />
         <CabinetDirectivePrompt />
         <ChairDirectivePrompt />
+        <DelegateReplyPrompt />
         <MeetingInvitePrompt />
       </div>
       </CharacterProfileProvider>

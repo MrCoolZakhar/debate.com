@@ -1,8 +1,8 @@
 'use client';
 // Gavelling Crisis: the delegate's home, three columns on a wide screen and no bar at the top.
-//   Left (small, 280px): the character card (portrait over the top edge, opens My Character), the two
-//   buttons (Request to speak, Chat), the compact speakers list, then the small facts (in-world date,
-//   directives open or paused) and the resources, two per row.
+//   Left (small, 320px): the character card (portrait over the top edge, opens My Character), the two
+//   buttons (Request to speak, Chat), the speakers list (half width) beside the quick glance (in-world
+//   date, directives open or paused, cooldown), then the resources, two per row.
 //   Middle: Send a Directive, sized to fit one screen at 1440x900.
 //   Right: the latest news (with this cabinet's big numbers), then My Directives.
 // On a phone it stacks: character and buttons, my directives (where replies arrive), send directive, speakers list, news, facts and resources.
@@ -27,6 +27,7 @@ import ChatDialog from './ChatDialog';
 import NewsDialog from './NewsDialog';
 import ProfileCard from './ProfileCard';
 import FactsCard from './FactsCard';
+import GlanceCard from './GlanceCard';
 import NewsPanel from './NewsPanel';
 import SpeakersList from './SpeakersList';
 import { useCrisisNews } from '../news/useCrisisNews';
@@ -58,6 +59,8 @@ export default function DelegateHome() {
   const [story, setStory] = useState<News | null>(null);
   const [prefill, setPrefill] = useState<DirectivePrefill | null>(null);
   const [resend, setResend] = useState<DirectiveResend | null>(null);
+  // When the cooldown before the next directive ends (told by the form), for the glance card.
+  const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
   const news = useCrisisNews(ref);
   const seq = useRef<Record<string, number>>({});
 
@@ -173,7 +176,7 @@ export default function DelegateHome() {
         </section>
       )}
 
-      <div className="flex flex-col gap-6 xl:grid xl:items-start xl:gap-5 xl:grid-cols-[280px_minmax(0,6fr)_minmax(0,5fr)]">
+      <div className="flex flex-col gap-6 xl:grid xl:items-start xl:gap-5 xl:grid-cols-[320px_minmax(0,6fr)_minmax(0,5fr)]">
         {/* Left: the character, the buttons, the speakers list; the facts and resources come last on a phone. */}
         <div className="contents xl:flex xl:flex-col xl:gap-5 xl:min-w-0">
           <div className="contents xl:flex xl:flex-col xl:gap-3 xl:min-w-0">
@@ -185,22 +188,24 @@ export default function DelegateHome() {
                 <RoomActions room={room} onChat={() => setDialog('chat')} />
               </section>
             </div>
-            <div className="order-4 xl:order-none min-w-0">
-              <Card style={{ padding: '10px 12px 12px' }}>
+            {/* The speakers list at half its old width, with the quick glance beside it. */}
+            <div className="order-4 xl:order-none min-w-0 grid items-stretch" style={{ gridTemplateColumns: '140px minmax(0, 1fr)', gap: 10 }}>
+              <Card style={{ padding: '10px 10px 12px' }}>
                 <section aria-label="Speakers list">
                   <h2 style={{ margin: '0 0 4px', fontSize: 13.5, fontWeight: 800, color: CK.ink }}>Speakers List</h2>
                   <SpeakersList room={room} characters={everyone} />
                 </section>
               </Card>
+              <GlanceCard scenarioAt={crisis.scenario_at} crisisOpen={crisis.directives_open} cabinetOpen={cabinet?.directives_open !== false} pausedNote={pausedNote} cooldownUntil={cooldownUntil} />
             </div>
           </div>
           <div className="order-6 xl:order-none min-w-0">
-            <FactsCard crisis={{ scenario_at: crisis.scenario_at, directives_open: open, directives_paused_note: pausedNote }} types={res?.types ?? null} resources={myResources} characterId={characterId} color={myColor} />
+            <FactsCard types={res?.types ?? null} resources={myResources} characterId={characterId} color={myColor} />
           </div>
         </div>
 
         {/* Middle: the most important thing on the page. */}
-        <div id="crisis-send-directive" className="order-3 xl:order-none min-w-0 xl:pt-[38px]">
+        <div id="crisis-send-directive" className="order-3 xl:order-none min-w-0">
           <DirectiveForm
             cref={ref}
             memberId={memberId}
@@ -217,11 +222,12 @@ export default function DelegateHome() {
             cabinet={cabinet ? { name: cabinet.name, logo_url: cabinet.logo_url, color: cabinet.color } : null}
             resend={resend}
             onResendDone={() => setResend(null)}
+            onCooldown={setCooldownUntil}
           />
         </div>
 
         {/* Right: the news, then my directives. */}
-        <div className="contents xl:flex xl:flex-col xl:gap-6 xl:min-w-0 xl:pt-[38px]">
+        <div className="contents xl:flex xl:flex-col xl:gap-6 xl:min-w-0">
           <div className="order-5 xl:order-none min-w-0">
             <NewsPanel
               items={news.items}

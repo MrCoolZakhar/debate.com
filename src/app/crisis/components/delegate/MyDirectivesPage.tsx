@@ -4,20 +4,23 @@
 // directive pop-up as on the home page, where the author can write a clarification, edit or withdraw it while nobody has answered it.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { crisisError, listDirectives, loadWorld, type CrisisRef } from '@/lib/crisis/api';
 import { useCrisisLive } from '@/lib/crisis/live';
 import type { Directive, DirectiveNote, DirectiveStatus } from '@/lib/crisis/types';
 import { Card, CK, Skeleton } from '../../crisisKit';
-import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
+import { crisisBase, useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import DirectiveDialog from './DirectiveDialog';
 import DirectiveDeepLink from '../notifications/DirectiveDeepLink';
 import { DirectiveCard, type PersonRef } from './MyDirectives';
+import DraftCard from './DraftCard';
+import { requestOpenDraft, useSavedDrafts } from './draftStore';
 import { listAllNotes, listCoauthors } from './delegateData';
 import type { WorldCharacter } from './DirectiveForm';
 
-type FilterKey = 'waiting' | 'answered' | 'changes' | 'withdrawn' | 'all';
+type FilterKey = 'waiting' | 'answered' | 'changes' | 'withdrawn' | 'drafts' | 'all';
 
-const GROUP: Record<DirectiveStatus, Exclude<FilterKey, 'all'>> = {
+const GROUP: Record<DirectiveStatus, Exclude<FilterKey, 'all' | 'drafts'>> = {
   awaiting_chair: 'waiting',
   queued: 'waiting',
   claimed: 'waiting',
@@ -33,11 +36,14 @@ const FILTERS: Array<{ key: FilterKey; label: string }> = [
   { key: 'answered', label: 'Answered' },
   { key: 'changes', label: 'Changes asked for' },
   { key: 'withdrawn', label: 'Withdrawn' },
+  { key: 'drafts', label: 'Drafts' },
   { key: 'all', label: 'All' },
 ];
 
 export default function MyDirectivesPage() {
   const { ref, memberId, characterId, core } = useCrisis();
+  const router = useRouter();
+  const { drafts, remove: removeDraft } = useSavedDrafts(ref.id, memberId);
   const liveMember = core.members.find((m) => m.id === memberId) ?? null;
   const myCharacterId = liveMember ? liveMember.character_id : characterId;
   const me = useMemo(() => core.characters.find((c) => c.id === myCharacterId) ?? null, [core.characters, myCharacterId]);
@@ -86,11 +92,14 @@ export default function MyDirectivesPage() {
 
   const all = useMemo(() => [...(directives ?? [])].sort((a, b) => b.created_at.localeCompare(a.created_at)), [directives]);
   const counts = useMemo(() => {
-    const c: Record<FilterKey, number> = { waiting: 0, answered: 0, changes: 0, withdrawn: 0, all: all.length };
+    const c: Record<FilterKey, number> = { waiting: 0, answered: 0, changes: 0, withdrawn: 0, drafts: drafts.length, all: all.length + drafts.length };
     for (const d of all) c[GROUP[d.status]] += 1;
     return c;
-  }, [all]);
-  const shown = filter === 'all' ? all : all.filter((d) => GROUP[d.status] === filter);
+  }, [all, drafts.length]);
+  const shown = filter === 'all' ? all : filter === 'drafts' ? [] : all.filter((d) => GROUP[d.status] === filter);
+  const shownDrafts = filter === 'all' || filter === 'drafts' ? drafts : [];
+  // A draft opens in the Send a Directive form, which lives on the home page.
+  const openDraft = (id: string) => { requestOpenDraft(ref.id, memberId, id); router.push(crisisBase(ref)); };
   const openOne = openId ? all.find((d) => d.id === openId) ?? null : null;
 
   return (
@@ -121,10 +130,13 @@ export default function MyDirectivesPage() {
 
       {directives === null ? (
         <div className="grid gap-3"><Skeleton h={112} r={20} /><Skeleton h={112} r={20} /></div>
-      ) : shown.length === 0 ? (
-        <Card><p style={{ margin: 0, fontSize: 14, color: CK.inkSoft }}>{all.length === 0 ? 'You have not sent a directive yet.' : 'No directives here.'}</p></Card>
+      ) : shown.length === 0 && shownDrafts.length === 0 ? (
+        <Card><p style={{ margin: 0, fontSize: 14, color: CK.inkSoft }}>{all.length === 0 && drafts.length === 0 ? 'You have not sent a directive yet.' : filter === 'drafts' ? 'No saved drafts. Press Save as draft when you write a directive to keep it here.' : 'No directives here.'}</p></Card>
       ) : (
         <div className="grid" style={{ gap: 6, gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 380px), 1fr))', alignItems: 'start' }}>
+          {shownDrafts.map((e) => (
+            <div key={e.id} style={{ marginTop: 6 }}><DraftCard entry={e} onOpen={() => openDraft(e.id)} onDelete={() => removeDraft(e.id)} /></div>
+          ))}
           {shown.map((d) => <DirectiveCard key={d.id} d={d} author={personOf(d.author_character_id)} onOpen={() => setOpenId(d.id)} />)}
         </div>
       )}

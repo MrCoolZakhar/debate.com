@@ -11,7 +11,8 @@ export default function Portal({ children }: { children: ReactNode }) {
   useEffect(() => {
     let alive = true;
     void Promise.resolve().then(() => {
-      if (alive) setTarget(document.getElementById('fit-root') ?? document.body);
+      // Inside an element shown full screen (the crisis map), a layer must live inside it to be seen at all.
+      if (alive) setTarget((document.fullscreenElement as HTMLElement | null) ?? document.getElementById('fit-root') ?? document.body);
     });
     return () => { alive = false; };
   }, []);

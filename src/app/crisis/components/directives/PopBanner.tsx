@@ -1,7 +1,7 @@
 'use client';
 // Gavelling Crisis: the bold, game-style banner at the top of the big prompts ("New Cabinet Directive!", "Meeting Request!").
 // Chunky display font in gold on the crisis red, a short scale-in with a little bounce and one shine sweep. With reduced motion
-// it just appears. The ONLY place the display font is used.
+// it just appears. The title is always ONE line (owner, 2 Nov 2026), outside and above the card it announces. The ONLY place the display font is used.
 
 import type { ReactNode } from 'react';
 import { crisisDisplay } from '../../displayFont';
@@ -13,11 +13,12 @@ const CSS = `
   animation: pb-pop 560ms cubic-bezier(0.34,1.56,0.64,1) both; }
 .pb-banner::after { content: ''; position: absolute; top: -10%; bottom: -10%; width: 34%; left: -50%; transform: skewX(-18deg); pointer-events: none;
   background: linear-gradient(100deg, transparent, rgba(255,255,255,0.5), transparent); animation: pb-shine 900ms 480ms ease-out 1 both; }
-.pb-title { margin: 0; font-size: clamp(22px, 4.6vw, 32px); line-height: 1.1; letter-spacing: 0.02em; text-shadow: 0 2px 0 rgba(58,14,15,0.6), 0 0 18px rgba(255,217,102,0.28); overflow-wrap: anywhere; }
+.pb-title { margin: 0; white-space: nowrap; font-size: clamp(16px, 4.6vw, 32px); line-height: 1.1; letter-spacing: 0.02em; text-shadow: 0 2px 0 rgba(58,14,15,0.6), 0 0 18px rgba(255,217,102,0.28); }
 .pb-icon { display: inline-grid; place-items: center; flex: none; animation: pb-wiggle 900ms 520ms ease-in-out 1 both; }
 @keyframes pb-pop { 0% { opacity: 0; transform: scale(0.55) rotate(-3deg); } 62% { opacity: 1; transform: scale(1.07) rotate(1deg); } 100% { opacity: 1; transform: none; } }
 @keyframes pb-shine { from { left: -50%; } to { left: 130%; } }
 @keyframes pb-wiggle { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-14deg) scale(1.12); } 55% { transform: rotate(10deg) scale(1.08); } 80% { transform: rotate(-4deg); } }
+@media (max-width: 480px) { .pb-icon { display: none; } .pb-banner { padding: 12px 14px 11px; } }
 @media (prefers-reduced-motion: reduce) { .pb-banner, .pb-icon { animation: none; } .pb-banner::after { display: none; } }
 `;
 

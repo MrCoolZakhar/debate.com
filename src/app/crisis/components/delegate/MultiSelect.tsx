@@ -2,7 +2,7 @@
 // Gavelling Crisis: a multi-select dropdown. The trigger shows the chosen items (icon and word);
 // the list is a Portal popover at fixed coordinates, flipped upward near the bottom, never clipped.
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { Check, ChevronDown, Search } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { Avatar, CK, fieldStyle } from '../../crisisKit';
@@ -15,7 +15,7 @@ export interface MultiOption {
 
 interface Pos { left: number; width: number; top?: number; bottom?: number; maxHeight: number }
 
-export default function MultiSelect({ id, ariaLabel, options, value, onChange, placeholder, searchable, emptyText, iconsOnlyAfter }: {
+export default function MultiSelect({ id, ariaLabel, options, value, onChange, placeholder, searchable, emptyText, iconsOnlyAfter, renderTrigger, triggerStyle, triggerTitle }: {
   id?: string;
   ariaLabel: string;
   options: MultiOption[];
@@ -26,6 +26,11 @@ export default function MultiSelect({ id, ariaLabel, options, value, onChange, p
   emptyText?: string;
   /** Opt in: with more than this many chosen, the trigger shows their icons only (names in the tooltip), so it never grows. */
   iconsOnlyAfter?: number;
+  /** Replaces the whole look of the trigger (a small square, a few overlapping portraits): the button keeps its popover, keys and label. */
+  renderTrigger?: (chosen: MultiOption[], open: boolean) => ReactNode;
+  /** The trigger button's own style when `renderTrigger` is used. */
+  triggerStyle?: CSSProperties;
+  triggerTitle?: string;
 }) {
   const trigger = useRef<HTMLButtonElement>(null);
   const pop = useRef<HTMLDivElement>(null);
@@ -93,8 +98,10 @@ export default function MultiSelect({ id, ariaLabel, options, value, onChange, p
         aria-label={ariaLabel}
         onClick={() => { setQ(''); if (!open) place(); setOpen((o) => !o); }}
         className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] flex items-center justify-between gap-2"
-        style={{ ...fieldStyle, cursor: 'pointer', textAlign: 'left', minHeight: 44 }}
+        title={triggerTitle}
+        style={renderTrigger ? { border: 0, cursor: 'pointer', fontFamily: CK.font, ...triggerStyle } : { ...fieldStyle, cursor: 'pointer', textAlign: 'left', minHeight: 44 }}
       >
+        {renderTrigger ? renderTrigger(chosen, open) : <>
         <span className="flex flex-wrap items-center gap-x-3 gap-y-1 min-w-0" style={iconsOnlyAfter !== undefined && chosen.length > iconsOnlyAfter ? { columnGap: 10 } : undefined}>
           {chosen.length === 0 ? (
             <span style={{ color: CK.muted }}>{placeholder}</span>
@@ -120,6 +127,7 @@ export default function MultiSelect({ id, ariaLabel, options, value, onChange, p
           ))}
         </span>
         <ChevronDown size={17} strokeWidth={1.5} aria-hidden style={{ flexShrink: 0, color: CK.muted, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 160ms ease' }} />
+        </>}
       </button>
       {open && pos && (
         <Portal>

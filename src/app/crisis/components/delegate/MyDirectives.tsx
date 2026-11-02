@@ -8,8 +8,11 @@
 // seal and the number on its top border, the name a small label, the title big with the CABINET stamp inside the card beside it, and the
 // author's portrait and name.
 // A click opens the conversation, where the author can also edit or withdraw it in place while nobody has answered it.
+// On the home page this section is short on purpose (owner, 2 Nov 2026): cabinet directives are not listed here (they stay on the full
+// Directives page), the ones that need more detail come first, then the drafts saved on this device, then changes asked for, waiting,
+// answered (newest first) and the rest.
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ChevronRight, Clock, Undo2, Pencil } from 'lucide-react';
 import { dirNumber, isChairSendBack, timeAgo } from '@/lib/crisis/format';
@@ -19,6 +22,8 @@ import { Avatar, Btn, Card, CK, Skeleton } from '../../crisisKit';
 import { crisisBase, useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { CARD_GAP_BELOW, CabinetCrest, CabinetFoot, CabinetName, SEAL_ROW, cabinetColorOf, cabinetRing, cabinetWash, crestIndent, isCabinetDirective } from '../directives/cabinetStamp';
 import DirectiveDialog from './DirectiveDialog';
+import DraftCard from './DraftCard';
+import { requestOpenDraft, useSavedDrafts } from './draftStore';
 import DirectiveDeepLink from '../notifications/DirectiveDeepLink';
 import { KIND_WORD, kindIcon, verdictOf } from './directiveUi';
 import { plainText } from '../directives/attachedImage';
@@ -133,8 +138,18 @@ export function DirectiveCard({ d, author, onOpen }: { d: Directive; author: Per
   );
 }
 
+/** Where a directive sits on the home page: more detail needed first, then changes asked for, waiting, answered, the rest. */
+function priorityOf(d: Directive): number {
+  if (d.status === 'clarify') return 0;
+  if (d.status === 'changes_requested') return 1;
+  if (d.status === 'awaiting_chair' || d.status === 'queued' || d.status === 'claimed') return 2;
+  if (d.status === 'answered') return 3;
+  return 4;
+}
+const sortStamp = (d: Directive) => (d.status === 'answered' ? d.answered_at ?? d.created_at : d.created_at);
+
 export default function MyDirectives({
-  cref, directives, notes, coauthors, personOf, memberName, myMemberId, onChanged, onSendAgain, onEditReturned,
+  cref, directives, notes, coauthors, personOf, memberName, myMemberId, onChanged, onSendAgain, onEditReturned, onOpenDraft,
 }: {
   cref: CrisisRef;
   directives: Directive[] | null;
@@ -148,8 +163,19 @@ export default function MyDirectives({
   onSendAgain?: (d: Directive) => void;
   /** Open a directive the chair asked changes for in the send form, in edit mode. */
   onEditReturned?: (d: Directive) => void;
+  /** Open a saved draft in the Send a Directive form. */
+  onOpenDraft?: (id: string) => void;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
+  const { drafts, remove: removeDraft } = useSavedDrafts(cref.id, myMemberId);
+  // Cabinet directives are not shown here; the order is the priority above.
+  const shown = useMemo(() => {
+    const mine = (directives ?? []).filter((d) => !isCabinetDirective(d));
+    return mine.sort((a, b) => priorityOf(a) - priorityOf(b) || sortStamp(b).localeCompare(sortStamp(a)));
+  }, [directives]);
+  const clarify = shown.filter((d) => d.status === 'clarify');
+  const rest = shown.filter((d) => d.status !== 'clarify');
+  const openDraft = (id: string) => (onOpenDraft ? onOpenDraft(id) : requestOpenDraft(cref.id, myMemberId, id));
   const returned = (directives ?? []).filter((d) => d.status === 'changes_requested' && d.author_member_id === myMemberId && !!myMemberId);
   const openOne = openId ? (directives ?? []).find((d) => d.id === openId) ?? null : null;
 
@@ -188,11 +214,15 @@ export default function MyDirectives({
       )}
       {directives === null ? (
         <div className="grid gap-3"><Skeleton h={CARD_HEIGHT} r={20} /><Skeleton h={CARD_HEIGHT} r={20} /></div>
-      ) : directives.length === 0 ? (
-        <Card><p style={{ margin: 0, fontSize: 14, color: CK.inkSoft }}>You have not sent a directive yet.</p></Card>
+      ) : shown.length === 0 && drafts.length === 0 ? (
+        <Card><p style={{ margin: 0, fontSize: 14, color: CK.inkSoft }}>{directives.length === 0 ? 'You have not sent a directive yet.' : 'Nothing here. Your cabinet directives are on the Directives page.'}</p></Card>
       ) : (
         <div className="grid" style={{ gap: 6 }}>
-          {directives.map((d) => <DirectiveCard key={d.id} d={d} author={personOf(d.author_character_id)} onOpen={() => setOpenId(d.id)} />)}
+          {clarify.map((d) => <DirectiveCard key={d.id} d={d} author={personOf(d.author_character_id)} onOpen={() => setOpenId(d.id)} />)}
+          {drafts.map((e) => (
+            <div key={e.id} style={{ marginTop: 6 }}><DraftCard entry={e} onOpen={() => openDraft(e.id)} onDelete={() => removeDraft(e.id)} /></div>
+          ))}
+          {rest.map((d) => <DirectiveCard key={d.id} d={d} author={personOf(d.author_character_id)} onOpen={() => setOpenId(d.id)} />)}
         </div>
       )}
       {openOne && (

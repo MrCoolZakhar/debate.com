@@ -36,14 +36,14 @@ function Person({ name, picture, size, mine, strong }: { name: string; picture: 
     <div
       className="flex items-center"
       style={{
-        gap: 9, padding: mine ? '3px 9px 3px 5px' : '1px 5px', borderRadius: 14,
+        gap: 7, padding: mine ? '3px 6px 3px 4px' : '1px 3px', borderRadius: 14,
         background: mine ? 'rgba(238,217,138,0.5)' : 'transparent', boxShadow: mine ? `inset 0 0 0 1.5px ${CK.goldMid}` : 'none',
       }}
     >
       <Avatar name={name} src={picture} size={size} color={mine ? CK.goldMid : CK.red} />
-      <span className="min-w-0" style={{ fontSize: strong ? 14.5 : 13, fontWeight: strong || mine ? 800 : 600, color: CK.ink, overflowWrap: 'anywhere' }}>
+      <span className="min-w-0" style={{ fontSize: strong ? 13.5 : 12.5, fontWeight: strong || mine ? 800 : 600, color: CK.ink, overflowWrap: 'anywhere' }}>
         <CharacterName name={name} />
-        {mine && <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 800, color: CK.goldDeep }}>You</span>}
+        {mine && <span style={{ marginLeft: 6, fontSize: 12, fontWeight: 800, color: CK.goldDeep }}>You</span>}
       </span>
     </div>
   );
@@ -84,20 +84,20 @@ export default function SpeakersList({ room, characters }: { room: CrisisRoom; c
             <Mic size={13} strokeWidth={1.5} aria-hidden />Speaking now
           </p>
           {floorName ? (
-            <Person name={floorName} picture={pictureOf(floorName)} size={32} mine={iSpeak} strong />
+            <Person name={floorName} picture={pictureOf(floorName)} size={28} mine={iSpeak} strong />
           ) : (
             <p style={{ margin: '0 0 0 4px', fontSize: 13.5, color: CK.inkSoft }}>Nobody has the floor.</p>
           )}
           {shown.length > 0 && (
             <>
               <p style={{ margin: '6px 0 0', fontSize: 11.5, fontWeight: 700, color: CK.muted }}>Next</p>
-              {shown.map((n, i) => <Person key={`${n}-${i}`} name={n} picture={pictureOf(n)} size={24} mine={myShown && i === myIndex} />)}
+              {shown.map((n, i) => <Person key={`${n}-${i}`} name={n} picture={pictureOf(n)} size={22} mine={myShown && i === myIndex} />)}
             </>
           )}
           {!myShown && myIndex !== -1 && (
             <>
               <p style={{ margin: '4px 0 0', fontSize: 11.5, fontWeight: 700, color: CK.muted }}>Your place</p>
-              <Person name={country} picture={pictureOf(country)} size={24} mine />
+              <Person name={country} picture={pictureOf(country)} size={22} mine />
               <p style={{ margin: 0, fontSize: 12.5, fontWeight: 700, color: CK.goldDeep }}>You are {ordinal(myIndex + 1)} in line.</p>
             </>
           )}

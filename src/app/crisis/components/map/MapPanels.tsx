@@ -882,6 +882,8 @@ export function ZoneInfoCard({ zone, cabinets, staff, canEdit, canControl, onCon
     <Shell title={zone.label?.trim() || 'Zone'} onClose={onClose}>
       {zone.description?.trim() ? (
         <p style={{ margin: '0 0 10px', fontSize: 13.5, color: CK.ink, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{zone.description}</p>
+      ) : canEdit ? (
+        <p style={{ margin: '0 0 10px', fontSize: 13.5, color: CK.muted }}>No description yet. Press Edit zone to add one.</p>
       ) : null}
       {canControl ? (
         <Field label="Controlled by">
@@ -907,7 +909,7 @@ export function ZonesPanel({ zones, types, cabinets, onDraw, onPick, onClose }: 
   return (
     <Shell title="Zones" onClose={onClose}>
       <p style={{ margin: '0 0 10px', fontSize: 13, color: CK.inkSoft }}>
-        Zones sit on top of the map and are not territory: they never cut or merge anyone&apos;s land and may overlap. Click a zone to edit it.
+        Zones sit on top of the map and are not territory: they never cut or merge anyone&apos;s land and may overlap. Click a zone to see it.
       </p>
       <div style={{ margin: '0 0 10px' }}>
         <Btn size="sm" icon={<Plus size={14} strokeWidth={1.5} />} onClick={onDraw}>Draw a new zone</Btn>

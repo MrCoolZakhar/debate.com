@@ -7,7 +7,7 @@
 // main row stays plain. Single-key shortcuts work when no text field has the focus.
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { ChevronDown, Eraser, Flag, Hexagon, Maximize2, MousePointer2, Paintbrush, Pencil, Redo2, Shield, SlidersHorizontal, Undo2 } from 'lucide-react';
+import { ChevronDown, Eraser, Flag, Hexagon, Maximize2, Minimize2, MousePointer2, Paintbrush, Pencil, Redo2, Shield, SlidersHorizontal, Undo2 } from 'lucide-react';
 import GSelect from '@/components/GSelect';
 import { CK } from '../../crisisKit';
 import { BRUSH_MAX_KM, BRUSH_MIN_KM, kmFromSlider, sliderFromKm } from './brush';
@@ -21,7 +21,7 @@ const TOOLS: Array<{ tool: Tool; label: string; key: string; Icon: typeof Flag; 
   { tool: 'select', label: 'Select', key: 'V', Icon: MousePointer2, title: 'Select a unit, a country, a territory or a zone' },
   { tool: 'give', label: 'Give land', key: 'G', Icon: Flag, title: 'Click a country, province, territory or zone to give it to the cabinet in the chip' },
   { tool: 'paint', label: 'Paint', key: 'B', Icon: Paintbrush, title: 'Paint land for the cabinet in the chip with a round brush' },
-  { tool: 'erase', label: 'Erase', key: 'E', Icon: Eraser, title: 'Erase drawn land with a round brush' },
+  { tool: 'erase', label: 'Erase', key: 'E', Icon: Eraser, title: 'Erase land held by a cabinet with a round brush' },
   { tool: 'draw', label: 'Draw area', key: 'D', Icon: Pencil, title: 'Draw a new territory by dragging, or by clicking points' },
   { tool: 'zones', label: 'Zones', key: 'Z', Icon: Hexagon, title: 'Draw and reshape zones: blockade lines, no-fly zones and other areas that are not territory' },
   { tool: 'unit', label: 'Units', key: 'U', Icon: Shield, title: 'Add a unit to the map' },
@@ -57,7 +57,9 @@ export interface MapToolbarProps {
   redoLabel?: string | null;
   /** The shortcut also works inside a text field (the person is placing points on the map). */
   undoInFields?: boolean;
-  onFit: () => void;
+  /** The map is full screen now, and the press that enters or leaves full screen. */
+  fullscreen: boolean;
+  onFullscreen: () => void;
   /** The map's show-and-hide switches, drawn behind "Show on the map". */
   viewTools: ReactNode;
   /** True when this person can change the map (otherwise the hint is the viewer's). */
@@ -110,11 +112,11 @@ function hintFor(p: MapToolbarProps, ownerName: string): string {
         ? `Press and drag to paint land for ${ownerName}. Land of another cabinet under the brush is taken from it. [ and ] change the brush size; hold Shift and drag to move the map.`
         : 'Pick a cabinet in the chip to paint with. To take land away, use Erase.';
     case 'erase':
-      return 'Press and drag to erase drawn and painted land, whoever holds it. Whole countries stay as they are: use Give land for those. [ and ] change the brush size.';
+      return 'Press and drag to erase land a cabinet holds: painted and drawn land, and countries a cabinet holds. What is left of a country becomes that cabinet\'s drawn land. Countries nobody holds stay as they are. [ and ] change the brush size.';
     case 'draw':
       return `Press and drag to draw an outline: it stays open while you draw and letting go closes it. Or click points one by one. The land is ${p.owner ? `${ownerName}'s` : 'nobody\'s'} unless you change it before saving.`;
     case 'zones':
-      return 'Click a zone to edit it: its details, its corners, or the Move handle to carry all of it. Or press Draw a new zone, then press and drag to draw it freehand. A zone never changes who holds the land.';
+      return 'Click a zone to see its description, then drag its corners or the Move handle to reshape it, or press Edit zone to change its details. Or press Draw a new zone, then press and drag to draw it freehand. A zone never changes who holds the land.';
     case 'unit':
       return 'Choose a kind of unit, then click the map where it should go.';
     default:
@@ -239,8 +241,12 @@ export default function MapToolbar(p: MapToolbarProps) {
           <button type="button" className="wm-tb wm-tb-view" aria-expanded={viewOpen} onClick={() => setViewOpen((v) => !v)} title="Show or hide fog, sight ranges, characters, cities, zones, water and regions">
             <SlidersHorizontal size={17} strokeWidth={1.5} aria-hidden /><span className="wm-tb-name">Show on the map</span><ChevronDown size={15} strokeWidth={1.5} aria-hidden />
           </button>
-          <button type="button" className="wm-tb wm-tb-view" onClick={p.onFit} title="Zoom to fit all the units on screen">
-            <Maximize2 size={17} strokeWidth={1.5} aria-hidden /><span className="wm-tb-name">Fit view</span>
+          <button
+            type="button" className="wm-tb wm-tb-view" onClick={p.onFullscreen}
+            title={p.fullscreen ? 'Leave full screen (Esc)' : 'Show the map, its tools and its panels full screen'}
+          >
+            {p.fullscreen ? <Minimize2 size={17} strokeWidth={1.5} aria-hidden /> : <Maximize2 size={17} strokeWidth={1.5} aria-hidden />}
+            <span className="wm-tb-name">{p.fullscreen ? 'Exit full screen' : 'Full screen'}</span>
           </button>
         </div>
       </div>

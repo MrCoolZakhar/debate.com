@@ -1,12 +1,12 @@
 'use client';
-// Gavelling Crisis: one directive, opened, as a conversation. The pop-up is tall (most of the screen): a red header band (number,
-// kind, title), the outcome (or status) as a coloured statement, who it was sent to, then the thread as chat bubbles taking all the
-// free space: the delegate on the right (the directive, then their clarifications), the backroom on the left (the reply and its
-// notes), oldest first. The author can ALWAYS write a clarification in the big note box at the bottom, at any status, even before the
-// backroom has replied (addNote). While nobody has answered it, the author can also Edit it IN PLACE (owner, 1 Nov 2026: the title in
-// the band and the text in the first bubble turn into large fields, Save changes / Cancel at the bottom, editDirective) or Withdraw it
-// (asked in place, then withdrawDirective). A CABINET directive can be edited only while it waits for the chair (awaiting_chair) or the chair
-// asked for changes (changes_requested); after the chair approved it, Edit is gone. Every field here is 15.5px or bigger.
+// Gavelling Crisis: one directive, opened, as a conversation. The pop-up is for READING AND WRITING LONG DIRECTIVES (owner, 2 Nov 2026),
+// so nothing here takes room from the text: ONE slim header line (kind icon, number and title, ONE small status pill, when it was sent),
+// a tiny line under it (From, Signed with, the themes as icons, and Edit / Withdraw), then the thread as chat bubbles taking all the free
+// space (the directive on the right, the backroom on the left, oldest first, 13px text so a full 300-word directive fits without scrolling
+// on a laptop), and a compact note box that grows. There is no "To:" line. The author can always write a clarification (addNote). Edit exists
+// only while the backroom has NOT replied (awaiting the chair, changes asked for by the chair, queued, claimed); once it asked for detail
+// or answered, Edit is gone (the database refuses it too). A CABINET directive can be edited only while it waits for the chair or the chair
+// asked for changes. Withdraw is asked in place. A clarification note cannot be edited: the database has no way to change a note.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, Pencil, Send, Undo2, X } from 'lucide-react';
@@ -23,7 +23,7 @@ import type { PersonRef } from './MyDirectives';
 import { AttachBar, useImageAttach } from './ImageAttach';
 import { DirectiveBody, splitAttached, withAttached } from '../directives/attachedImage';
 import { countWords } from './DirectiveForm';
-import { bigField, KIND_WORD, kindIcon, statusColor, statusIcon, STATUS_WORDS, verdictOf, whenLabel, whenTitle } from './directiveUi';
+import { bigField, KIND_WORD, kindIcon, verdictOf, whenLabel, whenTitle } from './directiveUi';
 
 interface Bubble { key: string; mine: boolean; who: string; at: string | null; body: string; sort: number }
 
@@ -31,13 +31,13 @@ function BubbleView({ b, lead }: { b: Bubble; lead?: string }) {
   return (
     <div className="flex" style={{ justifyContent: b.mine ? 'flex-end' : 'flex-start' }}>
       <div style={{
-        maxWidth: 'min(86%, 760px)', borderRadius: b.mine ? '18px 18px 5px 18px' : '18px 18px 18px 5px', padding: '11px 15px',
+        maxWidth: 'min(92%, 820px)', borderRadius: b.mine ? '16px 16px 5px 16px' : '16px 16px 16px 5px', padding: '8px 12px',
         background: b.mine ? cabinetTint(CK.forest, 0.13) : CK.card, boxShadow: b.mine ? 'none' : CK.shadowSm,
       }}>
-        <p style={{ margin: 0, fontSize: 12.5, fontWeight: 800, color: b.mine ? CK.forest : CK.red, overflowWrap: 'anywhere' }}>
+        <p style={{ margin: 0, fontSize: 11.5, fontWeight: 800, color: b.mine ? CK.forest : CK.red, overflowWrap: 'anywhere' }}>
           {lead ? `${lead}, ` : ''}{b.who}{b.at ? <span title={whenTitle(b.at)}>{`, ${whenTitle(b.at) ?? ''} (${whenLabel(b.at)})`}</span> : ''}
         </p>
-        <DirectiveBody body={b.body} thumb={260} style={{ margin: '3px 0 0', fontSize: 15.5, lineHeight: 1.6, color: CK.ink, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }} />
+        <DirectiveBody body={b.body} thumb={260} style={{ margin: '2px 0 0', fontSize: 13, lineHeight: 1.55, color: CK.ink, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }} />
       </div>
     </div>
   );
@@ -57,10 +57,13 @@ export default function DirectiveDialog({
   const [busy, setBusy] = useState(false);
   const [confirmWithdraw, setConfirmWithdraw] = useState(false);
   const [withdrawing, setWithdrawing] = useState(false);
-  // Until the crisis team answers it, its author can still change it or take it back.
+  // Until the crisis team answers it, its author can take it back.
   const editable = isAuthor && (d.status === 'awaiting_chair' || d.status === 'queued' || d.status === 'claimed' || d.status === 'clarify');
-  // A cabinet directive can be changed only until the chair has approved it (owner, 1 Nov 2026); the others keep the rule above.
-  const canEdit = isAuthor && (isCabinetDirective(d) ? (d.status === 'awaiting_chair' || d.status === 'changes_requested') : editable);
+  // Edit only while the backroom has not replied (owner, 2 Nov 2026): never once it asked for detail or answered. A directive that
+  // went back to the queue after a clarification already carries the backroom's reply, so it is not editable either. A cabinet
+  // directive can also be changed only until the chair approved it (owner, 1 Nov 2026).
+  const backroomReplied = d.status === 'clarify' || d.status === 'answered' || (d.status !== 'awaiting_chair' && d.status !== 'changes_requested' && !!d.answered_at);
+  const canEdit = isAuthor && !backroomReplied && (isCabinetDirective(d) ? (d.status === 'awaiting_chair' || d.status === 'changes_requested') : (d.status === 'awaiting_chair' || d.status === 'changes_requested' || d.status === 'queued' || d.status === 'claimed'));
   const withdrawn = d.status === 'withdrawn';
 
   // Editing in place: the title and the text become fields where they are shown.
@@ -148,7 +151,15 @@ export default function DirectiveDialog({
     }
   };
   const scroller = useRef<HTMLElement>(null);
+  const noteBox = useRef<HTMLTextAreaElement>(null);
   const attach = useImageAttach(cref);
+  // The note box starts at 3 lines and grows with what is typed (up to about 8 lines).
+  useEffect(() => {
+    const el = noteBox.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 190)}px`;
+  }, [text]);
 
   const send = async () => {
     const body = text.trim();
@@ -195,8 +206,10 @@ export default function DirectiveDialog({
     if (showEdit) scroller.current?.scrollTo({ top: 0 });
   }, [showEdit]);
 
-  const { color: tone, word: verdict, icon: verdictIcon } = verdictOf(d, 30);
-  const barStyle = { flex: 'none', background: CK.surface, boxShadow: `0 -1px 0 ${CK.hair}`, padding: '12px 22px 16px' } as const;
+  const { color: tone, word: verdict, icon: verdictIcon } = verdictOf(d, 13);
+  const barStyle = { flex: 'none', background: CK.surface, boxShadow: `0 -1px 0 ${CK.hair}`, padding: '8px 18px 12px' } as const;
+  const replyAt = d.answered_at;
+  const pillHint = d.status === 'awaiting_chair' ? 'Your chair reads it first. If they send it on, it goes to the backroom.' : verdict;
 
   return (
     <CrisisDialog title="Your Directive" onClose={onClose} width={980} flush>
@@ -205,83 +218,67 @@ export default function DirectiveDialog({
         @media (max-width: 639px) { .dd-body { height: calc(100dvh - 62px); } }
       `}</style>
       <div className="dd-body">
-        <div style={{ flex: 'none', background: CK.redGrad, color: '#FFF4E6', padding: '14px 22px 16px' }}>
-          <p className="flex items-center justify-between gap-3 flex-wrap" style={{ margin: 0, fontSize: 12.5, fontWeight: 700, color: 'rgba(255,232,214,0.85)' }}>
-            <span className="inline-flex items-center gap-1.5">{kindIcon(d.kind, 15)}{KIND_WORD[d.kind]}</span>
-            <span title={whenTitle(d.created_at)}>Sent {whenTitle(d.created_at)} ({whenLabel(d.created_at)})</span>
-          </p>
+        {/* ONE slim header: kind, number and title, the status as one small pill, when it was sent. */}
+        <div style={{ flex: 'none', background: CK.card, boxShadow: `0 1px 0 ${CK.hair}`, padding: '10px 18px 8px' }}>
           {showEdit ? (
-            <div style={{ marginTop: 8 }}>
-              <label htmlFor={`dd-title-${d.id}`} style={{ display: 'block', margin: '0 0 4px', fontSize: 12.5, fontWeight: 700, color: 'rgba(255,232,214,0.9)' }}>Title</label>
+            <div className="flex items-center" style={{ gap: 10 }}>
+              <span style={{ flex: 'none', fontSize: 15, fontWeight: 800, color: CK.red }}>{dirNumber(d)}:</span>
+              <label htmlFor={`dd-title-${d.id}`} className="sr-only">Title</label>
               <input
                 id={`dd-title-${d.id}`}
                 value={eTitle}
                 onChange={(e) => { setProblem(null); setETitle(e.target.value); }}
                 maxLength={160}
                 placeholder="A short name for it"
-                style={{ ...bigField, height: 54, fontSize: 20, fontWeight: 800, color: CK.ink, background: '#FFFBF6', boxShadow: '0 2px 10px rgba(58,14,15,0.3)' }}
+                style={{ ...bigField, flex: 1, minWidth: 0, height: 40, minHeight: 40, fontSize: 15, fontWeight: 800, padding: '6px 12px' }}
               />
             </div>
           ) : (
-            <h3 style={{ margin: '6px 0 0', fontSize: 25, lineHeight: 1.2, fontWeight: 800, overflowWrap: 'anywhere' }}>{dirNumber(d)}: {d.title}</h3>
-          )}
-        </div>
-
-        <div className="flex items-center" style={{ flex: 'none', gap: 12, padding: '11px 22px', background: cabinetTint(tone, 0.1), boxShadow: `inset 0 -1px 0 ${cabinetTint(tone, 0.2)}` }}>
-          <span style={{ color: tone, lineHeight: 0, flexShrink: 0 }}>{verdictIcon}</span>
-          <div className="min-w-0">
-            <b style={{ display: 'block', fontSize: 21, lineHeight: 1.15, fontWeight: 800, color: tone, overflowWrap: 'anywhere' }}>{verdict}</b>
-            {d.status === 'awaiting_chair' && (
-              <span className="block" style={{ marginTop: 2, fontSize: 13.5, fontWeight: 700, color: CK.inkSoft }}>
-                Your chair reads it first. If they send it on, it goes to the backroom.
+            <div className="flex flex-wrap items-center" style={{ gap: '4px 10px' }}>
+              <span title={KIND_WORD[d.kind]} role="img" aria-label={KIND_WORD[d.kind]} className="inline-flex" style={{ color: CK.red, flex: 'none' }}>{kindIcon(d.kind, 17)}</span>
+              <h3 style={{ margin: 0, flex: '1 1 220px', minWidth: 0, fontSize: 18, lineHeight: 1.25, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{dirNumber(d)}: {d.title}</h3>
+              <span
+                title={pillHint}
+                className="inline-flex items-center"
+                style={{ flex: 'none', gap: 5, height: 24, padding: '0 10px', borderRadius: 999, fontSize: 12, fontWeight: 800, color: tone, background: cabinetTint(tone, 0.13), whiteSpace: 'nowrap' }}
+              >
+                {verdictIcon}{verdict}
               </span>
-            )}
-            {d.answered_at && (
-              <span className="block" style={{ marginTop: 2, fontSize: 13.5, fontWeight: 700, color: CK.inkSoft }}>
-                {sentBack ? 'Sent back' : 'Reply came in'} {whenTitle(d.answered_at)} ({whenLabel(d.answered_at)})
+              <span title={whenTitle(d.created_at)} style={{ flex: 'none', fontSize: 12, fontWeight: 600, color: CK.muted }}>
+                Sent {whenLabel(d.created_at)}{replyAt ? `, ${sentBack ? 'sent back' : 'reply'} ${whenLabel(replyAt)}` : ''}
               </span>
-            )}
-            {d.outcome && d.status !== 'answered' && (
-              <span className="inline-flex items-center gap-1.5" style={{ marginTop: 2, fontSize: 13.5, fontWeight: 700, color: statusColor(d.status) }}>{statusIcon(d.status)}{STATUS_WORDS[d.status]}</span>
-            )}
-          </div>
-        </div>
-
-        <div className="flex items-start justify-between flex-wrap" style={{ flex: 'none', gap: '8px 16px', padding: '12px 22px 0' }}>
-          <div className="min-w-0" style={{ flex: '1 1 320px' }}>
-            <p className="flex flex-wrap items-center gap-x-4 gap-y-1" style={{ margin: 0, fontSize: 14, color: CK.inkSoft }}>
-              {d.receiver && <span><b style={{ color: CK.ink }}>To:</b> {d.receiver}</span>}
-              <span><b style={{ color: CK.ink }}>From:</b> <CharacterName name={author.name} /></span>
-              {withNames.length > 0 && <span><b style={{ color: CK.ink }}>Signed with:</b> {withNames.map((n, i) => <span key={`${n}-${i}`}>{i > 0 ? ', ' : ''}<CharacterName name={n} /></span>)}</span>}
-            </p>
-            {d.themes.length > 0 && (
-              <span className="flex flex-wrap gap-1.5" style={{ marginTop: 8 }}>{d.themes.map((t) => <ThemeTag key={t} theme={t} size="md" />)}</span>
-            )}
-          </div>
-          {(editable || canEdit) && !sentBack && !showEdit && (
-            <div className="flex items-center flex-wrap" style={{ gap: 8 }}>
-              {confirmWithdraw ? (
-                <>
-                  <span style={{ fontSize: 13.5, fontWeight: 700, color: CK.ink, overflowWrap: 'anywhere' }}>Withdraw this directive? The crisis team will not answer it.</span>
-                  <Btn tone="danger" size="sm" disabled={withdrawing} onClick={() => { void withdraw(); }}>{withdrawing ? 'Withdrawing' : 'Yes, withdraw it'}</Btn>
-                  <Btn tone="ghost" size="sm" disabled={withdrawing} onClick={() => setConfirmWithdraw(false)}>Keep it</Btn>
-                </>
-              ) : (
-                <>
-                  {canEdit && <Btn tone="ghost" icon={<Pencil size={15} strokeWidth={1.5} />} onClick={startEdit}>Edit</Btn>}
-                  {editable && <Btn tone="danger" icon={<Undo2 size={15} strokeWidth={1.5} />} onClick={() => setConfirmWithdraw(true)}>Withdraw</Btn>}
-                </>
-              )}
             </div>
           )}
+          {/* Tiny facts: who it is from, who signed it, the themes as icons, and Edit / Withdraw. No "To". */}
+          <div className="flex items-center flex-wrap" style={{ gap: '4px 14px', marginTop: 5, fontSize: 12.5, color: CK.inkSoft }}>
+            <span><b style={{ color: CK.ink }}>From</b> <CharacterName name={author.name} /></span>
+            {withNames.length > 0 && <span><b style={{ color: CK.ink }}>Signed with</b> {withNames.map((n, i) => <span key={`${n}-${i}`}>{i > 0 ? ', ' : ''}<CharacterName name={n} /></span>)}</span>}
+            {d.themes.length > 0 && <span className="inline-flex flex-wrap" style={{ gap: 4 }}>{d.themes.map((t) => <ThemeTag key={t} theme={t} iconOnly />)}</span>}
+            {(editable || canEdit) && !sentBack && !showEdit && (
+              <span className="inline-flex items-center flex-wrap" style={{ gap: 6, marginLeft: 'auto' }}>
+                {confirmWithdraw ? (
+                  <>
+                    <span style={{ fontSize: 12.5, fontWeight: 700, color: CK.ink, overflowWrap: 'anywhere' }}>Withdraw it? The crisis team will not answer it.</span>
+                    <Btn tone="danger" size="sm" disabled={withdrawing} onClick={() => { void withdraw(); }}>{withdrawing ? 'Withdrawing' : 'Yes, withdraw it'}</Btn>
+                    <Btn tone="ghost" size="sm" disabled={withdrawing} onClick={() => setConfirmWithdraw(false)}>Keep it</Btn>
+                  </>
+                ) : (
+                  <>
+                    {canEdit && <Btn tone="ghost" size="sm" icon={<Pencil size={13} strokeWidth={1.5} />} onClick={startEdit}>Edit</Btn>}
+                    {editable && <Btn tone="danger" size="sm" icon={<Undo2 size={13} strokeWidth={1.5} />} onClick={() => setConfirmWithdraw(true)}>Withdraw</Btn>}
+                  </>
+                )}
+              </span>
+            )}
+          </div>
         </div>
 
-        <section ref={scroller} aria-label="Conversation with the backroom" className="grid gap-3 content-start" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '14px 22px 16px' }}>
+        <section ref={scroller} aria-label="Conversation with the backroom" className="grid gap-2 content-start" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '10px 18px 12px' }}>
           {thread.map((b) => (b.key === 'directive' && showEdit ? (
-            <div key="directive-edit" style={{ background: CK.card, borderRadius: 18, padding: '12px 14px 14px', boxShadow: `${CK.shadowSm}, inset 0 0 0 2px ${cabinetTint(CK.forest, 0.28)}` }}>
+            <div key="directive-edit" style={{ background: CK.card, borderRadius: 16, padding: '8px 12px 10px', boxShadow: `${CK.shadowSm}, inset 0 0 0 2px ${cabinetTint(CK.forest, 0.28)}` }}>
               <div className="flex items-baseline justify-between gap-3">
-                <label htmlFor={`dd-body-${d.id}`} style={{ display: 'block', fontSize: 13.5, fontWeight: 800, color: CK.forest, margin: '0 0 6px' }}>What do you want to happen?</label>
-                <span aria-live="polite" style={{ fontSize: 13, fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: over ? CK.danger : CK.muted, whiteSpace: 'nowrap' }}>
+                <label htmlFor={`dd-body-${d.id}`} style={{ display: 'block', fontSize: 12.5, fontWeight: 800, color: CK.forest, margin: '0 0 4px' }}>What do you want to happen?</label>
+                <span aria-live="polite" style={{ fontSize: 12.5, fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: over ? CK.danger : CK.muted, whiteSpace: 'nowrap' }}>
                   {words}{wordLimit > 0 ? ` / ${wordLimit}` : ''} words
                 </span>
               </div>
@@ -290,24 +287,21 @@ export default function DirectiveDialog({
                   id={`dd-body-${d.id}`}
                   value={eBody}
                   onChange={(e) => { setProblem(null); setEBody(e.target.value); }}
-                  rows={10}
-                  style={{ ...bigField, minHeight: 240, resize: 'vertical', paddingBottom: 50, boxShadow: over ? 'inset 0 0 0 2px rgba(163,65,47,0.6)' : bigField.boxShadow }}
+                  style={{ ...bigField, fontSize: 14, lineHeight: 1.55, padding: '9px 12px', height: 'min(50dvh, 480px)', minHeight: 200, resize: 'vertical', paddingBottom: 46, boxShadow: over ? 'inset 0 0 0 2px rgba(163,65,47,0.6)' : bigField.boxShadow }}
                   placeholder="Say what you do, how, and when."
                 />
-                <div style={{ position: 'absolute', left: 10, bottom: 9 }}>
+                <div style={{ position: 'absolute', left: 10, bottom: 8 }}>
                   <AttachBar url={editAttach.url} uploading={editAttach.uploading} onPick={(f) => { setProblem(null); void editAttach.pick(f); }} onClear={() => editAttachSet(null)} disabled={saving} />
                 </div>
               </div>
-              {problem && <p role="alert" style={{ margin: '8px 0 0', fontSize: 14, fontWeight: 600, color: CK.danger }}>{problem}</p>}
-              {over && !problem && <p style={{ margin: '8px 0 0', fontSize: 13.5, color: CK.danger }}>That is {words - wordLimit} words over the limit.</p>}
+              {problem && <p role="alert" style={{ margin: '6px 0 0', fontSize: 13, fontWeight: 600, color: CK.danger }}>{problem}</p>}
+              {over && !problem && <p style={{ margin: '6px 0 0', fontSize: 13, color: CK.danger }}>That is {words - wordLimit} words over the limit.</p>}
             </div>
           ) : (
             <BubbleView key={b.key} b={b} lead={b.key === 'directive' ? 'Directive' : b.key === 'reply' ? (sentBack ? CHAIR_SEND_BACK_WORD : 'Reply') : undefined} />
           )))}
-          {!d.reply && !showEdit && (
-            <p style={{ margin: '2px 0 0', fontSize: 14, color: CK.muted, textAlign: 'center' }}>
-              {withdrawn ? 'This directive was withdrawn. The crisis team will not answer it.' : 'No reply yet. It shows up here by itself.'}
-            </p>
+          {!d.reply && !showEdit && withdrawn && (
+            <p style={{ margin: '2px 0 0', fontSize: 13, color: CK.muted, textAlign: 'center' }}>This directive was withdrawn. The crisis team will not answer it.</p>
           )}
         </section>
 
@@ -320,31 +314,28 @@ export default function DirectiveDialog({
           <div className="flex items-center flex-wrap" style={{ ...barStyle, gap: 10 }}>
             <Btn tone="green" icon={<Check size={16} strokeWidth={1.6} />} disabled={!canSave} onClick={() => { void save(); }}>{saving ? 'Saving' : 'Save changes'}</Btn>
             <Btn tone="ghost" icon={<X size={15} strokeWidth={1.6} />} disabled={saving} onClick={cancelEdit}>Cancel</Btn>
-            <span style={{ fontSize: 13.5, color: CK.inkSoft }}>Nobody has answered it yet, so you can still change it.</span>
           </div>
         )}
         {isAuthor && !sentBack && !withdrawn && !showEdit && (
           <div style={barStyle}>
-            {d.status === 'clarify' && (
-              <p style={{ margin: '0 0 8px', fontSize: 14, fontWeight: 700, color: CK.red }}>The backroom needs more detail. Answer here and it goes back in the queue.</p>
-            )}
-            <div className="flex items-end" style={{ gap: 10 }}>
+            <div className="flex items-end" style={{ gap: 8 }}>
               <label htmlFor={`note-${d.id}`} className="sr-only">Write to the backroom</label>
               <div style={{ position: 'relative', flex: 1 }}>
                 <textarea
+                  ref={noteBox}
                   id={`note-${d.id}`}
                   value={text}
                   onChange={(e) => setText(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void send(); } }}
-                  rows={4}
-                  style={{ ...bigField, minHeight: 124, resize: 'none', paddingBottom: 46 }}
-                  placeholder="Add a clarification for the backroom"
+                  rows={3}
+                  style={{ ...bigField, fontSize: 14, lineHeight: 1.5, padding: '8px 12px', minHeight: 84, resize: 'none', paddingBottom: 40 }}
+                  placeholder={d.status === 'clarify' ? 'Add the detail the backroom asked for' : 'Add a clarification for the backroom'}
                 />
-                <div style={{ position: 'absolute', left: 10, bottom: 8 }}>
+                <div style={{ position: 'absolute', left: 8, bottom: 6 }}>
                   <AttachBar url={attach.url} uploading={attach.uploading} onPick={(f) => { void attach.pick(f); }} onClear={() => attach.setUrl(null)} disabled={busy} />
                 </div>
               </div>
-              <Btn tone="green" icon={<Send size={16} strokeWidth={1.5} />} disabled={!text.trim() || busy || attach.uploading} onClick={send} style={{ height: 48, padding: '0 20px', fontSize: 15 }}>
+              <Btn tone="green" icon={<Send size={16} strokeWidth={1.5} />} disabled={!text.trim() || busy || attach.uploading} onClick={send} style={{ height: 42, padding: '0 18px', fontSize: 14 }}>
                 {busy ? 'Sending' : 'Send'}
               </Btn>
             </div>

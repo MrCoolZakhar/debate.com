@@ -85,9 +85,9 @@ function Row({ m, refx, people, cabinets, members, canDecide, compact, now, onDe
         </span>
         <div style={{ flex: 1, minWidth: 0 }}>
           <p style={{ margin: 0, fontSize: compact ? 13 : 13.5, fontWeight: 800, color: CK.ink, lineHeight: 1.3, overflowWrap: 'anywhere' }}>
-            {m.requested_by_character ? <CharacterName id={m.requested_by_character} name={who} /> : who}<span style={{ fontWeight: 600, color: CK.inkSoft }}> asks to meet </span><NameList ids={m.character_ids} people={people} />
+            {m.requested_by_character ? <CharacterName id={m.requested_by_character} name={who} /> : who}<span style={{ fontWeight: 600, color: CK.inkSoft }}> asks to meet </span><NameList ids={m.character_ids.filter((id) => id !== m.requested_by_character)} people={people} />
           </p>
-          <p style={{ margin: '2px 0 0', fontSize: 12.5, color: CK.inkSoft, lineHeight: 1.4, overflowWrap: 'anywhere' }}>{m.intention}</p>
+          <p style={{ margin: '2px 0 0', fontSize: 12.5, color: CK.inkSoft, lineHeight: 1.4, overflowWrap: 'anywhere' }}>{m.intention.trim() && m.intention.trim().toLowerCase() !== 'meeting' ? m.intention : 'No reason given'}</p>
           <p style={{ margin: '3px 0 0', fontSize: 12, fontWeight: 700, color: CK.muted, fontVariantNumeric: 'tabular-nums' }}>
             {m.duration_minutes} min{hasWhen(m) ? ` · ${whenText(m)}` : ''} · asked {agoLabel(m.created_at, now)}
           </p>

@@ -3,7 +3,7 @@
 // front, the next ones of the chosen lane stepping off to the right, each smaller; clicking one brings it forward and
 // pressing the front one (or Respond) opens it as a pop-up with the "What happens when you send" panel docked beside
 // it (DirectivePopup). The lanes (Mine, Unassigned, All open, Waiting for delegate, Answered) and the filters stay as
-// a compact bar above. The lanes that wait for a staff reply (Mine, Unassigned, All open) also hold meeting requests and delegates
+// a compact bar above. Each card shows the responsible backroomer's picture on its bottom row, which hands the directive to someone else. The lanes that wait for a staff reply (Mine, Unassigned, All open) also hold meeting requests and delegates
 // whose character needs replacing, inline with the directives (inboxItems.tsx; owner, 1 Nov 2026). A notification's ?d=<id> brings that directive forward and opens it. Used at /directives and
 // as the backroomer's home.
 
@@ -17,6 +17,7 @@ import { KIND_LABEL, THEMES, type Directive } from '@/lib/crisis/types';
 import { Btn, Card, CK, Segmented, fieldStyle } from '../../crisisKit';
 import DirectiveReader from './DirectiveReader';
 import { useNow } from './useNow';
+import { staffLoads } from '../command/commandData';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import DirectivePopup from './DirectivePopup';
 import { MyDraftsButton, MyDraftsPanel, useReplyDraftList } from './MyReplyDrafts';
@@ -141,6 +142,8 @@ export default function BackroomInbox() {
     finally { setLoadingOlder(false); }
   };
   const lastAnswered = useMemo(() => lastAnsweredByAuthor(all), [all]);
+  // How many open directives each staff member has: the list on a card's responsible picture, to hand a directive to someone else.
+  const openCounts = useMemo(() => new Map(staffLoads(core.members, all, now).map((l) => [l.member.id, l.open.length])), [core.members, all, now]);
 
   // Meeting requests and delegates who need a new character sit in the same lanes, inline with the directives.
   const { meetings, reload: reloadMeetings } = useInboxMeetings(ref, staff);
@@ -313,7 +316,7 @@ export default function BackroomInbox() {
       {directives !== null && queue.length > 0 && (
         <DirectiveReader
           queue={queue} focusId={front?.id ?? null} onFocus={setFocusId} onOpen={openPopup} onTakeOver={takeOver} active={!popupOpen}
-          names={names} lane={lane} now={now} onChanged={() => { void load(); void reloadMeetings(); }}
+          names={names} lane={lane} now={now} openCounts={openCounts} onChanged={() => { void load(); void reloadMeetings(); }}
         />
       )}
 

@@ -19,11 +19,11 @@ import { KIND_LABEL, type Directive } from '@/lib/crisis/types';
 import { Avatar, Btn, CK, agoLabel, cabinetTint, waitLabel, waitSeverity } from '../../crisisKit';
 import { CharacterLink } from '../character/CharacterProfileHost';
 import { CabinetLogo, NameStack, NumberBadge, StaffPic, ThemeTags, shortName } from './directiveParts';
-import { KIND_ICON, authorName, isBeingWritten, memberName, outcomeView, writingAge, writtenByOther, type Lane, type Names } from './directiveKit';
+import { KIND_ICON, authorName, isBeingWritten, isOpenStatus, memberName, outcomeView, writingAge, writtenByOther, type Lane, type Names } from './directiveKit';
 import { CabinetCrest, CabinetFoot, CabinetName, cabinetColorOf, cabinetWash, crestIndent, isCabinetDirective } from './cabinetStamp';
-import { ExtraFront, ExtraNextBody } from './InboxExtraCards';
+import { ExtraFront, ExtraNextBody, MEETING_BLUE, MeetingBadge } from './InboxExtraCards';
 import { isExtra, type ReaderItem } from './inboxItems';
-import { FrontShell, HIDDEN, MAX_STACK, NavControls, NextShell, STRIP } from './readerParts';
+import { FrontShell, HIDDEN, MAX_STACK, NavControls, NextShell, ResponsibleFoot, STRIP } from './readerParts';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { DirectiveBody, plainText } from './attachedImage';
 
@@ -74,7 +74,7 @@ function Writing({ d, names, now, small }: { d: Directive; names: Names; now: nu
  * A smaller copy of the front card, further back in the stack: badge, title, character, the start of the text.
  * A cabinet directive is framed in its cabinet's colour, wears its seal and number on its top border and has the small stamp inside, beside the name.
  */
-function DirectiveNext({ d, k, fw, names, lane, now, onPick, readOnly }: { d: Directive; k: number; fw: number; names: Names; lane: Lane; now: number; onPick: () => void; readOnly?: ReaderReadOnly }) {
+function DirectiveNext({ d, k, fw, names, lane, now, onPick, readOnly, openCounts, onChanged }: { d: Directive; k: number; fw: number; names: Names; lane: Lane; now: number; onPick: () => void; readOnly?: ReaderReadOnly; openCounts: Map<string, number>; onChanged: () => void }) {
   const { memberId } = useCrisis();
   const grey = writtenByOther(d, memberId, now);
   const cab = d.cabinet_id ? names.cabinets.get(d.cabinet_id) : undefined;
@@ -84,9 +84,14 @@ function DirectiveNext({ d, k, fw, names, lane, now, onPick, readOnly }: { d: Di
   const color = cab?.color ?? CK.red;
   const when = whenOf(d, lane, now, readOnly);
   const KindIcon = KIND_ICON[d.kind];
+  // The responsible backroomer on the card's bottom row (open directives: press it to hand the directive to someone else).
+  const ownerId = ch?.owner_member_id ?? null;
+  const showFoot = !readOnly && (isOpenStatus(d) || !!(d.assigned_member_id ?? ownerId));
   return (
     <NextShell
       k={k} fw={fw} grey={grey} ring={isCab} color={color} onPick={onPick}
+      padBottom={showFoot ? 46 : 14}
+      foot={showFoot ? <ResponsibleFoot d={d} ownerId={ownerId} openCounts={openCounts} onChanged={onChanged} /> : undefined}
       tint={isCab ? cabinetWash(color) : undefined}
       label={`Read directive No. ${dirNumber(d)}: ${d.title}`}
       badge={isCab
@@ -138,13 +143,16 @@ function DirectiveNext({ d, k, fw, names, lane, now, onPick, readOnly }: { d: Di
   );
 }
 
-function NextCard({ item, k, fw, names, lane, now, onPick, readOnly }: { item: ReaderItem; k: number; fw: number; names: Names; lane: Lane; now: number; onPick: () => void; readOnly?: ReaderReadOnly }) {
-  if (!isExtra(item)) return <DirectiveNext d={item} k={k} fw={fw} names={names} lane={lane} now={now} onPick={onPick} readOnly={readOnly} />;
+function NextCard({ item, k, fw, names, lane, now, onPick, readOnly, openCounts, onChanged }: { item: ReaderItem; k: number; fw: number; names: Names; lane: Lane; now: number; onPick: () => void; readOnly?: ReaderReadOnly; openCounts: Map<string, number>; onChanged: () => void }) {
+  if (!isExtra(item)) return <DirectiveNext d={item} k={k} fw={fw} names={names} lane={lane} now={now} onPick={onPick} readOnly={readOnly} openCounts={openCounts} onChanged={onChanged} />;
   const meeting = item.extra === 'meeting';
+  const asking = meeting && item.m.status === 'awaiting_delegates';
   return (
     <NextShell
-      k={k} fw={fw} color={meeting ? '#3E6A9A' : CK.danger} onPick={onPick}
-      grey={meeting && item.m.status === 'awaiting_delegates'}
+      k={k} fw={fw} color={meeting ? MEETING_BLUE : CK.danger} onPick={onPick}
+      ring={meeting} tint={meeting ? cabinetWash(MEETING_BLUE) : undefined}
+      badge={meeting ? <span style={{ position: 'absolute', zIndex: 2, top: -11, left: HIDDEN + 14 }}><MeetingBadge small grey={asking} /></span> : undefined}
+      grey={asking}
       label={meeting ? 'Read this meeting request' : `Give ${item.member.display_name} a new character`}
     >
       <ExtraNextBody item={item} now={now} />
@@ -153,9 +161,10 @@ function NextCard({ item, k, fw, names, lane, now, onPick, readOnly }: { item: R
 }
 
 /** The directive in front: large, with its text, a few facts and Respond. */
-function FrontCard({ d, names, lane, now, index, total, onPrev, onNext, onRespond, onTakeOver, readOnly }: {
+function FrontCard({ d, names, lane, now, index, total, onPrev, onNext, onRespond, onTakeOver, readOnly, openCounts, onChanged }: {
   d: Directive; names: Names; lane: Lane; now: number; index: number; total: number;
   onPrev: () => void; onNext: () => void; onRespond: () => void; onTakeOver: () => void; readOnly?: ReaderReadOnly;
+  openCounts: Map<string, number>; onChanged: () => void;
 }) {
   const { memberId } = useCrisis();
   const takeable = !readOnly && writtenByOther(d, memberId, now) && (d.status === 'queued' || d.status === 'claimed');
@@ -168,6 +177,7 @@ function FrontCard({ d, names, lane, now, index, total, onPrev, onNext, onRespon
   const KindIcon = KIND_ICON[d.kind];
   const when = whenOf(d, lane, now, readOnly);
   const open = d.status === 'queued' || d.status === 'claimed';
+  const isOpen = isOpenStatus(d);
   const outcome = outcomeView(d);
   const responsible = d.assigned_member_id ?? ch?.owner_member_id ?? null;
 
@@ -175,8 +185,8 @@ function FrontCard({ d, names, lane, now, index, total, onPrev, onNext, onRespon
   facts.push(<span key="w">{d.word_count} words</span>);
   if (d.receiver?.trim()) facts.push(<span key="t">To {d.receiver}</span>);
   if (d.covert) facts.push(<span key="c" style={{ color: CK.redDeep }}>Covert</span>);
-  // A cabinet directive does not care who the responsible backroomer is (owner, 1 Nov 2026); the others say it is just for this directive.
-  if (!isCab) facts.push(<span key="r">{responsible ? `Responsible for this directive: ${memberName(responsible, names)}` : 'Nobody responsible for this directive yet'}</span>);
+  // The backroom sees the responsible person on the card's bottom row (and can change it there); the chair's read-only reader keeps the sentence.
+  if (!isCab && readOnly) facts.push(<span key="r">{responsible ? `Responsible for this directive: ${memberName(responsible, names)}` : 'Nobody responsible for this directive yet'}</span>);
 
   const waitClock = (
     <span className="inline-flex items-center" style={{ gap: 4, fontSize: 13, fontWeight: 800, color: when.sev ? WAIT_COLOR[when.sev] : CK.inkSoft, fontVariantNumeric: 'tabular-nums' }}>
@@ -245,7 +255,8 @@ function FrontCard({ d, names, lane, now, index, total, onPrev, onNext, onRespon
       {/* The footer: the state (chair's reader) on the left; the arrows, "3 of 12" and Respond on the right. Who looks after a character is
           changed on the character's own page, never here. */}
       <div className="flex items-center flex-wrap" data-no-open style={{ flex: 'none', gap: '8px 16px', padding: '12px 20px 14px 30px', boxShadow: `0 -1px 0 ${CK.hair}`, borderRadius: '0 0 24px 24px', background: isCab ? 'transparent' : CK.card }}>
-        <div style={{ flex: '1 1 260px', minWidth: 0 }}>
+        <div className="flex flex-col" style={{ flex: '1 1 260px', minWidth: 0, gap: 8, alignItems: 'flex-start' }}>
+          {!readOnly && (isOpen || !!responsible) && <ResponsibleFoot d={d} ownerId={ch?.owner_member_id ?? null} openCounts={openCounts} onChanged={onChanged} />}
           {isCab ? (
             <>
               {/* The kind, themes, wait and state (no submitter on the card). */}
@@ -267,7 +278,9 @@ function FrontCard({ d, names, lane, now, index, total, onPrev, onNext, onRespon
   );
 }
 
-export default function DirectiveReader({ queue, focusId, onFocus, onOpen, onTakeOver, active, names, lane, now, onChanged, readOnly }: {
+const NO_COUNTS = new Map<string, number>();
+
+export default function DirectiveReader({ queue, focusId, onFocus, onOpen, onTakeOver, active, names, lane, now, onChanged, readOnly, openCounts = NO_COUNTS }: {
   /** The lane, filtered and in queue order: directives, and in the backroom also meeting requests and characters to replace. */
   queue: ReaderItem[];
   focusId: string | null;
@@ -285,6 +298,8 @@ export default function DirectiveReader({ queue, focusId, onFocus, onOpen, onTak
   onChanged: () => void;
   /** The chair's read-only reader: states instead of the backroomer picker, no "Take over". */
   readOnly?: ReaderReadOnly;
+  /** How many open directives each staff member has (the list that hands a directive to someone else shows it). */
+  openCounts?: Map<string, number>;
 }) {
   const at = Math.max(0, queue.findIndex((x) => x.id === focusId));
   const front = queue[at];
@@ -351,10 +366,11 @@ export default function DirectiveReader({ queue, focusId, onFocus, onOpen, onTak
         <FrontCard
           key={front.id} d={front} names={names} lane={lane} now={now} index={at} total={total}
           onPrev={() => move(-1)} onNext={() => move(1)} onRespond={() => onOpen(front)} onTakeOver={() => onTakeOver(front)} readOnly={readOnly}
+          openCounts={openCounts} onChanged={onChanged}
         />
       )}
       {stack.map((item, i) => (
-        <NextCard key={item.id} item={item} k={i + 1} fw={fw} names={names} lane={lane} now={now} onPick={() => onFocus(item.id)} readOnly={readOnly} />
+        <NextCard key={item.id} item={item} k={i + 1} fw={fw} names={names} lane={lane} now={now} onPick={() => onFocus(item.id)} readOnly={readOnly} openCounts={openCounts} onChanged={onChanged} />
       ))}
     </div>
   );

@@ -184,6 +184,14 @@ export default function AppNotifyPills({ items, dismissLabel }: { items: LiveIte
   /* Nothing left to point at: no pointerleave will come, so let go now. */
   if (live.length === 0 && holding) setHolding(false);
 
+  /* While something is shown full screen (the crisis map), the pills must be drawn inside it or they are invisible. */
+  const [fsHost, setFsHost] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    const sync = () => setFsHost((document.fullscreenElement as HTMLElement | null) ?? null);
+    document.addEventListener('fullscreenchange', sync);
+    return () => document.removeEventListener('fullscreenchange', sync);
+  }, []);
+
   const onHeight = useCallback((key: string, h: number) => {
     setHeights((prev) => (prev[key] === h ? prev : { ...prev, [key]: h }));
   }, []);
@@ -210,7 +218,7 @@ export default function AppNotifyPills({ items, dismissLabel }: { items: LiveIte
         />
       ))}
     </div>,
-    document.body,
+    fsHost ?? document.body,
   );
 }
 
