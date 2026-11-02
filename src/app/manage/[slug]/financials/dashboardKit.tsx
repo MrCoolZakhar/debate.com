@@ -266,6 +266,9 @@ export function paymentMethodWords(s: S): { fact: string; sub: string } {
   if (s.manual_kind === 'qr') {
     return { fact: 'Payment QR code', sub: s.has_qr ? 'Payers scan your QR, then upload a proof' : 'Add your QR code to start taking payments' };
   }
+  if (s.manual_kind === 'phone') {
+    return { fact: 'Phone number', sub: 'Payers send money to your number, then upload a proof' };
+  }
   if (s.manual_kind === 'bank') {
     return { fact: 'Bank transfer', sub: s.has_bank ? 'Payers send a transfer, then upload a proof' : 'Add your bank details to start taking payments' };
   }

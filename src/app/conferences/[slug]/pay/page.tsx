@@ -99,7 +99,7 @@ export default function PayPage() {
     /** In-person payment (prompt 114): open asking "Finish without a proof?"; or add a first proof to a payment sent without one. */
     askWithout?: boolean; noProofYet?: boolean;
   } | null>(null);
-  const [wayPop, setWayPop] = useState<{ kind: 'qr' | 'bank' | 'in_person'; totalCents: number; currency: string } | null>(null);
+  const [wayPop, setWayPop] = useState<{ kind: 'qr' | 'bank' | 'in_person' | 'phone'; totalCents: number; currency: string } | null>(null);
   const [cancelFor, setCancelFor] = useState<string | null>(null);
   // Outstanding or Completed (prompt 101), kept in the URL as ?tab=completed.
   const [tab, setTabState] = useState<'outstanding' | 'completed'>('outstanding');
@@ -429,7 +429,7 @@ export default function PayPage() {
   // A started payment's way to pay: the link opens straight away (inside the
   // click); a QR or bank details open their own small pop-up.
   const kind = c.manual_kind ?? 'link';
-  const wayLabel = kind === 'qr' ? 'Open payment QR' : kind === 'bank' ? 'View bank details' : kind === 'in_person' ? 'Payment instructions'
+  const wayLabel = kind === 'qr' ? 'Open payment QR' : kind === 'phone' ? 'View phone number' : kind === 'bank' ? 'View bank details' : kind === 'in_person' ? 'Payment instructions'
     : (c.payment_url ? 'Open payment page' : null);
   const openWay = (p: StartedPayment) => {
     if (kind === 'link') { if (c.payment_url) window.open(c.payment_url, '_blank', 'noopener,noreferrer'); return; }

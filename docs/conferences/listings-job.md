@@ -60,21 +60,23 @@ A listing goes live only when it passes the quality bar (real dates, a place, a 
 - Never touch a conference whose `listed_by` is `organiser`. The upsert refuses anyway.
 - Never call any function that sends email. The upsert sends none.
 
-## This week's plan (27 October to 2 November 2026)
+## This week's plan (3 to 9 November 2026)
 
-Written 26 Oct 2026. Names are candidates, not facts: every date and detail still comes from the conference's own site, and a candidate that fails a check is skipped for the next one in the reserve. About 7 of every 10 are European. Many names on the first week's list were guesses that turned out not to exist, so this list leans on conferences a run has already confirmed are real (several were skipped only because their own site had no 2027 dates yet; check those again). When a day's names run dry, search by city and month ("Model United Nations February 2027 <city>") and check the result against the database. Already on Gavelling and never added again: BERMUN, BIMUN ESADE, BIMUN/SINUB, CBSMUN, HMUN Dubai, HNMUN, ILMUNC India, MUNoV, OxIMUN, PRAMUN, LIMUN, TIMUN (Tilburg), KULMUN (Leuven), NORMUN (Oslo). Hidden on purpose, never added: IEUMUN and every Change the World MUN (CWMUN) edition. "QMUN" is also an Indian organiser conference: Queen Mary's is listed as "QMUN London".
+Written 2 Nov 2026. Names are candidates, not facts: every date and detail still comes from the conference's own site, and a candidate that fails a check is skipped for the next one in the reserve. About 7 of every 10 are European. Last week's named lists mostly failed (the names did not exist, or the conference had no 2027 date on its own site yet), so this list holds conferences a run has confirmed are REAL but that lacked a 2027 date then (check them again), plus well-known names never tried. When a day's names run dry, search by city and month ("Model United Nations February 2027 <city>"); on 2 Nov that found IMUN Torino and IMUN Venezia (United Network, unitednetwork.it, which also runs other Italian editions).
+
+Already on Gavelling and never added again (besides the earlier list): CamMUN, ScotMUN, OPOMUN, THIMUN, WCDMUN, SAIMUN, LEAMUN, Harvard WorldMUN (Riga), and on 2 Nov UDMUN, Istanbul MUN, MMUN Bangkok, DCMUN, IMUN Torino, IMUN Venezia and FWWMUN Madrid, Lisbon, Prague and Warsaw (seven FWWMUN editions are now listed: do not add more of that series unless a day cannot reach 10 otherwise). Hidden on purpose, never added: IEUMUN and every CWMUN edition. Never used because robots.txt names ClaudeBot: HNMUN-LA (Panama), ConMUN (Concordia), TMUN (Toronto), HarvardMUN Canada.
 
 | Day | Europe (7) | Elsewhere (3) |
 |---|---|---|
-| Tue 27 Oct | LSEMUN (London), BrisMUN (Bristol), SOTONMUN (Southampton), DurMUN (Durham), KCLMUN (London), WarwickMUN, FWWMUN London | HMUN (Harvard, Boston, high school), CIMUN (Chicago), Hofstra MUN (New York) |
-| Wed 28 Oct | ZuMUN (Zurich), GIMUN (Geneva), BaMUN (Basel), LUXMUN (Luxembourg), StrasMUN (Strasbourg), PIMUN (Paris), MUN'ICP (Reims) | NHSMUN (New York), CMUNC (Cornell), DUMUNC (Duke) |
-| Thu 29 Oct | POITIERSMUN (Poitiers), MUNLM (Le Mans), HeiMUN (Heidelberg), MAMUN (Mannheim), FREIMUN (Freiburg), RiMUN (Nijmegen), GeMUN (Germany) | JHUMUNC (Baltimore), UFMUN (Gainesville), THIMUN Qatar (Doha) |
-| Fri 30 Oct | HELIMUN (Helsinki), Mothenburg MUN (Gothenburg), SCANDMUN, SISMUN Scandinavia, KattaMUN, MUNOM (Malmö, next edition), VIMUN (Vienna) | CIMUN AUC (Cairo), AitchMUN (Lahore), HMUN India |
-| Sat 31 Oct | SPLIMUN (Split), MEDMUN, HDMUN, URJCmun (Madrid), SeviMUN (Seville), ROMUN (Rome), MUIMUN | GIKMUN (Topi), Delhi MUN, IMUN India |
-| Sun 1 Nov | Davis College MUN (Cork), UCDMUN (Dublin), TCD MUN (Dublin), YorkMUN (York), LeedsMUN, NottsMUN (Nottingham), ExMUN (Exeter) | Kuwait MUN, Bahrain MUN, Muscat MUN |
-| Mon 2 Nov | ViMUN (Vilnius), RIGAMUN (Riga), KrakMUN (Krakow), ZagrebMUN, SofiaMUN, BelgradeMUN, CoimbraMUN | Kolkata MUN, Pune MUN, Peshawar MUN |
+| Tue 3 Nov | GöMUN (Göttingen, munsg.de), ZuMUN (Zurich, zumun.ch), MUIMUN (Münster), MUNoH (Hamburg), PozMUN (Poznan), SilMUN (Opole), VALMUN (Valencia, its Instagram for the December dates) | ACMUN (Aitchison, Lahore), ZENMUN (Karachi), Emirates Falcon MUN (Al Ain) |
+| Wed 4 Nov | EPMUN (Epsom College), WASAMUN (Wycombe Abbey), LEHMUN (Lady Eleanor Holles), Benenden MUN, AIMUN (Alleyn's), Royal Russell MUN (Croydon), St Margaret's MUN (Aberdeen) | LFIGPMUN (Dubai), Hartland MUN (Dubai), AUDMUN (Dubai) |
+| Thu 5 Nov | HELIMUN (Helsinki), PIMUN (Paris, cinup.fr), MUN Switzerland (uso.ch), Globeducate MUN (Geneva), BIMUN Belgrade (UNA Serbia), UC MUN (Coimbra), GlasMUN (Glasgow) | AUSMUN (Sharjah), THIMUN Qatar (Doha), CIMUN AUC (Cairo) |
+| Fri 6 Nov | TEIMUN (The Hague), LSEMUN (London), KCLMUN (London), WarwickMUN, DurMUN (Durham), BrisMUN (Bristol), SOTONMUN (Southampton) | GIKMUN (Topi), NUST MUN (Islamabad), IBA MUNIK (Karachi) |
+| Sat 7 Nov | GIMUN (Geneva), HeiMUN (Heidelberg), MAMUN (Mannheim), FREIMUN (Freiburg), RheinMUN (Düsseldorf), CologneMUN, SVeN (Hamburg) | Kuwait MUN, Bahrain MUN, Muscat MUN |
+| Sun 8 Nov | LUXMUN (Luxembourg), StrasMUN (Strasbourg), SPLIMUN (Split), MEDMUN, SeviMUN (Seville), LeedsMUN, NottsMUN (Nottingham) | DUMUNC (Duke), CMUNC (Cornell), Riyadh International MUN |
+| Mon 9 Nov | other United Network IMUN editions (Italy), VisMUN (Krakow), LVMUN (Riga), BiaMUN (Bialystok), TurMUN (Szczecin), KOSZMUN (Koszalin), BISMUN Belgrade | Southmun (Calgary), MarkMUN, VCMUN |
 
-**Reserve** (in order): GrazMUN, InnsbruckMUN, LausanneMUN, BernMUN, GöttingenMUN, MünsterMUN, GalwayMUN, SheffMUN (Sheffield), GlasMUN (Glasgow), St Andrews MUN, Ghent MUN, Eindhoven MUN, TübingenMUN, LjubljanaMUN, MaltaMUN, PaduaMUN, GranadaMUN, ValMUN (Valencia), ReykjavikMUN, OsloMUN; elsewhere: Lahore Grammar MUN, Riyadh MUN, Hyderabad MUN, a UAE university conference (AUD, AUS), a Pakistani university conference (NUST, IBA).
+**Reserve** (in order): any of the above that a later day finds dated; city-and-month searches in Spain (outside Madrid), Portugal, Greece, Cyprus, Malta, Belgium, Austria, the Baltics, Romania and Bulgaria; elsewhere: Tenby Ipoh MUN, HKMUN, a Mumbai, Bangalore or Delhi university conference, Jordan, Kenya, Nigeria, South Africa.
 
 At the end of the week, write next week's plan here the same way, dropping everything that was added or skipped.
 

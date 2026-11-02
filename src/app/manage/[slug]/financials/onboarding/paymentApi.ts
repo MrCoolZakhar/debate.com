@@ -14,7 +14,7 @@ import { friendlyError, plainOrFallback } from '@/lib/friendlyError';
 import { extractFunctionErrorMessage } from '@/lib/payments';
 import type { Conference } from '@/app/manage/[slug]/layout';
 
-export type MethodKey = 'card' | 'link' | 'qr' | 'bank' | 'in_person';
+export type MethodKey = 'card' | 'link' | 'qr' | 'phone' | 'bank' | 'in_person';
 export type BankDetails = { account_name: string; account_number: string; swift: string; bank_name: string; reference: string };
 
 export type SetupResult = { ok: true; ready: boolean; connectStatus?: string } | { ok: false; error: string; field?: string };
@@ -30,6 +30,7 @@ export const METHOD_NAME: Record<MethodKey, string> = {
   card: 'card payments',
   link: 'a payment link',
   qr: 'a payment QR code',
+  phone: 'a phone number',
   bank: 'bank transfer',
   in_person: 'in-person payment',
 };
@@ -41,6 +42,8 @@ export async function setPaymentSetup(args: {
   url?: string;
   note?: string;
   qrPath?: string | null;
+  /** manual kind 'phone': the number, sent in p_url (set_payment_setup stores it in payment_phone). */
+  phone?: string;
   bank?: BankDetails;
 }): Promise<SetupResult> {
   const fallback = 'Your payment set-up could not be saved. Try again in a moment.';
@@ -53,7 +56,7 @@ export async function setPaymentSetup(args: {
       p_payout_country: args.country,
       p_method: manual ? 'manual' : 'stripe',
       p_manual_kind: manual ? args.method : null,
-      p_url: args.method === 'link' ? (args.url ?? '').trim() || null : null,
+      p_url: args.method === 'link' ? (args.url ?? '').trim() || null : args.method === 'phone' ? (args.phone ?? '').trim() || null : null,
       p_note: manual ? (args.note ?? '').trim() || null : null,
       p_qr_path: args.method === 'qr' ? args.qrPath ?? null : null,
       p_bank: args.method === 'bank' ? args.bank ?? null : null,

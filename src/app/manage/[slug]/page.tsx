@@ -840,12 +840,29 @@ const SETUP_DONE_NOTICE: Record<string, { title: string; body: string }> = {
  * whole point — only genuine transitions are news. The ref is re-baselined on
  * a conference change too, so switching conferences is equally quiet.
  */
+/** Cards already shown in this browser, so a row's card appears ONCE, never
+ *  again on a later visit or after a refetch flips a row back and forth. */
+const SHOWN_NOTICES_KEY = 'gv-setup-notices-shown';
+function noticeShown(id: string): boolean {
+  try { return (JSON.parse(window.localStorage.getItem(SHOWN_NOTICES_KEY) || '[]') as string[]).includes(id); } catch { return false; }
+}
+function rememberNotice(id: string): void {
+  try {
+    const list = JSON.parse(window.localStorage.getItem(SHOWN_NOTICES_KEY) || '[]') as string[];
+    if (!list.includes(id)) window.localStorage.setItem(SHOWN_NOTICES_KEY, JSON.stringify([...list, id].slice(-300)));
+  } catch { /* private mode */ }
+}
+
 function SetupCompletionNotices({
   conferenceId,
   items,
+  ready,
 }: {
   conferenceId: string;
   items: { key: string; done: boolean }[];
+  /** True once every input of the checklist has loaded. The baseline is taken
+   *  only then, so rows that arrive late are never reported as just finished. */
+  ready: boolean;
 }) {
   const prevDone = useRef<Set<string> | null>(null);
   const prevConference = useRef<string | null>(null);
@@ -854,6 +871,7 @@ function SetupCompletionNotices({
   const doneSignature = items.filter(i => i.done).map(i => i.key).sort().join(',');
 
   useEffect(() => {
+    if (!ready) return;
     const doneNow = new Set(doneSignature ? doneSignature.split(',') : []);
     const baseline = prevDone.current;
     const sameConference = prevConference.current === conferenceId;
@@ -865,6 +883,9 @@ function SetupCompletionNotices({
       if (baseline.has(key)) continue;
       const copy = SETUP_DONE_NOTICE[key];
       if (!copy) continue;
+      const id = `setup:${key}:${conferenceId}`;
+      if (noticeShown(id)) continue;
+      rememberNotice(id);
       notify({
         key: `setup:${key}:${conferenceId}`,
         kind: 'info',
@@ -874,7 +895,7 @@ function SetupCompletionNotices({
         ttlMs: SETUP_NOTICE_TTL_MS,
       });
     }
-  }, [doneSignature, conferenceId]);
+  }, [doneSignature, conferenceId, ready]);
 
   return null;
 }
@@ -1011,6 +1032,7 @@ export default function DashboardPage() {
   const [emailsExplored, setEmailsExplored] = useState(false);
   const [commsVisited, setCommsVisited] = useState(false);
   const [storeVisited, setStoreVisited] = useState(false);
+  const [visitsRead, setVisitsRead] = useState(false);
   useEffect(() => {
     if (!conference) return;
     // localStorage is an external store; it can only be read after mount.
@@ -1018,6 +1040,7 @@ export default function DashboardPage() {
     setEmailsExplored(hasExploredEmails(conference.id));
     setCommsVisited(hasVisitedOrganiserPage(conference.id, 'communications'));
     setStoreVisited(hasVisitedOrganiserPage(conference.id, 'store'));
+    setVisitsRead(true);
   }, [conference?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** The server's own answer per checklist key, from conference_setup_status().
@@ -1026,6 +1049,7 @@ export default function DashboardPage() {
    *  it carries the old keys, and the rows below simply fall back to their
    *  client checks; nothing here assumes which keys come back. */
   const [serverDone, setServerDone] = useState<Record<string, boolean>>({});
+  const [serverDoneLoaded, setServerDoneLoaded] = useState(false);
   useEffect(() => {
     if (!conference?.id || !session) return;
     let alive = true;
@@ -1038,6 +1062,7 @@ export default function DashboardPage() {
       const next: Record<string, boolean> = {};
       for (const i of items) if (typeof i.key === 'string') next[i.key] = i.done === true;
       setServerDone(next);
+      setServerDoneLoaded(true);
     })();
     return () => { alive = false; };
   }, [conference?.id, !!session, verification]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1051,7 +1076,8 @@ export default function DashboardPage() {
     || !!conference?.emails_explored_at
     || emailsExplored
     || commsVisited;
-  const storeStageDone = !!serverDone.store || storeVisited;
+  // A verified conference has done its set-up; the Store row never nags it.
+  const storeStageDone = !!serverDone.store || storeVisited || !!conference?.is_verified;
 
   // Money card: the payments ledger, never payment_status x fee.
   const { money } = useConferenceMoney(session?.access_token, conference?.id);
@@ -1580,6 +1606,7 @@ export default function DashboardPage() {
         <SetupCompletionNotices
           conferenceId={conference.id}
           items={checklist.map(c => ({ key: c.key, done: c.done }))}
+          ready={!!dash && serverDoneLoaded && visitsRead}
         />
 
         {allSetAndVerified ? (
