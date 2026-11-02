@@ -217,6 +217,8 @@ export interface DirectiveNote {
   body: string;
   internal: boolean;
   created_at: string;
+  /** Set when the author changed their clarification (docs/crisis/sql/029, part 36). */
+  edited_at?: string | null;
 }
 
 export interface News {

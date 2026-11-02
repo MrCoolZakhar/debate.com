@@ -6,12 +6,12 @@
 // on a laptop), and a compact note box that grows. There is no "To:" line. The author can always write a clarification (addNote). Edit exists
 // only while the backroom has NOT replied (awaiting the chair, changes asked for by the chair, queued, claimed); once it asked for detail
 // or answered, Edit is gone (the database refuses it too). A CABINET directive can be edited only while it waits for the chair or the chair
-// asked for changes. Withdraw is asked in place. A clarification note cannot be edited: the database has no way to change a note.
+// asked for changes. Withdraw is asked in place. The delegate may edit their own latest clarification until the backroom replies after it (crisis_edit_note, SQL part 36).
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Check, Pencil, Send, Undo2, X } from 'lucide-react';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
-import { addNote, crisisError, editDirective, withdrawDirective, type CrisisRef } from '@/lib/crisis/api';
+import { addNote, crisisError, editDirective, editNote, withdrawDirective, type CrisisRef } from '@/lib/crisis/api';
 import { CHAIR_SEND_BACK_WORD, dirNumber, isChairSendBack } from '@/lib/crisis/format';
 import type { Directive, DirectiveNote } from '@/lib/crisis/types';
 import { Btn, cabinetTint, CK, ThemeTag } from '../../crisisKit';
@@ -25,9 +25,9 @@ import { DirectiveBody, splitAttached, withAttached } from '../directives/attach
 import { countWords } from './DirectiveForm';
 import { bigField, KIND_WORD, kindIcon, verdictOf, whenLabel, whenTitle } from './directiveUi';
 
-interface Bubble { key: string; mine: boolean; who: string; at: string | null; body: string; sort: number }
+interface Bubble { key: string; mine: boolean; who: string; at: string | null; body: string; sort: number; edited?: boolean }
 
-function BubbleView({ b, lead }: { b: Bubble; lead?: string }) {
+function BubbleView({ b, lead, onEdit, editor }: { b: Bubble; lead?: string; onEdit?: () => void; editor?: ReactNode }) {
   return (
     <div className="flex" style={{ justifyContent: b.mine ? 'flex-end' : 'flex-start' }}>
       <div style={{
@@ -36,8 +36,14 @@ function BubbleView({ b, lead }: { b: Bubble; lead?: string }) {
       }}>
         <p style={{ margin: 0, fontSize: 11.5, fontWeight: 800, color: b.mine ? CK.forest : CK.red, overflowWrap: 'anywhere' }}>
           {lead ? `${lead}, ` : ''}{b.who}{b.at ? <span title={whenTitle(b.at)}>{`, ${whenTitle(b.at) ?? ''} (${whenLabel(b.at)})`}</span> : ''}
+          {b.edited && <span style={{ marginLeft: 6, fontSize: 10.5, fontWeight: 600, color: CK.muted }}>edited</span>}
+          {onEdit && !editor && (
+            <button type="button" onClick={onEdit} className="focus:outline-none inline-flex items-center" style={{ marginLeft: 8, gap: 3, fontSize: 11.5, fontWeight: 700, color: CK.forest, background: 'none', border: 0, padding: 0, cursor: 'pointer', textDecoration: 'underline' }}>
+              <Pencil size={11} strokeWidth={1.5} />Edit
+            </button>
+          )}
         </p>
-        <DirectiveBody body={b.body} thumb={260} style={{ margin: '2px 0 0', fontSize: 13, lineHeight: 1.55, color: CK.ink, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }} />
+        {editor ?? <DirectiveBody body={b.body} thumb={260} style={{ margin: '2px 0 0', fontSize: 13, lineHeight: 1.55, color: CK.ink, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }} />}
       </div>
     </div>
   );
@@ -150,6 +156,55 @@ export default function DirectiveDialog({
       setWithdrawing(false);
     }
   };
+  // Editing the newest clarification in place, while the backroom has not replied after it.
+  const [noteEdits, setNoteEdits] = useState<Record<string, { body: string; edited_at: string }>>({});
+  const [editingNote, setEditingNote] = useState<string | null>(null);
+  const [noteDraft, setNoteDraft] = useState('');
+  const [noteImage, setNoteImage] = useState<string | null>(null);
+  const [noteProblem, setNoteProblem] = useState<string | null>(null);
+  const [noteSaving, setNoteSaving] = useState(false);
+  const noteSavingRef = useRef(false);
+  const noteEditBox = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = noteEditBox.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 190)}px`;
+  }, [noteDraft, editingNote]);
+  const startNoteEdit = (id: string, body: string) => {
+    const { text: plain, image } = splitAttached(body);
+    setNoteDraft(plain);
+    setNoteImage(image);
+    setNoteProblem(null);
+    setEditingNote(id);
+  };
+  const saveNote = async (id: string) => {
+    if (noteSavingRef.current) return;
+    const body = noteDraft.trim();
+    if (!body) { setNoteProblem('Write something first'); return; }
+    noteSavingRef.current = true;
+    setNoteSaving(true);
+    try {
+      const r = await editNote(cref, id, withAttached(body, noteImage));
+      if (r.ok) {
+        setNoteEdits((m) => ({ ...m, [id]: { body: withAttached(body, noteImage), edited_at: new Date().toISOString() } }));
+        notifyOk('Clarification changed');
+        setEditingNote(null);
+        onChanged();
+      } else if (r.reason === 'replied') {
+        notifyErr('The backroom has already replied, so it can\'t be changed.');
+        setEditingNote(null);
+        onChanged();
+      } else {
+        setNoteProblem('Write something first');
+      }
+    } catch (e) {
+      notifyErr(crisisError(e, 'Could not save your changes. Your text is kept, try again.'));
+    } finally {
+      noteSavingRef.current = false;
+      setNoteSaving(false);
+    }
+  };
   const scroller = useRef<HTMLElement>(null);
   const noteBox = useRef<HTMLTextAreaElement>(null);
   const attach = useImageAttach(cref);
@@ -187,10 +242,16 @@ export default function DirectiveDialog({
       out.push({ key: 'reply', mine: false, who: sentBack ? 'Your chair' : answeredBy ?? 'Backroom', at, body: d.reply, sort: at ? new Date(at).getTime() : t0 + 1 });
     }
     for (const n of notes) {
-      out.push({ key: n.id, mine: n.member_id === myMemberId, who: n.member_id === myMemberId ? 'You' : sentBack ? 'Your chair' : 'Backroom', at: n.created_at, body: n.body, sort: new Date(n.created_at).getTime() });
+      const ov = noteEdits[n.id];
+      out.push({ key: n.id, mine: n.member_id === myMemberId, who: n.member_id === myMemberId ? 'You' : sentBack ? 'Your chair' : 'Backroom', at: n.created_at, body: ov?.body ?? n.body, sort: new Date(n.created_at).getTime(), edited: !!(n.edited_at || ov) });
     }
     return out.sort((a, b) => a.sort - b.sort);
-  }, [d, notes, isAuthor, author.name, answeredBy, myMemberId, sentBack]);
+  }, [d, notes, isAuthor, author.name, answeredBy, myMemberId, sentBack, noteEdits]);
+  const lastBubble = thread[thread.length - 1];
+  const lastNote = lastBubble ? notes.find((n) => n.id === lastBubble.key) : undefined;
+  const editableNoteId = isAuthor && !sentBack && !withdrawn && !showEdit && lastNote && lastNote.member_id === myMemberId
+    && (!d.answered_at || new Date(d.answered_at).getTime() < new Date(lastNote.created_at).getTime())
+    ? lastNote.id : null;
 
   // The conversation shows its newest message: on open, and whenever a new one arrives. Starting an edit goes back to the top, where the fields are.
   const count = thread.length;
@@ -298,7 +359,30 @@ export default function DirectiveDialog({
               {over && !problem && <p style={{ margin: '6px 0 0', fontSize: 13, color: CK.danger }}>That is {words - wordLimit} words over the limit.</p>}
             </div>
           ) : (
-            <BubbleView key={b.key} b={b} lead={b.key === 'directive' ? 'Directive' : b.key === 'reply' ? (sentBack ? CHAIR_SEND_BACK_WORD : 'Reply') : undefined} />
+            <BubbleView
+              key={b.key}
+              b={b}
+              lead={b.key === 'directive' ? 'Directive' : b.key === 'reply' ? (sentBack ? CHAIR_SEND_BACK_WORD : 'Reply') : undefined}
+              onEdit={editableNoteId === b.key ? () => startNoteEdit(b.key, b.body) : undefined}
+              editor={editableNoteId === b.key && editingNote === b.key ? (
+                <div style={{ marginTop: 4, minWidth: 'min(70vw, 420px)' }}>
+                  <label htmlFor={`note-edit-${b.key}`} className="sr-only">Change your clarification</label>
+                  <textarea
+                    ref={noteEditBox}
+                    id={`note-edit-${b.key}`}
+                    value={noteDraft}
+                    onChange={(e) => { setNoteProblem(null); setNoteDraft(e.target.value); }}
+                    rows={3}
+                    style={{ ...bigField, fontSize: 14, lineHeight: 1.5, padding: '8px 12px', minHeight: 72, resize: 'none' }}
+                  />
+                  {noteProblem && <p role="alert" style={{ margin: '4px 0 0', fontSize: 12.5, fontWeight: 600, color: CK.danger }}>{noteProblem}</p>}
+                  <div className="flex items-center" style={{ gap: 8, marginTop: 6 }}>
+                    <Btn tone="green" size="sm" disabled={noteSaving} onClick={() => { void saveNote(b.key); }}>{noteSaving ? 'Saving' : 'Save'}</Btn>
+                    <Btn tone="ghost" size="sm" disabled={noteSaving} onClick={() => { setEditingNote(null); setNoteProblem(null); }}>Cancel</Btn>
+                  </div>
+                </div>
+              ) : undefined}
+            />
           )))}
           {!d.reply && !showEdit && withdrawn && (
             <p style={{ margin: '2px 0 0', fontSize: 13, color: CK.muted, textAlign: 'center' }}>This directive was withdrawn. The crisis team will not answer it.</p>

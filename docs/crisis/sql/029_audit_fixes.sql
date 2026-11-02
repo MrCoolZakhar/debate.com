@@ -66,3 +66,5 @@
 --   directive can be edited only while awaiting_chair or changes_requested (reason 'approved' once the chair approved it).
 -- 35 (2 Nov 2026, owner) crisis_edit_directive: a directive the backroom has replied to (answered, or asked for more
 --   detail) can no longer be edited; the delegate answers in the conversation instead.
+-- 36 crisis_edit_note(p_note, p_body) + crisis_directive_notes.edited_at: the author changes their own latest visible
+--   note (a clarification) until the backroom answers after it (reason 'replied'); never an older note.

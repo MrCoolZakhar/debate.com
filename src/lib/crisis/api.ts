@@ -442,6 +442,13 @@ export async function loadChairRooms(ref: CrisisRef): Promise<Array<{ cabinet_id
   return must(res, 'Could not load the committee room.') as Array<{ cabinet_id: string; cabinet_name: string; code: string | null; chair_password: string | null }>;
 }
 
+/** The author changes their own latest clarification note until the backroom replies after it (docs/crisis/sql/029, part 36). */
+export async function editNote(ref: CrisisRef, noteId: string, body: string): Promise<{ ok: boolean; reason?: 'replied' | 'empty' }> {
+  const client = await c(ref);
+  const res = await client.rpc('crisis_edit_note', { p_note: noteId, p_body: body });
+  return must(res, 'Could not save your change. Your text is kept, try again.') as { ok: boolean; reason?: 'replied' | 'empty' };
+}
+
 /** Gives a delegate whose character died or was arrested a spare character (docs/crisis/sql/029g). */
 export async function giveSpare(ref: CrisisRef, memberId: string, spareId: string): Promise<{ ok: boolean; reason?: 'taken'; seat_moved?: boolean }> {
   const client = await c(ref);
