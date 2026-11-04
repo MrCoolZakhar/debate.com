@@ -37,6 +37,7 @@ Owner: Peter, 19 Oct 2026. The decisions below came out of a Q&A before the rebu
 - Their committee (country + name of everyone in it), once the organiser publishes allocations.
 - Their delegation: who is in it and their committees. Only leaders see payments and other members' papers.
 - A leader may submit a paper for a delegate; the delegate can still replace it; the latest upload wins.
+- A leader (head delegate or faculty advisor with a delegation) whose application is still submitted and whose dashboard is closed (payment timing "after acceptance") sees "Your Application Is Under Review" at the top of Overview (`LeaderUnderReviewCard.tsx`) and a What's Next line saying the Delegation section and its invite link open once the application is accepted (prompt 18, owner 4 Nov 2026). The sections and the gate are unchanged.
 
 ## Organiser side
 

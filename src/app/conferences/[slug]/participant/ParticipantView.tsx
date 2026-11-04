@@ -35,6 +35,7 @@ import ApplyPointer from './ApplyPointer';
 import ConferenceDocsSection, { useConferenceDocs, docForRole, DOC_READER_STATUSES } from './ConferenceDocsSection';
 import ConferenceDocsExtra, { useMyConferenceDocs, requiredOutstanding, DocsRequiredNotice } from './ConferenceDocsExtra';
 import DelegationOverview from './delegation/overview/DelegationOverview';
+import LeaderUnderReviewCard from './LeaderUnderReviewCard';
 import type { ParticipantApplication, ParticipantRoleConfig, ParticipantAllocation, ParticipantCommittee } from './types';
 import { friendlyError, UserFacingError } from '@/lib/friendlyError';
 
@@ -124,6 +125,8 @@ function pageNextStep(o: {
   roleStep: NextStep | null;
   /** False while the conference has not set up payments: Pay now is drawn locked. */
   paymentsReady?: boolean | null;
+  /** A delegation leader whose Delegation section is not open yet (it opens on acceptance). */
+  leaderWaiting?: boolean;
 }): NextStep | null {
   const pay = { label: 'Pay now', href: `/conferences/${o.conferenceSlug}/pay`, lockedSlug: o.paymentsReady === false ? o.conferenceSlug : undefined };
   if (o.locked) {
@@ -132,7 +135,12 @@ function pageNextStep(o: {
   if (o.app.status === 'submitted') {
     return o.payNow
       ? { kind: 'action', line: 'Pay your registration fee while the organisers review your application.', action: pay }
-      : { kind: 'done', line: 'The organisers are reviewing your application. You will get an email when they decide.' };
+      : {
+          kind: 'done',
+          line: o.leaderWaiting
+            ? 'The organisers are reviewing your application. Once it is accepted you can invite your delegates from the Delegation section. You will get an email when they decide.'
+            : 'The organisers are reviewing your application. You will get an email when they decide.',
+        };
   }
   if (o.payNow) return { kind: 'action', line: 'Pay your registration fee to confirm your place.', action: pay };
   if (o.app.status === 'checked-in') return { kind: 'done', line: 'You are checked in. Enjoy the conference.' };
@@ -432,6 +440,7 @@ export default function ParticipantView({
     // A role step only counts while that role's dashboard is on the page.
     roleStep: gateOpen ? roleStep : null,
     paymentsReady,
+    leaderWaiting: isLeader && !gateOpen,
   });
 
   // Opens another section from Overview (the delegation Overview): the desktop
@@ -741,6 +750,8 @@ export default function ParticipantView({
             </Pane>
             ) : (
             <Pane show={activeSection === 'overview'}>
+              {/* A leader under review: why there is no Delegation section yet (owner, 4 Nov 2026). */}
+              {isLeader && selected.status === 'submitted' && !gateOpen && <LeaderUnderReviewCard />}
               {docsNotice}
               {roleOverview}
             </Pane>

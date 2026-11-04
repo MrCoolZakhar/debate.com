@@ -8,7 +8,7 @@
 // preview is the PDF made smaller, not a different layout.
 
 import {
-  DOC_INK, DOC_RULE, DOC_SOFT, DOC_TINT, accentOf, accentText, billedLines, detailRows, detailsLabel, docColumns, docDate,
+  DOC_INK, DOC_RULE, DOC_SOFT, DOC_TINT, accentOf, accentText, billedLines, detailRows, detailsLabel, docColumns, docDate, groupDocLines,
   docStamp, docTitle, issuerName, totalRows, type MoneyDoc,
 } from './moneyDocument';
 
@@ -88,7 +88,7 @@ export default function MoneyDocumentView({ doc, className, style }: { doc: Mone
                 <span key={c.head} role="columnheader" style={c.width == null ? { flex: 1 } : { width: u(c.width), flexShrink: 0, textAlign: c.align }}>{c.head}</span>
               ))}
             </div>
-            {doc.lines.map((l, i) => (
+            {groupDocLines(doc).map((l, i) => (
               <div key={i} role="row" style={{ display: 'flex', gap: u(12), padding: `${u(9)} ${u(12)}`, borderBottom: `${u(1)} solid ${DOC_RULE}` }}>
                 {cols.map(c => (
                   <span key={c.head} role="cell" style={{
