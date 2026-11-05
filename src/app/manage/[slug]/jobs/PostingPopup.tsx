@@ -207,7 +207,6 @@ export default function PostingPopup({
   function checkStep(s: Step): { field: string; message: string } | null {
     if (s === 'role') {
       if (!draft.role) return { field: 'role', message: 'Choose a role' };
-      if (draft.kind === 'gavelling' && roleRow && !roleRow.enabled) return { field: 'role', message: 'Applications for this role are off. Turn them on in Settings, or apply on another site' };
       if (draft.kind === 'outside') {
         const u = draft.outside_url.trim();
         if (!u) return { field: 'outside_url', message: 'Add the link where people apply' };
@@ -238,6 +237,15 @@ export default function PostingPopup({
 
   /** Refusal from the server: jump to the field's step and mark it. */
   const showRefusal = useCallback((r: Refusal) => {
+    // The role's applications (prompt 24): checked before the field routing,
+    // since these refusals carry field 'role'. The link navigates to the role
+    // in Settings; it opens nothing over this pop-up.
+    if (r.code === 'role_not_set_up' || r.code === 'role_closed') {
+      const role = (r.role ?? draft.role ?? 'chair') as JobRole;
+      const word = JOB_ROLE_LABEL[role] ?? 'Chair';
+      setErr(<>{r.message}{' '}<Link href={`/manage/${conference.slug}/settings?tab=applications&role=${encodeURIComponent(role)}`} className="gv-jp-a">{r.code === 'role_not_set_up' ? `Set up ${word} applications` : `Open ${word} applications`}</Link></>);
+      return;
+    }
     const f = r.field;
     if (f) {
       const target = FIELD_STEP[f] ?? (f.startsWith('question') ? 'questions' : null);
@@ -247,12 +255,8 @@ export default function PostingPopup({
         return;
       }
     }
-    if (r.code === 'role_off') {
-      setErr(<>{r.message} <Link href={`/manage/${conference.slug}/settings?tab=applications`} className="gv-jp-a">Open Settings</Link></>);
-      return;
-    }
     setErr(r.message);
-  }, [conference.slug]);
+  }, [conference.slug, draft.role]);
 
   /** Saves the changed keys (or creates the draft). Returns the id, or null after a refusal. */
   const persist = useCallback(async (): Promise<string | null> => {
@@ -408,16 +412,16 @@ export default function PostingPopup({
               {(['chair', 'secretariat', 'staff'] as JobRole[]).map((r) => {
                 const row = panel.roles.find((x) => x.role === r);
                 const off = !!row && !row.enabled;
-                const blocked = off && draft.kind === 'gavelling';
+                // Publishing switches the role's applications on (prompt 24), so an
+                // off role is never blocked here; the server refuses one that is not set up or closed.
                 const Icon = ROLE_ICON[r];
                 return (
-                  <div key={r} className={`gv-jp-role${draft.role === r ? ' gv-jp-role-on' : ''}${blocked ? ' gv-jp-role-off' : ''}`}>
+                  <div key={r} className={`gv-jp-role${draft.role === r ? ' gv-jp-role-on' : ''}`}>
                     <button
                       type="button"
                       role="radio"
                       aria-checked={draft.role === r}
-                      aria-disabled={blocked || undefined}
-                      onClick={() => { if (!blocked) set('role', r); }}
+                      onClick={() => set('role', r)}
                       className="gv-jp-role-btn"
                     >
                       <span className="gv-jp-role-disc" aria-hidden><Icon size={22} strokeWidth={2} /></span>
@@ -425,8 +429,8 @@ export default function PostingPopup({
                     </button>
                     {off && (
                       <p className="gv-jp-role-note">
-                        Applications are off{' '}
-                        <Link href={`/manage/${conference.slug}/settings?tab=applications`} className="gv-jp-a">Open Settings</Link>
+                        {draft.kind === 'gavelling' ? 'Applications are off. Publishing this listing opens them.' : 'Applications are off'}{' '}
+                        <Link href={`/manage/${conference.slug}/settings?tab=applications&role=${r}`} className="gv-jp-a">Open Settings</Link>
                       </p>
                     )}
                   </div>

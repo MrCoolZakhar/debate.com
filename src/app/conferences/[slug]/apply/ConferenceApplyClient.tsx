@@ -131,6 +131,9 @@ interface RoleConfig {
   /** Chair/secretariat only (DB CHECK enforces this) — whether this role gets
    *  the dedicated MUN-experience step instead of the generic rank step. */
   collect_mun_experience: boolean;
+  /** Remove Taken Allocations (default on): taken allocations are hidden from
+   *  the preference picker; off, they show and can be ranked like any other. */
+  remove_taken_allocations?: boolean;
 }
 
 interface CommitteeOption {
@@ -1233,6 +1236,9 @@ function ConferenceApplyInner() {
   const showCountryPick = prefMode === 'committees_and_countries' || prefMode === 'countries_only';
   const committeesOnly = prefMode === 'committees_only';
   const countriesOnly = prefMode === 'countries_only';
+  // Remove Taken Allocations (prompt 24): on, the picker hides taken allocations
+  // (a saved choice of one stays in the ranking); off, they are ordinary chips.
+  const hideTaken = roleConfig?.remove_taken_allocations !== false;
 
   // Availability, derived from the loaded slot + taken-allocation data.
   const committeeSlotInfo = (id: string) => {
@@ -4417,7 +4423,7 @@ function ConferenceApplyInner() {
         {minPrefs > 0 && (
           <p className="mb-4" style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.muted }}>
             Pick and order at least <span style={{ fontWeight: 800, color: NEU.ink, fontVariantNumeric: 'tabular-nums' }}>{minPrefs}</span>
-            {atMax ? ' · maximum of 8 reached' : ' · rank up to 8'}. Taken options are greyed out.
+            {atMax ? ' · maximum of 8 reached' : ' · rank up to 8'}.{hideTaken ? ' Taken allocations are not shown.' : ''}
           </p>
         )}
 
@@ -4500,13 +4506,14 @@ function ConferenceApplyInner() {
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {info.slots.map(slot => {
-                      const taken = info.taken.has(slot.country_code);
+                      const isTaken = info.taken.has(slot.country_code);
+                      if (isTaken && hideTaken) return null;
                       return (
                         <CountryChip
                           key={slot.id}
                           code={slot.country_code}
                           name={slot.country_name}
-                          taken={taken || (atMax && !isCountrySelected(c.id, slot.country_code))}
+                          taken={atMax && !isCountrySelected(c.id, slot.country_code)}
                           selected={isCountrySelected(c.id, slot.country_code)}
                           onClick={() => toggleCountry(c, slot)}
                           reducedMotion={reducedMotion}
@@ -4534,7 +4541,7 @@ function ConferenceApplyInner() {
                     totalCount={info.total}
                     rank={null}
                     active={expanded || chosenHere > 0}
-                    disabled={info.full && chosenHere === 0}
+                    disabled={hideTaken && info.full && chosenHere === 0}
                     showAvailability={info.total > 0}
                     onClick={() => setExpandedCommitteeId(prev => (prev === c.id ? null : c.id))}
                     reducedMotion={reducedMotion}
@@ -4562,14 +4569,14 @@ function ConferenceApplyInner() {
                         </div>
                         <div className="flex flex-wrap gap-2">
                           {info.slots.map(slot => {
-                            const taken = info.taken.has(slot.country_code);
+                            if (hideTaken && info.taken.has(slot.country_code)) return null;
                             const selected = isCountrySelected(c.id, slot.country_code);
                             return (
                               <CountryChip
                                 key={slot.id}
                                 code={slot.country_code}
                                 name={slot.country_name}
-                                taken={taken || (atMax && !selected)}
+                                taken={atMax && !selected}
                                 selected={selected}
                                 onClick={() => toggleCountry(c, slot)}
                                 reducedMotion={reducedMotion}

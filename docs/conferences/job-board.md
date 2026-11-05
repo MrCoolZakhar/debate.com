@@ -74,7 +74,8 @@ Linking is automatic: a database trigger links the normal application to the lis
 - A listing that applies on another site costs 2 credits once (`prices.outside_listing`).
 - After a paid outside listing is published, its role, title, link and dates are fixed, with one free fix in the first 24 hours (`fix_available`, `fix_used`).
 - The 60-day question (`confirm_deadline`): a paid outside listing that would stay up 60 days or more asks "Is this really the application deadline?". Yes, publish calls again with `p_confirm_deadline true`.
-- Refusal codes of `job_listing_publish`: `confirm_deadline`, `short`, `role_off` (with a link to Settings > Applications), `not_public`.
+- Refusal codes of `job_listing_publish`: `confirm_deadline`, `short`, `not_public`, and (prompt 24, replacing `role_off`) `role_not_set_up` ("Set up <Role> applications" link), `role_closed` ("Open <Role> applications" link; both links go to `/manage/<slug>/settings?tab=applications&role=<role>`, checked before the field routing) and `role_opens_later` (field `deadline`: the pop-up goes to the deadline step). `job_listing_save` can refuse with the same three.
+- **Publishing a conference listing switches its role's applications on** (`application_role_configs.is_enabled`; prompt 24): "Your listing is live. Chair applications are now open too.", or, when the role opens later, "Your listing is saved. Chair applications open on <date>, and your listing shows from then." (`role_opened` in the answer). The pop-up no longer greys out a role whose applications are off; it says "Applications are off. Publishing this listing opens them." and the server decides at publish.
 
 ### Promotion
 

@@ -108,6 +108,8 @@ interface RoleConfig {
   hide_dashboard_until_paid?: boolean;
   preference_mode: string;
   collect_mun_experience: boolean;
+  /** Applicants cannot see or pick allocations already given out (default on). */
+  remove_taken_allocations: boolean;
 }
 
 interface Organizer {
@@ -2593,6 +2595,7 @@ export default function SettingsPage() {
         payment_timing: 'anytime',
         preference_mode: 'none',
         collect_mun_experience: false,
+        remove_taken_allocations: true,
         submission_message: null,
         submission_link_label: null,
         submission_link_url: null,
@@ -3182,6 +3185,7 @@ export default function SettingsPage() {
         <SwitchRow
           label="The committee list"
           desc="Turn it off if your committees are not announced yet."
+          hint={<InfoHint label="About the committee list" text="This only changes your public conference page. Off hides the committee section there, for example while your committees are not announced yet." />}
           checked={showCommittees}
           busy={visibilitySavingKey === 'show_committees'}
           disabled={visibilitySavingKey !== null}
@@ -3190,14 +3194,16 @@ export default function SettingsPage() {
         <SwitchRow
           label="Member counts"
           desc="How many delegates are in each committee."
+          hint={<InfoHint label="About member counts" text="This only changes your public conference page. On: each committee shows how many delegates it has. Off: the numbers are hidden." />}
           checked={showCommitteeCounts}
           busy={visibilitySavingKey === 'show_committee_counts'}
           disabled={visibilitySavingKey !== null}
           onChange={(v) => saveVisibility('show_committee_counts', v, setShowCommitteeCounts)}
         />
         <SwitchRow
-          label="Taken countries"
-          desc="Which country seats are already allocated."
+          label="Taken allocations"
+          desc="Which allocations are already taken."
+          hint={<InfoHint label="About taken allocations" text="This only changes your public conference page: visitors see which allocations in each committee are already given out. What applicants can pick is set per role, under Applications, then Delegate or Head Delegate, then Preferences." />}
           checked={showTakenCountries}
           busy={visibilitySavingKey === 'show_taken_countries'}
           disabled={visibilitySavingKey !== null}
