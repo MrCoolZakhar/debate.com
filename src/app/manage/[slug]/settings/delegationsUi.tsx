@@ -31,7 +31,7 @@ const FONT = 'var(--font-brand), sans-serif';
 
 export const SWAP_MODE_OPTIONS: { value: string; label: string; hint: string }[] = [
   { value: 'off', label: 'No Reshuffling', hint: 'Only your team moves delegates between seats.' },
-  { value: 'request', label: 'Request Reshuffling', hint: 'Leaders ask to place, take out or swap their delegates, and nothing changes until you approve it in Messages.' },
+  { value: 'request', label: 'Request Reshuffling', hint: 'Leaders ask to take out or swap their delegates, and nothing changes until you approve it in Messages.' },
   { value: 'self_serve', label: 'Allow Reshuffling', hint: 'Leaders swap seats within their own delegation and you are notified. They can never take another delegation’s seat.' },
 ];
 
