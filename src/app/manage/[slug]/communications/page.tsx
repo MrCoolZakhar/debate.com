@@ -258,8 +258,22 @@ interface SwapMetadata {
   app_b?: string;
   member_a?: string;
   member_b?: string;
-  before?: { a?: string; b?: string };
-  after?: { a?: string; b?: string };
+  /** Old swaps: one word per side. A seat change (delegation_request_move) carries a string. */
+  before?: { a?: string; b?: string } | string;
+  after?: { a?: string; b?: string } | string;
+  /** Request Reshuffling (5 Nov 2026): a seat change of one person, decided by respond_delegation_move_request. */
+  action?: 'place' | 'unplace';
+  member?: string;
+}
+
+/** A seat-change request (it has metadata.action); old swap requests do not. */
+function isMoveRequest(m: SwapMetadata | null | undefined): boolean {
+  return !!m && typeof m.action === 'string';
+}
+
+/** One side of an old swap's before / after. */
+function swapSide(v: SwapMetadata['before'], side: 'a' | 'b'): string | undefined {
+  return v && typeof v === 'object' ? v[side] : undefined;
 }
 
 interface InboxRequest {
@@ -293,7 +307,7 @@ interface InboxProfile {
 
 const KIND_CHIP: Record<string, { label: string; color: string; Icon: typeof HelpCircle }> = {
   question: { label: 'Question', color: '#1B3828', Icon: HelpCircle },
-  swap_request: { label: 'Swap request', color: GOLD_INK, Icon: Repeat },
+  swap_request: { label: 'Seat change', color: GOLD_INK, Icon: Repeat },
   swap_notice: { label: 'Swap', color: '#6B5F52', Icon: Repeat },
 };
 
@@ -318,7 +332,7 @@ const STACK_BLUR = [0, 0.9, 1.7, 2.5];
 
 const INBOX_KIND_OPTIONS = [
   { value: 'question', label: 'Question' },
-  { value: 'swap_request', label: 'Swap request' },
+  { value: 'swap_request', label: 'Seat change' },
   { value: 'swap_notice', label: 'Swap' },
 ];
 
@@ -3768,6 +3782,26 @@ function CommunicationsPageInner() {
     clearErr('communications-swap');
     const supabase = getAuthedClient(session.access_token);
 
+    // A seat change (Request Reshuffling): one RPC makes or declines the change,
+    // writes the decision message and closes the thread. Nothing else is written here.
+    if (isMoveRequest(req.metadata)) {
+      setSwapActing(true);
+      try {
+        const { data, error } = await supabase.rpc('respond_delegation_move_request', { p_request: req.id, p_approve: approve, p_note: null });
+        if (error) { notifyErr(friendlyError(error, 'The decision could not be saved.'), 'communications-swap'); return; }
+        const result = (data ?? {}) as { ok?: boolean; error?: string };
+        if (result.ok !== true) { notifyErr(plainOrFallback(result.error, 'The decision could not be saved.'), 'communications-swap'); return; }
+        setInboxRequests(prev => prev.map(r => (r.id === req.id ? { ...r, status: 'closed', last_message_at: new Date().toISOString(), seen_by_organizer: true } : r)));
+        void loadInbox();
+        window.dispatchEvent(new CustomEvent('gv-inbox-read-changed'));
+      } catch (e) {
+        notifyErr(friendlyError(e, 'The decision could not be saved.'), 'communications-swap');
+      } finally {
+        setSwapActing(false);
+      }
+      return;
+    }
+
     if (approve) {
       // The swap itself is a server-computed RPC whose ok/error result gates
       // everything else, so it stays awaited, busy-state on the Approve/
@@ -3949,11 +3983,14 @@ function CommunicationsPageInner() {
         createdAt: m.created_at,
       })),
       swap: isSwap ? {
-        lines: [
-          `${req.metadata.member_a ?? 'Member A'}: ${req.metadata.before?.a ?? 'Not set'} → ${req.metadata.after?.a ?? 'Not set'}`,
-          `${req.metadata.member_b ?? 'Member B'}: ${req.metadata.before?.b ?? 'Not set'} → ${req.metadata.after?.b ?? 'Not set'}`,
-        ],
+        lines: isMoveRequest(req.metadata)
+          ? [`${req.metadata.member ?? 'Member'}: ${typeof req.metadata.before === 'string' ? req.metadata.before : 'Not set'} → ${typeof req.metadata.after === 'string' ? req.metadata.after : 'Not set'}`]
+          : [
+            `${req.metadata.member_a ?? 'Member A'}: ${swapSide(req.metadata.before, 'a') ?? 'Not set'} → ${swapSide(req.metadata.after, 'a') ?? 'Not set'}`,
+            `${req.metadata.member_b ?? 'Member B'}: ${swapSide(req.metadata.before, 'b') ?? 'Not set'} → ${swapSide(req.metadata.after, 'b') ?? 'Not set'}`,
+          ],
         canDecide: req.kind === 'swap_request' && req.status === 'open',
+        isChange: isMoveRequest(req.metadata),
       } : null,
     };
   })() : null;

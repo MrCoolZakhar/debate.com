@@ -94,7 +94,9 @@ interface Item {
   off?: string;
 }
 
-export default function MemberMenu({ member, societyId, openSeats, conferenceId, onDone, ops, handleRef }: {
+export default function MemberMenu({ member, societyId, openSeats, conferenceId, onDone, ops, handleRef, swapMode }: {
+  /** conferences.allocation_swap_mode: in 'request' a seat change is asked for, not made. */
+  swapMode?: string;
   member: MenuMember;
   societyId: string;
   /** The delegation's open seats (V2 only), for Allocate. */
@@ -117,6 +119,9 @@ export default function MemberMenu({ member, societyId, openSeats, conferenceId,
 
   const self = member.is_me;
   const isAdvisor = member.role === 'faculty-advisor';
+  // Request Reshuffling: a seated person's seat changes go to the organisers.
+  const asks = swapMode === 'request' && !!member.seat;
+  const unplaceWord = asks ? 'Ask to unallocate' : 'Unallocate';
 
   const place = useCallback(() => {
     const r = (anchorRef.current ?? btnRef.current)?.getBoundingClientRect();
@@ -182,7 +187,13 @@ export default function MemberMenu({ member, societyId, openSeats, conferenceId,
       const r = await work();
       if (!r.ok) { notifyErr(r.error); return; }
       setOpen(false);
-      notifyOk(okLine);
+      if (r.requested) {
+        // Request Reshuffling: sent to the organisers, nothing moved yet.
+        notifyOk(r.message ?? 'Request sent. The organisers will approve or decline it.');
+        window.dispatchEvent(new CustomEvent('gv-requests-changed'));
+      } else {
+        notifyOk(okLine);
+      }
       await onDone();
     } catch (e) {
       notifyErr(friendlyError(e, 'That change was not saved. Try again.'));
@@ -235,8 +246,8 @@ export default function MemberMenu({ member, societyId, openSeats, conferenceId,
   if (!isAdvisor) {
     if (member.seat) {
       items.push(DELEGATIONS_V2_DB
-        ? { key: 'unplace', icon: CircleMinus, label: 'Unallocate', onPress: () => setStep({ confirm: { kind: 'unplace' } }) }
-        : { key: 'unplace', icon: CircleMinus, label: 'Unallocate', onPress: noop, off: SOON });
+        ? { key: 'unplace', icon: CircleMinus, label: unplaceWord, onPress: () => setStep({ confirm: { kind: 'unplace' } }) }
+        : { key: 'unplace', icon: CircleMinus, label: unplaceWord, onPress: noop, off: SOON });
     } else {
       items.push(!DELEGATIONS_V2_DB
         ? { key: 'place', icon: Armchair, label: 'Allocate', onPress: noop, off: SOON }
@@ -272,6 +283,9 @@ export default function MemberMenu({ member, societyId, openSeats, conferenceId,
 
   const confirmCopy = (a: Action): { title: string; line: string | null; yes: string; danger: boolean } => {
     if (a.kind === 'switch') return { ...(ops?.switchCopy(a.to) ?? { title: 'Switch these allocations?', line: null, yes: 'Switch' }), danger: false };
+    if (a.kind === 'unplace' && asks) return self
+      ? { title: 'Ask to unallocate yourself?', line: 'The organising team gets the request and makes the change.', yes: 'Ask to unallocate', danger: false }
+      : { title: `Ask to unallocate ${member.name}?`, line: 'The organising team gets the request and makes the change.', yes: 'Ask to unallocate', danger: false };
     if (a.kind === 'unplace') return self
       ? { title: 'Unallocate yourself?', line: 'Your allocation stays with the delegation as an open allocation.', yes: 'Unallocate', danger: true }
       : { title: `Unallocate ${member.name}?`, line: 'Their allocation stays with the delegation as an open allocation.', yes: 'Unallocate', danger: true };
@@ -293,7 +307,8 @@ export default function MemberMenu({ member, societyId, openSeats, conferenceId,
     body = (
       <div>
         {backBtn}
-        <p style={{ fontFamily: FONT, fontSize: 13.5, fontWeight: 600, color: INK, margin: '4px 10px 6px' }}>Choose an allocation for {member.name}</p>
+        <p style={{ fontFamily: FONT, fontSize: 13.5, fontWeight: 600, color: INK, margin: '4px 10px 6px' }}>{asks ? `Ask to move ${member.name} to` : `Choose an allocation for ${member.name}`}</p>
+        {asks && <p style={{ fontFamily: FONT, fontSize: 12.5, color: INK_SOFT, margin: '0 10px 6px' }}>The organising team gets the request and makes the change.</p>}
         <div style={{ maxHeight: 280, overflowY: 'auto' }}>
           {(seats ?? []).map((s, i) => (
             <button
@@ -310,7 +325,7 @@ export default function MemberMenu({ member, societyId, openSeats, conferenceId,
               style={itemStyle}
             >
               <CircleFlag code={s.country_code} logoUrl={s.country_logo_url} label={s.country_name} size={22} decorative />
-              <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{s.country_name}</span>
+              <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{asks ? `Ask to move to ${s.country_name}` : s.country_name}</span>
               <span className="inline-flex items-center gap-1.5 [overflow-wrap:anywhere]" style={{ fontSize: 12.5, color: INK_SOFT }}>
                 <CommitteeDisc src={committeeEmblemSrc(s.logo_url, s.committee, s.abbreviation)} size={16} />
                 {s.abbreviation || committeeDisplayName(s.committee, s.abbreviation)}

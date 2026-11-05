@@ -60,7 +60,8 @@ export interface SplitDetail {
   applicationHref: string | null;
   messages: SplitMessage[];
   /** Swap details, and whether Approve / Decline are offered. */
-  swap: { lines: string[]; canDecide: boolean } | null;
+  /** isChange: a seat change (Request Reshuffling), worded "the change" instead of "the swap". */
+  swap: { lines: string[]; canDecide: boolean; isChange?: boolean } | null;
 }
 
 const AVATAR_TONES: { bg: string; fg: string }[] = [
@@ -360,10 +361,10 @@ export default function InboxSplit({
                     {detail.swap?.canDecide && (
                       <div className="flex flex-wrap gap-2">
                         <Chip onClick={() => onSwap(true)} disabled={swapActing} icon={<Check size={14} strokeWidth={2.6} aria-hidden />}>
-                          {swapActing ? 'Swapping…' : 'Approve the swap'}
+                          {detail.swap.isChange ? (swapActing ? 'Saving…' : 'Approve the change') : (swapActing ? 'Swapping…' : 'Approve the swap')}
                         </Chip>
                         <Chip onClick={() => onSwap(false)} disabled={swapActing} icon={<X size={14} strokeWidth={2.6} aria-hidden />}>
-                          Decline the swap
+                          {detail.swap.isChange ? 'Decline the change' : 'Decline the swap'}
                         </Chip>
                       </div>
                     )}
@@ -472,7 +473,7 @@ function ThreadRow({ t, active, onOpen, muted }: { t: SplitThread; active: boole
           title={preview}
           style={{ fontFamily: FONT, fontSize: 13.5, color: t.unread ? INK : (muted ? SOFT_INK : '#3A2E24'), fontWeight: t.unread ? 600 : 400 }}
         >
-          {t.kind !== 'question' && <Repeat size={13} aria-label={t.kind === 'swap_request' ? 'Swap request' : 'Swap'} style={{ flexShrink: 0, color: FOREST }} />}
+          {t.kind !== 'question' && <Repeat size={13} aria-label={t.kind === 'swap_request' ? 'Seat change' : 'Swap'} style={{ flexShrink: 0, color: FOREST }} />}
           {t.status === 'closed' && <CheckCheck size={13} aria-label="Done" style={{ flexShrink: 0, color: FOREST }} />}
           <span className="truncate">{preview}</span>
         </span>

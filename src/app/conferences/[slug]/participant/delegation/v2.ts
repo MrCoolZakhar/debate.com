@@ -34,7 +34,9 @@ export const DELEGATIONS_V2_DB = true;
 // delegation_set_role is withdrawn and nothing here calls it.
 export const DELEGATIONS_MONEY_DB = true;
 
-export type Result = { ok: true } | { ok: false; error: string };
+/** requested: in Request Reshuffling the change went to the organisers as a
+ *  request (message says so) and nothing moved yet. code: the server's refusal code. */
+export type Result = { ok: true; requested?: boolean; message?: string } | { ok: false; error: string; code?: string };
 
 export type MemberRole = 'delegate' | 'head-delegate' | 'faculty-advisor';
 
@@ -46,24 +48,43 @@ async function call(fn: string, args: Record<string, unknown>, fallback: string)
     if (!c) return { ok: false, error: SIGNED_OUT };
     const { data, error } = await c.rpc(fn, args);
     if (error) return { ok: false, error: friendlyError(error, fallback) };
-    const r = (data ?? {}) as { ok?: boolean; error?: string; message?: string };
-    if (r.ok !== true) return { ok: false, error: plainOrFallback(r.error ?? r.message, fallback) };
+    const r = (data ?? {}) as { ok?: boolean; error?: string; message?: string; code?: string };
+    if (r.ok !== true) return { ok: false, error: plainOrFallback(r.error ?? r.message, fallback), code: typeof r.code === 'string' ? r.code : undefined };
     return { ok: true };
   } catch (e) {
     return { ok: false, error: friendlyError(e, fallback) };
   }
 }
 
-export function placeMember(applicationId: string, allocationId: string): Promise<Result> {
-  return call('delegation_place_member', { p_application: applicationId, p_allocation: allocationId }, 'They could not be given that allocation. Try again.');
+/** Request Reshuffling (owner, 5 Nov 2026): the seat change goes to the organisers
+ *  as a request (delegation_request_move; allocationId null = take them out). */
+async function requestMove(applicationId: string, allocationId: string | null): Promise<Result> {
+  const fallback = 'The request could not be sent. Try again.';
+  try {
+    const c = await getFreshAuthedClient();
+    if (!c) return { ok: false, error: SIGNED_OUT };
+    const { data, error } = await c.rpc('delegation_request_move', { p_application: applicationId, p_allocation: allocationId });
+    if (error) return { ok: false, error: friendlyError(error, fallback) };
+    const r = (data ?? {}) as { ok?: boolean; error?: string; message?: string; code?: string };
+    if (r.ok !== true) return { ok: false, error: plainOrFallback(r.error, fallback), code: typeof r.code === 'string' ? r.code : undefined };
+    return { ok: true, requested: true, message: r.message || 'Request sent. The organisers will approve or decline it.' };
+  } catch (e) {
+    return { ok: false, error: friendlyError(e, fallback) };
+  }
+}
+
+export async function placeMember(applicationId: string, allocationId: string): Promise<Result> {
+  const r = await call('delegation_place_member', { p_application: applicationId, p_allocation: allocationId }, 'They could not be given that allocation. Try again.');
+  return !r.ok && r.code === 'reshuffle_request' ? requestMove(applicationId, allocationId) : r;
 }
 
 export function removeMember(applicationId: string): Promise<Result> {
   return call('delegation_remove_member', { p_application: applicationId }, 'They could not be removed. Try again.');
 }
 
-export function unplaceMember(applicationId: string): Promise<Result> {
-  return call('delegation_unplace_member', { p_application: applicationId }, 'They could not be unallocated. Try again.');
+export async function unplaceMember(applicationId: string): Promise<Result> {
+  const r = await call('delegation_unplace_member', { p_application: applicationId }, 'They could not be unallocated. Try again.');
+  return !r.ok && r.code === 'reshuffle_request' ? requestMove(applicationId, null) : r;
 }
 
 /** The delegation's short invite code, or null (flag off, not a leader, or a failed read). */

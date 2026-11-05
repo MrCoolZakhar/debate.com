@@ -30,9 +30,9 @@ import { LEADER_IMPORTS_PAID_LAUNCH } from '@/app/manage/[slug]/import/importQuo
 const FONT = 'var(--font-brand), sans-serif';
 
 export const SWAP_MODE_OPTIONS: { value: string; label: string; hint: string }[] = [
-  { value: 'off', label: 'Off', hint: 'Only your team can move delegates between seats.' },
-  { value: 'request', label: 'Request', hint: 'Leaders ask for a swap and nothing changes until you approve it.' },
-  { value: 'self_serve', label: 'Self-serve', hint: 'Leaders swap seats within their own delegation and you are notified. They can never take another delegation’s seat.' },
+  { value: 'off', label: 'No Reshuffling', hint: 'Only your team moves delegates between seats.' },
+  { value: 'request', label: 'Request Reshuffling', hint: 'Leaders ask to place, take out or swap their delegates, and nothing changes until you approve it in Messages.' },
+  { value: 'self_serve', label: 'Allow Reshuffling', hint: 'Leaders swap seats within their own delegation and you are notified. They can never take another delegation’s seat.' },
 ];
 
 // The Settings card (Oct 2026 bookmarks redesign): the Store's white card on

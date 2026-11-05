@@ -49,7 +49,7 @@
 // (onChanged), never behind a loader.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeftRight, Check, Crown, FileCheck2, FileText, GraduationCap, Mail, Search, Upload, User, UserX, X } from 'lucide-react';
+import { ArrowLeftRight, Check, Clock, Crown, FileCheck2, FileText, GraduationCap, Mail, Search, Upload, User, UserX, X } from 'lucide-react';
 import { CircleFlag } from '@/components/CircleFlag';
 import { committeeDisplayName } from '@/lib/presetNames';
 import { friendlyError } from '@/lib/friendlyError';
@@ -61,6 +61,7 @@ import SeatCell, { type Seat } from './seat/SeatCell';
 import InPlaceConfirm from './seat/InPlaceConfirm';
 import { useSeatDrag } from './seat/useSeatDrag';
 import { useSwapMode } from './seat/useSwapMode';
+import { useOpenMoveRequests } from './seat/useOpenMoveRequests';
 import { moveSeat, switchSeats } from './seat/seatWrites';
 import { addPendingSeats, dropPendingSeats, usePendingOpenSeats, type PendingOpenSeat } from './seat/pendingSeats';
 import { compareSeatKeys, sortOpenSeats } from './seat/seatOrder';
@@ -201,6 +202,8 @@ export default function PeopleTable({ rows, societyId, societyName, conferenceId
 }) {
   const [query, setQuery] = useState('');
   const mode = useSwapMode(conferenceId, allocationSwapMode);
+  // Request Reshuffling: who has an open seat-change request ("Change requested").
+  const requestedApps = useOpenMoveRequests(conferenceId, societyId, rows);
   const [patches, setPatches] = useState<Map<string, Patch>>(() => new Map());
   const [busy, setBusy] = useState<Set<string>>(() => new Set());
   const [ask, setAsk] = useState<Ask | null>(null);
@@ -278,7 +281,12 @@ export default function PeopleTable({ rows, societyId, societyName, conferenceId
     } catch (e) {
       r = { ok: false, error: friendlyError(e, 'That change was not saved. Try again.') };
     }
-    if (r.ok) {
+    if (r.ok && r.requested) {
+      // Request Reshuffling: sent to the organisers, nothing moved yet.
+      notifyOk(r.message ?? 'Request sent. The organisers will approve or decline it.');
+      window.dispatchEvent(new CustomEvent('gv-requests-changed'));
+      try { await onChanged(); } catch { /* the next read corrects it */ }
+    } else if (r.ok) {
       notifyOk(o.ok);
       // A quiet re-read in place; the patch stays until it has landed.
       try { await onChanged(); } catch { /* the patch is dropped; the next read corrects it */ }
@@ -376,24 +384,27 @@ export default function PeopleTable({ rows, societyId, societyName, conferenceId
     const r = rowOf(id);
     if (!r || !s.allocation_id) return;
     const allocationId = s.allocation_id;
+    // A seated person in Request Reshuffling: a request, so nothing moves on screen.
+    const asks = mode === 'request' && !!r.seat;
     void runOp({
-      patch: { [id]: { seat: { v: seatFromOpen(s) } } },
-      pending: { hide: allocationId, show: r.seat ? openFromSeat(r.seat) : null },
+      patch: asks ? {} : { [id]: { seat: { v: seatFromOpen(s) } } },
+      pending: asks ? undefined : { hide: allocationId, show: r.seat ? openFromSeat(r.seat) : null },
       work: () => placeMember(id, allocationId),
       ok: `${r.name} is now in ${s.country_name}.`,
     });
-  }, [rowOf, runOp]);
+  }, [rowOf, runOp, mode]);
 
   const doUnplace = useCallback((id: string) => {
     const r = rowOf(id);
     if (!r?.seat) return;
+    const asks = mode === 'request';
     void runOp({
-      patch: { [id]: { seat: { v: null } } },
-      pending: { show: openFromSeat(r.seat) },
+      patch: asks ? {} : { [id]: { seat: { v: null } } },
+      pending: asks ? undefined : { show: openFromSeat(r.seat) },
       work: () => unplaceMember(id),
       ok: r.is_me ? 'You are unallocated. Your allocation stays with the delegation as an open allocation.' : `${r.name} is unallocated. Their allocation stays with the delegation as an open allocation.`,
     });
-  }, [rowOf, runOp]);
+  }, [rowOf, runOp, mode]);
 
 
   const doUpload = useCallback((id: string, file: File) => {
@@ -626,6 +637,9 @@ export default function PeopleTable({ rows, societyId, societyName, conferenceId
                   {!r.attending && (
                     <span className="inline-flex items-center gap-1"><UserX size={14} strokeWidth={STROKE} aria-hidden />Not attending</span>
                   )}
+                  {requestedApps.has(r.application_id) && (
+                    <span className="inline-flex items-center gap-1"><Clock size={14} strokeWidth={STROKE} aria-hidden />Change requested</span>
+                  )}
                 </span>
               </div>
             </div>
@@ -699,6 +713,7 @@ export default function PeopleTable({ rows, societyId, societyName, conferenceId
                   openSeats={shownOpenSeats}
                   onDone={onChanged}
                   ops={ops}
+                  swapMode={mode}
                 />
               )}
             </div>

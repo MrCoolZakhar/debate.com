@@ -3263,7 +3263,7 @@ export default function SettingsPage() {
         <div className="flex flex-col gap-5">
           <SectionHead emoji="School" icon={School} tint={TINT_GREEN_BG}
             title="Delegations"
-            line={`${conference.allow_delegation_import ? 'Leaders bring in their own delegates.' : 'Each delegate applies on their own.'} ${swapMode === 'off' ? 'Only your team moves seats.' : swapMode === 'self_serve' ? 'Leaders swap seats themselves.' : 'Leaders ask to swap seats.'}`}
+            line={`${conference.allow_delegation_import ? 'Leaders bring in their own delegates.' : 'Each delegate applies on their own.'} ${swapMode === 'off' ? 'Only your team moves seats.' : swapMode === 'self_serve' ? 'Leaders move seats themselves.' : 'Leaders ask for seat changes.'}`}
           />
           <DelegationsSettings
             conferenceId={conference.id}
