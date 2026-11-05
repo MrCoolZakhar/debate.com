@@ -3855,7 +3855,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
               <input
                 id="public-banner-upload"
                 type="file"
-                accept="image/jpeg,image/png,image/webp"
+                accept="image/*"
                 style={{ display: 'none' }}
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) handleAssetSelect('banners', f); e.target.value = ''; }}
               />

@@ -565,7 +565,7 @@ export default function StandalonePostingPopup({
                         <input
                           ref={logoInput}
                           type="file"
-                          accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                          accept="image/*"
                           hidden
                           onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void uploadLogo(f); }}
                         />

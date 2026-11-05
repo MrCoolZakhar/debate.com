@@ -239,6 +239,19 @@ export function friendlyError(error: unknown, fallback: string = DEFAULT_FALLBAC
     return say("We couldn't reach Gavelling. Check your connection and try again.", 'network', true, message, code);
   }
 
+  // b2. Storage's two refusals (prompt 21): a type the bucket does not allow,
+  // and a file over the bucket's size limit. Say which type, and what to use.
+  const mimeMatch = message.match(/mime type ([\w.+/-]+) is not supported/i);
+  if (mimeMatch) {
+    const mime = mimeMatch[1].toLowerCase();
+    const sub = (mime.split('/')[1] ?? mime).replace(/^x-/, '').split('+')[0];
+    const tail = mime.startsWith('image/') ? ' Use a JPG, PNG, WebP or GIF.' : '';
+    return say(`This file type (${sub.toUpperCase()}) can't be uploaded here.${tail}`, 'storage', true, message, code);
+  }
+  if (/exceeded the maximum allowed size|Payload too large/i.test(message)) {
+    return say('This file is too big to upload here. Try a smaller one.', 'storage', true, message, code);
+  }
+
   // c. Session. An expired token is refreshed and the call retried once by
   // getAuthedClient's fetch (src/lib/supabase-auth.ts) before anything gets
   // here, and that path opens the sign-in pop-up and reports it itself; this is
