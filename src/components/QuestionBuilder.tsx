@@ -9,6 +9,7 @@ import Portal from '@/components/Portal';
 import { Pill, PillToggle } from '@/app/account/accountUi';
 import { useConfirmModal } from '@/components/ConfirmModal';
 import { InfoHint } from '@/app/manage/[slug]/settings/applicationsUi';
+import QuestionDocRow from '@/components/QuestionDocRow';
 import {
   type QuestionType, type FormBlock, type QuestionBlock, type TitleBlock, type SectionBlock,
   isChoiceType, QUESTION_TYPE_LABELS, usableOptions,
@@ -323,8 +324,10 @@ type MenuState =
   | { kind: 'more'; blockId: string; anchor: HTMLElement }
   | null;
 
-export default function QuestionBuilder({ value, onChange, hasApplications = false, alwaysOpen = false }: {
+export default function QuestionBuilder({ value, onChange, hasApplications = false, alwaysOpen = false, conferenceId }: {
   value: FormBlock[];
+  /** The application form builder (Settings' role pop-up): each question can carry a document. The aid form leaves it out. */
+  conferenceId?: string;
   onChange: (next: FormBlock[]) => void;
   /** Google Forms layout (Settings' role pop-up, 12 Oct 2026): every question
    *  and title is shown in full and editable (its title, type and options
@@ -751,6 +754,15 @@ export default function QuestionBuilder({ value, onChange, hasApplications = fal
                                 <Info size={12} className="flex-shrink-0 mt-0.5" />
                                 Existing answers were given to the previous wording.
                               </p>
+                            )}
+
+                            {conferenceId && (
+                              <QuestionDocRow
+                                conferenceId={conferenceId}
+                                questionId={block.id}
+                                doc={block.doc}
+                                onChange={(doc) => patchBlock(block.id, { doc })}
+                              />
                             )}
 
                             <div className="flex items-center justify-end gap-1 mt-4 pt-2.5" style={{ borderTop: '1px solid #EDE7D9' }}>

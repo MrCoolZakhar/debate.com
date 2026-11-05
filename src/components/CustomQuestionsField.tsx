@@ -3,6 +3,7 @@
 import { type FormBlock, type CustomQuestion, type CustomAnswers, type CustomAnswerValue, usableOptions } from '@/lib/customQuestions';
 import { DatePicker } from '@/components/DatePicker';
 import GSelect from '@/components/GSelect';
+import QuestionDocLink from '@/components/QuestionDocLink';
 import { NEU } from '@/components/neu';
 
 // Correctness floor shared by every input this component renders:
@@ -100,6 +101,7 @@ export default function CustomQuestionsField({ blocks, answers, onChange, missin
             {q.help && (
               <p className="text-[13px] mb-1.5 whitespace-pre-wrap" style={{ color: HELP_INK, fontFamily: "var(--font-brand), sans-serif" }}>{q.help}</p>
             )}
+            {q.doc && <QuestionDocLink doc={q.doc} />}
 
             {q.type === 'short_text' && (
               <input

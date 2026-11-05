@@ -35,6 +35,7 @@ import { fetchMessageStubsForPapers, type PaperMessageStub } from '@/lib/positio
 import { safeStorageKey } from '@/lib/storageKey';
 import { AwardsSheet } from '../settings/awardsSheet';
 import { F, INK, INK_SOFT, FOREST, DANGER, TEXT_LINK, TYPE, TYPE_PX, SwitchRow } from '../settings/panelKit';
+import { InfoHint } from '../settings/applicationsUi';
 
 const OUTFIT = "var(--font-brand), sans-serif";
 
@@ -48,6 +49,8 @@ export interface CommitteeDoc {
   committee_type: string;
   position_paper_deadline: string | null;
   pp_submissions_enabled: boolean;
+  /** Mandatory Submission: delegates see their paper as Required (default off). */
+  pp_required?: boolean;
   study_guides_publish_at: string | null;
   notification_email: string | null;
 }
@@ -118,11 +121,12 @@ export function CommitteeLogo({ c, size }: { c: CommitteeDoc; size: number }) {
   );
 }
 
-type SavePatch = Partial<Pick<CommitteeDoc, 'pp_submissions_enabled' | 'position_paper_deadline' | 'study_guides_publish_at'>>;
+type SaveKeys = 'pp_submissions_enabled' | 'pp_required' | 'position_paper_deadline' | 'study_guides_publish_at';
+type SavePatch = Partial<Pick<CommitteeDoc, SaveKeys>>;
 
 /** save_committee_documents: the committee the server now holds, or the sentence why not. */
 export async function saveCommitteeDocuments(committeeId: string, patch: SavePatch): Promise<
-  { ok: true; committee: Pick<CommitteeDoc, 'id' | 'pp_submissions_enabled' | 'position_paper_deadline' | 'study_guides_publish_at'> } | { ok: false; error: string }
+  { ok: true; committee: Pick<CommitteeDoc, 'id' | SaveKeys> } | { ok: false; error: string }
 > {
   const fallback = 'That could not be saved. Try again in a moment.';
   try {
@@ -368,7 +372,7 @@ function copyCardLines(c: CommitteeDoc, guideTitle: string | null, now: number):
   return [
     guideTitle ? `Study guide: ${guideTitle}` : 'No study guide',
     !at ? 'No release date' : new Date(at).getTime() <= now ? `Released ${formatDate(at)}` : `Releases ${formatDate(at)}`,
-    c.pp_submissions_enabled ? 'Position papers open' : 'Position papers closed',
+    c.pp_submissions_enabled ? (c.pp_required ? 'Position papers open, Required' : 'Position papers open') : 'Position papers closed',
     ...(c.pp_submissions_enabled && c.position_paper_deadline ? [`Due ${formatDate(c.position_paper_deadline)}`] : []),
   ];
 }
@@ -407,6 +411,9 @@ export default function CommitteeDocsPopup({
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
   const [ppBusy, setPpBusy] = useState(false);
   const [ppErr, setPpErr] = useState('');
+  const [reqBusy, setReqBusy] = useState(false);
+  const [reqErr, setReqErr] = useState('');
+  const reqBusyRef = useRef(false);
   const [copyBusy, setCopyBusy] = useState(false);
   const [copyErr, setCopyErr] = useState('');
   const ppBusyRef = useRef(false);
@@ -510,10 +517,11 @@ export default function CommitteeDocsPopup({
 
   // ── Settings: every write is save_committee_documents ────────────────────
 
-  const apply = (c: Pick<CommitteeDoc, 'pp_submissions_enabled' | 'position_paper_deadline' | 'study_guides_publish_at'>) => {
+  const apply = (c: Pick<CommitteeDoc, SaveKeys>) => {
     onCommitteeChange({
       ...committee,
       pp_submissions_enabled: c.pp_submissions_enabled,
+      pp_required: c.pp_required === true,
       position_paper_deadline: c.position_paper_deadline,
       study_guides_publish_at: c.study_guides_publish_at,
     });
@@ -538,6 +546,19 @@ export default function CommitteeDocsPopup({
     apply(r.committee);
   }
 
+  /** Mandatory Submission: the same guarded, verified write as the switch above. */
+  async function toggleRequired(next: boolean) {
+    if (reqBusyRef.current) return;
+    reqBusyRef.current = true;
+    setReqBusy(true);
+    setReqErr('');
+    const r = await saveCommitteeDocuments(committeeId, { pp_required: next });
+    reqBusyRef.current = false;
+    setReqBusy(false);
+    if (!r.ok) { setReqErr(r.error); return; }
+    apply(r.committee);
+  }
+
   const copySources = committees.filter(c => c.id !== committeeId);
 
   /** "Copy settings" in the copy view: the same one call as before. */
@@ -549,6 +570,7 @@ export default function CommitteeDocsPopup({
     const r = await saveCommitteeDocuments(committeeId, {
       study_guides_publish_at: source.study_guides_publish_at,
       pp_submissions_enabled: source.pp_submissions_enabled,
+      pp_required: source.pp_required === true,
       position_paper_deadline: source.position_paper_deadline,
     });
     copyBusyRef.current = false;
@@ -663,6 +685,7 @@ export default function CommitteeDocsPopup({
                 conferenceCommitteeId={committeeId}
                 currentUserId={user?.id ?? ''}
                 deadline={committee.pp_submissions_enabled ? committee.position_paper_deadline : null}
+                required={committee.pp_submissions_enabled && committee.pp_required === true}
                 allocations={rosterAllocations}
                 papers={papers}
                 messagesByPaper={messagesByPaper}
@@ -795,6 +818,19 @@ export default function CommitteeDocsPopup({
                 disabled={ppBusy}
               />
               {ppErr && <p role="alert" style={{ ...TYPE.hint, color: DANGER, margin: '6px 0 0' }}>{ppErr}</p>}
+              {committee.pp_submissions_enabled && (
+                <div style={{ marginTop: 10 }}>
+                  <SwitchRow
+                    label="Mandatory Submission"
+                    hint={<InfoHint label="What Mandatory Submission does" text="On: delegates in this committee see their position paper as Required. Off: submitting a paper is optional." />}
+                    checked={committee.pp_required === true}
+                    onChange={next => { void toggleRequired(next); }}
+                    busy={reqBusy}
+                    disabled={reqBusy}
+                  />
+                  {reqErr && <p role="alert" style={{ ...TYPE.hint, color: DANGER, margin: '6px 0 0' }}>{reqErr}</p>}
+                </div>
+              )}
               {committee.pp_submissions_enabled && (
                 <div style={{ marginTop: 14 }}>
                   <label htmlFor="gv-cdp-deadline" style={{ ...TYPE.label, display: 'block', marginBottom: 6 }}>Position Paper Deadline</label>

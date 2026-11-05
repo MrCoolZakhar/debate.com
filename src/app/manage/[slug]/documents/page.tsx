@@ -68,12 +68,11 @@ function CommitteeCard({ c, guides, now, onOpen }: {
   const sg = studyGuideLine(c, guides, now);
   const label = shortName(c);
   return (
-    <article className="gv-docs-ccard">
+    <article className="gv-docs-ccard" title={c.name !== label ? c.name : undefined}>
       <div className="gv-docs-cid">
         <CommitteeLogo c={c} size={36} />
         <div className="min-w-0">
           <h3 className="gv-docs-cname">{label}</h3>
-          {c.abbreviation && c.abbreviation !== c.name && <p className="gv-docs-cfull">{c.name}</p>}
         </div>
       </div>
       <ul className="gv-docs-lines">
@@ -146,7 +145,7 @@ export default function DocumentsPage() {
     const supabase = getAuthedClient(accessToken);
     const { data } = await supabase
       .from('conference_committees')
-      .select('id, name, abbreviation, logo_url, committee_type, position_paper_deadline, pp_submissions_enabled, study_guides_publish_at, notification_email')
+      .select('id, name, abbreviation, logo_url, committee_type, position_paper_deadline, pp_submissions_enabled, pp_required, study_guides_publish_at, notification_email')
       .eq('conference_id', conference.id)
       .order('name', { ascending: true });
     const rows = (data ?? []) as CommitteeDoc[];
@@ -296,7 +295,6 @@ const PAGE_CSS = `
 .gv-docs-dash .gv-st-card-title{font-size:clamp(20px,1.6vw,24px);letter-spacing:-0.015em;line-height:1.15}
 .gv-docs-committees{display:grid;grid-template-columns:minmax(0,1fr);gap:6px;align-content:start;container-type:inline-size}
 .gv-docs-cname{margin:0;font-family:${OUTFIT};font-size:16px;font-weight:800;letter-spacing:-0.01em;line-height:1.15;color:#1C1410;white-space:nowrap}
-.gv-docs-cfull{margin:1px 0 0;font-family:${OUTFIT};font-size:11.5px;line-height:1.2;color:${NEU.inkSoft};overflow-wrap:normal;word-break:normal}
 .gv-docs-lines{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1px;font-family:${OUTFIT};font-size:12px;font-weight:600;line-height:1.25;flex:0 1 auto;min-width:0}
 .gv-docs-lines li{display:flex;align-items:center;gap:5px;white-space:nowrap}
 .gv-docs-cactions{display:flex;gap:6px;flex-wrap:nowrap;flex:0 0 auto}

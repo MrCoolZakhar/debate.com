@@ -3044,7 +3044,7 @@ export default function SettingsPage() {
               {blocksBlocked}
             </p>
           )}
-          <QuestionBuilder key={`${selectedRole}-${formVersion}`} alwaysOpen value={currentBlocks} onChange={handleBlocksChange} hasApplications={selectedRoleHasApplications} />
+          <QuestionBuilder key={`${selectedRole}-${formVersion}`} alwaysOpen value={currentBlocks} onChange={handleBlocksChange} hasApplications={selectedRoleHasApplications} conferenceId={conference?.id} />
         </>
       }
       afterSlot={

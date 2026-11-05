@@ -87,7 +87,9 @@ export default function DelegateParticipant({ conferenceId, conferenceSlug, conf
   // Below lg every pane shows on one page (see ParticipantView), in this
   // order: awards and the seat, the delegation, the committee, documents.
   const stacked = useDashStacked();
-  const [paper, setPaper] = useState<{ enabled: boolean; submitted: boolean } | null>(null);
+  const [paper, setPaper] = useState<{ enabled: boolean; submitted: boolean; hidden?: boolean } | null>(null);
+  // Papers closed and none on file: the paper card renders nothing (prompt 19), so the grid closes the gap.
+  const paperHidden = paper?.hidden === true;
   useReportNextStep(stacked ? delegateNextStep(myAllocation, conferenceStartDate, paper) : null);
   // With no seat yet, the Committee and Documents sections would only repeat
   // "appears once you are assigned": the phone page leaves them out.
@@ -136,11 +138,11 @@ export default function DelegateParticipant({ conferenceId, conferenceSlug, conf
             open: deadline, status, the big select area and Submit), the study
             guides with Open and, when there are any, the Additional Documents
             (owner, 22 Oct 2026). Stacked on a phone. */}
-        <div className={`grid gap-4 sm:gap-6 md:grid-cols-2 items-start${additionalDocs.length > 0 ? ' xl:grid-cols-3' : ''}`}>
+        <div className={`grid gap-4 sm:gap-6 items-start${paperHidden ? (additionalDocs.length > 0 ? ' md:grid-cols-2' : '') : ` md:grid-cols-2${additionalDocs.length > 0 ? ' xl:grid-cols-3' : ''}`}`}>
           <PositionPaperCard conferenceId={conferenceId} conferenceSlug={conferenceSlug} myAllocation={myAllocation} onPaperState={setPaper} />
           <StudyGuideCard committeeId={myAllocation?.conference_committee_id ?? null} />
           {additionalDocs.length > 0 && (
-            <div className="md:col-span-2 xl:col-span-1 min-w-0">
+            <div className={paperHidden ? 'min-w-0' : 'md:col-span-2 xl:col-span-1 min-w-0'}>
               <AdditionalDocsCard docs={additionalDocs} />
             </div>
           )}

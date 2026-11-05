@@ -31,6 +31,7 @@ import Portal from '@/components/Portal';
 import { DatePicker } from '@/components/DatePicker';
 import { type CustomQuestion, type CustomAnswerValue, usableOptions } from '@/lib/customQuestions';
 import { wordCount, parseWordTarget } from '@/lib/applyQuestionPages';
+import QuestionDocLink from '@/components/QuestionDocLink';
 
 // ── Contrast-checked tokens ────────────────────────────────────────────────
 // BOUNDARY: 3.21:1 on the #EDE7D8 page, 3.33:1 on the #F0EBDD card surface.
@@ -667,6 +668,9 @@ export default function ApplicationQuestionCard({
           {q.help}
         </p>
       )}
+
+      {/* The conference's document for this question (prompt 19), above the answer. */}
+      {q.doc && <div style={{ marginLeft: 38 }}><QuestionDocLink doc={q.doc} /></div>}
 
       {q.type === 'paragraph' && (
         <EssayField q={q} value={str} onChange={onChange} hasError={hasError} describedBy={describedBy} />

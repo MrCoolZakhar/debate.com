@@ -20,6 +20,22 @@ export interface CustomQuestion {
   options?: string[];
   placeholder?: string;
   help?: string;
+  /** A document shown with the question (a privacy policy above "I have read it"),
+   *  in the public bucket application-form-docs. Part of the question, never of the answer. */
+  doc?: QuestionDoc | null;
+}
+
+/** A file attached to a question: its path in QUESTION_DOCS_BUCKET, its name and size in bytes. */
+export interface QuestionDoc { path: string; name: string; size: number }
+
+/** Public bucket (PDF and Word, 10 MB); organizers write only under <conference_id>/. */
+export const QUESTION_DOCS_BUCKET = 'application-form-docs';
+
+/** A stored doc, or null when it is missing or malformed. */
+export function parseQuestionDoc(raw: unknown): QuestionDoc | null {
+  const r = raw as Record<string, unknown> | null | undefined;
+  if (!r || typeof r.path !== 'string' || !r.path || typeof r.name !== 'string') return null;
+  return { path: r.path, name: r.name, size: typeof r.size === 'number' ? r.size : 0 };
 }
 
 export type CustomAnswerValue = string | string[];
@@ -46,6 +62,7 @@ export function normalizeQuestion(raw: unknown): CustomQuestion {
     options: Array.isArray(r.options) ? r.options.filter((o): o is string => typeof o === 'string') : [],
     placeholder: typeof r.placeholder === 'string' ? r.placeholder : undefined,
     help: typeof r.help === 'string' ? r.help : undefined,
+    ...(parseQuestionDoc(r.doc) ? { doc: parseQuestionDoc(r.doc) } : {}),
   };
 }
 

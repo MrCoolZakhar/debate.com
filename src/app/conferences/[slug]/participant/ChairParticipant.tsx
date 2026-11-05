@@ -47,6 +47,7 @@ interface ChairCommittee {
   position_paper_deadline: string | null;
   /** Papers closed: no due date and no "Late" (prompt 141). */
   pp_submissions_enabled?: boolean | null;
+  pp_required?: boolean | null;
   session_id: string | null;
   awards_submitted_at: string | null;
   awards_approved_at: string | null;
@@ -466,6 +467,7 @@ function ChairCommitteeBlock({ conferenceId, conferenceSlug, committee, chairDis
               conferenceCommitteeId={committee.id}
               currentUserId={user?.id ?? ''}
               deadline={committee.pp_submissions_enabled === false ? null : committee.position_paper_deadline}
+              required={committee.pp_submissions_enabled !== false && committee.pp_required === true}
               allocations={rosterAllocations}
               papers={papers}
               messagesByPaper={messagesByPaper}
@@ -533,7 +535,7 @@ export default function ChairParticipant({ conferenceId, conferenceSlug, section
     const [{ data }, { data: confData }] = await Promise.all([
       supabase
         .from('conference_committees')
-        .select('id, name, abbreviation, topics, difficulty, committee_type, logo_url, session_code, position_paper_deadline, pp_submissions_enabled, session_id, awards_submitted_at, awards_approved_at, awards_return_note, chair_user_ids')
+        .select('id, name, abbreviation, topics, difficulty, committee_type, logo_url, session_code, position_paper_deadline, pp_submissions_enabled, pp_required, session_id, awards_submitted_at, awards_approved_at, awards_return_note, chair_user_ids')
         .eq('conference_id', conferenceId)
         .contains('chair_user_ids', [user.id])
         .order('name', { ascending: true }),
