@@ -1310,10 +1310,11 @@ export default function CommitteesPage() {
     list.push(inv);
     invitesByCommittee.set(inv.committee_id, list);
   }
-  // The server said open at load; a chair or invite added since closes it here
+  // The server said open at load; a chair account added since closes it here
   // at once, without waiting for the refetch. Never opens what the server gated.
+  // A pending invite never hides it: invited is not joined (owner, 28 Oct 2026).
   const chairCodeFor = (c: { id: string; chair_user_ids: string[] | null }) =>
-    (c.chair_user_ids?.length ?? 0) === 0 && !invitesByCommittee.has(c.id) ? openDaisCodes[c.id] ?? null : null;
+    (c.chair_user_ids?.length ?? 0) === 0 ? openDaisCodes[c.id] ?? null : null;
 
   let sortedCommittees = committees;
   if (sortKey) {
