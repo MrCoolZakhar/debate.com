@@ -21,7 +21,7 @@ import {
   type EmailTokenContext, type EmailTokenKey,
 } from '@/lib/emailTokens';
 import { ALWAYS_ON_EMAILS, ALWAYS_ON_LINE } from './alwaysOnEmails';
-import { EVENT_REGISTRY, queueEventEmail, getEventLabel, notifyIfNeeded, turnOnDefaultEmail, turnOffDefaultEmail, eventOnWhenMissing, newTemplateStartsEnabled, hasDraftContent, type EventDef, type EventKey } from '@/lib/emailEvents';
+import { EVENT_REGISTRY, joinFieldLabels, queueEventEmail, getEventLabel, notifyIfNeeded, turnOnDefaultEmail, turnOffDefaultEmail, eventOnWhenMissing, newTemplateStartsEnabled, hasDraftContent, type EventDef, type EventKey } from '@/lib/emailEvents';
 import { EASE, NEU, NEU_GRADIENTS, Emoji3D, NeuIconDisc, type NeuGradient } from '@/components/neu';
 import {
   SOFT, GREEN_INK, RED,
@@ -194,6 +194,9 @@ interface OutboxDetailRow {
   error: string | null;
   sent_at: string | null;
   recipient_application_id: string | null;
+  /** Our default copy went instead of the organiser's: their copy used these
+   *  fields, which this person did not have yet (owner, 6 Nov 2026). */
+  fallback_fields?: string[] | null;
 }
 
 /** One row of the whole outbox, summary columns only (no bodies). This is what
@@ -218,6 +221,9 @@ interface AutoSendGroup {
   delivered: number;
   failed: number;
   pending: number;
+  /** Rows that went out as our default copy (fallback_fields), and their fields. */
+  fallback: number;
+  fallbackFields: string[];
   rows: OutboxFeedRow[];
 }
 
@@ -1801,7 +1807,7 @@ function CommunicationsPageInner() {
     const supabase = getAuthedClient(accessToken);
     const { data } = await supabase
       .from('email_outbox')
-      .select('id, template_id, email_send_id, recipient_application_id, recipient_email, subject, status, error, sent_at, created_at, send_after')
+      .select('id, template_id, email_send_id, recipient_application_id, recipient_email, subject, status, error, sent_at, created_at, send_after, fallback_fields')
       .eq('conference_id', conferenceId)
       .order('created_at', { ascending: false })
       .limit(4000);
@@ -2038,11 +2044,15 @@ function CommunicationsPageInner() {
         g = {
           key, eventKey, day, latestAt: r.created_at,
           label: eventKey ? getEventLabel(eventKey) : (r.subject || '(No subject)'),
-          count: 0, delivered: 0, failed: 0, pending: 0, rows: [],
+          count: 0, delivered: 0, failed: 0, pending: 0, fallback: 0, fallbackFields: [], rows: [],
         };
         map.set(key, g);
       }
       g.count += 1;
+      if ((r.fallback_fields?.length ?? 0) > 0) {
+        g.fallback += 1;
+        for (const f of r.fallback_fields ?? []) if (!g.fallbackFields.includes(f)) g.fallbackFields.push(f);
+      }
       if (r.status === 'sent') g.delivered += 1;
       else if (r.status === 'failed') g.failed += 1;
       else g.pending += 1;
@@ -3138,7 +3148,7 @@ function CommunicationsPageInner() {
     const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase
       .from('email_outbox')
-      .select('id, recipient_email, status, error, sent_at, recipient_application_id')
+      .select('id, recipient_email, status, error, sent_at, recipient_application_id, fallback_fields')
       .eq('email_send_id', sendId);
     setOutboxBySend(prev => ({ ...prev, [sendId]: (data ?? []) as OutboxDetailRow[] }));
   }
@@ -3576,6 +3586,11 @@ function CommunicationsPageInner() {
           </ProfileLink>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
+          {(r.fallback_fields?.length ?? 0) > 0 && (
+            <span className="text-xs" style={{ color: RED, fontFamily: OUTFIT }}>
+              {`Default copy: no ${joinFieldLabels([...(r.fallback_fields ?? [])].sort())} yet`}
+            </span>
+          )}
           {r.status === 'failed' && r.error && (() => {
             const failure = friendlyDeliveryError(r.error, r.recipient_email);
             return (
@@ -4250,6 +4265,11 @@ function CommunicationsPageInner() {
                           {g.pending > 0 && <span style={{ color: GOLD_INK, fontWeight: 700 }}>{g.pending} sending</span>}
                           <span className="ml-auto flex-shrink-0">{formatDate(g.latestAt)}</span>
                         </div>
+                        {g.fallback > 0 && (
+                          <p className="mt-1.5 [overflow-wrap:anywhere]" style={{ fontSize: 12, color: RED, fontWeight: 700, fontFamily: OUTFIT, margin: '6px 0 0' }}>
+                            {`${g.fallback === 1 ? '1 person' : `${g.fallback} people`} got our default copy: your version uses ${joinFieldLabels([...g.fallbackFields].sort())}, which they do not have yet.`}
+                          </p>
+                        )}
                         <div className="mt-3 pt-3 flex flex-col gap-2" style={{ borderTop: '1px solid rgba(27,56,40,0.09)' }}>
                           <div>
                             <button

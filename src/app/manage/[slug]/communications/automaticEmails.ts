@@ -100,7 +100,7 @@ export const EVENT_COPY: Record<EventKey, { name: string; when: string }> = {
   payment_received: { name: 'Payment received', when: 'When someone who pays for themselves has paid' },
   fee_waived: { name: 'Fee waived', when: "When financial aid covers someone's whole fee" },
   pledge_received: { name: 'Delegation tickets paid', when: "When you confirm a delegation's tickets are paid" },
-  spot_received: { name: 'Spot covered', when: 'Coming soon. When a delegation ticket covers someone' },
+  spot_received: { name: 'Fee covered', when: 'When their delegation pays the ticket that covers them' },
   spot_lost: { name: 'Spot lost', when: 'Coming soon. When someone loses a covered place' },
   documents_published: { name: 'Study guide out', when: "When a committee's study guide is released" },
   document_shared: { name: 'New document', when: 'When you share a document and choose to email it' },
@@ -146,5 +146,7 @@ export const REMINDER_OF: Partial<Record<EventKey, EventKey>> = {
  *  not live yet is hidden, so no organiser switches on an email that cannot send. */
 export function automaticEventListed(key: string): boolean {
   if (key === 'delegation_allocations') return DELEGATION_ALLOCATION_EMAIL_DB;
+  // Retired 6 Nov 2026: a pledge or its removal sends nothing.
+  if (key === 'spot_lost') return false;
   return true;
 }

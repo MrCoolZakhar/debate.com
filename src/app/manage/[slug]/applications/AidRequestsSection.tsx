@@ -193,6 +193,7 @@ export default function AidRequestsSection({ conferenceId, conferenceSlug, aidBl
     // applied to spot pricing server-side at checkout — never auto-waive the
     // advisor's own role fee for those.
     const { amount: fee } = roleFeeFor(r.applications.role);
+    let waivedNow = false;
     if (!r.society_id && granted >= fee) {
       const { data: waiveData, error: waiveError } = await supabase
         .from('applications')
@@ -205,19 +206,29 @@ export default function AidRequestsSection({ conferenceId, conferenceSlug, aidBl
         await loadRequests();
         return;
       }
-      try {
-        const waiveResult = await queueEventEmail(supabase, conferenceId, 'fee_waived', [r.application_id]);
-        notifyIfNeeded(waiveResult, pushDraftNotice);
-      } catch {
-        notifyErr('Aid approved, but the fee-waived notification email could not be queued.', 'aid');
-      }
+      waivedNow = true;
     }
 
+    // One action, emails in order (owner, 6 Nov 2026): Aid Approved now, Fee
+    // Waived a day later through the database (dropped on the day if the
+    // waiver is gone; at once when Aid Approved is off).
     try {
       const result = await queueEventEmail(supabase, conferenceId, 'aid_approved', [r.application_id]);
       notifyIfNeeded(result, pushDraftNotice);
     } catch {
       notifyErr('Aid approved, but the notification email could not be queued.', 'aid');
+    }
+    if (waivedNow) {
+      try {
+        const { data: later, error: laterError } = await supabase.rpc('queue_email_later', {
+          p_application_id: r.application_id, p_event: 'fee_waived', p_after: 'aid_approved',
+        });
+        if (laterError || (later as { ok?: boolean } | null)?.ok !== true) {
+          notifyErr('Aid approved, but the fee waived email could not be queued.', 'aid');
+        }
+      } catch {
+        notifyErr('Aid approved, but the fee waived email could not be queued.', 'aid');
+      }
     }
 
     setBusyId(null);

@@ -291,20 +291,20 @@ export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
       { type: 'paragraph', content: "Hi {{delegate_name}},\n\nYou've been removed from {{delegation_name}}'s delegation for {{conference_name}}. Your own registration is unaffected. You are still applying or attending exactly as before.\n\nIf that doesn't look right, get in touch with your head delegate or the organizing team." },
     ],
   },
+  // Fee Covered (owner, 6 Nov 2026): the database sends it when the delegation
+  // actually pays the ticket that covers this member. A pledge sends nothing.
   spot_received: {
-    subject: "You've been given a paid spot: {{conference_name}}",
+    subject: 'Your fee has been covered: {{conference_name}}',
     blocks: [
-      { type: 'paragraph', variant: 'heading', content: 'Your spot is paid for' },
-      { type: 'paragraph', content: 'Hi {{delegate_name}},\n\nA paid delegation spot for {{conference_name}} has been transferred to you, so your registration is now covered.' },
-      // Who is covering it, and that nothing is owed, are the two facts this
-      // email exists to state. Both were inside the sentence.
+      { type: 'paragraph', variant: 'heading', content: 'Your fee has been covered' },
+      { type: 'paragraph', content: 'Hi {{delegate_name}},\n\nYour delegation has paid your ticket for {{conference_name}}, so there is nothing left for you to pay.' },
+      // Who paid it, and that nothing is owed, are the two facts this email exists to state.
       { type: 'facts', items: [
-        { label: 'Amount due', value: 'Nothing further to pay' },
-        { label: 'Covered by', value: '{{delegation_name}}' },
+        { label: 'Amount due', value: 'Nothing to pay' },
+        { label: 'Paid by', value: '{{delegation_name}}' },
         { label: 'Registered as', value: '{{role}}' },
       ] },
       VIEW_CONFERENCE_BUTTON,
-      { type: 'paragraph', variant: 'small', content: 'Delegations can move a paid spot between members. If yours is moved again, we will email you.' },
     ],
   },
   spot_lost: {

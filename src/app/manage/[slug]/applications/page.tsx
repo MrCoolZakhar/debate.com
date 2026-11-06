@@ -13,7 +13,7 @@ import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
 import { fetchAllRows, chunk } from '@/lib/fetchAllRows';
 import { useAuth } from '@/components/AuthProvider';
-import { queueEventEmail, notifyIfNeeded, turnOnDefaultEmail, heldUnresolvedMessage } from '@/lib/emailEvents';
+import { queueEventEmail, notifyIfNeeded, turnOnDefaultEmail, heldUnresolvedMessage, fallbackDefaultMessage } from '@/lib/emailEvents';
 import { queueAdHocEmail } from '@/lib/adHocEmail';
 import { readEmailAllowance, emailsShort, emailsShortSentence, isEmailAllowanceMessage } from '@/lib/emailAllowance';
 import GetMoreEmails from '../store/GetMoreEmails';
@@ -2631,24 +2631,16 @@ export default function ApplicationsPage() {
         try {
           const result = await queueEventEmail(supabase, conference.id, 'application_accepted', [appId]);
           notifyIfNeeded(result, pushDraftNotice);
+          const fellBack = fallbackDefaultMessage(result);
+          if (fellBack) notifyErr(fellBack, 'email-held');
           const held = heldUnresolvedMessage(result);
           if (held) notifyErr(held, 'email-held');
-          // Consolidation: application_accepted wins over payment_available.
-          // payment_available only sends alone for this person when acceptance
-          // actually resolved to nothing (off/unconfigured) for them.
           const acceptedIds = new Set(result.queuedApplicationIds ?? []);
-
-          const roleConfig = roleConfigs.find(rc => rc.role === prevRow.role);
-          if (roleConfig?.payment_timing === 'after_acceptance') {
-            const payResult = await queueEventEmail(supabase, conference.id, 'payment_available', [appId], undefined, { suppressIds: acceptedIds });
-            notifyIfNeeded(payResult, pushDraftNotice);
-          }
+          // The payment email is queued by the database for a day after acceptance (trigger zzz_queue_accept_followups).
 
           // F13: acceptance is when auto-cover runs, newly accepted pool members
-          // absorb any free delegation-purchased spots, oldest-first. The fill
-          // helper emails spot_received for whoever it covers, suppressing the
-          // just-accepted person's own id so they don't get that on top of
-          // application_accepted (rule one wins) if the same action covers them.
+          // absorb any free delegation-purchased spots, oldest-first. It only
+          // marks them paid: the database sends Fee Covered (spot_received).
           const pool = poolForRole(prevRow.role);
           if (prevRow.society_id && pool) {
             await fillFreeSpots(supabase, conference.id, prevRow.society_id, pool, { suppressIds: acceptedIds });
