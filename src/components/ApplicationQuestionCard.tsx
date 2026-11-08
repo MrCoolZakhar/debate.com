@@ -32,6 +32,7 @@ import { DatePicker } from '@/components/DatePicker';
 import { type CustomQuestion, type CustomAnswerValue, usableOptions } from '@/lib/customQuestions';
 import { wordCount, parseWordTarget } from '@/lib/applyQuestionPages';
 import QuestionDocLink from '@/components/QuestionDocLink';
+import FileUploadField, { type UploadContext } from '@/components/FileUploadField';
 
 // ── Contrast-checked tokens ────────────────────────────────────────────────
 // BOUNDARY: 3.21:1 on the #EDE7D8 page, 3.33:1 on the #F0EBDD card surface.
@@ -60,7 +61,7 @@ export function focusQuestion(questionId: string): void {
   const card = document.getElementById(questionCardId(questionId));
   if (!card) return;
   card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  const control = card.querySelector<HTMLElement>('textarea, input, [role="combobox"], [role="radio"], [role="checkbox"]');
+  const control = card.querySelector<HTMLElement>('textarea, input:not([type="file"]), [role="combobox"], [role="radio"], [role="checkbox"], button[data-upload]');
   (control ?? card).focus({ preventScroll: true });
 }
 
@@ -71,6 +72,7 @@ function errorMessage(q: CustomQuestion): string {
     case 'paragraph': return 'Please answer this one: a few sentences is enough.';
     case 'number': return 'Please enter a number.';
     case 'date': return 'Please pick a date.';
+    case 'file_upload': return 'Please upload a file.';
     case 'checkboxes': return 'Please pick at least one.';
     case 'multiple_choice':
     case 'dropdown': return 'Please choose one.';
@@ -581,8 +583,12 @@ function PortalSelect({
 
 // ── The card ───────────────────────────────────────────────────────────────
 export default function ApplicationQuestionCard({
-  question: q, index, value, onChange, hasError, solo = false, compact = false,
+  question: q, index, value, onChange, hasError, solo = false, compact = false, upload, onUploadingChange,
 }: {
+  /** Where a file_upload answer goes (the conference, and the user when signed in). */
+  upload?: UploadContext;
+  /** A file_upload card says when its upload starts and ends. */
+  onUploadingChange?: (busy: boolean) => void;
   question: CustomQuestion;
   /** 1-based position within the current page. */
   index: number;
@@ -691,6 +697,17 @@ export default function ApplicationQuestionCard({
           value={str}
           onChange={(iso) => onChange(iso)}
           placeholder={q.placeholder ?? 'Pick a date'}
+        />
+      )}
+      {q.type === 'file_upload' && (
+        <FileUploadField
+          questionId={q.id}
+          value={str}
+          onChange={(path) => onChange(path)}
+          upload={upload}
+          describedBy={describedBy}
+          invalid={hasError}
+          onUploadingChange={onUploadingChange}
         />
       )}
       {q.type === 'multiple_choice' && (

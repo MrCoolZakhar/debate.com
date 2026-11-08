@@ -1076,6 +1076,8 @@ function ConferenceApplyInner() {
   const expTrackRef = useRef<HTMLDivElement | null>(null);
   const [customAnswers, setCustomAnswers] = useState<CustomAnswers>({});
   const [customMissingIds, setCustomMissingIds] = useState<string[]>([]);
+  // File answers still uploading on the questions page: Next waits for them (8 Nov 2026).
+  const [uploadsBusy, setUploadsBusy] = useState(0);
   // Custom questions render as one Section per page within this step.
   const [questionPage, setQuestionPage] = useState(0);
   // ── Jumping to ONE question (Overview → that answer; failed submit → the
@@ -5315,6 +5317,8 @@ function ConferenceApplyInner() {
                 }
               }}
               missingIds={customMissingIds}
+              upload={conference ? { conferenceId: conference.id, userId: user?.id ?? null } : undefined}
+              onUploadingChange={(b) => setUploadsBusy(n => Math.max(0, n + (b ? 1 : -1)))}
             />
           </div>
         )}
@@ -5323,6 +5327,7 @@ function ConferenceApplyInner() {
             carry one — "Skip this section →  →" was the first render. */}
         <WizardFooter
           onNext={handleContinueQuestions}
+          disabled={uploadsBusy > 0}
           nextLabel={
             returnStepAfterJump !== null
               ? 'Back to overview'

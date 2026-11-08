@@ -25,6 +25,7 @@ import NotesPanel from '../applications/ApplicantDetail/NotesPanel';
 import { AnswersTab, type AnswerItem } from '../applications/ApplicantDetail/tabs';
 import { fmtDay } from '../applications/ApplicantDetail/kit';
 import { type TeamApplicant, teamRoleLabel, firstPickTitle } from './teamApplicantsApi';
+import { applicationFileHref } from '@/lib/applicationUploads';
 
 export type PopupStep = 'review' | 'access';
 
@@ -119,11 +120,14 @@ export default function TeamApplicantPopup({
     const questions = questionsOf(normalizeBlocks(customQuestions ?? []), { includeArchived: true });
     const answers = (a.custom_answers ?? {}) as Record<string, CustomAnswerValue>;
     const ids = new Set(questions.map(q => q.id));
-    const it: AnswerItem[] = questions.map(q => ({ key: q.id, label: q.label, answer: displayAnswer(q, answers[q.id]), archived: !!q.archived }));
+    const it: AnswerItem[] = questions.map(q => ({
+      key: q.id, label: q.label, answer: displayAnswer(q, answers[q.id]), archived: !!q.archived,
+      ...(q.type === 'file_upload' && typeof answers[q.id] === 'string' && answers[q.id] ? { href: applicationFileHref(a.application_id, q.id) } : {}),
+    }));
     const or: AnswerItem[] = Object.entries(answers).filter(([k]) => !ids.has(k))
       .map(([key, value]) => ({ key, label: key, answer: Array.isArray(value) ? value.join(', ') : String(value ?? '') }));
     return { items: it, orphans: or };
-  }, [customQuestions, a.custom_answers]);
+  }, [customQuestions, a.custom_answers, a.application_id]);
 
   const experience = useMemo(() => [...(a.experience_entries ?? [])].sort((x, y) => {
     if (!x.event_date && !y.event_date) return 0;

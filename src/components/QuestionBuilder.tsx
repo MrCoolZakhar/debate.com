@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   AlignLeft, Calendar, ChevronDown, ChevronDownCircle, CircleDot, Copy, GripHorizontal,
-  Hash, Heading, Info, MoreVertical, Plus, Rows3, SquareCheck, Text, Trash2, X,
+  Hash, Heading, Info, MoreVertical, Paperclip, Plus, Rows3, SquareCheck, Text, Trash2, X,
 } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { Pill, PillToggle } from '@/app/account/accountUi';
@@ -15,12 +15,14 @@ import {
   isChoiceType, QUESTION_TYPE_LABELS, usableOptions,
 } from '@/lib/customQuestions';
 
-/** The seven types in the three groups Google uses: free text, choices, and
- *  the constrained scalars. Order within the menu only, never data. */
+/** The types in the three groups Google uses (free text, choices, the
+ *  constrained scalars), then a file upload (8 Nov 2026). Order within the menu
+ *  only, never data. */
 const TYPE_GROUPS: QuestionType[][] = [
   ['short_text', 'paragraph'],
   ['multiple_choice', 'checkboxes', 'dropdown'],
   ['number', 'date'],
+  ['file_upload'],
 ];
 
 const TYPE_ICONS: Record<QuestionType, typeof AlignLeft> = {
@@ -31,6 +33,7 @@ const TYPE_ICONS: Record<QuestionType, typeof AlignLeft> = {
   dropdown: ChevronDownCircle,
   number: Hash,
   date: Calendar,
+  file_upload: Paperclip,
 };
 
 /** Types that can carry a placeholder. A date picker and the choice types have
@@ -45,6 +48,7 @@ const PREVIEW_TEXT: Partial<Record<QuestionType, string>> = {
   paragraph: 'Long answer text',
   number: 'Number',
   date: 'Date',
+  file_upload: 'File upload',
 };
 
 const softInput: React.CSSProperties = {
@@ -195,6 +199,11 @@ function AnswerPreview({ block, onPatch }: {
         <span className="text-sm" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
           {PREVIEW_TEXT[block.type]}
         </span>
+        {block.type === 'file_upload' && (
+          <p className="text-xs mt-1" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif", margin: '4px 0 0' }}>
+            Applicants upload one PDF, Word, JPG or PNG file, up to 10 MB.
+          </p>
+        )}
       </div>
     );
   }

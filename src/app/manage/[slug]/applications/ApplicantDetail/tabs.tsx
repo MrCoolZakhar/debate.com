@@ -6,7 +6,7 @@
 
 import Link from 'next/link';
 import {
-  ArrowRight, ArrowUpRight, Award, BadgeCheck, Cake, CircleDashed, FileQuestion, Flag,
+  ArrowRight, ArrowUpRight, Award, BadgeCheck, Cake, CircleDashed, ExternalLink, FileQuestion, Flag,
   GraduationCap, Landmark, ListOrdered, MessageSquareText, Receipt, Trophy, UserRoundCheck, Wallet,
 } from 'lucide-react';
 import { DelegationIdentity } from '../DelegationAvatar';
@@ -595,7 +595,8 @@ function Linkified({ text }: { text: string }) {
   );
 }
 
-export interface AnswerItem { key: string; label: string; answer: string; archived?: boolean }
+/** href: a file answer (file_upload), opened through /files/application/... */
+export interface AnswerItem { key: string; label: string; answer: string; archived?: boolean; href?: string }
 
 function AnswerBlock({ item, index }: { item: AnswerItem; index: number }) {
   const long = item.answer.length > 220 || item.answer.includes('\n');
@@ -606,7 +607,16 @@ function AnswerBlock({ item, index }: { item: AnswerItem; index: number }) {
         <span>{item.label?.trim() || 'Untitled question'}</span>
         {item.archived && <span style={{ fontSize: 11.5, fontWeight: 600, color: C.inkSoft }}>(no longer on the form)</span>}
       </p>
-      {item.answer ? (
+      {item.answer && item.href ? (
+        <p className="mt-1 flex items-center flex-wrap gap-x-2 gap-y-0.5" style={{ fontFamily: OUTFIT, fontSize: 15, lineHeight: 1.5 }}>
+          <a href={item.href} target="_blank" rel="noopener noreferrer" style={{ fontWeight: 700, color: C.ink, textDecoration: 'underline', textUnderlineOffset: 3, overflowWrap: 'anywhere' }}>
+            {item.answer}
+          </a>
+          <span className="inline-flex items-center gap-1" style={{ fontSize: 12.5, color: C.inkSoft }}>
+            Open <ExternalLink size={13} strokeWidth={1.75} aria-hidden />
+          </span>
+        </p>
+      ) : item.answer ? (
         <p
           className="mt-1 whitespace-pre-wrap"
           style={{

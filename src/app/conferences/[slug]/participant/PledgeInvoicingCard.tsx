@@ -33,12 +33,16 @@ export interface PledgeInvoicingCardProps {
   financialAidEnabled: boolean;
   aidBlocks: FormBlock[];
   aidIntro: string | null;
+  /** For file_upload aid questions (the upload path starts with it). */
+  conferenceId?: string;
 }
 
 export default function PledgeInvoicingCard({
-  applicationId, societyId, currency, financialAidEnabled, aidBlocks, aidIntro,
+  applicationId, societyId, currency, financialAidEnabled, aidBlocks, aidIntro, conferenceId,
 }: PledgeInvoicingCardProps) {
   const { session } = useAuth();
+  // File answers still uploading: Submit waits for them (8 Nov 2026).
+  const [uploadsBusy, setUploadsBusy] = useState(0);
 
   // ── Delegation financial aid request (pool, separate lifecycle, same
   // financial_aid_requests table but scoped by society_id instead of applicant) ──
@@ -179,6 +183,8 @@ export default function PledgeInvoicingCard({
                   }
                 }}
                 missingIds={aidMissingIds}
+                upload={conferenceId ? { conferenceId, userId: session?.user?.id ?? null } : undefined}
+                onUploadingChange={(b) => setUploadsBusy(n => Math.max(0, n + (b ? 1 : -1)))}
               />
             )}
 
@@ -227,7 +233,7 @@ export default function PledgeInvoicingCard({
               </button>
               <button
                 onClick={handleSubmitDelegationAid}
-                disabled={aidSubmitting}
+                disabled={aidSubmitting || uploadsBusy > 0}
                 className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none transition-colors"
                 style={{
                   backgroundColor: aidSubmitting ? '#DDD4C0' : 'var(--gv-main)',

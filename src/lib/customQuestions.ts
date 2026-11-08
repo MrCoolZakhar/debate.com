@@ -1,3 +1,5 @@
+import { uploadedFileName } from '@/lib/applicationUploads';
+
 // Shared custom-question types for conference applications (and, next, the
 // financial aid form). One question shape, one set of helpers, used by the
 // organizer builder, the applicant renderer, and the read-only display.
@@ -9,8 +11,9 @@ export type QuestionType =
   | 'multiple_choice'
   | 'checkboxes'
   | 'number'
-  | 'date';
-// TODO: file-upload type needs storage plumbing (bucket + upload UI) — not in this pass.
+  | 'date'
+  // One uploaded file; the answer is its object path (src/lib/applicationUploads.ts).
+  | 'file_upload';
 
 export interface CustomQuestion {
   id: string;
@@ -42,7 +45,7 @@ export type CustomAnswerValue = string | string[];
 export type CustomAnswers = Record<string, CustomAnswerValue>;
 
 const QUESTION_TYPES: readonly QuestionType[] = [
-  'short_text', 'paragraph', 'dropdown', 'multiple_choice', 'checkboxes', 'number', 'date',
+  'short_text', 'paragraph', 'dropdown', 'multiple_choice', 'checkboxes', 'number', 'date', 'file_upload',
 ];
 
 /** Legacy 'text'/'textarea' → new types; unknown types fall back to short_text. */
@@ -213,6 +216,8 @@ export function validateAnswers(
 export function displayAnswer(q: CustomQuestion, v: CustomAnswerValue | undefined): string {
   if (v === undefined) return '';
   if (Array.isArray(v)) return v.join(', ');
+  // A file answer is its object path: show the file's name, never the path.
+  if (q.type === 'file_upload') return v ? uploadedFileName(v) : '';
   return v;
 }
 
@@ -224,4 +229,5 @@ export const QUESTION_TYPE_LABELS: Record<QuestionType, string> = {
   checkboxes: 'Checkboxes',
   number: 'Number',
   date: 'Date',
+  file_upload: 'File upload',
 };

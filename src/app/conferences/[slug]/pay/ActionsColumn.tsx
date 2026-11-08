@@ -209,6 +209,7 @@ export default function ActionsColumn({
             financialAidEnabled={conference.financial_aid_enabled}
             aidBlocks={aidBlocks}
             aidIntro={conference.aid_intro}
+            conferenceId={conference.id}
           />
         </PayActionPopup>
       )}

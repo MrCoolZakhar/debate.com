@@ -31,6 +31,7 @@
 // can be run from a script.
 
 import { answerIsEmpty, normalizeBlocks, questionsOf, type CustomAnswerValue } from '@/lib/customQuestions';
+import { applicationFileHref } from '@/lib/applicationUploads';
 
 export interface ExportExperienceEntry {
   conference_name: string;
@@ -42,6 +43,8 @@ export interface ExportExperienceEntry {
 }
 
 export interface ExportApplication {
+  /** The application id, for file_upload answer links. */
+  id?: string;
   role: string;
   status: string;
   payment_status: string | null;
@@ -87,6 +90,8 @@ export interface SheetData {
   rows: Cell[][];
   /** Columns holding Excel date serials, shown as YYYY-MM-DD. */
   dateCols: number[];
+  /** Columns holding file links (file_upload answers), written as hyperlinks. */
+  linkCols?: number[];
 }
 
 function answerText(v: CustomAnswerValue | undefined): string {
@@ -133,7 +138,8 @@ function widths(rows: Cell[][]): { wch: number }[] {
   });
 }
 
-interface Col { id: string; label: string; role: string | null; source: 'app' | 'aid' }
+/** file: a file_upload question; its cell is the /files link, not the stored path. */
+interface Col { id: string; label: string; role: string | null; source: 'app' | 'aid'; file?: boolean }
 
 /** Gives every column a distinct header without ever merging two columns. */
 function uniqueLabels(cols: Col[], roleName: (role: string) => string): string[] {
@@ -203,7 +209,7 @@ export function buildApplicationsSheets(opts: {
   const roleOrder = [...ROLE_ORDER, ...[...rolesPresent].filter((r) => !ROLE_ORDER.includes(r))];
   const cols: Col[] = [];
   const colIds = new Set<string>();
-  const archivedFor = new Map<string, { label: string; role: string }>();
+  const archivedFor = new Map<string, { label: string; role: string; file: boolean }>();
   for (const role of roleOrder) {
     const blocks = normalizeBlocks(roleConfigs.find((rc) => rc.role === role)?.custom_questions ?? []);
     const current = questionsOf(blocks).filter((q) => q.label.trim());
@@ -212,12 +218,12 @@ export function buildApplicationsSheets(opts: {
       for (const q of current) {
         if (colIds.has(q.id)) continue;
         colIds.add(q.id);
-        cols.push({ id: q.id, label: q.label.trim(), role, source: 'app' });
+        cols.push({ id: q.id, label: q.label.trim(), role, source: 'app', file: q.type === 'file_upload' });
       }
     }
     for (const q of questionsOf(blocks, { includeArchived: true })) {
       if (!currentIds.has(q.id) && q.label.trim() && !archivedFor.has(q.id)) {
-        archivedFor.set(q.id, { label: q.label.trim(), role });
+        archivedFor.set(q.id, { label: q.label.trim(), role, file: q.type === 'file_upload' });
       }
     }
   }
@@ -227,7 +233,7 @@ export function buildApplicationsSheets(opts: {
       if (colIds.has(id) || !answerText(v)) continue;
       colIds.add(id);
       const arch = archivedFor.get(id);
-      cols.push({ id, label: arch?.label ?? 'Removed question', role: arch?.role ?? null, source: 'app' });
+      cols.push({ id, label: arch?.label ?? 'Removed question', role: arch?.role ?? null, source: 'app', file: arch?.file });
     }
   }
 
@@ -237,17 +243,18 @@ export function buildApplicationsSheets(opts: {
   const aidIds = new Set<string>();
   for (const q of aidCurrent) {
     aidIds.add(q.id);
-    cols.push({ id: q.id, label: `Financial aid: ${q.label.trim()}`, role: null, source: 'aid' });
+    cols.push({ id: q.id, label: `Financial aid: ${q.label.trim()}`, role: null, source: 'aid', file: q.type === 'file_upload' });
   }
   const aidArchived = new Map<string, string>();
+  const aidArchivedFile = new Set<string>();
   for (const q of questionsOf(aidBlocks, { includeArchived: true })) {
-    if (!aidIds.has(q.id) && q.label.trim()) aidArchived.set(q.id, q.label.trim());
+    if (!aidIds.has(q.id) && q.label.trim()) { aidArchived.set(q.id, q.label.trim()); if (q.type === 'file_upload') aidArchivedFile.add(q.id); }
   }
   for (const a of applications) {
     for (const [id, v] of Object.entries(a.aid_custom_answers ?? {})) {
       if (aidIds.has(id) || !answerText(v)) continue;
       aidIds.add(id);
-      cols.push({ id, label: `Financial aid: ${aidArchived.get(id) ?? 'Removed question'}`, role: null, source: 'aid' });
+      cols.push({ id, label: `Financial aid: ${aidArchived.get(id) ?? 'Removed question'}`, role: null, source: 'aid', file: aidArchivedFile.has(id) });
     }
   }
 
@@ -272,13 +279,19 @@ export function buildApplicationsSheets(opts: {
       a.aid_requested_amount ?? '',
       a.aid_statement ?? '',
       experienceText(a.experience_entries),
-      ...cols.map((c) => answerText((c.source === 'aid' ? a.aid_custom_answers : a.custom_answers)?.[c.id])),
+      ...cols.map((c) => {
+        const text = answerText((c.source === 'aid' ? a.aid_custom_answers : a.custom_answers)?.[c.id]);
+        // A file answer: the link that opens it (signs on open), never the stored path.
+        return c.file && text && a.id ? `https://gavelling.com${applicationFileHref(a.id, c.id)}` : text;
+      }),
     ];
   };
+  const firstQuestionCol = fullHeader.length - questionLabels.length;
   const full: SheetData = {
     name: FULL_SHEET,
     rows: [fullHeader, ...applications.map(fullRow)],
     dateCols: [2],
+    linkCols: cols.map((c, i) => (c.file ? firstQuestionCol + i : -1)).filter((i) => i >= 0),
   };
   return { overview, full };
 }
@@ -293,6 +306,12 @@ export function sheetsToWorkbook(XLSX: typeof import('xlsx'), sheets: SheetData[
       for (let r = 1; r < sheet.rows.length; r++) {
         const cell = ws[XLSX.utils.encode_cell({ r, c })];
         if (cell && cell.t === 'n') cell.z = 'yyyy-mm-dd';
+      }
+    }
+    for (const c of sheet.linkCols ?? []) {
+      for (let r = 1; r < sheet.rows.length; r++) {
+        const cell = ws[XLSX.utils.encode_cell({ r, c })];
+        if (cell && cell.t === 's' && typeof cell.v === 'string' && cell.v.startsWith('https://')) cell.l = { Target: cell.v };
       }
     }
     XLSX.utils.book_append_sheet(wb, ws, sheet.name.slice(0, 31));

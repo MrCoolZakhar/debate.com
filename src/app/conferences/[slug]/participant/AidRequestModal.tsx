@@ -32,9 +32,11 @@ export interface AidRequestModalProps {
 }
 
 export default function AidRequestModal({
-  applicationId, aidBlocks, aidIntro, currency, societyId, open, onClose, onSubmitted,
+  applicationId, conferenceId, aidBlocks, aidIntro, currency, societyId, open, onClose, onSubmitted,
 }: AidRequestModalProps) {
   const { session } = useAuth();
+  // File answers still uploading: Next and Submit wait for them (8 Nov 2026).
+  const [uploadsBusy, setUploadsBusy] = useState(0);
   const [requestedAmount, setRequestedAmount] = useState('');
   const [customAnswers, setCustomAnswers] = useState<CustomAnswers>({});
   const [missingIds, setMissingIds] = useState<string[]>([]);
@@ -155,6 +157,8 @@ export default function AidRequestModal({
               }
             }}
             missingIds={missingIds}
+            upload={{ conferenceId, userId: session?.user?.id ?? null }}
+            onUploadingChange={(b) => setUploadsBusy(n => Math.max(0, n + (b ? 1 : -1)))}
           />
         )}
 
@@ -205,7 +209,7 @@ export default function AidRequestModal({
           </button>
           <button
             onClick={isLast ? handleSubmit : handleNext}
-            disabled={submitting}
+            disabled={submitting || uploadsBusy > 0}
             className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none transition-colors"
             style={{
               backgroundColor: submitting ? '#DDD4C0' : 'var(--gv-main)',

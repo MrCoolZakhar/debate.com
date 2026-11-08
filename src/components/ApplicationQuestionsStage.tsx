@@ -20,6 +20,7 @@ import {
 } from '@/lib/customQuestions';
 import { stagePhoto } from '@/lib/applyQuestionPages';
 import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
+import type { UploadContext } from '@/components/FileUploadField';
 
 const HELP_INK = NEU.inkSoft;
 
@@ -215,8 +216,12 @@ export function MissingSummary({ count, onJump }: { count: number; onJump: () =>
 
 // ── The stage body ─────────────────────────────────────────────────────────
 export default function ApplicationQuestionsStage({
-  blocks, answers, onChange, missingIds = [], hideBlockId, solo = false,
+  blocks, answers, onChange, missingIds = [], hideBlockId, solo = false, upload, onUploadingChange,
 }: {
+  /** Where file_upload answers go (passed to every card). */
+  upload?: UploadContext;
+  /** A file upload started or ended on this page. */
+  onUploadingChange?: (busy: boolean) => void;
   blocks: FormBlock[];
   answers: CustomAnswers;
   onChange: (next: CustomAnswers) => void;
@@ -270,6 +275,8 @@ export default function ApplicationQuestionsStage({
         hasError={missingIds.includes(block.id)}
         solo={solo}
         compact={compact}
+        upload={upload}
+        onUploadingChange={onUploadingChange}
       />
     );
   };

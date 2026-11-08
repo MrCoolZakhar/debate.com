@@ -14,6 +14,7 @@ import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
 import { fetchAllRows, chunk } from '@/lib/fetchAllRows';
 import { useAuth } from '@/components/AuthProvider';
 import { queueEventEmail, notifyIfNeeded, turnOnDefaultEmail, heldUnresolvedMessage, fallbackDefaultMessage } from '@/lib/emailEvents';
+import { applicationFileHref } from '@/lib/applicationUploads';
 import { queueAdHocEmail } from '@/lib/adHocEmail';
 import { readEmailAllowance, emailsShort, emailsShortSentence, isEmailAllowanceMessage } from '@/lib/emailAllowance';
 import GetMoreEmails from '../store/GetMoreEmails';
@@ -5429,7 +5430,10 @@ export default function ApplicationsPage() {
             showsPreferences={showsPreferences}
             feeCharged={roleChargesFee(app.role)}
             experienceLevel={expLabel}
-            answerItems={questions.map(q => ({ key: q.id, label: q.label, answer: displayAnswer(q, answers[q.id]), archived: !!q.archived }))}
+            answerItems={questions.map(q => ({
+              key: q.id, label: q.label, answer: displayAnswer(q, answers[q.id]), archived: !!q.archived,
+              ...(q.type === 'file_upload' && typeof answers[q.id] === 'string' && answers[q.id] ? { href: applicationFileHref(app.id, q.id) } : {}),
+            }))}
             orphanAnswers={orphanedAnswers.map(([key, value]) => ({ key, label: key, answer: Array.isArray(value) ? value.join(', ') : String(value ?? '') }))}
             listedExperience={munExperience}
             showListedExperience={isMunExperienceRole}

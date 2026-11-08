@@ -4,6 +4,7 @@ import { type FormBlock, type CustomQuestion, type CustomAnswers, type CustomAns
 import { DatePicker } from '@/components/DatePicker';
 import GSelect from '@/components/GSelect';
 import QuestionDocLink from '@/components/QuestionDocLink';
+import FileUploadField, { type UploadContext } from '@/components/FileUploadField';
 import { NEU } from '@/components/neu';
 
 // Correctness floor shared by every input this component renders:
@@ -34,11 +35,15 @@ function errorStyle(hasError: boolean): React.CSSProperties {
  *  header/divider, Title blocks as static content, Question blocks as the
  *  actual inputs. One page for now — pagination on Section breaks comes in a
  *  later pass (see splitIntoSections in lib/customQuestions). */
-export default function CustomQuestionsField({ blocks, answers, onChange, missingIds = [] }: {
+export default function CustomQuestionsField({ blocks, answers, onChange, missingIds = [], upload, onUploadingChange }: {
   blocks: FormBlock[];
   answers: CustomAnswers;
   onChange: (next: CustomAnswers) => void;
   missingIds?: string[];
+  /** Where file_upload answers go (the conference, and the user when signed in). */
+  upload?: UploadContext;
+  /** A file upload started or ended in this form. */
+  onUploadingChange?: (busy: boolean) => void;
 }) {
   function setAnswer(id: string, value: CustomAnswerValue) {
     onChange({ ...answers, [id]: value });
@@ -139,6 +144,17 @@ export default function CustomQuestionsField({ blocks, answers, onChange, missin
                 style={{ ...inputStyle, ...errorStyle(hasError) }}
                 onFocus={(e) => { e.currentTarget.style.borderColor = INPUT_BORDER_FOCUS; }}
                 onBlur={(e) => { e.currentTarget.style.borderColor = hasError ? INPUT_BORDER_ERROR : INPUT_BORDER; }}
+              />
+            )}
+
+            {q.type === 'file_upload' && (
+              <FileUploadField
+                questionId={q.id}
+                value={typeof value === 'string' ? value : ''}
+                onChange={(path) => setAnswer(q.id, path)}
+                upload={upload}
+                invalid={hasError}
+                onUploadingChange={onUploadingChange}
               />
             )}
 
