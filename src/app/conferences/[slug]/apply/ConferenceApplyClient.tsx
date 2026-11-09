@@ -1108,11 +1108,17 @@ function ConferenceApplyInner() {
   const [poolCovers, setPoolCovers] = useState(false);
   // The conference's Store pays applicants' credit (conference_credit_sponsored).
   const [creditSponsored, setCreditSponsored] = useState(false);
+  // False until conference_credit_sponsored has answered (or failed): Submit
+  // never opens the credits pop-up on a guess.
+  const [creditSponsoredLoaded, setCreditSponsoredLoaded] = useState(false);
   const sponsoredConfId = conference?.id ?? null;
   useEffect(() => {
     if (!sponsoredConfId) return;
     let cancelled = false;
-    void fetchConferenceCreditSponsored(sponsoredConfId).then(v => { if (!cancelled) setCreditSponsored(v); });
+    void fetchConferenceCreditSponsored(sponsoredConfId)
+      .then(v => { if (!cancelled) setCreditSponsored(v); })
+      .catch(() => { /* not sponsored as far as the page knows; the database decides at submit */ })
+      .finally(() => { if (!cancelled) setCreditSponsoredLoaded(true); });
     return () => { cancelled = true; };
   }, [sponsoredConfId]);
   const [recapOpen, setRecapOpen] = useState(false);
@@ -1288,10 +1294,11 @@ function ConferenceApplyInner() {
   const hasUnlimited = financeProfile.has_active_subscription;
   const previewSocietyId = !isIndependent && !isObserver ? selectedSocietyId : null;
   const poolCovered = !!previewSocietyId && poolCovers;
-  // Gavelling-sponsored conferences: consume_credit_for_application always
-  // succeeds without consuming a credit (reason:'sponsored') — never gate or
-  // charge here, regardless of the applicant's own balance.
-  const creditsSponsored = conference?.credits_sponsored ?? false;
+  // The conference covers the credit when it is Gavelling-sponsored, free credits only, or has
+  // Store sponsorship credits left (conference_credit_sponsored); the database decides what is actually taken.
+  const creditsSponsored = (conference?.credits_sponsored ?? false) || creditSponsored;
+  // Only the column means Gavelling itself pays: the copy that says so reads this, never the wider rule.
+  const gavellingSponsored = conference?.credits_sponsored ?? false;
   const canApply = creditsSponsored || isExemptRole || hasUnlimited || poolCovered || (creditBalance ?? 0) >= 1;
 
   // Redesign: the flow no longer opens on a price/credit ('role') step. It
@@ -2976,6 +2983,9 @@ function ConferenceApplyInner() {
     // A row this tab already filed is past the credit gate (the credit was
     // taken at insert), so a resume never reopens the pop-up.
     if (!isEditMode && !previewing && !!user && !canApply && !submittedAppIdRef.current) {
+      // Whether the conference covers the credit is not known yet: never open
+      // the credits pop-up on a guess. Nothing is written; the next press decides.
+      if (!creditSponsoredLoaded) { setSubmitting(false); return; }
       setSubmitError('');
       setSubmitting(false);
       goBuyCredits({ autoSubmit: true });
@@ -5502,17 +5512,21 @@ function ConferenceApplyInner() {
                 decided the same way costLabel above decides it — never a
                 balance, plan, pool or Unlimited state, all of which need an
                 account and would just be a guess here. */}
-            {creditsSponsored ? (
+            {gavellingSponsored ? (
               <p className="text-xs mt-3" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
                 Credits for this conference have been sponsored by Gavelling, so applying is free.
               </p>
-            ) : isExemptRole ? null : (
+            ) : isExemptRole ? null : creditsSponsored ? (
+              <p className="text-xs mt-3" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+                {creditSponsoredLine(conference?.acronym || conference?.full_name || 'The conference')}
+              </p>
+            ) : (
               <p className="text-xs mt-3" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
                 Submitting this application uses 1 Gavelling credit.
               </p>
             )}
           </div>
-        ) : creditsSponsored ? (
+        ) : gavellingSponsored ? (
           <div
             className="relative rounded-2xl p-5 mb-4 flex items-center gap-3"
             style={{ background: 'linear-gradient(135deg, color-mix(in srgb, var(--gv-accent) 28%, transparent), color-mix(in srgb, var(--gv-main) 6%, transparent))', border: '1.5px solid color-mix(in srgb, var(--gv-accent) 55%, transparent)' }}
