@@ -50,6 +50,8 @@ import { cents, readDashboard, type FinancialsDashboard } from '../financialsApi
 import ApplicationFeeSection from '../ApplicationFeeSection';
 import AddonsSection from '../AddonsSection';
 import StripeState from './StripeState';
+import PaymentWays from './PaymentWays';
+import { readPaymentWays } from './paymentWaysApi';
 import {
   METHOD_NAME, currentMethod, setPaymentSetup, setUpLater, uploadPaymentQr, sessionSet, welcomeMarkerKey,
   connectStart, readCurrencyState, setConferenceCurrency, type BankDetails, type CurrencyState, type MethodKey,
@@ -200,6 +202,27 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
   const busyRef = useRef(false);
   const qrInput = useRef<HTMLInputElement | null>(null);
 
+  // Several payment methods (prompt 31). After the main method saves: 'ask'
+  // ("Are you using multiple payment methods?"), then 'list' (PaymentWays).
+  // The Payment Method pop-up opens straight on the list when extra methods exist.
+  const isFree = conference.payment_method === 'manual' && conference.external_payment_note === 'This conference is free.';
+  const multiAllowed = !conference.platform_collects && !isFree;
+  const [multi, setMulti] = useState<null | 'ask' | 'list'>(null);
+  const [listFromAsk, setListFromAsk] = useState(false);
+  // Set when the main method is edited from the list: saving it returns there.
+  const backToList = useRef(false);
+  const [checkingWays, setCheckingWays] = useState(mode === 'payment' && startStep === undefined && multiAllowed);
+  useEffect(() => {
+    if (!checkingWays) return;
+    let alive = true;
+    void readPaymentWays(conference.id).then(r => {
+      if (!alive) return;
+      if (!('error' in r) && r.ways.length > 0) { setListFromAsk(false); setMulti('list'); }
+      setCheckingWays(false);
+    });
+    return () => { alive = false; };
+  }, [checkingWays, conference.id]);
+
   const countries = useMemo(() => [...UN_COUNTRIES].sort((a, b2) => a.name.localeCompare(b2.name)), []);
   const countryName = countries.find(c => c.code === country)?.name ?? country;
   const cardOk = isStripeCountrySupported(country);
@@ -274,6 +297,12 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
 
   /** After a manual method saved: on to the fee (welcome) or done (payment). */
   const afterSave = () => {
+    if (backToList.current) { backToList.current = false; notifyOk('Payment method saved', 'financials'); setMulti('list'); return; }
+    if (multiAllowed) { setMulti('ask'); return; }
+    finishMain();
+  };
+  /** What saving the main method did before several methods existed. */
+  const finishMain = () => {
     if (mode === 'welcome') setStep(6);
     else { notifyOk('Payment method saved', 'financials'); onClose(); }
   };
@@ -461,7 +490,7 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
       );
       primary = {
         label: hasStripeAccount ? (current === 'card' ? (mode === 'welcome' ? 'Continue' : 'Done') : 'Use card payments') : 'Continue to Stripe',
-        onClick: () => { if (mode === 'payment' && current === 'card' && hasStripeAccount) { onClose(); return; } void continueSetup(); },
+        onClick: () => { if (mode === 'payment' && current === 'card' && hasStripeAccount) { if (multiAllowed || backToList.current) afterSave(); else onClose(); return; } void continueSetup(); },
       };
     } else if (method === 'link') {
       title = 'Payment Link';
@@ -561,7 +590,7 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
   }
 
   const showBack = step > 1 && step < 8;
-  const fitted = intro || step === 8 || !!conference.platform_collects;
+  const fitted = intro || step === 8 || !!conference.platform_collects || multi === 'ask';
 
   return (
     <>
@@ -593,6 +622,28 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
                 <button type="button" className="gv-st-btn gv-st-forest" style={{ marginTop: 6 }} onClick={() => setIntro(false)} autoFocus>Let&apos;s get started</button>
               </div>
             </div>
+          ) : checkingWays ? (
+            <div className="gv-fd-ph" style={{ height: 160, borderRadius: 16 }} aria-busy="true" />
+          ) : multi === 'ask' ? (
+            <>
+              <div style={{ paddingRight: 40 }}>
+                <h2 className="gv-fd-pop-title" style={{ paddingRight: 0 }}>Are you using multiple payment methods?</h2>
+              </div>
+              <p className="gv-fd-note" style={{ fontSize: 15 }}>For example, one for Indian delegates and one for international delegates. Payers pick theirs when they pay.</p>
+              <div className="gv-fd-footbar">
+                <button type="button" className="gv-st-btn gv-st-outline" onClick={() => { setMulti(null); finishMain(); }}>No</button>
+                <button type="button" className="gv-st-btn gv-st-forest" onClick={() => { setListFromAsk(true); setMulti('list'); }} autoFocus>Yes</button>
+              </div>
+            </>
+          ) : multi === 'list' ? (
+            <PaymentWays
+              conference={conference}
+              mainKind={currentMethod(conference)}
+              readOnly={readOnly}
+              onBack={listFromAsk ? () => setMulti('ask') : undefined}
+              onEditMain={() => { backToList.current = true; setMulti(null); setErr(''); setStep(4); }}
+              onDone={() => { setMulti(null); if (mode === 'welcome') setStep(6); else onClose(); }}
+            />
           ) : step === 8 ? (
             <div className="gv-pf-done">
               <span className="gv-pf-win" aria-hidden>

@@ -262,6 +262,9 @@ function ProofStep({ p, readOnly, onDone, onSkip }: { p: ProofThing; readOnly: b
             Sent {formatDate(p.uploaded_at)}
             {p.replaced_count > 0 ? ` · Replaced ${p.replaced_count} time${p.replaced_count === 1 ? '' : 's'}` : ''}
           </p>
+          {p.payment_way_name && (
+            <p className="gv-fd-note" style={{ marginTop: 4, fontWeight: 700, overflowWrap: 'anywhere' }}>Paid through: {p.payment_way_name}</p>
+          )}
           <div className="gv-fd-rows" style={{ marginTop: 14 }}>
             {(p.items ?? []).map(i => (
               <Row key={i.invoice_id} label={i.label} sub={i.for_name ? `For ${i.for_name}` : undefined} amount={cents(i.amount_cents, p.currency)} />

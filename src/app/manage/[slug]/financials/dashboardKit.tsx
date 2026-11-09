@@ -278,7 +278,11 @@ export function paymentMethodWords(s: S): { fact: string; sub: string } {
   return { fact: 'Payment link', sub: s.has_external_url ? 'Payers pay on your page, then upload a proof' : 'Add your payment link to start taking payments' };
 }
 
-export function PaymentMethodCard({ s, onOpen, readOnly, onHow }: { s: S; onOpen: () => void; readOnly: boolean; onHow?: () => void }) {
+export function PaymentMethodCard({ s, onOpen, readOnly, onHow, extraMethods = 0 }: {
+  s: S; onOpen: () => void; readOnly: boolean; onHow?: () => void;
+  /** Extra payment methods beside the main one (prompt 31); the card then shows the count. */
+  extraMethods?: number;
+}) {
   let fact = 'Not set up yet';
   let sub: string | undefined = 'Set this up when you want to take payments';
   if (s.platform_collects) {
@@ -291,6 +295,10 @@ export function PaymentMethodCard({ s, onOpen, readOnly, onHow }: { s: S; onOpen
     const m = paymentMethodWords(s);
     fact = m.fact;
     sub = m.sub;
+  }
+  if (extraMethods > 0 && !s.platform_collects) {
+    fact = `${extraMethods + 1} payment methods`;
+    sub = 'Payers pick theirs when they pay';
   }
   return (
     <SettingCard

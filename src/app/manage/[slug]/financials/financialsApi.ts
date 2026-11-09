@@ -76,6 +76,8 @@ export interface ProofThing {
   items: ProofItem[];
   /** Prompt 114: an in-person payment finished without a file. */
   no_proof?: boolean;
+  /** Prompt 31: the payment method it was paid through, null when the conference has one method. */
+  payment_way_name?: string | null;
 }
 
 export type TodoKind = 'refund_request' | 'refund_not_received' | 'stripe_refund_to_match' | 'dispute' | 'refund_due';

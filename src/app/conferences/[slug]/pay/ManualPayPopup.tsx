@@ -32,7 +32,7 @@ import { PurchaseShell, PURCHASE_CSS } from '@/components/purchase/purchaseKit';
 import { notifyOk } from '@/lib/appNotify';
 import { DANGER, DEEP_GOLD, INK_SOFT } from './payKit';
 import { money, type PayOverview } from './payApi';
-import { attachProof, finishWithoutProof, qrLink, readPaymentPhone, replaceProof, resubmitProof } from './manualApi';
+import { attachProof, finishWithoutProof, qrLink, readPaymentPhone, readWayPhone, replaceProof, resubmitProof } from './manualApi';
 import ProofDrop from './ProofDrop';
 
 export type ManualMode = 'pay' | 'upload' | 'replace' | 'resubmit';
@@ -102,8 +102,11 @@ function InPersonBlock({ instructions, total, heading }: { instructions: string 
   );
 }
 
-export default function ManualPayPopup({ conference, batchId, totalCents, currency, mode, tabOpened, reason, onStartNew, onClose, onDone, askWithoutProof, noProofYet }: {
+export default function ManualPayPopup({ conference, batchId, totalCents, currency, mode, tabOpened, reason, onStartNew, onClose, onDone, askWithoutProof, noProofYet, wayId }: {
+  /** For an extra payment method (prompt 31) this is the conference with that method's details laid over it. */
   conference: PayOverview['conference'];
+  /** The extra payment method paid through (prompt 31); its phone number is read from it. */
+  wayId?: string | null;
   batchId: string;
   totalCents: number;
   currency: string;
@@ -143,7 +146,7 @@ export default function ManualPayPopup({ conference, batchId, totalCents, curren
     void qrLink(conference.qr_path).then(u => { if (alive) setQr(u); });
     return () => { alive = false; };
   }, [kind, conference.qr_path, showWay]);
-  const phone = usePaymentPhone(kind === 'phone' && showWay ? conference.id : null);
+  const phone = usePaymentPhone(kind === 'phone' && showWay ? conference.id : null, wayId);
 
   const finish = async () => {
     if (busyRef.current || !path) return;
@@ -385,14 +388,14 @@ function BankRows({ bank, total }: { bank: PayOverview['conference']['bank']; to
 }
 
 /** The number people pay to, read once the pop-up opens (undefined = still reading). */
-function usePaymentPhone(conferenceId: string | null): string | null | undefined {
+function usePaymentPhone(conferenceId: string | null, wayId?: string | null): string | null | undefined {
   const [phone, setPhone] = useState<string | null | undefined>(undefined);
   useEffect(() => {
     if (!conferenceId) return;
     let alive = true;
-    void readPaymentPhone(conferenceId).then(p => { if (alive) setPhone(p); });
+    void (wayId ? readWayPhone(wayId) : readPaymentPhone(conferenceId)).then(p => { if (alive) setPhone(p); });
     return () => { alive = false; };
-  }, [conferenceId]);
+  }, [conferenceId, wayId]);
   return phone;
 }
 
@@ -408,8 +411,10 @@ function PhoneRows({ phone, total }: { phone: string | null | undefined; total: 
 }
 
 /** A started payment's QR ("Payment QR") or bank details ("Bank Details"): small, as tall as its content. */
-export function PaymentWayPopup({ conference, kind, totalCents, currency, onClose }: {
+export function PaymentWayPopup({ conference, kind, totalCents, currency, onClose, wayId }: {
   conference: PayOverview['conference'];
+  /** The extra payment method (prompt 31) whose details these are. */
+  wayId?: string | null;
   kind: 'qr' | 'bank' | 'in_person' | 'phone';
   totalCents: number;
   currency: string;
@@ -425,7 +430,7 @@ export function PaymentWayPopup({ conference, kind, totalCents, currency, onClos
     void qrLink(conference.qr_path).then(u => { if (alive) setQr(u); });
     return () => { alive = false; };
   }, [kind, conference.qr_path]);
-  const phone = usePaymentPhone(kind === 'phone' ? conference.id : null);
+  const phone = usePaymentPhone(kind === 'phone' ? conference.id : null, wayId);
   const title = kind === 'qr' ? 'Payment QR' : kind === 'in_person' ? 'Payment Instructions' : kind === 'phone' ? 'Phone Number' : 'Bank Details';
 
   return (

@@ -34,6 +34,7 @@ import {
 import AidCard from './AidCard';
 import MoneyPopup from './MoneyPopup';
 import PaymentFlow, { HowPaymentsWork } from './onboarding/PaymentFlow';
+import { readPaymentWays } from './onboarding/paymentWaysApi';
 import { isStripeCountrySupported } from '@/lib/payments';
 import { FeePopup, AddonsPopup, VouchersPopup } from './onboarding/SettingsPopups';
 import { sessionDel, sessionGet, sessionSet, welcomeMarkerKey, welcomeSeenKey } from './onboarding/paymentApi';
@@ -98,6 +99,14 @@ export default function FinancialsDashboardPage() {
   }, [conferenceId, attempt]);
 
   const reload = useCallback(() => setAttempt(a => a + 1), []);
+  // Extra payment methods beside the main one (prompt 31): the Payment Method card shows the count.
+  const [extraMethods, setExtraMethods] = useState(0);
+  useEffect(() => {
+    if (!conference?.id) return;
+    let alive = true;
+    void readPaymentWays(conference.id).then(r => { if (alive && !('error' in r)) setExtraMethods(r.ways.length); });
+    return () => { alive = false; };
+  }, [conference?.id, attempt]);
   /** After anything in the payment flow or a settings pop-up was saved. */
   const afterChange = useCallback(() => { refreshConferenceQuiet(); reload(); }, [refreshConferenceQuiet, reload]);
 
@@ -297,7 +306,7 @@ export default function FinancialsDashboardPage() {
           </div>
 
           <div className="gv-fd-four">
-            <PaymentMethodCard s={data.settings} onOpen={() => setFlow(needsSetup ? { mode: 'welcome' } : { mode: 'payment' })} readOnly={financialsReadOnly} onHow={() => setHowOpen(true)} />
+            <PaymentMethodCard s={data.settings} onOpen={() => setFlow(needsSetup ? { mode: 'welcome' } : { mode: 'payment' })} readOnly={financialsReadOnly} onHow={() => setHowOpen(true)} extraMethods={extraMethods} />
             <RegistrationFeeCard s={data.settings} onOpen={() => setSetting('fee')} readOnly={financialsReadOnly} formatCents={cents} />
             <AddonsCard s={data.settings} onOpen={() => setSetting('addons')} readOnly={financialsReadOnly} />
             <VouchersCard s={data.settings} onOpen={() => setSetting('vouchers')} readOnly={financialsReadOnly} />

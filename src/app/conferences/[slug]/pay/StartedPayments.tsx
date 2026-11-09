@@ -19,7 +19,7 @@ import { DANGER, DEEP_GOLD, INK_SOFT } from './payKit';
 import { money, shortDate } from './payApi';
 import { timeLeft, type StartedPayment } from './manualApi';
 
-export default function StartedPayments({ payments, highlight, wayLabel, onUpload, onOpenWay, onCancel, onViewProof, onReplace, onRestart, inPerson, onFinishWithout }: {
+export default function StartedPayments({ payments, highlight, wayLabel, onUpload, onOpenWay, onCancel, onViewProof, onReplace, onRestart, inPerson, onFinishWithout, wayFor }: {
   payments: StartedPayment[];
   highlight: string | null;
   /** "Open payment page", "Open payment QR" or "View bank details"; null hides the button. */
@@ -36,6 +36,9 @@ export default function StartedPayments({ payments, highlight, wayLabel, onUploa
   inPerson?: boolean;
   /** Opens the proof pop-up with "Finish without proof?" asking. */
   onFinishWithout?: (p: StartedPayment) => void;
+  /** Several payment methods (prompt 31): a payment started through an extra
+   *  method gets that method's button and in-person rule instead. */
+  wayFor?: (p: StartedPayment) => { label: string | null; inPerson: boolean } | null;
 }) {
   const now = useNow(60_000);
   const refs = useRef(new Map<string, HTMLDivElement>());
@@ -54,6 +57,9 @@ export default function StartedPayments({ payments, highlight, wayLabel, onUploa
         {payments.map(p => {
           const left = p.status === 'awaiting_proof' ? timeLeft(p.expires_at, now) : null;
           const lit = highlight === p.batch_id;
+          const own = wayFor?.(p) ?? null;
+          const label = own ? own.label : wayLabel;
+          const inPersonHere = own ? own.inPerson : !!inPerson;
           return (
             <div
               key={p.batch_id}
@@ -67,14 +73,19 @@ export default function StartedPayments({ payments, highlight, wayLabel, onUploa
                     <p className="gv-pay-state" style={{ margin: 0, color: DEEP_GOLD }}><Clock size={15} strokeWidth={2.4} aria-hidden /> {left ?? 'Waiting for your proof'}</p>
                   )}
                   {p.status === 'pending' && (
-                    <p className="gv-pay-state" style={{ margin: 0, color: DEEP_GOLD }}><Hourglass size={15} strokeWidth={2.4} aria-hidden /> {inPerson && !p.proof_path ? 'Waiting for the organizers to confirm. No proof uploaded' : 'Waiting for the organizer to review'}</p>
+                    <p className="gv-pay-state" style={{ margin: 0, color: DEEP_GOLD }}><Hourglass size={15} strokeWidth={2.4} aria-hidden /> {inPersonHere && !p.proof_path ? 'Waiting for the organizers to confirm. No proof uploaded' : 'Waiting for the organizer to review'}</p>
                   )}
                   {p.status === 'rejected' && (
                     <p className="gv-pay-state" style={{ margin: 0, color: DANGER }}><XCircle size={15} strokeWidth={2.4} aria-hidden /> Proof not accepted</p>
                   )}
                   <p style={{ margin: '4px 0 0', fontSize: 13, color: INK_SOFT }}>Started {shortDate(p.created_at)}</p>
                 </div>
-                <span style={{ fontSize: 18, fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{money(p.total_cents, p.currency)}</span>
+                <span style={{ textAlign: 'right' }}>
+                  <span style={{ display: 'block', fontSize: 18, fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{money(p.total_cents, p.currency)}</span>
+                  {p.payment_way_name && (
+                    <span style={{ display: 'block', marginTop: 2, fontSize: 12.5, color: INK_SOFT, overflowWrap: 'anywhere' }}>Paying through {p.payment_way_name}</span>
+                  )}
+                </span>
               </div>
 
               <div className="gv-pay-rows" style={{ marginTop: 12, background: '#FAF8F3' }}>
@@ -91,8 +102,8 @@ export default function StartedPayments({ payments, highlight, wayLabel, onUploa
                 {p.status === 'awaiting_proof' && (
                   <>
                     <button type="button" className="gv-pay-btn gv-pay-forest" onClick={() => onUpload(p)}>Upload proof</button>
-                    {wayLabel && <button type="button" className="gv-pay-btn gv-pay-outline" onClick={() => onOpenWay(p)}>{wayLabel}</button>}
-                    {inPerson && onFinishWithout && <button type="button" className="gv-pay-btn gv-pay-outline" onClick={() => onFinishWithout(p)}>Finish without proof</button>}
+                    {label && <button type="button" className="gv-pay-btn gv-pay-outline" onClick={() => onOpenWay(p)}>{label}</button>}
+                    {inPersonHere && onFinishWithout && <button type="button" className="gv-pay-btn gv-pay-outline" onClick={() => onFinishWithout(p)}>Finish without proof</button>}
                     <button type="button" className="gv-pay-btn" style={{ background: DANGER, color: '#FFFFFF' }}
                       onClick={() => onCancel(p)}>Cancel</button>
                   </>
