@@ -773,7 +773,7 @@ const SETUP_DONE_NOTICE: Record<string, { title: string; body: string }> = {
   },
   committees: {
     title: 'Committees are ready',
-    body: 'You have enough seats for the head count you are expecting.',
+    body: 'Delegates can now pick from your committees when they apply.',
   },
   chairs: {
     title: 'Team positions are set',
@@ -1300,12 +1300,10 @@ export default function DashboardPage() {
     0,
   );
   const expectedDelegates = conference.expected_delegates ?? 0;
-  // Seats only need to cover 70% of the expected head count before we stop
-  // flagging it: expected_delegates is an early guess, committees get added
-  // over months, and demanding 100% meant this row nagged conferences that were
-  // in perfectly good shape. The same 0.70 lives in conference_setup_status()
-  // (which drives the nudge emails) and in admin/ConferencesTab isShortOnSeats
-  // — change all three together or they will contradict each other again.
+  // The 0.70 now only shapes a hint: the committees row's line here, the todo
+  // text of conference_setup_status() and admin/ConferencesTab isShortOnSeats
+  // (change all three together). It no longer decides whether the step is done
+  // (owner, 8 Nov 2026: one committee is enough).
   const SEAT_COVERAGE = 0.70;
   const requiredSeats = expectedDelegates > 0 ? Math.ceil(expectedDelegates * SEAT_COVERAGE) : 0;
   const seatShortfall = expectedDelegates > 0 ? Math.max(0, requiredSeats - seatCapacity) : 0;
@@ -1388,14 +1386,13 @@ export default function DashboardPage() {
       emoji: 'Classical building',
       gradient: NEU_GRADIENTS.forest,
       title: 'Add committees',
+      // The step is done at one committee (server rule); the allocation gap is a hint only.
       sub: committeeCount === 0
         ? 'Create committees and their topics.'
         : seatShortfall > 0
-          // Only ever shown below 70% coverage, so the gap quoted is the gap to
-          // that bar, not to the full expected head count.
-          ? `Only ${seatCapacity} seats for ${expectedDelegates} expected delegates. ${seatShortfall} more covers most of them.`
-          : `${committeeCount} committee${committeeCount === 1 ? '' : 's'}, ${seatCapacity} seats.`,
-      done: committeeCount > 0 && seatShortfall === 0,
+          ? `${committeeCount} committee${committeeCount === 1 ? '' : 's'}, ${seatCapacity} allocations. About ${seatShortfall} more would cover most of the ${expectedDelegates} delegates you expect.`
+          : `${committeeCount} committee${committeeCount === 1 ? '' : 's'}, ${seatCapacity} allocations.`,
+      done: committeeCount > 0,
       onClick: () => router.push(`/manage/${slug}/committees`),
     },
     {
