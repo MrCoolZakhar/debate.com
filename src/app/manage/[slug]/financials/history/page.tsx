@@ -39,7 +39,12 @@ interface PaymentRow {
   reason: string | null;
   created_at: string;
   invoice: PaymentInvoice | PaymentInvoice[] | null;
+  /** The manual payment's batch: 'pending' = proof uploaded, waiting for review
+   *  (what Things to Do lists); 'awaiting_proof' = started, no receipt yet. */
+  batch: PaymentBatch | PaymentBatch[] | null;
 }
+
+interface PaymentBatch { status: string; expires_at: string | null; proof_path: string | null; created_at: string }
 
 const first = <T,>(v: T | T[] | null | undefined): T | null => (Array.isArray(v) ? (v[0] ?? null) : (v ?? null));
 
@@ -91,6 +96,7 @@ export default function FinancialsHistoryPage() {
         .from('payments')
         .select(`
           id, invoice_id, amount_cents, currency, type, method, status, note, reason, created_at,
+          batch:payment_batches!payments_batch_id_fkey (status, expires_at, proof_path, created_at),
           invoice:invoices!inner (
             id, kind, label, conference_id,
             application:applications!invoices_application_id_fkey (role, invited_name, profiles (display_name))
@@ -162,7 +168,15 @@ export default function FinancialsHistoryPage() {
             const amt = signed(p.amount_cents, p.currency);
             // Money that has not landed (a proof waiting, a failed card) is never shown as money in or out.
             const amtColor = settled ? amt.color : NEU.inkSoft;
-            const whatLabel = what === 'proof' && !settled ? 'Proof sent' : WHAT_LABEL[what];
+            // A manual payment started at checkout with no receipt uploaded yet
+            // (batch 'awaiting_proof') is not a proof to review: Things to Do
+            // lists only 'pending' batches. It closes on its own at expires_at.
+            const batch = first(p.batch);
+            const noReceipt = what === 'proof' && !settled && batch?.status === 'awaiting_proof' && !batch.proof_path;
+            const whatLabel = noReceipt ? 'Started checkout' : what === 'proof' && !settled ? 'Proof sent' : WHAT_LABEL[what];
+            const expiryLine = noReceipt
+              ? `Started on ${formatRowDate(batch?.created_at ?? p.created_at)}.${batch?.expires_at ? ` Closes on ${formatRowDate(batch.expires_at)} if no receipt is uploaded.` : ''}`
+              : undefined;
             return (
               <div
                 key={p.id}
@@ -181,11 +195,16 @@ export default function FinancialsHistoryPage() {
                   </span>
                 </span>
 
-                <span style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: NEU.ink, minWidth: 110 }}>
+                <span title={expiryLine} style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: NEU.ink, minWidth: 110 }}>
                   {whatLabel}
                   {!settled && (
                     <span style={{ display: 'block', fontSize: 11.5, fontWeight: 600, color: NEU.inkSoft }}>
-                      {p.status === 'pending' ? 'Waiting' : p.status.charAt(0).toUpperCase() + p.status.slice(1)}
+                      {noReceipt ? 'No receipt yet' : p.status === 'pending' ? 'Waiting' : p.status.charAt(0).toUpperCase() + p.status.slice(1)}
+                    </span>
+                  )}
+                  {expiryLine && (
+                    <span style={{ display: 'block', fontSize: 11, fontWeight: 500, color: NEU.inkSoft, maxWidth: 260 }}>
+                      {expiryLine}
                     </span>
                   )}
                 </span>
