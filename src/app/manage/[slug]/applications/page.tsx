@@ -2652,9 +2652,18 @@ export default function ApplicationsPage() {
 
         // Auto-cover may have promoted OTHER members to paid, reconcile.
         scheduleReconcile();
+        // Several roles per person (9 Nov 2026): the database may have deleted
+        // or withdrawn this person's other applications under review.
+        void loadApplications({ silent: true });
       })
-      .catch(() => {
+      .catch((err: unknown) => {
         restoreRow(prevRow);
+        // The database refuses a role this person cannot combine with one they hold.
+        const hint = (err as { hint?: unknown } | null)?.hint;
+        if (hint === 'holds_role') {
+          notifyErr(friendlyError(err, 'Could not accept the application. The change was reverted. Please try again.'));
+          return;
+        }
         setActionError('Could not accept the application. The change was reverted. Please try again.');
       });
   }
@@ -5421,6 +5430,20 @@ export default function ApplicationsPage() {
                   </span>
                 )}
                 <ApplicationSourceChip source={app.traffic_source} detail={app.traffic_detail} invited={!!app.invited_email} importedBy={leaderImports.get(app.id) ?? null} />
+                {/* Several roles per person (9 Nov 2026): the same person's other live applications here, from the rows already loaded. */}
+                {app.user_id && applications
+                  .filter(o => o.id !== app.id && o.user_id === app.user_id && ['submitted', 'accepted', 'assigned', 'checked-in'].includes(o.status))
+                  .map(o => (
+                    <button
+                      key={o.id}
+                      type="button"
+                      onClick={() => setReviewId(o.id)}
+                      className="focus:outline-none"
+                      style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 12, fontFamily: OUTFIT, fontWeight: 700, color: '#EED98A', textDecoration: 'underline', textUnderlineOffset: 3 }}
+                    >
+                      Also applied as {roleLabel(o.role)}
+                    </button>
+                  ))}
               </>
             )}
             actions={decisionControls(true)}

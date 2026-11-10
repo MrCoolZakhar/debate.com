@@ -75,6 +75,7 @@ import {
   Info, Coins, Pencil, Ban, Cake, CircleAlert,
 } from 'lucide-react';
 import { replaceUrlInPlace } from '@/lib/replaceUrlInPlace';
+import { CHARGED_ROLES, HOLDING_STATUSES, rolesCombine, roleWithArticle } from '@/lib/roleCombos';
 import { ListingApplyLine, ListingClaimNote, useListingClaim, useListingForApply, useListingCommitteePrefill } from './ListingApplyLine';
 
 /** Destructive-action red, matching /drafts/[token] exactly. */
@@ -874,7 +875,8 @@ function ConferenceApplyInner() {
   const [committees, setCommittees] = useState<CommitteeOption[]>([]);
   const [societies, setSocieties] = useState<Society[]>([]);
   const [existingApp, setExistingApp] = useState<ExistingApp | null | undefined>(undefined);
-  const [otherRoleApp, setOtherRoleApp] = useState<OtherActiveApp | null>(null);
+  // This person's other live applications at this conference (several roles per person, 9 Nov 2026).
+  const [otherRoleApps, setOtherRoleApps] = useState<OtherActiveApp[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   // Whether the signed-in user may preview this conference at all — set once
@@ -1299,7 +1301,14 @@ function ConferenceApplyInner() {
   const creditsSponsored = (conference?.credits_sponsored ?? false) || creditSponsored;
   // Only the column means Gavelling itself pays: the copy that says so reads this, never the wider rule.
   const gavellingSponsored = conference?.credits_sponsored ?? false;
-  const canApply = creditsSponsored || isExemptRole || hasUnlimited || poolCovered || (creditBalance ?? 0) >= 1;
+  // Several roles per person (9 Nov 2026): one credit per person per conference,
+  // so a live application in another charged role means this one takes none.
+  const creditTakenElsewhere = !isExemptRole && otherRoleApps.some(o => CHARGED_ROLES.has(o.role));
+  // A role they already HOLD that cannot combine with this one: the wall below.
+  const heldBlocking = otherRoleApps.find(o => HOLDING_STATUSES.has(o.status) && !rolesCombine(o.role, role)) ?? null;
+  // Another application under review: no wall, one notice at the top of the form.
+  const otherUnderReview = otherRoleApps.find(o => o.status === 'submitted') ?? null;
+  const canApply = creditsSponsored || isExemptRole || hasUnlimited || poolCovered || creditTakenElsewhere || (creditBalance ?? 0) >= 1;
 
   // Redesign: the flow no longer opens on a price/credit ('role') step. It
   // starts straight at the Independent-vs-Delegation ('society') choice; any
@@ -2238,8 +2247,7 @@ function ConferenceApplyInner() {
         .eq('conference_id', confData.id)
         .eq('user_id', user!.id)
         .neq('role', role)
-        .in('status', ['submitted', 'accepted', 'assigned', 'checked-in'])
-        .limit(1) : Promise.resolve({ data: null }),
+        .in('status', ['submitted', 'accepted', 'assigned', 'checked-in']) : Promise.resolve({ data: null }),
       authed ? supabase
         .from('profiles')
         .select('nationality, date_of_birth, is_ambassador, unlimited_conferences_remaining, mun_experience_level')
@@ -2271,13 +2279,13 @@ function ConferenceApplyInner() {
     const committeesData = (committeesRes.data as CommitteeOption[]) ?? [];
     const societiesData = (societiesRes.data as Society[]) ?? [];
     const appData = (appRes.data as ExistingApp) ?? null;
-    const otherAppData = ((otherAppRes.data as OtherActiveApp[]) ?? [])[0] ?? null;
+    const otherAppData = (otherAppRes.data as OtherActiveApp[] | null) ?? [];
 
     setRoleConfig((roleRes.data as RoleConfig) ?? null);
     setCommittees(committeesData);
     setSocieties(societiesData);
     setExistingApp(appData);
-    setOtherRoleApp(otherAppData);
+    setOtherRoleApps(otherAppData);
     const prof = profileRes.data as { nationality: string | null; date_of_birth: string | null; is_ambassador: boolean; unlimited_conferences_remaining: number; mun_experience_level: string | null } | null;
     const sub = subRes.data as { plan: string; status: string; current_period_end: string | null } | null;
     setMyNationality(prof?.nationality ?? null);
@@ -5376,6 +5384,8 @@ function ConferenceApplyInner() {
       ? 'Included with Gavelling Unlimited ∞'
       : creditSponsored
       ? creditSponsoredLine(conference?.acronym || conference?.full_name || 'The conference')
+      : creditTakenElsewhere
+      ? 'No credit needed: your other application here already used one.'
       : poolCovered
       ? 'Your delegation covers your credit'
       : 'This application uses 1 Gavelling credit';
@@ -5563,7 +5573,7 @@ function ConferenceApplyInner() {
                 </div>
               </div>
 
-              {!isExemptRole && !hasUnlimited && !poolCovered && !creditSponsored && (
+              {!isExemptRole && !hasUnlimited && !poolCovered && !creditSponsored && !creditTakenElsewhere && (
                 <p className="text-xs" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
                   You have {creditBalanceLoading || creditBalance === null ? '…' : creditBalance} credit{creditBalance === 1 ? '' : 's'}.
                 </p>
@@ -5605,7 +5615,7 @@ function ConferenceApplyInner() {
         {/* Need more credits? Two quiet buttons that open the global purchase
             pop-ups (prices live there). Only when this role actually spends
             credits: never for sponsored / exempt / Unlimited / edit resubmits. */}
-        {!creditsSponsored && !isExemptRole && !hasUnlimited && !isEditMode && !guestGate && (
+        {!creditsSponsored && !isExemptRole && !hasUnlimited && !creditTakenElsewhere && !isEditMode && !guestGate && (
           <div className="mb-4">
             <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.2em', color: NEU.inkSoft, marginBottom: 10 }}>
               NEED MORE CREDITS?
@@ -5732,12 +5742,11 @@ function ConferenceApplyInner() {
   // nothing to gain by pretending it is stable. Never read in preview.
   const guestDraftRow = !previewing ? loadGuestDraft(slug, role) : null;
 
-  // One-active-application-per-conference: an active application under a
-  // different role blocks a fresh apply here, same wall treatment as
-  // "already applied". Checked BEFORE the same-role wall (and skipped
-  // entirely by canEdit) so editing/resubmitting one's own rejected or
-  // submitted application is never blocked by a second, unrelated role.
-  if (!canEdit && !previewing && otherRoleApp) {
+  // Several roles per person (9 Nov 2026): only a role they already HOLD that
+  // cannot combine with this one blocks a fresh apply here. Checked BEFORE the
+  // same-role wall (and skipped entirely by canEdit) so editing/resubmitting
+  // one's own application is never blocked by another role.
+  if (!canEdit && !previewing && heldBlocking) {
     return (
       <div className="min-h-screen flex flex-col" style={{ ...themeCssVars(activeTheme), backgroundColor: 'var(--gv-bg)' }}>
         <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
@@ -5745,18 +5754,17 @@ function ConferenceApplyInner() {
         <div className="relative z-10 flex-1 flex items-center justify-center px-6 py-20">
           <div className="rounded-2xl p-10 text-center max-w-sm w-full" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)' }}>
             <h2 className="font-semibold text-lg mb-2" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif" }}>
-              You&apos;ve Already Applied
+              You Already Hold a Role Here
             </h2>
             <p className="text-sm mb-6" style={{ color: 'var(--gv-muted)', fontFamily: "var(--font-brand), sans-serif" }}>
-              You already have an active {otherRoleApp.role.replace(/-/g, ' ')} application to this conference. Withdraw it or contact the organizing team if you need to change roles.
-              {guestDraftRow && ' The answers you just filled in are still saved in this browser, so if you withdraw it you can come back and finish.'}
+              You are {roleWithArticle(heldBlocking.role)} at {conference?.acronym || conference?.full_name || 'this conference'}. Each person holds one role at a conference, so contact the organisers if you want to switch.
             </p>
             <Link
-              href={`/conferences/${slug}`}
+              href={`/conferences/${slug}/role/${encodeURIComponent(heldBlocking.role)}`}
               className="inline-block rounded-xl py-2.5 px-6 font-bold text-sm focus:outline-none"
               style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', textDecoration: 'none', fontFamily: "var(--font-brand), sans-serif" }}
             >
-              View conference
+              Go to my role page
             </Link>
           </div>
         </div>
@@ -6290,6 +6298,15 @@ function ConferenceApplyInner() {
 
         <ListingApplyLine listing={applyListing} />
         <ListingClaimNote note={listingClaim.note} />
+        {/* Several roles per person (9 Nov 2026): another application under review never blocks this one. */}
+        {!isEditMode && !heldBlocking && otherUnderReview && (
+          <ListingClaimNote note={{
+            good: true,
+            text: rolesCombine(otherUnderReview.role, role)
+              ? `You already applied as ${roleWithArticle(otherUnderReview.role)}. You can hold both roles.`
+              : `You already applied as ${roleWithArticle(otherUnderReview.role)}. You can apply for this role too. If you are accepted for one, your other application closes.`,
+          }} />
+        )}
 
         {/* Another tab is writing this same draft. Non-blocking on purpose —
             they can finish and submit from here, they just aren't being

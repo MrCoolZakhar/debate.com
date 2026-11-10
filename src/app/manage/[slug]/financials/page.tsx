@@ -29,7 +29,7 @@ import {
 } from './financialsApi';
 import {
   DASH_CSS, DashCard, DashboardPlaceholder, FitBig, GENERATE_INVOICES_READY, READ_ONLY_LINE, moneyFontSize,
-  PaymentMethodCard, RegistrationFeeCard, AddonsCard, VouchersCard, IconDisc, TINT_GOLD, TINT_GREEN,
+  PaymentMethodCard, RegistrationFeeCard, AddonsCard, VouchersCard, SpecialFeesCard, IconDisc, TINT_GOLD, TINT_GREEN,
 } from './dashboardKit';
 import AidCard from './AidCard';
 import MoneyPopup from './MoneyPopup';
@@ -40,6 +40,7 @@ import { FeePopup, AddonsPopup, VouchersPopup } from './onboarding/SettingsPopup
 import { sessionDel, sessionGet, sessionSet, welcomeMarkerKey, welcomeSeenKey } from './onboarding/paymentApi';
 import ThingsToDoPopup from './ThingsToDoPopup';
 import { replaceUrlInPlace } from '@/lib/replaceUrlInPlace';
+import SpecialFeesPopup, { readSpecialFees } from './SpecialFeesPopup';
 
 const TODO_WORDS: Record<'setup' | 'proof' | TodoKind, [string, string]> = {
   proof: ['proof to review', 'proofs to review'],
@@ -70,7 +71,17 @@ export default function FinancialsDashboardPage() {
   // The payment flow (welcome or Payment method) and the three settings pop-ups.
   // start 6 resumes the welcome flow after Stripe (the registration fee step); start 2 is the currency step (Settings, Payments).
   const [flow, setFlow] = useState<{ mode: 'welcome' | 'payment'; start?: 2 | 6 } | null>(null);
-  const [setting, setSetting] = useState<'fee' | 'addons' | 'vouchers' | null>(null);
+  const [setting, setSetting] = useState<'fee' | 'addons' | 'vouchers' | 'special' | null>(null);
+  // Special fees (9 Nov 2026): the card's count, read on load and after its pop-up closes.
+  const [specialCount, setSpecialCount] = useState<number | null>(null);
+  const [specialVersion, setSpecialVersion] = useState(0);
+  const specialConfId = conference?.id ?? null;
+  useEffect(() => {
+    if (!specialConfId) return;
+    let cancelled = false;
+    void readSpecialFees(specialConfId).then(r => { if (!cancelled) setSpecialCount(r.ok ? r.fees.length : 0); });
+    return () => { cancelled = true; };
+  }, [specialConfId, specialVersion]);
   // "How it works" (prompt 136): only the How Payments Work step, in its own pop-up.
   const [howOpen, setHowOpen] = useState(false);
   const openParamDone = useRef(false);
@@ -305,11 +316,12 @@ export default function FinancialsDashboardPage() {
             <AidCard conferenceId={conference.id} slug={slug} enabled={!!conference.financial_aid_enabled} />
           </div>
 
-          <div className="gv-fd-four">
+          <div className="gv-fd-four gv-fd-five">
             <PaymentMethodCard s={data.settings} onOpen={() => setFlow(needsSetup ? { mode: 'welcome' } : { mode: 'payment' })} readOnly={financialsReadOnly} onHow={() => setHowOpen(true)} extraMethods={extraMethods} />
             <RegistrationFeeCard s={data.settings} onOpen={() => setSetting('fee')} readOnly={financialsReadOnly} formatCents={cents} />
             <AddonsCard s={data.settings} onOpen={() => setSetting('addons')} readOnly={financialsReadOnly} />
             <VouchersCard s={data.settings} onOpen={() => setSetting('vouchers')} readOnly={financialsReadOnly} />
+            <SpecialFeesCard count={specialCount} onOpen={() => setSetting('special')} readOnly={financialsReadOnly} />
           </div>
         </div>
       )}
@@ -339,6 +351,7 @@ export default function FinancialsDashboardPage() {
       {setting === 'fee' && <FeePopup conference={conference} readOnly={financialsReadOnly} onClose={() => { setSetting(null); afterChange(); }} />}
       {setting === 'addons' && <AddonsPopup conference={conference} readOnly={financialsReadOnly} onClose={() => { setSetting(null); afterChange(); }} />}
       {setting === 'vouchers' && <VouchersPopup conference={conference} readOnly={financialsReadOnly} onClose={() => { setSetting(null); afterChange(); }} />}
+      {setting === 'special' && <SpecialFeesPopup conference={conference} readOnly={financialsReadOnly} onClose={() => { setSetting(null); setSpecialVersion(v => v + 1); afterChange(); }} />}
       {popup === 'todo' && (
         <ThingsToDoPopup
           conferenceId={conference.id}

@@ -93,6 +93,10 @@ export default function PayPage() {
   const [hold, setHold] = useState<{ id: string; totalCents: number; currency: string } | null>(null);
   // Manual conferences (prompt 96): started payments, the pay / proof pop-up, locks, refunds.
   const [started, setStarted] = useState<StartedInfo | null>(null);
+  // Several roles per person (9 Nov 2026): role fees of applications that wait
+  // while another of this person's applications here is under review
+  // (application_payment_on_hold). Not tickable until one role is accepted.
+  const [heldInvoiceIds, setHeldInvoiceIds] = useState<Set<string>>(() => new Set());
   const [manualPop, setManualPop] = useState<{
     batchId: string; totalCents: number; currency: string; mode: ManualMode; tabOpened?: boolean;
     /** 'resubmit': the organizer's reason, and the payment's items for "Start a new payment". */
@@ -178,6 +182,22 @@ export default function PayPage() {
         if (cancelled) return;
         setOverview(o);
         setStarted(st);
+        // One check per application under review; then one read of their role-fee invoices.
+        {
+          const review = apps.filter(a => a.status === 'submitted');
+          const heldApps: string[] = [];
+          for (const a of review) {
+            const { data: onHold } = await supabase.rpc('application_payment_on_hold', { p_app: a.id });
+            if (onHold === true) heldApps.push(a.id);
+          }
+          let held = new Set<string>();
+          if (heldApps.length > 0) {
+            const { data: inv } = await supabase.from('invoices').select('id').in('application_id', heldApps).eq('kind', 'role_fee');
+            held = new Set(((inv ?? []) as { id: string }[]).map(r => r.id));
+          }
+          if (cancelled) return;
+          setHeldInvoiceIds(held);
+        }
         setLoadError('');
         setRoleConfigs((rc.data as RoleConfigRow[]) ?? []);
         setAddons((ad.data as ActiveAddon[]) ?? []);
@@ -279,7 +299,10 @@ export default function PayPage() {
     return () => { alive = false; };
   }, [selectedKey, appliedCode]);
 
-  const items = useMemo(() => overview?.items ?? [], [overview]);
+  const items = useMemo(
+    () => (overview?.items ?? []).map(i => (heldInvoiceIds.has(i.invoice_id) ? { ...i, payable: false } : i)),
+    [overview, heldInvoiceIds],
+  );
   // An item that costs nothing is never something to pay (OAKMUN, 14 Oct 2026:
   // a "Conference Registration Fee ₹0" sat on Outstanding).
   const outstandingItems = items.filter(i => OUTSTANDING_STATES.has(i.state) && (i.amount_cents > 0 || i.due_cents > 0));
@@ -591,6 +614,11 @@ export default function PayPage() {
           <div className="gv-pay-head flex flex-col gap-5" style={{ minWidth: 0 }}>
             <BalanceHeader o={overview} />
             {!canPay && <PaymentsNotSetUp contactEmail={c.contact_email} />}
+            {heldInvoiceIds.size > 0 && (
+              <p role="status" className="[overflow-wrap:anywhere]" style={{ margin: 0, padding: '12px 16px', borderRadius: 14, fontFamily: 'var(--font-brand), sans-serif', fontSize: 14, lineHeight: 1.5, color: '#1C1410', backgroundColor: 'color-mix(in srgb, var(--gv-accent) 16%, transparent)', border: '1px solid color-mix(in srgb, var(--gv-accent) 36%, transparent)' }}>
+                You applied for more than one role here. You can pay once the organisers accept you for one of them.
+              </p>
+            )}
           </div>
 
           {/* Each tab is ONE wrapper: below 1024px .gv-pay-mid is display:contents, and a
