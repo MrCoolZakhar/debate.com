@@ -1,11 +1,14 @@
-// paymentWaysApi.ts — extra payment methods (prompt 31, C.D. MUN).
+// paymentWaysApi.ts — payment methods (prompt 31; the list, prompt 34).
 //
-// The conference's own set-up (set_payment_setup) stays its MAIN method. Up to
-// 4 extra MANUAL methods (5 in all) sit beside it, each with a name payers see:
-//   payment_ways_list        what the organiser has (organisers only)
-//   set_payment_method_name  the main method's name, needed before any extra
-//   payment_way_save         add (p_way_id null) or edit one extra method
-//   payment_way_remove       hides it; payments already started on it stay reviewable
+// The conference's own set-up (set_payment_setup) is the FIRST method, named by
+// conferences.payment_method_name. Up to 4 more MANUAL methods (5 in all) sit
+// beside it, each with a name payers see when they pick how to pay:
+//   payment_ways_list               what the organiser has (organisers only)
+//   set_payment_method_name         the first method's name
+//   payment_way_save                add (p_way_id null) or edit one other method
+//   payment_way_remove              hides it; payments already started on it stay reviewable
+//   payment_method_remove_main      removes the first method; the next one takes its place
+//   payment_method_card_first       adds card as the first method; the manual one moves into the list
 // Every answer is { ok, error?, field?, code? }; refusals are sentences.
 
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
@@ -112,4 +115,23 @@ export async function removePaymentWay(wayId: string): Promise<WayResult> {
   const r = await rpc('payment_way_remove', { p_way_id: wayId }, 'This payment method could not be removed. Try again in a moment.');
   if (!('a' in r)) return r;
   return { ok: true, openPayments: typeof r.a.open_payments === 'number' ? r.a.open_payments : 0 };
+}
+
+/** Removes the first method: the next one takes its place, or payments switch off when it was the last. */
+export async function removeFirstMethod(conferenceId: string): Promise<{ ok: true; last: boolean; nowFirst: string | null; openPayments: number } | { ok: false; error: string; field?: string; code?: string }> {
+  const r = await rpc('payment_method_remove_main', { p_conference_id: conferenceId }, 'This payment method could not be removed. Try again in a moment.');
+  if (!('a' in r)) return r;
+  return {
+    ok: true,
+    last: r.a.last === true,
+    nowFirst: typeof r.a.now_first === 'string' && r.a.now_first.trim() ? r.a.now_first.trim() : null,
+    openPayments: typeof r.a.open_payments === 'number' ? r.a.open_payments : 0,
+  };
+}
+
+/** Adds card as the first method; the current manual first method moves into the list. */
+export async function addCardFirst(conferenceId: string, name: string, payoutCountry: string): Promise<{ ok: true; connectStatus: string | null; ready: boolean } | { ok: false; error: string; field?: string; code?: string }> {
+  const r = await rpc('payment_method_card_first', { p_conference_id: conferenceId, p_name: name.trim(), p_payout_country: payoutCountry || null }, 'Card payments could not be added. Try again in a moment.');
+  if (!('a' in r)) return r;
+  return { ok: true, connectStatus: typeof r.a.connect_status === 'string' ? r.a.connect_status : null, ready: r.a.ready === true };
 }

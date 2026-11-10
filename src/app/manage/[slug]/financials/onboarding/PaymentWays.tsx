@@ -1,22 +1,23 @@
 'use client';
 
 // PaymentWays — "Your Payment Methods" inside the Payment Method pop-up
-// (prompt 31, C.D. MUN: UPI for Indian delegates, a SWIFT transfer for
-// international ones). The conference's own set-up stays the MAIN method;
-// here the organiser names it and adds up to 4 extra MANUAL methods, each with
-// a name payers see when they pick how to pay. Every view replaces the
-// pop-up's content (never a pop-up on a pop-up): the list, the kind picker,
-// then that kind's form. Remove asks in place and only hides the method.
+// (prompt 31; one list, prompt 34). Every method is one row that looks the
+// same: the conference's own set-up (set_payment_setup, the FIRST method) and
+// up to 4 more MANUAL methods, each with a name payers see when there is more
+// than one. Each row has Edit and Remove. Every view replaces the pop-up's
+// content (never a pop-up on a pop-up): the list, the kind picker, then that
+// kind's form. Remove asks in place. Card can be added while the first method
+// is manual (payment_method_card_first): card becomes the first method.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Building2, Check, HandCoins, ImageUp, Link2, Phone, Plus, QrCode, X } from 'lucide-react';
+import { ArrowLeft, Building2, Check, CreditCard, HandCoins, ImageUp, Link2, Phone, Plus, QrCode, X } from 'lucide-react';
 import type { Conference } from '@/app/manage/[slug]/layout';
 import { SUPABASE_URL } from '@/lib/supabase';
 import { notifyOk } from '@/lib/appNotify';
 import { READ_ONLY_LINE } from '../dashboardKit';
-import { uploadPaymentQr, type BankDetails, type MethodKey } from './paymentApi';
+import { connectStart, sessionSet, uploadPaymentQr, welcomeMarkerKey, type BankDetails, type MethodKey } from './paymentApi';
 import {
-  WAY_KIND_LABEL, readPaymentWays, removePaymentWay, savePaymentWay, setMainMethodName,
+  WAY_KIND_LABEL, addCardFirst, readPaymentWays, removeFirstMethod, removePaymentWay, savePaymentWay,
   type PaymentWay, type WayKind, type WaysList,
 } from './paymentWaysApi';
 
@@ -33,14 +34,31 @@ const WAYS_CSS = `
 .gv-pw-name b{display:block;font-size:16px;font-weight:800;color:#1C1410;overflow-wrap:anywhere}
 .gv-pw-name small{display:block;margin-top:2px;font-size:13px;color:#5A5046}
 .gv-pw-acts{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
-.gv-pw-main{display:inline-block;margin-left:8px;font-size:12px;font-weight:700;color:#2A5A3C}
+.gv-pw-count{position:absolute;top:14px;right:14px;display:inline-flex;align-items:center;gap:4px;font-size:12.5px;font-weight:800;color:#1B3828}
+.gv-pw-count .gv-pw-tick{width:26px;height:26px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;background:#1B3828;color:#EED98A}
 `;
+
+/** The name field every payment method form starts with (prompt 34). */
+export const METHOD_NAME_LABEL = 'Name of this payment method';
+export const METHOD_NAME_HINT = 'Payers see this name when you have more than one payment method.';
+export const METHOD_NAME_MISSING = 'Give this payment method a name.';
+
+/** The check (and "x2" when used more than once) on a kind card already in use. */
+export function KindInUse({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return (
+    <span className="gv-pw-count" aria-label={count > 1 ? `In use ${count} times` : 'In use'}>
+      {count > 1 && <span>x{count}</span>}
+      <span className="gv-pw-tick" aria-hidden><Check size={15} strokeWidth={3} /></span>
+    </span>
+  );
+}
 
 const KIND_CARDS: { key: WayKind; title: string; desc: string; icon: React.ReactNode }[] = [
   { key: 'link', title: 'Payment link', icon: <Link2 size={24} strokeWidth={2.2} />,
     desc: 'Send payers to your own payment page. You confirm payments by reviewing the proofs payers upload.' },
   { key: 'qr', title: 'Payment QR code', icon: <QrCode size={24} strokeWidth={2.2} />,
-    desc: 'Show a QR code payers scan with their banking app (for example UPI). You confirm payments by reviewing the proofs payers upload.' },
+    desc: 'Show a QR code payers scan with their banking app. You confirm payments by reviewing the proofs payers upload.' },
   { key: 'phone', title: 'Phone number', icon: <Phone size={24} strokeWidth={2.2} />,
     desc: 'Show a phone number payers send money to (for example a mobile money or bank app number). You confirm payments by reviewing the proofs payers upload.' },
   { key: 'bank', title: 'Bank transfer', icon: <Building2 size={24} strokeWidth={2.2} />,
@@ -57,18 +75,30 @@ type Errs = Partial<Record<'name' | 'url' | 'qr' | 'phone' | 'note' | 'account_n
 
 const qrUrl = (path: string) => `${SUPABASE_URL}/storage/v1/object/public/conference-assets/${path.split('/').map(encodeURIComponent).join('/')}`;
 
-type View = { v: 'list' } | { v: 'kind' } | { v: 'form'; kind: WayKind; way: PaymentWay | null };
+type View = { v: 'list' } | { v: 'kind' } | { v: 'form'; kind: WayKind; way: PaymentWay | null } | { v: 'card' };
 
-export default function PaymentWays({ conference, mainKind, readOnly, onBack, onEditMain, onDone }: {
+export default function PaymentWays({ conference, mainKind, readOnly, cardOk, country, welcome, stepLine, onBack, onEditMain, onAddFirst, onDone, onChanged }: {
+  /** "Step 3 of 3" above the title, the flow's own counter. */
+  stepLine?: string;
   conference: Conference;
-  /** The main method's kind today (card or a manual kind). */
+  /** The first method's kind today (card or a manual kind), null when there is none. */
   mainKind: MethodKey | null;
   readOnly: boolean;
-  /** Back from the list (to "Are you using multiple payment methods?"); none when opened straight on the list. */
+  /** Stripe works for the bank country (isStripeCountrySupported). */
+  cardOk: boolean;
+  /** The bank country, for adding card. */
+  country: string;
+  /** Inside the welcome flow (its marker is set before going to Stripe). */
+  welcome: boolean;
+  /** Back from the list (to the currency step). */
   onBack?: () => void;
-  /** Runs today's set-up for the main method. */
+  /** Opens the first method's own set-up form. */
   onEditMain: () => void;
+  /** No method at all: the first set-up path (kind cards, then the form, then back here). */
+  onAddFirst: () => void;
   onDone: () => void;
+  /** Re-read the conference after a change. */
+  onChanged: () => void;
 }) {
   const [list, setList] = useState<WaysList | null>(null);
   const [loadErr, setLoadErr] = useState('');
@@ -92,41 +122,8 @@ export default function PaymentWays({ conference, mainKind, readOnly, onBack, on
     try { await fn(); } finally { busyRef.current = false; setBusy(false); }
   };
 
-  // ── The main method's name ──────────────────────────────────────────────
-  const [mainName, setMainName] = useState('');
-  const [editingMain, setEditingMain] = useState(false);
-  const [mainErr, setMainErr] = useState('');
-  const needsMainName = !!list && !list.mainName;
-  const saveMainName = () => run(async () => {
-    const n = mainName.trim();
-    if (!n) { setMainErr('Give your main payment method a name, for example International delegates.'); return; }
-    if (n.length > NAME_MAX) { setMainErr('Keep the name under 40 characters.'); return; }
-    const r = await setMainMethodName(conference.id, n);
-    if (!r.ok) { setMainErr(r.error); return; }
-    setMainErr('');
-    setEditingMain(false);
-    await load();
-  });
-  const mainNameField = (
-    <div>
-      <label className="gv-fd-label" htmlFor="gv-pw-main-name">Name for your main payment method</label>
-      <input id="gv-pw-main-name" className="gv-pf-input" value={mainName} maxLength={NAME_MAX} disabled={readOnly || busy}
-        placeholder="For example, International delegates" aria-invalid={!!mainErr}
-        onChange={e => { setMainName(e.target.value); setMainErr(''); }}
-        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void saveMainName(); } }} />
-      {mainErr && <p className="gv-st-err" role="alert">{mainErr}</p>}
-      <div className="flex items-center gap-3 flex-wrap" style={{ marginTop: 10 }}>
-        <button type="button" className="gv-st-btn gv-st-forest" disabled={readOnly || busy} onClick={() => { void saveMainName(); }}>
-          {busy ? 'Saving' : 'Save name'}
-        </button>
-        {editingMain && (
-          <button type="button" className="gv-st-btn gv-st-outline" disabled={busy} onClick={() => { setEditingMain(false); setMainErr(''); }}>Cancel</button>
-        )}
-      </div>
-    </div>
-  );
-
   // ── Remove, asked in place ───────────────────────────────────────────────
+  // asking: a way id, or 'first' for the first method.
   const [asking, setAsking] = useState<string | null>(null);
   const remove = (w: PaymentWay) => run(async () => {
     const r = await removePaymentWay(w.id);
@@ -134,6 +131,43 @@ export default function PaymentWays({ conference, mainKind, readOnly, onBack, on
     setAsking(null);
     notifyOk('Payment method removed', 'financials');
     await load();
+    onChanged();
+  });
+  const removeFirst = () => run(async () => {
+    const r = await removeFirstMethod(conference.id);
+    if (!r.ok) { setErr(r.error); return; }
+    setAsking(null);
+    if (r.nowFirst) notifyOk(`${r.nowFirst} is now your first payment method`, 'financials');
+    else notifyOk('Payment method removed', 'financials');
+    await load();
+    onChanged();
+  });
+
+  // ── Adding card (the first method is manual) ─────────────────────────────
+  const hasStripeAccount = !!conference.stripe_account_id
+    || conference.connect_onboarding_status === 'pending' || conference.connect_onboarding_status === 'complete';
+  const saveCard = () => run(async () => {
+    const n = name.trim();
+    if (!n) { setErrs({ name: METHOD_NAME_MISSING }); return; }
+    if (n.length > NAME_MAX) { setErrs({ name: 'Keep the name under 40 characters.' }); return; }
+    setErrs({});
+    const r = await addCardFirst(conference.id, n, country);
+    if (!r.ok) {
+      if (r.field === 'name') setErrs({ name: r.error }); else setErr(r.error);
+      return;
+    }
+    onChanged();
+    if (!hasStripeAccount) {
+      // On to Stripe exactly as the first set-up does; the welcome flow resumes on return.
+      if (welcome) sessionSet(welcomeMarkerKey(conference.id), '1');
+      const c = await connectStart(conference.id, country || null);
+      if ('error' in c) { setErr(c.error); return; }
+      window.location.assign(c.url);
+      return;
+    }
+    notifyOk('Card payments added', 'financials');
+    await load();
+    setView({ v: 'list' });
   });
 
   // ── The form (add or edit one extra method) ──────────────────────────────
@@ -175,7 +209,7 @@ export default function PaymentWays({ conference, mainKind, readOnly, onBack, on
   const localErrors = (kind: WayKind): Errs => {
     const e: Errs = {};
     const n = name.trim();
-    if (!n) e.name = 'Give this payment method a name, for example Indian delegates.';
+    if (!n) e.name = METHOD_NAME_MISSING;
     else if (n.length > NAME_MAX) e.name = 'Keep the name under 40 characters.';
     if (kind === 'link') {
       const u = url.trim();
@@ -214,13 +248,14 @@ export default function PaymentWays({ conference, mainKind, readOnly, onBack, on
     }
     const r = await savePaymentWay({ conferenceId: conference.id, wayId: way?.id ?? null, name, kind, url, note, qrPath: path, bank, phone });
     if (!r.ok) {
-      if (r.code === 'main_name') { await load(); setView({ v: 'list' }); setMainErr(r.error); return; }
+      if (r.code === 'main_name' || r.code === 'no_main') { await load(); setView({ v: 'list' }); setErr(r.error); return; }
       if (r.field && r.field in ({ name: 1, url: 1, qr: 1, phone: 1, note: 1, account_name: 1, account_number: 1, swift: 1, bank_name: 1, reference: 1, manual_kind: 1 } as Record<string, number>)) {
         setErrs({ [r.field]: r.error } as Errs);
       } else setErr(r.error);
       return;
     }
     await load();
+    onChanged();
     setView({ v: 'list' });
   });
 
@@ -231,68 +266,79 @@ export default function PaymentWays({ conference, mainKind, readOnly, onBack, on
   let body: React.ReactNode = null;
   let foot: React.ReactNode = null;
 
+  // How many methods use each kind (the check, and "x2", on the kind cards).
+  const kindCounts = new Map<string, number>();
+  if (mainKind) kindCounts.set(mainKind, 1);
+  for (const w of list?.ways ?? []) kindCounts.set(w.manual_kind, (kindCounts.get(w.manual_kind) ?? 0) + 1);
+  const total = (mainKind ? 1 : 0) + (list?.ways.length ?? 0);
+
   if (view.v === 'list') {
     if (!list) {
       body = loadErr
         ? <p className="gv-st-err" role="alert">{loadErr} <button type="button" className="gv-st-link" onClick={() => { void load(); }}>Try again</button></p>
         : <div className="gv-fd-ph" style={{ height: 120, borderRadius: 16 }} aria-busy="true" />;
-    } else if (needsMainName) {
-      body = (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <p className="gv-fd-note" style={{ fontSize: 15 }}>Payers see each method&apos;s name when they pay. Start with the one you have now</p>
-          {mainNameField}
+    } else {
+      const only = total === 1;
+      const askingWay = asking && asking !== 'first' ? list.ways.find(w => w.id === asking) ?? null : null;
+      const confirm = (open: number, onYes: () => void) => (
+        <div className="gv-fd-warn" role="alertdialog" aria-label="Remove this payment method" style={{ marginTop: 8 }}>
+          <p style={{ margin: '0 0 12px' }}>
+            {only
+              ? 'This is your only payment method. If you remove it, nobody can pay you until you add a new one.'
+              : `Remove this payment method? Payers will not see it any more.${open > 0 ? ' Payments already started with it stay in your list to review.' : ''}`}
+          </p>
+          <div className="flex items-center gap-3 flex-wrap">
+            <button type="button" className="gv-st-btn gv-st-forest" disabled={busy} onClick={onYes} autoFocus>
+              {busy ? 'Removing' : 'Remove'}
+            </button>
+            <button type="button" className="gv-st-btn gv-st-outline" disabled={busy} onClick={() => setAsking(null)}>Keep it</button>
+          </div>
         </div>
       );
-    } else {
-      const askingWay = asking ? list.ways.find(w => w.id === asking) ?? null : null;
+      const cardNote = mainKind === 'card' && conference.connect_onboarding_status !== 'complete' ? ' · Stripe needs a few more details' : '';
       body = (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div className="gv-pw-list">
-            <div className="gv-pw-row">
-              <span className="gv-pw-name">
-                <b>{list.mainName}<span className="gv-pw-main">Main</span></b>
-                <small>{mainKind ? WAY_KIND_LABEL[mainKind] : 'Not set up'}</small>
-              </span>
-              {!readOnly && !editingMain && (
-                <span className="gv-pw-acts">
-                  <button type="button" className="gv-st-link" onClick={() => { setMainName(list.mainName ?? ''); setMainErr(''); setEditingMain(true); }}>Edit name</button>
-                  <button type="button" className="gv-st-link" onClick={onEditMain}>Edit</button>
-                </span>
-              )}
-            </div>
-            {editingMain && <div style={{ padding: '4px 0 16px' }}>{mainNameField}</div>}
-            {list.ways.map(w => (
-              <div key={w.id} className="gv-pw-row">
-                <span className="gv-pw-name">
-                  <b>{w.name}</b>
-                  <small>{WAY_KIND_LABEL[w.manual_kind]}{w.complete ? '' : ' · Not finished'}</small>
-                </span>
-                {!readOnly && asking !== w.id && (
-                  <span className="gv-pw-acts">
-                    <button type="button" className="gv-st-link" onClick={() => openForm(w.manual_kind, w)}>Edit</button>
-                    <button type="button" className="gv-st-link" style={{ color: '#8B2020' }} onClick={() => { setErr(''); setAsking(w.id); }}>Remove</button>
+          <p className="gv-fd-note" style={{ fontSize: 15, margin: 0 }}>Payers choose one of these when they pay. With only one, they never see its name.</p>
+          {total === 0 ? (
+            <p className="gv-fd-note" style={{ fontSize: 15, fontWeight: 700 }}>No payment methods yet</p>
+          ) : (
+            <div className="gv-pw-list">
+              {mainKind && (
+                <div className="gv-pw-row">
+                  <span className="gv-pw-name">
+                    <b>{list.mainName ?? WAY_KIND_LABEL[mainKind]}</b>
+                    <small>{WAY_KIND_LABEL[mainKind]}{cardNote}</small>
                   </span>
-                )}
-              </div>
-            ))}
-          </div>
-          {askingWay && (
-            <div className="gv-fd-warn" role="alertdialog" aria-label="Remove this payment method">
-              <p style={{ margin: '0 0 12px' }}>
-                Remove this payment method? Payers will not see it any more.
-                {askingWay.open_payments > 0 ? ' Payments already started with it stay in your list to review.' : ''}
-              </p>
-              <div className="flex items-center gap-3 flex-wrap">
-                <button type="button" className="gv-st-btn gv-st-forest" disabled={busy} onClick={() => { void remove(askingWay); }} autoFocus>
-                  {busy ? 'Removing' : 'Remove'}
-                </button>
-                <button type="button" className="gv-st-btn gv-st-outline" disabled={busy} onClick={() => setAsking(null)}>Keep it</button>
-              </div>
+                  {!readOnly && asking !== 'first' && (
+                    <span className="gv-pw-acts">
+                      <button type="button" className="gv-st-link" onClick={onEditMain}>Edit</button>
+                      <button type="button" className="gv-st-link" style={{ color: '#8B2020' }} onClick={() => { setErr(''); setAsking('first'); }}>Remove</button>
+                    </span>
+                  )}
+                  {asking === 'first' && <div style={{ flexBasis: '100%' }}>{confirm(0, () => { void removeFirst(); })}</div>}
+                </div>
+              )}
+              {list.ways.map(w => (
+                <div key={w.id} className="gv-pw-row">
+                  <span className="gv-pw-name">
+                    <b>{w.name}</b>
+                    <small>{WAY_KIND_LABEL[w.manual_kind]}{w.complete ? '' : ' · Not finished'}</small>
+                  </span>
+                  {!readOnly && asking !== w.id && (
+                    <span className="gv-pw-acts">
+                      <button type="button" className="gv-st-link" onClick={() => openForm(w.manual_kind, w)}>Edit</button>
+                      <button type="button" className="gv-st-link" style={{ color: '#8B2020' }} onClick={() => { setErr(''); setAsking(w.id); }}>Remove</button>
+                    </span>
+                  )}
+                  {askingWay?.id === w.id && <div style={{ flexBasis: '100%' }}>{confirm(w.open_payments, () => { void remove(w); })}</div>}
+                </div>
+              ))}
             </div>
           )}
-          {!readOnly && (list.canAdd ? (
+          {!readOnly && (total < 5 ? (
             <div>
-              <button type="button" className="gv-st-btn gv-st-outline" disabled={busy} onClick={() => { setErr(''); setAsking(null); setView({ v: 'kind' }); }}>
+              <button type="button" className="gv-st-btn gv-st-outline" disabled={busy}
+                onClick={() => { setErr(''); setAsking(null); if (!mainKind) onAddFirst(); else setView({ v: 'kind' }); }}>
                 <Plus size={16} strokeWidth={2.4} aria-hidden /> Add a payment method
               </button>
             </div>
@@ -307,18 +353,28 @@ export default function PaymentWays({ conference, mainKind, readOnly, onBack, on
             <ArrowLeft size={16} strokeWidth={2.4} aria-hidden /> Back
           </button>
         )}
-        <button type="button" className="gv-st-btn gv-st-forest" disabled={busy}
-          onClick={() => { if (!readOnly) notifyOk('Payment methods saved', 'financials'); onDone(); }}>
+        <button type="button" className="gv-st-btn gv-st-forest" disabled={busy} onClick={onDone}>
           Done
         </button>
       </>
     );
   } else if (view.v === 'kind') {
     title = 'Add a Payment Method';
+    const hasCard = mainKind === 'card';
     body = (
       <div className="gv-pf-cards" role="radiogroup" aria-label="How people pay you">
+        {cardOk && (
+          <button type="button" role="radio" aria-checked={false} className="gv-pf-card" disabled={hasCard}
+            onClick={() => { setName(''); setErrs({}); setErr(''); setView({ v: 'card' }); }}>
+            <KindInUse count={hasCard ? 1 : 0} />
+            <span className="gv-pf-icon" aria-hidden><CreditCard size={24} strokeWidth={2.2} /></span>
+            <p className="gv-pf-title">Pay by card</p>
+            <p className="gv-pf-desc">{hasCard ? 'You already have a card payment method' : 'Payers pay by card inside Gavelling and everything updates automatically. Card becomes your first payment method.'}</p>
+          </button>
+        )}
         {KIND_CARDS.map(m => (
           <button key={m.key} type="button" role="radio" aria-checked={false} className="gv-pf-card" onClick={() => openForm(m.key, null)}>
+            <KindInUse count={kindCounts.get(m.key) ?? 0} />
             <span className="gv-pf-icon" aria-hidden>{m.icon}</span>
             <p className="gv-pf-title">{m.title}</p>
             <p className="gv-pf-desc">{m.desc}</p>
@@ -330,6 +386,34 @@ export default function PaymentWays({ conference, mainKind, readOnly, onBack, on
       <button type="button" className="gv-st-btn gv-st-outline" onClick={() => setView({ v: 'list' })}>
         <ArrowLeft size={16} strokeWidth={2.4} aria-hidden /> Back
       </button>
+    );
+  } else if (view.v === 'card') {
+    title = 'Pay by Card';
+    body = (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div>
+          <label className="gv-fd-label" htmlFor="gv-pw-card-name">{METHOD_NAME_LABEL}</label>
+          <input id="gv-pw-card-name" className="gv-pf-input" value={name} maxLength={NAME_MAX} disabled={readOnly} required aria-invalid={!!errs.name}
+            onChange={e => { setName(e.target.value); setErrs(x => ({ ...x, name: undefined })); }} />
+          <p className="gv-fd-note" style={{ marginTop: 4 }}>{METHOD_NAME_HINT}</p>
+          {fieldErr('name')}
+        </div>
+        <p style={{ margin: 0, fontSize: 15, lineHeight: 1.55 }}>
+          {hasStripeAccount
+            ? 'Card payments go to your Stripe account. Card becomes your first payment method and the method you have now moves into this list.'
+            : 'Stripe handles card payments and pays them into your bank account. Next, Stripe asks for your organisation\'s details and your bank account. It takes about five minutes, and you come straight back here'}
+        </p>
+      </div>
+    );
+    foot = (
+      <>
+        <button type="button" className="gv-st-btn gv-st-outline" disabled={busy} onClick={() => { setErr(''); setView({ v: 'kind' }); }}>
+          <ArrowLeft size={16} strokeWidth={2.4} aria-hidden /> Back
+        </button>
+        <button type="button" className="gv-st-btn gv-st-forest" disabled={readOnly || busy} onClick={() => { void saveCard(); }}>
+          {busy ? 'Saving' : hasStripeAccount ? 'Use card payments' : 'Continue to Stripe'}
+        </button>
+      </>
     );
   } else {
     const { kind, way } = view;
@@ -348,10 +432,11 @@ export default function PaymentWays({ conference, mainKind, readOnly, onBack, on
     body = (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div>
-          <label className="gv-fd-label" htmlFor="gv-pw-name">Name payers will see</label>
+          <label className="gv-fd-label" htmlFor="gv-pw-name">{METHOD_NAME_LABEL}</label>
           <input id="gv-pw-name" className="gv-pf-input" value={name} maxLength={NAME_MAX} disabled={readOnly} required
-            placeholder="For example, Indian delegates" aria-invalid={!!errs.name}
+            aria-invalid={!!errs.name}
             onChange={e => { setName(e.target.value); setErrs(x => ({ ...x, name: undefined })); }} />
+          <p className="gv-fd-note" style={{ marginTop: 4 }}>{METHOD_NAME_HINT}</p>
           {fieldErr('name')}
         </div>
         {kind === 'link' && (
@@ -434,6 +519,7 @@ export default function PaymentWays({ conference, mainKind, readOnly, onBack, on
     <>
       <style>{WAYS_CSS}</style>
       <div style={{ paddingRight: 40 }}>
+        {stepLine && <p className="gv-pf-step">{stepLine}</p>}
         <h2 className="gv-fd-pop-title" style={{ paddingRight: 0 }}>{title}</h2>
       </div>
       {readOnly && <p className="gv-fd-note">{READ_ONLY_LINE}</p>}

@@ -363,7 +363,7 @@ export function SpecialFeesCard({ count, onOpen, readOnly }: { count: number | n
   return (
     <SettingCard
       title="Special Fees" icon={{ emoji: 'Label', lucide: Tag, tint: TINT_GOLD }}
-      hint="A different fee for people you choose, for example your own school's students. Only their invoice changes, nothing public shows it, and people who match later get it by themselves."
+      hint="A different fee for people you choose. Only their invoice changes, nothing public shows it, and people who match later get it by themselves."
       fact={count === null ? '…' : count === 0 ? 'None yet' : `${count} special fee${count === 1 ? '' : 's'}`}
       onOpen={onOpen} readOnly={readOnly}
     />

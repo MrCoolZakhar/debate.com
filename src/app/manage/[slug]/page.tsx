@@ -1608,9 +1608,9 @@ export default function DashboardPage() {
 
         {allSetAndVerified ? (
           <NeuCard className="gv-dash-prio flex flex-col" style={{ padding: '14px 15px', border: BENTO_BORDER, backgroundColor: BENTO_WASH_FOREST, overflowY: 'auto' }}>
-            <UntoldSeatsRow conferenceId={conference.id} slug={slug} />
             <ShareHero conference={conference} />
             <SponsorListRow />
+            <UntoldSeatsRow conferenceId={conference.id} slug={slug} />
           </NeuCard>
         ) : (
         <NeuCard className="gv-dash-prio flex flex-col" style={{ padding: '13px 15px 11px', border: BENTO_BORDER, backgroundColor: BENTO_WASH_FOREST }}>

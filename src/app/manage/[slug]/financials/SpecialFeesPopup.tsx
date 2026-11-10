@@ -20,10 +20,10 @@ import { PurchaseShell, PURCHASE_CSS } from '@/components/purchase/purchaseKit';
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { friendlyError, plainOrFallback } from '@/lib/friendlyError';
 import { notifyOk } from '@/lib/appNotify';
-import { isChoiceType, normalizeBlocks, questionsOf, usableOptions } from '@/lib/customQuestions';
+import { normalizeBlocks, questionsOf } from '@/lib/customQuestions';
 import { STORE_CSS } from '../store/storeKit';
 import { DASH_CSS, READ_ONLY_LINE } from './dashboardKit';
-import { formatMoney, roleLabel } from './shared';
+import { formatMoney, ROLE_ORDER_FULL, roleLabelFull } from './shared';
 
 const FONT = 'var(--font-brand), sans-serif';
 const INK = '#1C1410';
@@ -34,7 +34,17 @@ const LINE = '#E6DFCF';
 export type SpecialTarget =
   | { kind: 'application'; application_id: string; label?: string }
   | { kind: 'society'; society_id: string; label?: string }
-  | { kind: 'answer'; question_id: string; answer: string; label?: string };
+  | { kind: 'answer'; question_id: string; answer: string; label?: string }
+  // MUN level (applications.experience_level) and a committee preference (any rank), 9 Nov 2026.
+  | { kind: 'level'; answer: string; label?: string }
+  | { kind: 'committee'; answer: string; label?: string };
+
+/** special_fee_answer_groups: only groups with at least one live person in the role. */
+interface AnswerGroups {
+  levels: { answer: string; count: number }[];
+  committees: { answer: string; name: string; full_name: string | null; count: number }[];
+  answers: { question_id: string; answer: string; count: number }[];
+}
 
 export interface SpecialFee {
   id: string; role: string; name: string; amount: number; updated_at: string;
@@ -59,10 +69,18 @@ export async function readSpecialFees(conferenceId: string): Promise<{ ok: true;
   }
 }
 
-const targetKey = (t: SpecialTarget) => t.kind === 'application' ? `a:${t.application_id}` : t.kind === 'society' ? `s:${t.society_id}` : `q:${t.question_id}:${t.answer}`;
+const targetKey = (t: SpecialTarget) => t.kind === 'application' ? `a:${t.application_id}`
+  : t.kind === 'society' ? `s:${t.society_id}`
+  : t.kind === 'level' ? `l:${t.answer}`
+  : t.kind === 'committee' ? `c:${t.answer}`
+  : `q:${t.question_id}:${t.answer}`;
 const stripLabel = (t: SpecialTarget): SpecialTarget => t.kind === 'application'
   ? { kind: 'application', application_id: t.application_id }
-  : t.kind === 'society' ? { kind: 'society', society_id: t.society_id } : { kind: 'answer', question_id: t.question_id, answer: t.answer };
+  : t.kind === 'society' ? { kind: 'society', society_id: t.society_id }
+  : t.kind === 'level' ? { kind: 'level', answer: t.answer }
+  : t.kind === 'committee' ? { kind: 'committee', answer: t.answer }
+  : { kind: 'answer', question_id: t.question_id, answer: t.answer };
+const LEVEL_WORD: Record<string, string> = { beginner: 'Beginner', intermediate: 'Intermediate', advanced: 'Advanced', expert: 'Expert' };
 
 type Step = 'list' | 'role' | 'fee' | 'who';
 interface Draft { id: string | null; role: string; name: string; amount: string; targets: SpecialTarget[] }
@@ -111,7 +129,9 @@ export default function SpecialFeesPopup({ conference, readOnly, onClose }: {
       if (!c) return;
       const { data } = await c.from('application_role_configs')
         .select('role, is_enabled, fee_amount, fee_currency, custom_questions').eq('conference_id', conference.id);
-      setRoles(((data ?? []) as RoleRow[]).filter(r => r.is_enabled));
+      // Every role the conference has, in a fixed order (special_fee_save accepts any of them).
+      const rank = (r: string) => { const i = ROLE_ORDER_FULL.indexOf(r); return i < 0 ? 99 : i; };
+      setRoles(((data ?? []) as RoleRow[]).sort((a, b) => rank(a.role) - rank(b.role)));
     })();
   }, [load, conference.id]);
 
@@ -146,11 +166,26 @@ export default function SpecialFeesPopup({ conference, readOnly, onClose }: {
     return () => { cancelled = true; };
   }, [step, draft.role, conference.id]);
 
-  // The role's choice questions: live, choice type, at least one non-empty option.
-  const choiceQuestions = useMemo(() => {
+  // The Application answer tab: the answer groups of this role, read once when the who step opens for it.
+  const [groups, setGroups] = useState<AnswerGroups | null>(null);
+  useEffect(() => {
+    if (step !== 'who' || !draft.role) return;
+    let cancelled = false;
+    setGroups(null);
+    void (async () => {
+      const c = await getFreshAuthedClient();
+      if (!c || cancelled) return;
+      const { data, error } = await c.rpc('special_fee_answer_groups', { p_conference_id: conference.id, p_role: draft.role });
+      if (cancelled) return;
+      const d = (data ?? {}) as { ok?: boolean } & Partial<AnswerGroups>;
+      setGroups(error || d.ok !== true ? { levels: [], committees: [], answers: [] } : { levels: d.levels ?? [], committees: d.committees ?? [], answers: d.answers ?? [] });
+    })();
+    return () => { cancelled = true; };
+  }, [step, draft.role, conference.id]);
+  // The role's questions, live AND archived, to label answers (never file uploads).
+  const roleQuestions = useMemo(() => {
     const rc = roles.find(r => r.role === draft.role);
-    return questionsOf(normalizeBlocks(rc?.custom_questions ?? []))
-      .filter(q => !q.archived && isChoiceType(q.type) && usableOptions(q).length > 0);
+    return questionsOf(normalizeBlocks(rc?.custom_questions ?? []), { includeArchived: true }).filter(q => q.type !== 'file_upload');
   }, [roles, draft.role]);
 
   // Live reach of the targets, debounced.
@@ -242,10 +277,18 @@ export default function SpecialFeesPopup({ conference, readOnly, onClose }: {
     }
   }
 
+  // Back on the left; on the add or edit steps the counter on the same line, on the right.
   const back = (to: Step) => (
-    <button type="button" className="gv-st-link" onClick={() => setStep(to)} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 12, textDecoration: 'none' }}>
-      <ChevronLeft size={16} strokeWidth={2} aria-hidden /> Back
-    </button>
+    <div className="flex items-center justify-between gap-3" style={{ marginBottom: 12 }}>
+      <button type="button" className="gv-st-link" onClick={() => setStep(to)} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}>
+        <ChevronLeft size={16} strokeWidth={2} aria-hidden /> Back
+      </button>
+      {step !== 'list' && (
+        <span style={{ fontFamily: FONT, fontSize: 12, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#5A5046' }}>
+          Step {step === 'role' ? 1 : step === 'fee' ? 2 : 3} of 3
+        </span>
+      )}
+    </div>
   );
   const fieldErr = (m?: string) => (m ? <p role="alert" className="gv-st-err">{m}</p> : null);
   const people2 = (n: number) => `${n} ${n === 1 ? 'person' : 'people'}`;
@@ -258,7 +301,7 @@ export default function SpecialFeesPopup({ conference, readOnly, onClose }: {
         {fees === null ? (
           <p className="gv-st-quiet">Loading</p>
         ) : fees.length === 0 ? (
-          <p className="gv-st-quiet" style={{ fontSize: 14.5 }}>Give a different fee to people you choose, for example your own school&apos;s students. Only their invoice changes.</p>
+          <p className="gv-st-quiet" style={{ fontSize: 14.5 }}>Give a different fee to people you choose. Only their invoice changes.</p>
         ) : (
           <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
             {fees.map(f => (
@@ -267,7 +310,7 @@ export default function SpecialFeesPopup({ conference, readOnly, onClose }: {
                   <div className="min-w-0" style={{ flex: '1 1 220px' }}>
                     <p className="[overflow-wrap:anywhere]" style={{ margin: 0, fontFamily: FONT, fontSize: 15, fontWeight: 800, color: INK }}>{f.name}</p>
                     <p style={{ margin: '2px 0 0', fontFamily: FONT, fontSize: 13, color: INK_SOFT }}>
-                      {roleLabel(f.role)} · {formatMoney(f.amount, currency)}
+                      {roleLabelFull(f.role)} · {formatMoney(f.amount, currency)}
                     </p>
                     <p style={{ margin: '2px 0 0', fontFamily: FONT, fontSize: 13, color: INK_SOFT }}>
                       {people2(f.reach?.matched ?? 0)}{(f.reach?.already_paid ?? 0) > 0 ? `, ${f.reach.already_paid} already paid the normal fee` : ''}
@@ -312,11 +355,11 @@ export default function SpecialFeesPopup({ conference, readOnly, onClose }: {
               className="flex items-center justify-between gap-3 focus:outline-none"
               style={{ border: `1.5px solid ${draft.role === r.role ? '#1B3828' : LINE}`, borderRadius: 14, padding: '12px 14px', background: '#FFFFFF', cursor: 'pointer', fontFamily: FONT, textAlign: 'left' }}
             >
-              <span style={{ fontSize: 15, fontWeight: 700, color: INK }}>{roleLabel(r.role)}</span>
+              <span style={{ fontSize: 15, fontWeight: 700, color: INK }}>{roleLabelFull(r.role)}</span>
               <span style={{ fontSize: 13.5, color: INK_SOFT }}>{formatMoney(Number(r.fee_amount ?? 0), r.fee_currency || currency)}</span>
             </button>
           ))}
-          {roles.length === 0 && <p className="gv-st-quiet">No roles are taking applications yet.</p>}
+          {roles.length === 0 && <p className="gv-st-quiet">This conference has no roles yet.</p>}
         </div>
         {fieldErr(errs.role)}
       </>
@@ -326,7 +369,7 @@ export default function SpecialFeesPopup({ conference, readOnly, onClose }: {
       <>
         {back('role')}
         <label htmlFor="sf-name" style={labelStyle}>Name</label>
-        <input id="sf-name" style={inputStyle} maxLength={60} placeholder="For example, GECA students" value={draft.name}
+        <input id="sf-name" style={inputStyle} maxLength={60} value={draft.name}
           onChange={(e) => setDraft(d => ({ ...d, name: e.target.value }))} />
         {fieldErr(errs.name)}
         <label htmlFor="sf-amount" style={{ ...labelStyle, marginTop: 14 }}>Fee ({currency.toUpperCase()})</label>
@@ -353,28 +396,45 @@ export default function SpecialFeesPopup({ conference, readOnly, onClose }: {
   } else {
     const q = query.trim().toLowerCase();
     const shownPeople = (people ?? []).filter(p => !q || p.name.toLowerCase().includes(q) || p.email.toLowerCase().includes(q)).slice(0, 200);
-    const question = choiceQuestions.find(x => x.id === questionId) ?? null;
+    const question = roleQuestions.find(x => x.id === questionId) ?? null;
     const chipLabel = (t: SpecialTarget): string => {
       if (t.label) return t.label;
       if (t.kind === 'application') return people?.find(p => p.id === t.application_id)?.name ?? 'A person';
       if (t.kind === 'society') return societies?.find(s => s.id === t.society_id)?.name ?? 'A delegation';
-      const qq = choiceQuestions.find(x => x.id === t.question_id);
+      if (t.kind === 'level') return `MUN level: ${LEVEL_WORD[t.answer] ?? t.answer}`;
+      if (t.kind === 'committee') return `Committee preference: ${groups?.committees.find(c => c.answer === t.answer)?.name ?? 'a committee'}`;
+      const qq = roleQuestions.find(x => x.id === t.question_id);
       return `${qq?.label ?? 'Answer'}: ${t.answer}`;
     };
+    // Answers grouped by question, only for questions found on this role's form.
+    const answerQuestions = roleQuestions
+      .map(x => ({ q: x, answers: (groups?.answers ?? []).filter(a => a.question_id === x.id) }))
+      .filter(x => x.answers.length > 0);
+    const levels = groups?.levels ?? [];
+    const committeesG = groups?.committees ?? [];
+    const answerTabShown = levels.length > 0 || committeesG.length > 0 || answerQuestions.length > 0;
+    const tab = whoTab === 'answer' && !answerTabShown ? 'people' : whoTab;
+    const countWord = (n: number) => `${n} ${n === 1 ? 'person' : 'people'}`;
+    const groupHead = (t: string) => (
+      <p style={{ margin: '10px 0 4px', fontFamily: FONT, fontSize: 12, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: INK_SOFT }}>{t}</p>
+    );
     const tabBtn = (k: typeof whoTab, label: string) => (
       <button type="button" onClick={() => setWhoTab(k)} className="focus:outline-none"
         style={{ border: 'none', borderBottom: `2px solid ${whoTab === k ? '#1B3828' : 'transparent'}`, background: 'none', padding: '6px 2px', marginRight: 16, fontFamily: FONT, fontSize: 14, fontWeight: 700, color: whoTab === k ? INK : INK_SOFT, cursor: 'pointer' }}>
         {label}
       </button>
     );
-    const rowBtn = (on: boolean, onClick: () => void, main: string, sub?: string, key?: string) => (
+    const rowBtn = (on: boolean, onClick: () => void, main: React.ReactNode, sub?: string, key?: string, count?: number) => (
       <button key={key} type="button" onClick={onClick} className="flex items-center justify-between gap-3 w-full focus:outline-none"
         style={{ border: `1.5px solid ${on ? '#1B3828' : LINE}`, borderRadius: 12, padding: '9px 12px', background: on ? 'rgba(27,56,40,0.05)' : '#FFFFFF', cursor: 'pointer', fontFamily: FONT, textAlign: 'left' }}>
         <span className="min-w-0">
           <span className="block [overflow-wrap:anywhere]" style={{ fontSize: 14, fontWeight: 700, color: INK }}>{main}</span>
           {sub ? <span className="block [overflow-wrap:anywhere]" style={{ fontSize: 12.5, color: INK_SOFT }}>{sub}</span> : null}
         </span>
-        <span style={{ fontSize: 12.5, fontWeight: 700, color: on ? '#1B3828' : INK_SOFT }}>{on ? 'Added' : 'Add'}</span>
+        <span className="flex items-center gap-3 flex-shrink-0">
+          {count !== undefined && <span style={{ fontSize: 12.5, color: INK_SOFT, fontVariantNumeric: 'tabular-nums' }}>{countWord(count)}</span>}
+          <span style={{ fontSize: 12.5, fontWeight: 700, color: on ? '#1B3828' : INK_SOFT }}>{on ? 'Added' : 'Add'}</span>
+        </span>
       </button>
     );
     body = (
@@ -384,9 +444,9 @@ export default function SpecialFeesPopup({ conference, readOnly, onClose }: {
         <div style={{ borderBottom: `1px solid ${LINE}`, marginBottom: 12 }}>
           {tabBtn('people', 'People')}
           {tabBtn('delegations', 'Delegations')}
-          {tabBtn('answer', 'Application answer')}
+          {answerTabShown && tabBtn('answer', 'Application answer')}
         </div>
-        {whoTab === 'people' && (
+        {tab === 'people' && (
           <>
             <div className="flex items-center gap-2" style={{ ...inputStyle, padding: '0 12px' }}>
               <Search size={16} strokeWidth={1.75} aria-hidden style={{ color: INK_SOFT, flexShrink: 0 }} />
@@ -401,7 +461,7 @@ export default function SpecialFeesPopup({ conference, readOnly, onClose }: {
             </div>
           </>
         )}
-        {whoTab === 'delegations' && (
+        {tab === 'delegations' && (
           <div className="flex flex-col gap-1.5" style={{ maxHeight: 300, overflowY: 'auto' }}>
             {societies === null ? <p className="gv-st-quiet">Loading</p>
               : societies.length === 0 ? <p className="gv-st-quiet">No delegations have people here yet</p>
@@ -409,21 +469,43 @@ export default function SpecialFeesPopup({ conference, readOnly, onClose }: {
                 () => toggleTarget({ kind: 'society', society_id: s.id, label: s.name }), s.name, undefined, s.id))}
           </div>
         )}
-        {whoTab === 'answer' && (
-          choiceQuestions.length === 0 ? (
-            <p className="gv-st-quiet">This role&apos;s form has no choice question to pick an answer from.</p>
-          ) : (
-            <div className="flex flex-col gap-1.5">
-              {!question ? choiceQuestions.map(x => rowBtn(false, () => setQuestionId(x.id), x.label || 'Untitled question', undefined, x.id)) : (
-                <>
-                  <button type="button" className="gv-st-link" onClick={() => setQuestionId('')} style={{ alignSelf: 'flex-start', marginBottom: 4 }}>Choose another question</button>
-                  <p className="[overflow-wrap:anywhere]" style={{ margin: '0 0 4px', fontFamily: FONT, fontSize: 14, fontWeight: 700, color: INK }}>{question.label}</p>
-                  {usableOptions(question).map(o => rowBtn(hasTarget({ kind: 'answer', question_id: question.id, answer: o }),
-                    () => toggleTarget({ kind: 'answer', question_id: question.id, answer: o, label: `${question.label}: ${o}` }), o, undefined, o))}
-                </>
-              )}
-            </div>
-          )
+        {tab === 'answer' && (
+          <div className="flex flex-col gap-1.5" style={{ maxHeight: 340, overflowY: 'auto' }}>
+            {levels.length > 0 && (
+              <>
+                {groupHead('MUN level')}
+                {levels.map(l => rowBtn(hasTarget({ kind: 'level', answer: l.answer }),
+                  () => toggleTarget({ kind: 'level', answer: l.answer, label: `MUN level: ${LEVEL_WORD[l.answer] ?? l.answer}` }),
+                  LEVEL_WORD[l.answer] ?? l.answer, undefined, `l:${l.answer}`, l.count))}
+              </>
+            )}
+            {committeesG.length > 0 && (
+              <>
+                {groupHead('Committee preference')}
+                {committeesG.map(c => rowBtn(hasTarget({ kind: 'committee', answer: c.answer }),
+                  () => toggleTarget({ kind: 'committee', answer: c.answer, label: `Committee preference: ${c.name}` }),
+                  c.name, c.full_name && c.full_name !== c.name ? c.full_name : undefined, `c:${c.answer}`, c.count))}
+              </>
+            )}
+            {answerQuestions.length > 0 && (
+              <>
+                {groupHead('Application answers')}
+                {!question ? answerQuestions.map(({ q: x }) => rowBtn(false, () => setQuestionId(x.id),
+                  <>{x.label || 'Untitled question'}{x.archived && <span style={{ fontSize: 12, fontWeight: 500, color: INK_SOFT }}> (no longer on the form)</span>}</>,
+                  undefined, x.id)) : (
+                  <>
+                    <button type="button" className="gv-st-link" onClick={() => setQuestionId('')} style={{ alignSelf: 'flex-start', marginBottom: 4 }}>Choose another question</button>
+                    <p className="[overflow-wrap:anywhere]" style={{ margin: '0 0 4px', fontFamily: FONT, fontSize: 14, fontWeight: 700, color: INK }}>
+                      {question.label}{question.archived && <span style={{ fontSize: 12, fontWeight: 500, color: INK_SOFT }}> (no longer on the form)</span>}
+                    </p>
+                    {(answerQuestions.find(x => x.q.id === question.id)?.answers ?? []).map(a => rowBtn(hasTarget({ kind: 'answer', question_id: question.id, answer: a.answer }),
+                      () => toggleTarget({ kind: 'answer', question_id: question.id, answer: a.answer, label: `${question.label}: ${a.answer}` }),
+                      a.answer, undefined, a.answer, a.count))}
+                  </>
+                )}
+              </>
+            )}
+          </div>
         )}
 
         {draft.targets.length > 0 && (
@@ -442,7 +524,7 @@ export default function SpecialFeesPopup({ conference, readOnly, onClose }: {
         )}
         {reach && draft.targets.length > 0 && (
           <p style={{ margin: '10px 0 0', fontFamily: FONT, fontSize: 14, color: INK }}>
-            {people2(reach.matched)} get this fee.
+            {reach.matched === 1 ? '1 person gets this fee.' : `${reach.matched} people get this fee.`}
             {reach.already_paid > 0 ? ` ${reach.already_paid} already paid the normal fee and keep what they paid.` : ''}
             {reach.locked > 0 ? ` ${reach.locked} have a payment in progress and keep the price they started with.` : ''}
           </p>
