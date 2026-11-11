@@ -21,6 +21,7 @@ import {
   cents, recordManualRefund, refundCardItems, uploadRefundProof, type RefundItem,
 } from './financialsApi';
 import { Row } from './dashboardKit';
+import { compareMoneyItems } from '@/lib/moneyItemOrder';
 
 type Method = 'bank_transfer' | 'cash' | 'other';
 const METHODS: { v: Method; label: string }[] = [
@@ -141,7 +142,7 @@ export default function RefundDialog({ items, currency, conferenceId, todoId, on
           <section aria-label="Card refund" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {manual.length > 0 && <p className="gv-fd-sect">Paid by card</p>}
             <div className="gv-fd-rows">
-              {card.map(i => <Row key={i.invoice_id} label={i.label} amount={cents(i.amount_cents, currency)} />)}
+              {[...card].sort(compareMoneyItems).map(i => <Row key={i.invoice_id} label={i.label} amount={cents(i.amount_cents, currency)} />)}
             </div>
             {cardDone ? (
               <p className="gv-st-ok" role="status">Sent back to their card</p>
@@ -167,7 +168,7 @@ export default function RefundDialog({ items, currency, conferenceId, todoId, on
           <section aria-label="Manual refund" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {card.length > 0 && <p className="gv-fd-sect">Paid manually</p>}
             <div className="gv-fd-rows">
-              {manual.map(i => <Row key={i.invoice_id} label={i.label} amount={cents(i.amount_cents, currency)} />)}
+              {[...manual].sort(compareMoneyItems).map(i => <Row key={i.invoice_id} label={i.label} amount={cents(i.amount_cents, currency)} />)}
             </div>
             {manualDone ? (
               <p className="gv-st-ok" role="status">Refund recorded</p>

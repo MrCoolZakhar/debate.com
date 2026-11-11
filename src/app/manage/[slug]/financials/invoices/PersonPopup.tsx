@@ -23,6 +23,7 @@ import DocumentEditor from '../documents/DocumentEditor';
 import { DOCS_CSS } from '../documents/docsKit';
 import { createDocument } from '../documents/documentsApi';
 import { readPerson, roleWord, type AuditRow, type PersonDetail, type PersonInvoice, type PersonPayment } from './invoicesApi';
+import { compareMoneyItems } from '@/lib/moneyItemOrder';
 
 const SOFT_GREEN = '#2A5A3C';
 const DANGER = '#8B2020';
@@ -137,7 +138,8 @@ export default function PersonPopup({ applicationId, conferenceId, slug, readOnl
   const byId = new Map(invoices.map(i => [i.invoice_id, i]));
   const currency = invoices[0]?.currency ?? detail?.payments[0]?.currency ?? 'USD';
   const aidLeft = aidLeftLabel(aidPool, (c, cur) => cents(c, cur || currency));
-  const outstanding = invoices.filter(i => i.status !== 'waived' && (i.due_cents > 0 || i.status === 'open' || i.status === 'partial'));
+  // Delegate Ticket 1, 2, 3... in number order everywhere (owner, 10 Nov 2026; display only).
+  const outstanding = invoices.filter(i => i.status !== 'waived' && (i.due_cents > 0 || i.status === 'open' || i.status === 'partial')).sort(compareMoneyItems);
   const waived = invoices.filter(i => i.status === 'waived' || i.aid_cents > 0);
   const owed = outstanding.reduce((s, i) => s + i.due_cents, 0);
   // A Mark unpaid undoes a record and moves no money, so it is never shown as a refund (prompt 105).
@@ -312,7 +314,7 @@ export default function PersonPopup({ applicationId, conferenceId, slug, readOnl
                             const tickedHere = stillPaid.filter(x => paidTicks.has(x.invoice_id));
                             return (
                             <div style={{ padding: '0 14px 12px 14px' }}>
-                              {pay.items.map(it => {
+                              {[...pay.items].sort(compareMoneyItems).map(it => {
                                 const inv = byId.get(it.invoice_id);
                                 const gone = !inv || inv.refundable_cents <= 0;
                                 const canTick = !readOnly && !!inv && !gone && !inv.paid_by_card;
@@ -409,7 +411,7 @@ export default function PersonPopup({ applicationId, conferenceId, slug, readOnl
               <Fold title="All Transactions" open={showLedger} onToggle={() => setShowLedger(v => !v)} count={detail.ledger.length}>
                 {detail.ledger.length === 0 ? <p className="gv-fd-note">Nothing recorded yet</p> : (
                   <div className="gv-fd-rows">
-                    {detail.ledger.map((l, idx) => (
+                    {ledgerInOrder(detail.ledger).map((l, idx) => (
                       <div key={idx} className="gv-fd-row">
                         <span className="gv-fd-row-label">
                           {l.label}
@@ -516,4 +518,19 @@ function Fold({ title, open, onToggle, count, children }: { title: string; open:
       {open && <div style={{ marginTop: 8 }}>{children}</div>}
     </section>
   );
+}
+
+/** All Transactions: newest first between payments as the server gives them; the
+ *  lines of one payment moment (the same second) in item order, so a card payment
+ *  of 17 tickets reads Delegate Ticket 1 to 17. Display only. */
+function ledgerInOrder<T extends { at: string; label: string }>(lines: T[]): T[] {
+  const out: T[] = [];
+  let run: T[] = [];
+  const sec = (l: T) => (l.at ?? '').slice(0, 19);
+  for (const l of lines) {
+    if (run.length > 0 && sec(run[0]) !== sec(l)) { out.push(...run.sort(compareMoneyItems)); run = []; }
+    run.push(l);
+  }
+  out.push(...run.sort(compareMoneyItems));
+  return out;
 }

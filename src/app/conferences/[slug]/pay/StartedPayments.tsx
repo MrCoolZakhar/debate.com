@@ -18,6 +18,7 @@ import { useNow } from '@/lib/useNow';
 import { DANGER, DEEP_GOLD, INK_SOFT } from './payKit';
 import { money, shortDate } from './payApi';
 import { timeLeft, type StartedPayment } from './manualApi';
+import { compareMoneyItems } from '@/lib/moneyItemOrder';
 
 export default function StartedPayments({ payments, highlight, wayLabel, onUpload, onOpenWay, onCancel, onViewProof, onReplace, onRestart, inPerson, onFinishWithout, wayFor }: {
   payments: StartedPayment[];
@@ -89,7 +90,7 @@ export default function StartedPayments({ payments, highlight, wayLabel, onUploa
               </div>
 
               <div className="gv-pay-rows" style={{ marginTop: 12, background: '#FAF8F3' }}>
-                {p.items.map(i => (
+                {[...p.items].sort(compareMoneyItems).map(i => (
                   <div key={i.invoice_id} className="gv-pay-row"><span style={{ overflowWrap: 'anywhere' }}>{i.label}</span><b>{money(i.amount_cents, p.currency)}</b></div>
                 ))}
               </div>

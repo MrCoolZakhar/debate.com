@@ -17,6 +17,7 @@ import { DANGER, GREEN, INK_SOFT } from './payKit';
 import { money, shortDate, type PayItem, type PayPayment, type PayRefund } from './payApi';
 import { DownloadStatus, refundLine, type DownloadPhase } from './PayDocuments';
 import { refundVia } from './ItemList';
+import { compareMoneyItems } from '@/lib/moneyItemOrder';
 
 export function howWords(how: PayPayment['how']): string {
   if (how === 'card') return 'Card';
@@ -107,7 +108,7 @@ export function ReceiptPopup({ payment, conferenceName, onClose, pdf, itemsById,
             <div className="gv-pay-row"><span>Paid by</span><b>{howWords(payment.how)}</b></div>
           </div>
           <div className="gv-pay-rows">
-            {payment.items.map(i => {
+            {[...payment.items].sort(compareMoneyItems).map(i => {
               const it = itemsById.get(i.invoice_id);
               const manualRefund = it?.state === 'refunded' && it.refund && refundVia(it.refund.method) !== 'card';
               return (

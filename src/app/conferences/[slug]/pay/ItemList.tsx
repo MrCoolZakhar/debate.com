@@ -14,6 +14,7 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import { DANGER, DEEP_GOLD, GREEN, INK_SOFT } from './payKit';
 import { money, shortDate, type PayItem } from './payApi';
+import { compareMoneyItems } from '@/lib/moneyItemOrder';
 
 export const PAYABLE_STATES = new Set(['unpaid', 'rejected', 'refunded']);
 
@@ -160,7 +161,8 @@ export default function ItemList({ items, selected, onToggle, onReceipt, onRemov
 
   return (
     <div className="gv-pay-items" role="list" aria-label="Your items">
-      {items.map(it => {
+      {/* Delegate Ticket 1, 2, 3... in number order (owner, 10 Nov 2026; display only). */}
+      {[...items].sort(compareMoneyItems).map(it => {
         if ((it.state === 'waived' || it.state === 'covered') && it.not_charged) return <NotChargedLine key={it.invoice_id} it={it} />;
         const lock = locked?.[it.invoice_id];
         const tick = canTick(it, locked);

@@ -23,6 +23,7 @@ import {
 } from './financialsApi';
 import { READ_ONLY_LINE, Row, formatDate } from './dashboardKit';
 import RefundDialog from './RefundDialog';
+import { compareMoneyItems } from '@/lib/moneyItemOrder';
 
 type Thing = { type: 'setup'; key: string; s: SetupThing } | { type: 'proof'; key: string; p: ProofThing } | { type: 'todo'; key: string; t: TodoThing };
 
@@ -350,10 +351,12 @@ function TodoStep({ t, conferenceId, readOnly, onDone, onSkip, onRefund }: {
     onDone();
   });
 
-  const itemRows = items.map(i => (
+  // Display order only (owner, 10 Nov 2026): Delegate Ticket 1, 2, 3...
+  const shownItems = [...items].sort(compareMoneyItems);
+  const itemRows = shownItems.map(i => (
     <Row key={i.invoice_id} label={i.label} sub={undefined} amount={cents(i.paid_cents > 0 ? i.paid_cents : i.amount_cents, cur)} />
   ));
-  const itemRowsWithPay = items.map(i => (
+  const itemRowsWithPay = shownItems.map(i => (
     <div key={i.invoice_id} className="gv-fd-row">
       <span className="gv-fd-row-label">{i.label}<small><PaidBy card={i.paid_by_card} /></small></span>
       <span className="gv-fd-row-amt">{cents(i.paid_cents > 0 ? i.paid_cents : i.amount_cents, cur)}</span>
