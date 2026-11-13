@@ -175,7 +175,7 @@ export default function DirectiveMain({ directive: d, reply, notesVersion = 0, o
       </div>
 
       {/* Bottom, fixed: the composer */}
-      <DirectiveComposer d={d} reply={reply} who={who} effectsButton={effectsButton} />
+      <DirectiveComposer d={d} reply={reply} who={d.kind === 'committee' && cabinet ? (cabinet.short_name || cabinet.name) : who} effectsButton={effectsButton} />
     </>
   );
 }

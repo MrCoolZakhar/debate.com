@@ -170,3 +170,25 @@ Owner decisions (Peter, 1 Nov 2026):
 - Room chat shows which staff member wrote ("Crisis Team · Name").
 - Not now: set-up and codes, security and logging in, packages, access expiry (archive will be premium).
 SQL: docs/crisis/sql/028_chair_request_changes.sql, 029_audit_fixes.sql (parts 29a to 29h, 30a, 30b).
+
+## Round 23: Hult MUN, the first real conference (13 Nov 2026)
+
+Hult MUN (13 to 15 Nov 2026) runs a joint French Revolution crisis: National Assembly and Paris Commune, both conference
+committees with live rooms. Its crisis is `french-revolution` (crisis id 999a9606-…), made from the two committees' seats:
+one character per seat (32), every allocated delegate as a member with their account, every empty seat as a code-only
+member named after the character, the two chairs with their accounts, and code-only staff (Crisis Director, Assistant
+Crisis Director, Backroom 1 to 4, Press). Everyone has a personal code and a 6-digit password; the code sheet is kept
+outside git (private/hult-crisis-codes.csv in the crisis worktree) and is NOT sent until Peter says so. Peter's own
+account is an Assistant Director there, so cabinet directives go to the conference's own Crisis Director (the first
+director by creation date).
+
+Feedback from their Crisis Director, now built (SQL part 37, docs/crisis/sql/037_*):
+- Chairs can see both cabinets: a setting, default off. Read only for the other cabinet; approving stays own cabinet.
+- Cross-cabinet meetings: a setting, default on. Delegates invite other cabinets' characters by name and picture
+  (crisis_meeting_people) even when "What delegates see of the other cabinets" is Nothing.
+- Third parties on the map: an owner that is neither a cabinet nor a delegate (name and colour), offered wherever an
+  owner is picked ("Someone else…"). A party that owns nothing drops out of the list; staff can rename or remove one
+  (its land becomes nobody's). Stored in settings.thirdParties, owners checked by a trigger.
+- Clarifications on cabinet directives: the writer, co-authors or the cabinet's chair answer; the chair gets the
+  question as a pop-up and on the Front Room, and an answer goes straight back to the backroom (no second chair approval).
+- The map opens on where the characters are when there are no units yet.

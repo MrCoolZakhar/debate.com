@@ -29,9 +29,9 @@ const TOOLS: Array<{ tool: Tool; label: string; key: string; Icon: typeof Flag; 
 
 const KEY_TOOL: Record<string, Tool> = { v: 'select', g: 'give', b: 'paint', e: 'erase', d: 'draw', z: 'zones', u: 'unit' };
 
-/** Which cabinet word goes in front of the chip's name for each tool. */
+/** The word in front of the chip's owner name (a cabinet or a third party) for each tool. */
 const VERB: Record<Tool, string> = {
-  select: 'Cabinet', give: 'Giving land to', paint: 'Painting as', erase: 'Cabinet', draw: 'Drawing for', zones: 'Cabinet', unit: 'Cabinet',
+  select: 'Owner', give: 'Giving land to', paint: 'Painting as', erase: 'Owner', draw: 'Drawing for', zones: 'Owner', unit: 'Owner',
 };
 
 export interface MapToolbarProps {

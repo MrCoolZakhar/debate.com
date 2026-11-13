@@ -31,6 +31,8 @@ const SEND_BACK_STYLE = { Icon: Undo2, color: '#7B3F61' };
 export function outcomeView(d: Pick<Directive, 'status' | 'reply' | 'outcome'>): { Icon: LucideIcon; color: string; word: string } | null {
   if (isChairSendBack(d)) return { ...SEND_BACK_STYLE, word: CHAIR_SEND_BACK_WORD };
   if (!d.outcome) return null;
+  // A clarification that was already answered: the question stays on the card, labelled as answered.
+  if (d.outcome === 'clarify' && d.status !== 'clarify') return { ...OUTCOME_STYLE.clarify, word: 'Question answered' };
   return { ...OUTCOME_STYLE[d.outcome], word: OUTCOME_LABEL[d.outcome] };
 }
 

@@ -1903,11 +1903,17 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
     const map = mapRef.current;
     if (!map) return;
     const pts = shownUnits.map((u) => [u.lng, u.lat] as LngLat);
+    // Placed characters count too, so a crisis with no units yet opens on where its people are, not on the whole world.
+    for (const c of core.characters) {
+      if (typeof c.location_lng === 'number' && typeof c.location_lat === 'number') pts.push([c.location_lng, c.location_lat]);
+    }
     if (!pts.length) { map.fitBounds([[-168, -48], [178, 76]], { padding: 24, duration: 0 }); return; }
     let minX = 180; let minY = 90; let maxX = -180; let maxY = -90;
     for (const [x, y] of pts) { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y); }
-    map.fitBounds([[minX, minY], [maxX, maxY]], { padding: compact || isStage ? 50 : 110, maxZoom: 5.5, duration: 0 });
-  }, [shownUnits, compact, isStage]);
+    // Everything inside one region (several points within about 2 degrees): zoom in as far as the map goes, otherwise stay at country level.
+    const city = pts.length > 1 && maxX - minX < 2 && maxY - minY < 2;
+    map.fitBounds([[minX, minY], [maxX, maxY]], { padding: compact || isStage ? 50 : 110, maxZoom: city ? 13 : 5.5, duration: 0 });
+  }, [shownUnits, core.characters, compact, isStage]);
 
   /** The outline point under the pointer, if it is within reach of the selected territory's outline. */
   const edgeAt = useCallback((map: MLMap, multi: Multi, point: { x: number; y: number }, ll: { lng: number; lat: number }): EdgeHit | null => {
