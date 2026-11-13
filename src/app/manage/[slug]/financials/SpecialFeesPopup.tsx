@@ -20,10 +20,10 @@ import { PurchaseShell, PURCHASE_CSS } from '@/components/purchase/purchaseKit';
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { friendlyError, plainOrFallback } from '@/lib/friendlyError';
 import { notifyOk } from '@/lib/appNotify';
-import { normalizeBlocks, questionsOf } from '@/lib/customQuestions';
+import { isChoiceType, normalizeBlocks, questionsOf, usableOptions } from '@/lib/customQuestions';
 import { STORE_CSS } from '../store/storeKit';
 import { DASH_CSS, READ_ONLY_LINE } from './dashboardKit';
-import { formatMoney, ROLE_ORDER_FULL, roleLabelFull } from './shared';
+import { formatMoney, ROLE_ORDER_FULL, roleLabel, roleLabelFull } from './shared';
 
 const FONT = 'var(--font-brand), sans-serif';
 const INK = '#1C1410';
@@ -412,8 +412,10 @@ export default function SpecialFeesPopup({ conference, readOnly, onClose }: {
       .filter(x => x.answers.length > 0);
     const levels = groups?.levels ?? [];
     const committeesG = groups?.committees ?? [];
-    const answerTabShown = levels.length > 0 || committeesG.length > 0 || answerQuestions.length > 0;
-    const tab = whoTab === 'answer' && !answerTabShown ? 'people' : whoTab;
+    // The Application answer tab always shows (prompt 38); with no live choice
+    // question on the role's form it says so and links to the form builder.
+    const tab = whoTab;
+    const hasLiveChoice = roleQuestions.some(x => !x.archived && isChoiceType(x.type) && usableOptions(x).length > 0);
     const countWord = (n: number) => `${n} ${n === 1 ? 'person' : 'people'}`;
     const groupHead = (t: string) => (
       <p style={{ margin: '10px 0 4px', fontFamily: FONT, fontSize: 12, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: INK_SOFT }}>{t}</p>
@@ -432,7 +434,7 @@ export default function SpecialFeesPopup({ conference, readOnly, onClose }: {
           {sub ? <span className="block [overflow-wrap:anywhere]" style={{ fontSize: 12.5, color: INK_SOFT }}>{sub}</span> : null}
         </span>
         <span className="flex items-center gap-3 flex-shrink-0">
-          {count !== undefined && <span style={{ fontSize: 12.5, color: INK_SOFT, fontVariantNumeric: 'tabular-nums' }}>{countWord(count)}</span>}
+          {count !== undefined && count > 0 && <span style={{ fontSize: 12.5, color: INK_SOFT, fontVariantNumeric: 'tabular-nums' }}>{countWord(count)}</span>}
           <span style={{ fontSize: 12.5, fontWeight: 700, color: on ? '#1B3828' : INK_SOFT }}>{on ? 'Added' : 'Add'}</span>
         </span>
       </button>
@@ -444,7 +446,7 @@ export default function SpecialFeesPopup({ conference, readOnly, onClose }: {
         <div style={{ borderBottom: `1px solid ${LINE}`, marginBottom: 12 }}>
           {tabBtn('people', 'People')}
           {tabBtn('delegations', 'Delegations')}
-          {answerTabShown && tabBtn('answer', 'Application answer')}
+          {tabBtn('answer', 'Application answer')}
         </div>
         {tab === 'people' && (
           <>
@@ -471,6 +473,16 @@ export default function SpecialFeesPopup({ conference, readOnly, onClose }: {
         )}
         {tab === 'answer' && (
           <div className="flex flex-col gap-1.5" style={{ maxHeight: 340, overflowY: 'auto' }}>
+            {!hasLiveChoice && (
+              <div style={{ marginBottom: 6 }}>
+                <p className="[overflow-wrap:anywhere]" style={{ margin: '0 0 8px', fontFamily: FONT, fontSize: 14, color: INK }}>
+                  No application questions with choices have been set up for {roleLabel(draft.role)} yet.
+                </p>
+                <a href={`/manage/${conference.slug}/settings?tab=applications&role=${encodeURIComponent(draft.role)}&step=form`} className="gv-st-btn gv-st-outline" style={{ textDecoration: 'none' }}>
+                  Set up application questions
+                </a>
+              </div>
+            )}
             {levels.length > 0 && (
               <>
                 {groupHead('MUN level')}

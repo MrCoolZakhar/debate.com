@@ -20,14 +20,12 @@ import { PillToggle } from '@/app/account/accountUi';
 import {
   NEU, NEU_GRADIENTS, OUTFIT, NeuCard, NeuButton, NeuIconDisc, NeuPill,
 } from '@/components/neu';
-import { useConfirmModal } from '@/components/ConfirmModal';
 import { inputStyle, fieldLabelStyle } from './shared';
 import { InfoHint } from '../settings/applicationsUi';
 
 // The house confirm sits at z-index 50; this section also lives inside the
 // Financials pop-ups (z-index 9090), so while the turn-off question is open
 // its backdrop is lifted above them.
-const RAISE_CONFIRM_CSS = '.gv-modal-backdrop{z-index:9300 !important}';
 
 interface SurchargeRow {
   id: string;
@@ -59,7 +57,8 @@ export default function ApplicationFeeSection({ conference, bare = false }: {
   // A NEW fee starts Inactive (prompt 106); a saved row keeps its own value below.
   const [active, setActive] = useState(false);
   const [gatesAcceptance, setGatesAcceptance] = useState(false);
-  const { confirm, modal: confirmModal } = useConfirmModal();
+  // Turning a live fee off is asked in place, above Save (prompt 38).
+  const [askOff, setAskOff] = useState(false);
   const askingRef = useRef(false);
 
   useEffect(() => {
@@ -91,8 +90,8 @@ export default function ApplicationFeeSection({ conference, bare = false }: {
   const amountMinor = Math.round(Number(amount) * 100);
   const amountIsPositive = Number.isFinite(amountMinor) && amountMinor > 0;
 
-  async function handleSave() {
-    if (!session || saving || askingRef.current) return;
+  async function handleSave(confirmedOff = false) {
+    if (!session || saving || (askingRef.current && !confirmedOff)) return;
     const amt = Number(amount);
     if (!label.trim()) { setError('Give the fee a label.'); return; }
     if (!Number.isFinite(amt) || amt < 0) { setError('Enter an amount of 0 or more.'); return; }
@@ -103,18 +102,13 @@ export default function ApplicationFeeSection({ conference, bare = false }: {
     // Turning a live fee off cancels pending Registration Fee invoices on the
     // server (owner, 8 Oct 2026), so ask first. Only when the SAVED fee is on
     // and this save turns it off: never on first setup, never when already off.
-    if (existing?.active && !active) {
+    if (existing?.active && !active && !confirmedOff) {
       askingRef.current = true;
-      const { confirmed } = await confirm({
-        title: 'Turn Off Registration Fee?',
-        body: 'Turning off registration fee will cancel any pending Registration Fee invoices from applicants. Do you wish to continue?',
-        confirmLabel: 'Turn off',
-        cancelLabel: 'Keep it on',
-        danger: true,
-      });
-      askingRef.current = false;
-      if (!confirmed) { setActive(true); return; }
+      setAskOff(true);
+      return;
     }
+    askingRef.current = false;
+    setAskOff(false);
     setError('');
     clearErr('financials-fee');
     setSaving(true);
@@ -149,7 +143,6 @@ export default function ApplicationFeeSection({ conference, bare = false }: {
 
   return (
     <section className={bare ? undefined : 'mt-8'}>
-      {confirmModal && <><style>{RAISE_CONFIRM_CSS}</style>{confirmModal}</>}
       {!bare && (
       <div className="flex items-center gap-3 mb-4">
           <NeuIconDisc gradient={NEU_GRADIENTS.amber} icon={ShieldAlert} emoji="Locked" size={36} />
@@ -278,8 +271,24 @@ export default function ApplicationFeeSection({ conference, bare = false }: {
           </div>
           </fieldset>
 
+          {askOff && (
+            <div role="alertdialog" aria-label="Turn Off Registration Fee?" style={{ marginTop: bare ? 12 : 16, padding: '12px 14px', borderRadius: 14, background: 'rgba(139,32,32,0.06)', boxShadow: 'inset 0 0 0 1.5px rgba(139,32,32,0.22)', fontFamily: OUTFIT }}>
+              <p style={{ margin: 0, fontSize: 15, fontWeight: 800, color: NEU.ink }}>Turn Off Registration Fee?</p>
+              <p style={{ margin: '4px 0 10px', fontSize: 13, lineHeight: 1.5, color: NEU.inkSoft }}>
+                Turning off registration fee will cancel any pending Registration Fee invoices from applicants. Do you wish to continue?
+              </p>
+              <div className="flex items-center gap-3 flex-wrap">
+                <NeuButton onClick={() => { void handleSave(true); }} disabled={saving}>{saving ? 'Saving…' : 'Turn off'}</NeuButton>
+                <button type="button" className="focus:outline-none" onClick={() => { askingRef.current = false; setAskOff(false); setActive(true); }}
+                  style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: NEU.forest, textDecoration: 'underline', textUnderlineOffset: 3 }}>
+                  Keep it on
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="flex items-center justify-end gap-3 flex-wrap" style={{ marginTop: bare ? 12 : 16 }}>
-            <NeuButton onClick={handleSave} disabled={saving} gradient={saved ? NEU_GRADIENTS.green : NEU_GRADIENTS.forest}>
+            <NeuButton onClick={() => { void handleSave(); }} disabled={saving || askOff} gradient={saved ? NEU_GRADIENTS.green : NEU_GRADIENTS.forest}>
               {saving ? 'Saving…' : saved ? 'Saved' : 'Save'}
             </NeuButton>
           </div>
