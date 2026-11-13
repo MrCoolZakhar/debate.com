@@ -177,7 +177,7 @@ function SettingsBody() {
             />
             <ToggleRow
               title="Chairs see both cabinets" checked={s.chairsSeeAllCabinets} onChange={(on) => save('chairsSeeAllCabinets', on)}
-              hint="On: each chair also sees the other cabinet's characters, cabinet directives and meetings, read only. Chairs still approve only their own cabinet's directives."
+              hint="On (the default): each chair also sees the other cabinet's characters, cabinet directives and meetings, read only. Chairs still approve only their own cabinet's directives. Off: chairs see only their own cabinet."
             />
             {full && (
               <ToggleRow

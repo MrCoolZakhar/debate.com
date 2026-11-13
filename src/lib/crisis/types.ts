@@ -45,12 +45,32 @@ export interface CrisisSettings {
   zoneTypes: ZoneType[];
   /** Custom troop types (a name, a picture, a sight range, details) a unit on the map can be made from (docs/crisis/sql/029, part 32). */
   customUnitTypes: CustomUnitType[];
-  /** Chairs also see the other cabinets' characters, cabinet directives and meetings, read only (docs/crisis/sql/037). Default off. */
+  /** Chairs also see the other cabinets' characters, cabinet directives and meetings, read only (docs/crisis/sql/037). Default on (13 Nov 2026). */
   chairsSeeAllCabinets: boolean;
   /** Delegates may ask characters of another cabinet to a meeting (docs/crisis/sql/037). Default on. */
   crossCabinetMeetings: boolean;
   /** Owners on the map that are neither a cabinet nor a delegate (docs/crisis/sql/037). Written only by crisis_add_party / crisis_edit_party / crisis_remove_party. */
   thirdParties: ThirdParty[];
+  /** An old map drawn under the crisis map: 'etatmajor' = IGN's État-major map of France (1820 to 1866), served by /api/crisis-tiles. */
+  historicalMap: 'none' | 'etatmajor';
+  /** Named places on the map (a club, a palace, a newspaper office), shown to everyone with their description. */
+  landmarks: Landmark[];
+}
+
+/** A named place on the map. */
+export interface Landmark { id: string; name: string; description: string; lng: number; lat: number }
+
+export function readLandmarks(s: { landmarks?: unknown }): Landmark[] {
+  const raw = Array.isArray(s.landmarks) ? s.landmarks : [];
+  const out: Landmark[] = [];
+  for (const e of raw) {
+    if (!e || typeof e !== 'object') continue;
+    const o = e as Record<string, unknown>;
+    if (typeof o.id !== 'string' || typeof o.name !== 'string' || !o.name.trim()) continue;
+    if (typeof o.lng !== 'number' || typeof o.lat !== 'number' || !Number.isFinite(o.lng) || !Number.isFinite(o.lat)) continue;
+    out.push({ id: o.id, name: o.name.trim(), description: typeof o.description === 'string' ? o.description.trim() : '', lng: o.lng, lat: o.lat });
+  }
+  return out;
 }
 
 /** A third party on the map: owns land, areas, zones and units through owner_cabinet_id like a cabinet does. */
@@ -86,9 +106,11 @@ export const DEFAULT_SETTINGS: CrisisSettings = {
   hideCabinetLocations: false,
   zoneTypes: [],
   customUnitTypes: [],
-  chairsSeeAllCabinets: false,
+  chairsSeeAllCabinets: true,
   crossCabinetMeetings: true,
   thirdParties: [],
+  historicalMap: 'none',
+  landmarks: [],
 };
 
 export function readSettings(raw: unknown): CrisisSettings {
@@ -102,9 +124,11 @@ export function readSettings(raw: unknown): CrisisSettings {
     hideCabinetLocations: s.hideCabinetLocations === true,
     zoneTypes: readZoneTypes(s),
     customUnitTypes: readCustomUnitTypes(s),
-    chairsSeeAllCabinets: s.chairsSeeAllCabinets === true,
+    chairsSeeAllCabinets: s.chairsSeeAllCabinets !== false,
     crossCabinetMeetings: s.crossCabinetMeetings !== false,
     thirdParties: readThirdParties(s),
+    historicalMap: (s as { historicalMap?: unknown }).historicalMap === 'etatmajor' ? 'etatmajor' : 'none',
+    landmarks: readLandmarks(s),
   };
 }
 
