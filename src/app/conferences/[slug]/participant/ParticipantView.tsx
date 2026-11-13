@@ -11,7 +11,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { ClipboardList, CreditCard, FileText, FolderOpen, Gavel, Landmark, LayoutDashboard, LifeBuoy, LogOut, MessageCircle, Pencil, Radio, Trophy, Users, X } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
-import { getAuthedClient } from '@/lib/supabase-auth';
+import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
 import { roleFeeToday } from '@/lib/freeRegistration';
 import { type FormBlock } from '@/lib/customQuestions';
 import { SectionCardSkeleton } from '@/components/Skeleton';
@@ -330,6 +330,29 @@ export default function ParticipantView({
     }
   }
 
+  // A special fee is never hidden (owner, 12 Nov 2026): a person at a special
+  // price owes that, so it is today's fee for the gate and the status row
+  // (special_fee_reason, read once per selected application, keyed on its id).
+  const specialAppId = myApplications.length > 0
+    ? ((holdsInitialRole ? myApplications.find(a => a.role === initialRole) : null) ?? pickDefault(myApplications)).id
+    : null;
+  const [specialFee, setSpecialFee] = useState<{ appId: string; special: number | null } | null>(null);
+  useEffect(() => {
+    if (!specialAppId) return;
+    let alive = true;
+    void (async () => {
+      try {
+        const client = await getFreshAuthedClient();
+        if (!client) return;
+        const { data, error } = await client.rpc('special_fee_reason', { p_application_id: specialAppId });
+        const d = (data ?? null) as { ok?: boolean; special?: number | null } | null;
+        if (!alive || error || !d?.ok) return;
+        setSpecialFee({ appId: specialAppId, special: d.special === null || d.special === undefined ? null : Number(d.special) });
+      } catch { /* keep the normal fee */ }
+    })();
+    return () => { alive = false; };
+  }, [specialAppId]);
+
   if (participantDataLoading) {
     return (
       <div className="flex flex-col gap-6">
@@ -381,9 +404,10 @@ export default function ParticipantView({
   const paymentTiming = roleConfig?.payment_timing ?? 'anytime';
   // Locked only when the organiser turned on "Hide dashboard until payment"
   // and this role charges a fee today (see getGateState).
-  const gateState = getGateState(paymentTiming, selected.status, selected.payment_status, roleFeeToday(roleConfig), roleConfig?.hide_dashboard_until_paid === true);
+  const specialToday = specialFee && specialFee.appId === selected.id && specialFee.special !== null && Number.isFinite(specialFee.special) ? specialFee.special : null;
+  const feeToday = specialToday ?? roleFeeToday(roleConfig);
+  const gateState = getGateState(paymentTiming, selected.status, selected.payment_status, feeToday, roleConfig?.hide_dashboard_until_paid === true);
 
-  const feeToday = roleFeeToday(roleConfig);
   const isDelegateRole = DELEGATE_ROLES.has(selected.role);
   const isLeader = (selected.role === 'faculty-advisor' || selected.role === 'head-delegate') && !!selected.society_id;
   const gateOpen = gateState === 'full';

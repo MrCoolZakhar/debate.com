@@ -76,6 +76,8 @@ import {
 } from 'lucide-react';
 import { replaceUrlInPlace } from '@/lib/replaceUrlInPlace';
 import { CHARGED_ROLES, HOLDING_STATUSES, rolesCombine, roleWithArticle } from '@/lib/roleCombos';
+import { specialFeeSentence, ticketNameFor, toSpecialFeeInfo, type SpecialFeeInfo } from '@/lib/specialFeeReason';
+import SpecialFeeInfoButton from '@/components/SpecialFeeInfoButton';
 import { ListingApplyLine, ListingClaimNote, useListingClaim, useListingForApply, useListingCommitteePrefill } from './ListingApplyLine';
 
 /** Destructive-action red, matching /drafts/[token] exactly. */
@@ -1342,6 +1344,41 @@ function ConferenceApplyInner() {
   // 'role' used to be a real first step; the fallback outlived it and matched
   // no render branch. Clamp to the last real stage instead of a dead sentinel.
   const currentStepKind: StepKind = stepSequence[step - 1] ?? stepSequence[stepSequence.length - 1];
+
+  // A special fee is never hidden (owner, 12 Nov 2026): on the overview the
+  // fee comes from special_fee_quote for the answers on screen, read again
+  // 400 ms after any of them change. The last answer stays while a read runs;
+  // a failed read keeps the normal fee.
+  const [feeQuote, setFeeQuote] = useState<SpecialFeeInfo | null>(null);
+  const quoteConfId = conference?.id ?? null;
+  const quoteAppId = existingApp?.id ?? null;
+  const quoteCommittees = preferences.map(p => p.committeeId).join(',');
+  const quoteAnswers = JSON.stringify(customAnswers);
+  useEffect(() => {
+    if (currentStepKind !== 'overview' || !quoteConfId) return;
+    let cancelled = false;
+    const t = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const client = session ? getAuthedClient(session.access_token) : anonSupabase;
+          const { data, error } = await client.rpc('special_fee_quote', {
+            p_conference_id: quoteConfId,
+            p_role: role,
+            p_answers: JSON.parse(quoteAnswers),
+            p_level: experienceLevel || null,
+            p_committee_ids: quoteCommittees ? quoteCommittees.split(',') : [],
+            p_society_id: selectedSocietyId || null,
+            p_application_id: quoteAppId,
+          });
+          if (cancelled || error) return;
+          const d = (data ?? null) as { ok?: boolean } | null;
+          if (d?.ok) setFeeQuote(toSpecialFeeInfo(d));
+        } catch { /* keep the normal fee */ }
+      })();
+    }, 400);
+    return () => { cancelled = true; window.clearTimeout(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStepKind, quoteConfId, role, quoteAnswers, experienceLevel, quoteCommittees, selectedSocietyId, quoteAppId, !!session]);
 
   // A role switch mid-flow means a different question set (different pages),
   // so any in-progress section pagination is stale — start over. Forward/back
@@ -3061,6 +3098,10 @@ function ConferenceApplyInner() {
               .select('id')
               .single();
             if (socInsertError) {
+              // The name belongs to a delegation in use: the database's own sentence, not a fault to report.
+              if ((socInsertError as { hint?: string }).hint === 'delegation_name_taken') {
+                throw new UserFacingError(friendlyError(socInsertError, 'We could not create your delegation. Please try again.'));
+              }
               reportBlocked('create delegation', socInsertError, { conferenceSlug: slug, role });
               throw new UserFacingError('We could not create your delegation. Please try again.');
             }
@@ -3523,7 +3564,10 @@ function ConferenceApplyInner() {
   function renderOrderSummary() {
     const rc = roleConfig;
     if (!rc || isEditMode) return null;
-    const { amount: resolvedFee, phase: currentPhase } = activePhaseFee(rc);
+    const { amount: normalFee, phase: currentPhase } = activePhaseFee(rc);
+    // A special fee for these answers replaces the normal one (special_fee_quote).
+    const special = feeQuote && feeQuote.special !== null ? feeQuote : null;
+    const resolvedFee = special ? (special.special as number) : normalFee;
     if (!(resolvedFee > 0)) return null;
     // The voucher is only useful when the fee is paid AT application. When the
     // conference doesn't require payment to submit (pay after acceptance), the
@@ -3548,9 +3592,14 @@ function ConferenceApplyInner() {
 
         {/* Fee line, names the active fee phase when one applies */}
         <div style={{ ...summaryRow, marginBottom: 10 }}>
-          <span style={{ color: 'color-mix(in srgb, var(--gv-on-bg) 75%, transparent)' }}>
-            Registration fee
-            {currentPhase && (
+          <span className="min-w-0 [overflow-wrap:anywhere]" style={{ color: 'color-mix(in srgb, var(--gv-on-bg) 75%, transparent)' }}>
+            {special ? `Special ${ticketNameFor(role)}` : ticketNameFor(role)}
+            {special && (
+              <SpecialFeeInfoButton
+                text={specialFeeSentence(special, conference?.acronym || conference?.full_name || '', (n, cur) => formatFee(n, cur))}
+              />
+            )}
+            {currentPhase && !special && (
               <span style={{ color: NEU.muted, fontWeight: 600 }}>: {currentPhase.label || 'Current phase'}</span>
             )}
           </span>

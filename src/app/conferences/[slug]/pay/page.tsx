@@ -25,7 +25,8 @@ import AuthLink from '@/components/auth/AuthLink';
 import SiteNav from '@/components/SiteNav';
 import Loader from '@/components/Loader';
 import { useAuth } from '@/components/AuthProvider';
-import { getAuthedClient } from '@/lib/supabase-auth';
+import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
+import { toSpecialFeeInfo, type SpecialFeeInfo } from '@/lib/specialFeeReason';
 import { activePhaseFee } from '@/lib/finance';
 import type { InvoiceRow } from '@/lib/invoices';
 import { themeCssVars } from '@/lib/theme';
@@ -97,6 +98,27 @@ export default function PayPage() {
   // while another of this person's applications here is under review
   // (application_payment_on_hold). Not tickable until one role is accepted.
   const [heldInvoiceIds, setHeldInvoiceIds] = useState<Set<string>>(() => new Set());
+  // A special fee is never hidden (owner, 12 Nov 2026): tickets at a special price,
+  // by invoice id (special_fee_items), read after every overview read. Display only.
+  const [specialItems, setSpecialItems] = useState<Map<string, SpecialFeeInfo>>(() => new Map());
+  useEffect(() => {
+    const ids = (overview?.items ?? []).filter(i => i.kind === 'role_fee' || i.kind === 'pledge_spot').map(i => i.invoice_id);
+    if (ids.length === 0) return;
+    let alive = true;
+    void (async () => {
+      try {
+        const client = await getFreshAuthedClient();
+        if (!client) return;
+        const { data, error } = await client.rpc('special_fee_items', { p_invoice_ids: ids });
+        const d = (data ?? null) as { ok?: boolean; items?: ({ invoice_id: string } & Record<string, unknown>)[] } | null;
+        if (!alive || error || !d?.ok || !Array.isArray(d.items)) return;
+        const m = new Map<string, SpecialFeeInfo>();
+        for (const it of d.items) { const info = toSpecialFeeInfo(it); if (info && info.special !== null) m.set(it.invoice_id, info); }
+        setSpecialItems(m);
+      } catch { /* a failed read changes nothing */ }
+    })();
+    return () => { alive = false; };
+  }, [overview]);
   const [manualPop, setManualPop] = useState<{
     batchId: string; totalCents: number; currency: string; mode: ManualMode; tabOpened?: boolean;
     /** 'resubmit': the organizer's reason, and the payment's items for "Start a new payment". */
@@ -648,6 +670,8 @@ export default function PayPage() {
                   ? <VoucherPanel conferenceId={c.id} applicationId={primary.application_id} discountCents={discount} currency={it.currency} onChanged={reload} />
                   : null}
                 discounts={quote ? new Map(quote.lines.filter(l => l.eligible && l.discount_cents > 0).map(l => [l.invoice_id, l.after_cents])) : undefined}
+                special={specialItems}
+                conferenceName={c.acronym || c.full_name}
               />
               {quote && quote.skipped.length > 0 && (
                 <p className="gv-pay-quiet">{quote.skipped.join(', ')} already {quote.skipped.length === 1 ? 'has' : 'have'} a discount</p>
