@@ -2,7 +2,7 @@
 // a big word with small words fitted to its exact width (below it, "stack"),
 // or beside it, matching its height ("side"); ivory paper, white cards, forest
 // and a touch of gold, the Gavelling lockup. "How a committee runs" becomes a
-// timeline. Same wording as the plain set (sheets.mjs).
+// timeline. Wording from sheets.mjs.
 //
 //   node scripts/reference-sheets/render-styled.mjs
 //

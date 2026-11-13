@@ -11,9 +11,13 @@ import { NextResponse, type NextRequest } from 'next/server';
  * a browser. Without it every call answers `{ enabled: false, items: [] }` with status 200 and
  * the chat hides its GIF button, so a missing key is not an error anywhere.
  *
- * Responses are trimmed to what the picker and a message need, cached in memory for 60 s
- * (LRU, per server instance) and marked cacheable for 60 s at the edge. A light per-IP limit
- * stops one client hammering the provider's quota.
+ * Responses are trimmed to what the picker and a message need. GIPHY's key allows only so many
+ * calls an hour (31 Oct 2026: busy conference rooms ran it out about three times a day), so
+ * answers are cached hard: at Vercel's edge, shared by every viewer (trending 1 h, a search 1 day,
+ * both served stale while refreshing and when GIPHY refuses), and in memory per server instance,
+ * where an expired copy is still served if GIPHY fails. The client normalises the query and drops
+ * the language from trending so the same request is the same URL. A light per-IP limit stops one
+ * client hammering the quota.
  *
  * Privacy: this route sends GIPHY only the search text, never the viewer's IP (the request
  * comes from our server). The GIF IMAGES, however, load from GIPHY's CDN in the viewer's
@@ -24,7 +28,8 @@ export const dynamic = 'force-dynamic';
 
 const PAGE = 24;
 const MAX_OFFSET = 499; // GIPHY's beta keys cap offset; we also cap how deep a picker scrolls.
-const TTL_MS = 60_000;
+const TRENDING_TTL_MS = 10 * 60_000;
+const SEARCH_TTL_MS = 6 * 60 * 60_000;
 const CACHE_MAX = 300;
 const RATE_WINDOW_MS = 60_000;
 const RATE_MAX = 90;
@@ -87,36 +92,43 @@ function trim(g: GiphyGif): GifItem | null {
   return { id: g.id, title: (g.title ?? '').slice(0, 120), preview, send, original };
 }
 
-function json(data: GifResponse, status = 200, cacheable = true) {
+const EDGE_TRENDING = 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400, stale-if-error=86400';
+const EDGE_SEARCH = 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800, stale-if-error=604800';
+
+function json(data: GifResponse, status = 200, cache: string | null = 'public, max-age=60, s-maxage=60') {
   return NextResponse.json(data, {
     status,
-    headers: { 'Cache-Control': cacheable ? 'public, max-age=60, s-maxage=60' : 'no-store' },
+    headers: { 'Cache-Control': cache ?? 'no-store' },
   });
 }
 
 export async function GET(req: NextRequest) {
   const key = process.env.GIPHY_API_KEY;
-  if (!key) return json({ enabled: false, items: [], next: null }, 200, false);
+  if (!key) return json({ enabled: false, items: [], next: null }, 200, null);
 
   const sp = req.nextUrl.searchParams;
   if (sp.get('probe')) return json({ enabled: true, items: [], next: null });
 
   const ip = (req.headers.get('x-forwarded-for') ?? '').split(',')[0].trim() || req.headers.get('x-real-ip') || 'local';
-  if (limited(ip)) return json({ enabled: true, items: [], next: null, error: 'rate_limited' }, 429, false);
+  if (limited(ip)) return json({ enabled: true, items: [], next: null, error: 'rate_limited' }, 429, null);
 
-  const q = (sp.get('q') ?? '').trim().slice(0, 50);
+  const q = (sp.get('q') ?? '').trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 50);
   const offsetRaw = Number.parseInt(sp.get('offset') ?? '0', 10);
   const offset = Number.isFinite(offsetRaw) ? Math.min(MAX_OFFSET, Math.max(0, offsetRaw)) : 0;
   const lang = (sp.get('lang') ?? 'en').slice(0, 2).replace(/[^a-z]/g, '') || 'en';
 
-  const cacheKey = `${q.toLowerCase()}|${offset}|${lang}`;
+  const edge = q ? EDGE_SEARCH : EDGE_TRENDING;
+  const ttl = q ? SEARCH_TTL_MS : TRENDING_TTL_MS;
+  const cacheKey = q ? `${q}|${offset}|${lang}` : `|${offset}`;
   const now = Date.now();
   const cached = cache.get(cacheKey);
-  if (cached && now - cached.at < TTL_MS) {
+  if (cached && now - cached.at < ttl) {
     cache.delete(cacheKey); // LRU: move to the newest end
     cache.set(cacheKey, cached);
-    return json(cached.data);
+    return json(cached.data, 200, edge);
   }
+  // GIPHY refused or failed: an expired copy beats an empty picker.
+  const stale = () => (cached ? json(cached.data, 200, 'public, max-age=60, s-maxage=60') : null);
 
   const params = new URLSearchParams({
     api_key: key, limit: String(PAGE), offset: String(offset), rating: 'pg-13', bundle: 'messaging_non_clips',
@@ -129,7 +141,7 @@ export async function GET(req: NextRequest) {
     const timer = setTimeout(() => ctrl.abort(), 6000);
     const res = await fetch(endpoint, { signal: ctrl.signal, cache: 'no-store' });
     clearTimeout(timer);
-    if (!res.ok) return json({ enabled: true, items: [], next: null, error: 'provider' }, 502, false);
+    if (!res.ok) return stale() ?? json({ enabled: true, items: [], next: null, error: 'provider' }, 502, null);
     const body = await res.json() as { data?: GiphyGif[]; pagination?: { total_count?: number; count?: number; offset?: number } };
     const items = (body.data ?? []).map(trim).filter((x): x is GifItem => x != null);
     const count = body.pagination?.count ?? body.data?.length ?? 0;
@@ -143,8 +155,8 @@ export async function GET(req: NextRequest) {
       if (oldest === undefined) break;
       cache.delete(oldest);
     }
-    return json(data);
+    return json(data, 200, edge);
   } catch {
-    return json({ enabled: true, items: [], next: null, error: 'provider' }, 502, false);
+    return stale() ?? json({ enabled: true, items: [], next: null, error: 'provider' }, 502, null);
   }
 }

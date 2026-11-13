@@ -75,6 +75,8 @@ export interface Refusal {
   conference_credits?: number;
   your_credits?: number;
   taken_days?: string[];
+  /** job_listing_save / job_listing_publish: the role a role_* refusal is about. */
+  role?: string;
 }
 
 const SIGNIN = 'Your session has ended. Sign in again to continue.';
@@ -130,7 +132,7 @@ export function saveListing(p: ListingPatch) {
 }
 
 export function publishListing(id: string, topUp = false, confirmDeadline = false) {
-  return call<{ charged?: number; message?: string }>('job_listing_publish', { p_id: id, p_top_up: topUp, p_confirm_deadline: confirmDeadline }, 'We could not publish this listing. Try again.');
+  return call<{ charged?: number; message?: string; role_opened?: boolean }>('job_listing_publish', { p_id: id, p_top_up: topUp, p_confirm_deadline: confirmDeadline }, 'We could not publish this listing. Try again.');
 }
 
 export function closeListing(id: string) {

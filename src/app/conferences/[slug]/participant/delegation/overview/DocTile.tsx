@@ -41,9 +41,11 @@ export function TileAction({ Icon, label, onClick, busy, tone = 'main' }: {
   );
 }
 
-export default function DocTile({ Icon, title, line, lineColor, action }: {
+export default function DocTile({ Icon, title, tag, line, lineColor, action }: {
   Icon: LucideIcon;
   title: string;
+  /** A tag beside the title (the Required tag of a mandatory position paper). */
+  tag?: React.ReactNode;
   /** The deadline or release date, small beneath the name. */
   line: React.ReactNode;
   lineColor?: string;
@@ -58,6 +60,7 @@ export default function DocTile({ Icon, title, line, lineColor, action }: {
       <div className="flex-1 min-w-0 flex flex-col gap-0.5">
         <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 14.5, fontWeight: 600, color: INK, lineHeight: 1.25 }}>
           {title}
+          {tag && <span style={{ marginLeft: 8, verticalAlign: 'middle' }}>{tag}</span>}
         </span>
         <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 12.5, color: lineColor ?? INK_SOFT, lineHeight: 1.35 }}>
           {line}

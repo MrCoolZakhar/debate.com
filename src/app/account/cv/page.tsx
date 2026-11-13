@@ -2,7 +2,7 @@
 
 import { sortCvEntries } from '@/lib/cvOrder';
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, Share2, Check, ScrollText, EyeOff } from 'lucide-react';
+import { Plus, Share2, Check, ScrollText, EyeOff, Download, Loader2 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { syncExperienceLevel } from '@/lib/munExperience';
@@ -21,6 +21,8 @@ import { experienceProgress } from '@/lib/munExperience';
 import CVPrivacyPanel, { type CvPrivacy } from './CVPrivacyPanel';
 import { friendlyError } from '@/lib/friendlyError';
 import TalentPrompt from '@/components/TalentPrompt';
+import { downloadCvPdf, CV_PDF_FAILED } from '@/components/cv/downloadCvPdf';
+import { notifyErr } from '@/lib/appNotify';
 
 // ── Page ───────────────────────────────────────────────────────────────────
 
@@ -31,6 +33,7 @@ export default function CVPage() {
   const [modalEntry, setModalEntry] = useState<CVEntry | null>(null);
   const [modalOpen, setModalOpen]   = useState(false);
   const [copied, setCopied]         = useState(false);
+  const [pdfBusy, setPdfBusy]       = useState(false);
   // Spotify-Wrapped celebration — set only when a NEW entry is added.
   const [shareEntry, setShareEntry] = useState<CVEntry | null>(null);
   // Who can see the CV (profiles.cv_private / cv_hide_nationality). Enforced by
@@ -173,6 +176,23 @@ export default function CVPage() {
     }
   }
 
+  // The PDF is for sharing, so it carries only what a visitor to the public CV
+  // would see: entries the owner hid stay out, and so does a hidden nationality.
+  // It is built from the entries already on this page; nothing is read.
+  async function handleDownloadPdf() {
+    if (!user || pdfBusy) return;
+    setPdfBusy(true);
+    const ok = await downloadCvPdf({
+      name: profile?.display_name ?? user.email?.split('@')[0] ?? 'Delegate',
+      avatarUrl: profile?.avatar_url ?? null,
+      nationality: privacy.hideNationality ? null : nationality,
+      entries: entries.filter((e) => !e.is_private),
+      shareUrl: privacy.cvPrivate ? '' : buildCvShareUrl(),
+    });
+    setPdfBusy(false);
+    if (!ok) notifyErr(CV_PDF_FAILED);
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -215,6 +235,21 @@ export default function CVPage() {
               {copied ? <Check size={16} strokeWidth={2.6} style={{ color: '#2A5A3C' }} aria-hidden /> : <Share2 size={16} strokeWidth={2.2} aria-hidden />}
               {copied ? 'Copied' : 'Share'}
             </button>
+            {/* Download PDF: the CV as an A4 file, without the entries you hide */}
+            {entries.length > 0 && (
+              <button
+                type="button"
+                onClick={handleDownloadPdf}
+                disabled={pdfBusy}
+                aria-busy={pdfBusy}
+                aria-label="Download your CV as a PDF"
+                title="Download your CV as a PDF. Entries you hide are left out."
+                className="gv-acct-btn2"
+              >
+                {pdfBusy ? <Loader2 size={16} strokeWidth={1.5} className="animate-spin" aria-hidden /> : <Download size={16} strokeWidth={1.5} aria-hidden />}
+                Download PDF
+              </button>
+            )}
             <button type="button" onClick={openAdd} className="gv-acct-btn" aria-label="Add a conference to your CV">
               <Plus size={18} strokeWidth={2.6} aria-hidden />
               Add conference

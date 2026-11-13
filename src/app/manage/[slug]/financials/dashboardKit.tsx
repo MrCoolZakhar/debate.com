@@ -7,7 +7,7 @@
 // cards are separate components with an `onOpen` prop, so prompt 94 only swaps
 // the handler for a pop-up.
 
-import { CreditCard, Gift, ReceiptText, Ticket, type LucideIcon } from 'lucide-react';
+import { CreditCard, Gift, ReceiptText, Tag, Ticket, type LucideIcon } from 'lucide-react';
 import { OUTFIT, Emoji3D } from '@/components/neu';
 import { InfoHint } from '../settings/applicationsUi';
 import { INK, INK_SOFT, FOREST, GOLD, DEEP_GOLD, IVORY, LINE, DANGER } from '../store/storeKit';
@@ -37,6 +37,13 @@ export const DASH_CSS = `
   .gv-fd-four{grid-template-columns:repeat(4,minmax(0,1fr))}
 }
 @media (max-width:420px){.gv-fd-four{grid-template-columns:minmax(0,1fr)}}
+/* The settings row with Special Fees (9 Nov 2026): five across from 1280px, a touch smaller. */
+@media (min-width:1280px){
+  .gv-fd-four.gv-fd-five{grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
+  .gv-fd-five .gv-fd-set{padding:14px 12px 12px!important}
+  .gv-fd-five .gv-fd-set-fact{font-size:14px}
+  .gv-fd-five .gv-fd-set .gv-st-btn{padding:0 12px;font-size:12.5px}
+}
 
 /* Header numbers, top right, in the Store balances' place */
 .gv-fd-head-nums{display:flex;align-items:flex-start;gap:22px;flex-wrap:wrap}
@@ -266,6 +273,9 @@ export function paymentMethodWords(s: S): { fact: string; sub: string } {
   if (s.manual_kind === 'qr') {
     return { fact: 'Payment QR code', sub: s.has_qr ? 'Payers scan your QR, then upload a proof' : 'Add your QR code to start taking payments' };
   }
+  if (s.manual_kind === 'phone') {
+    return { fact: 'Phone number', sub: 'Payers send money to your number, then upload a proof' };
+  }
   if (s.manual_kind === 'bank') {
     return { fact: 'Bank transfer', sub: s.has_bank ? 'Payers send a transfer, then upload a proof' : 'Add your bank details to start taking payments' };
   }
@@ -275,7 +285,11 @@ export function paymentMethodWords(s: S): { fact: string; sub: string } {
   return { fact: 'Payment link', sub: s.has_external_url ? 'Payers pay on your page, then upload a proof' : 'Add your payment link to start taking payments' };
 }
 
-export function PaymentMethodCard({ s, onOpen, readOnly, onHow }: { s: S; onOpen: () => void; readOnly: boolean; onHow?: () => void }) {
+export function PaymentMethodCard({ s, onOpen, readOnly, onHow, extraMethods = 0 }: {
+  s: S; onOpen: () => void; readOnly: boolean; onHow?: () => void;
+  /** Extra payment methods beside the main one (prompt 31); the card then shows the count. */
+  extraMethods?: number;
+}) {
   let fact = 'Not set up yet';
   let sub: string | undefined = 'Set this up when you want to take payments';
   if (s.platform_collects) {
@@ -288,6 +302,10 @@ export function PaymentMethodCard({ s, onOpen, readOnly, onHow }: { s: S; onOpen
     const m = paymentMethodWords(s);
     fact = m.fact;
     sub = m.sub;
+  }
+  if (extraMethods > 0 && !s.platform_collects) {
+    fact = `${extraMethods + 1} payment methods`;
+    sub = 'Payers pick theirs when they pay';
   }
   return (
     <SettingCard
@@ -336,6 +354,17 @@ export function VouchersCard({ s, onOpen, readOnly }: { s: S; onOpen: () => void
       hint="Discount codes you hand out, for partner schools or early supporters. A code takes money off the ticket when someone applies."
       fact={any ? `${s.vouchers_active} active code${s.vouchers_active === 1 ? '' : 's'}` : 'None yet'}
       sub={any ? `Used ${s.vouchers_used} time${s.vouchers_used === 1 ? '' : 's'}` : undefined}
+      onOpen={onOpen} readOnly={readOnly}
+    />
+  );
+}
+
+export function SpecialFeesCard({ count, onOpen, readOnly }: { count: number | null; onOpen: () => void; readOnly: boolean }) {
+  return (
+    <SettingCard
+      title="Special Fees" icon={{ emoji: 'Label', lucide: Tag, tint: TINT_GOLD }}
+      hint="A different fee for people you choose. Only their invoice changes, nothing public shows it, and people who match later get it by themselves."
+      fact={count === null ? '…' : count === 0 ? 'None yet' : `${count} special fee${count === 1 ? '' : 's'}`}
       onOpen={onOpen} readOnly={readOnly}
     />
   );

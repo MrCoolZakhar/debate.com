@@ -67,6 +67,7 @@ export function AddonsPopup({ conference, readOnly, onClose }: { conference: Con
   return (
     <Shell title="Add-ons" line="Extras payers can add, like a socials ticket or a T-shirt" readOnly={readOnly} onClose={onClose}>
       <AddonsSection
+        soldFor={(id) => stats.get(id)?.bought}
         conference={conference}
         bare
         renderStats={(id) => {

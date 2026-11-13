@@ -20,6 +20,7 @@ import {
 } from '@/lib/customQuestions';
 import { stagePhoto } from '@/lib/applyQuestionPages';
 import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
+import type { UploadContext } from '@/components/FileUploadField';
 
 const HELP_INK = NEU.inkSoft;
 
@@ -70,7 +71,7 @@ export function ConferencePlate({
       style={{
         height: 152, borderRadius: 20, marginBottom: 20,
         // Last-resort ground, visible only if neither image paints.
-        background: `linear-gradient(135deg, ${NEU.forest}, #2F6644)`,
+        background: 'linear-gradient(135deg, var(--gv-main), var(--gv-main-dark, var(--gv-main)))',
         boxShadow: NEU.out,
       }}
     >
@@ -88,12 +89,12 @@ export function ConferencePlate({
       <span
         aria-hidden
         className="absolute inset-0"
-        style={{ background: 'linear-gradient(100deg, rgba(20,36,27,0.88) 0%, rgba(20,36,27,0.66) 44%, rgba(20,36,27,0.22) 100%)' }}
+        style={{ background: `linear-gradient(100deg, color-mix(in srgb, var(--gv-main-dark, var(--gv-main)) 88%, transparent) 0%, color-mix(in srgb, var(--gv-main-dark, var(--gv-main)) 66%, transparent) 44%, color-mix(in srgb, var(--gv-main-dark, var(--gv-main)) 22%, transparent) 100%)` }}
       />
       <span
         aria-hidden
         className="absolute inset-0"
-        style={{ background: 'linear-gradient(to top, rgba(20,36,27,0.45) 0%, rgba(20,36,27,0) 58%)' }}
+        style={{ background: `linear-gradient(to top, color-mix(in srgb, var(--gv-main-dark, var(--gv-main)) 45%, transparent) 0%, transparent 58%)` }}
       />
       <div className="absolute inset-0 flex items-center gap-3.5" style={{ padding: '0 20px' }}>
         {/* Always rendered: LogoDisc falls back to a gold monogram, so a
@@ -163,7 +164,7 @@ export function SectionStrip({
         className="absolute inset-0"
         style={{ backgroundImage: `url(${photo})`, backgroundSize: 'cover', backgroundPosition: 'center' }}
       />
-      <span aria-hidden className="absolute inset-0" style={{ background: 'linear-gradient(100deg, rgba(20,36,27,0.88) 0%, rgba(20,36,27,0.60) 55%, rgba(20,36,27,0.26) 100%)' }} />
+      <span aria-hidden className="absolute inset-0" style={{ background: `linear-gradient(100deg, color-mix(in srgb, var(--gv-main-dark, var(--gv-main)) 88%, transparent) 0%, color-mix(in srgb, var(--gv-main-dark, var(--gv-main)) 60%, transparent) 55%, color-mix(in srgb, var(--gv-main-dark, var(--gv-main)) 26%, transparent) 100%)` }} />
       <div className="absolute inset-0 flex items-center justify-between gap-3" style={{ padding: '0 16px' }}>
         <p className="min-w-0 [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 14.5, color: '#FFFCF4', letterSpacing: '0.01em' }}>
           {acronymLabel}
@@ -172,9 +173,9 @@ export function SectionStrip({
           className="flex-shrink-0"
           style={{
             fontFamily: OUTFIT, fontWeight: 800, fontSize: 10.5, letterSpacing: '0.13em',
-            color: NEU.gold, fontVariantNumeric: 'tabular-nums',
+            color: '#FFFCF4', fontVariantNumeric: 'tabular-nums',
             padding: '4px 10px', borderRadius: 999,
-            backgroundColor: 'rgba(238,217,138,0.15)', border: '1px solid rgba(238,217,138,0.38)',
+            backgroundColor: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.4)',
           }}
         >
           SECTION {index + 1} OF {total}
@@ -215,8 +216,12 @@ export function MissingSummary({ count, onJump }: { count: number; onJump: () =>
 
 // ── The stage body ─────────────────────────────────────────────────────────
 export default function ApplicationQuestionsStage({
-  blocks, answers, onChange, missingIds = [], hideBlockId, solo = false,
+  blocks, answers, onChange, missingIds = [], hideBlockId, solo = false, upload, onUploadingChange,
 }: {
+  /** Where file_upload answers go (passed to every card). */
+  upload?: UploadContext;
+  /** A file upload started or ended on this page. */
+  onUploadingChange?: (busy: boolean) => void;
   blocks: FormBlock[];
   answers: CustomAnswers;
   onChange: (next: CustomAnswers) => void;
@@ -270,6 +275,8 @@ export default function ApplicationQuestionsStage({
         hasError={missingIds.includes(block.id)}
         solo={solo}
         compact={compact}
+        upload={upload}
+        onUploadingChange={onUploadingChange}
       />
     );
   };

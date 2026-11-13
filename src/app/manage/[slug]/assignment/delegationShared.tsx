@@ -51,10 +51,10 @@ export function poolForRole(role: string): Pool | null {
  * Canonical location (F: fillFreeSpots consolidation): applications/page.tsx
  * and DelegationsView.tsx both import this rather than keeping their own copy.
  *
- * Every newly-covered member gets a 'spot_received' email (the fill-path
- * notification), except any id in `opts.suppressIds`, used when the fill was
- * triggered by that same person's own acceptance, which already told them via
- * 'application_accepted' (rule one wins; see emailEvents.ts consolidation notes).
+ * It sends no email (owner, 6 Nov 2026): the database sends Fee Covered
+ * (spot_received) when a member becomes paid by their delegation, a day after
+ * the acceptance email of the same action. `opts.suppressIds` stays for the
+ * callers and is no longer read.
  */
 export async function fillFreeSpots(
   supabase: ReturnType<typeof getAuthedClient>,
@@ -100,12 +100,6 @@ export async function fillFreeSpots(
   // These members are absorbed into an already-purchased delegation spot, not
   // funding one themselves, self_paid stays false.
   await supabase.from('applications').update({ payment_status: 'paid', self_paid: false }).in('id', ids);
-
-  const suppress = opts?.suppressIds instanceof Set ? opts.suppressIds : new Set(opts?.suppressIds ?? []);
-  const emailIds = ids.filter(id => !suppress.has(id));
-  if (emailIds.length > 0) {
-    await queueEventEmail(supabase, conferenceId, 'spot_received', emailIds);
-  }
 
   return { filledIds: ids };
 }
@@ -249,8 +243,10 @@ export interface SwapEmailResult {
  * an allocation, when the incoming delegate (source) already has one; the
  * caller (SwapConfirmModal, F11) also disables the checkbox in that case, but
  * the guard here holds regardless of what the caller passes.
- * Queues spot_received for the incoming delegate and spot_lost for the
- * outgoing one; the returned flags say whether either had no enabled template.
+ * Sends no email (owner, 6 Nov 2026): the database sends Fee Covered
+ * (spot_received) to the incoming delegate once they are paid by the
+ * delegation, and Spot Lost is retired. incoming / outgoing come back 'off'
+ * so callers show no notice.
  */
 export async function performSwap(
   supabase: ReturnType<typeof getAuthedClient>,
@@ -313,10 +309,8 @@ export async function performSwap(
     note(tgtClearErr);
   }
 
-  const [incoming, outgoing] = await Promise.all([
-    queueEventEmail(supabase, conferenceId, 'spot_received', [source.id]),
-    queueEventEmail(supabase, conferenceId, 'spot_lost', [target.id]),
-  ]);
+  const incoming: QueueEventEmailResult = { outcome: 'off', drafted: false, eventKey: 'spot_received' };
+  const outgoing: QueueEventEmailResult = { outcome: 'off', drafted: false, eventKey: 'spot_lost' };
   return { incoming, outgoing, error: firstError };
 }
 

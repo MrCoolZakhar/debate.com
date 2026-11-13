@@ -31,6 +31,8 @@ import Portal from '@/components/Portal';
 import { DatePicker } from '@/components/DatePicker';
 import { type CustomQuestion, type CustomAnswerValue, usableOptions } from '@/lib/customQuestions';
 import { wordCount, parseWordTarget } from '@/lib/applyQuestionPages';
+import QuestionDocLink from '@/components/QuestionDocLink';
+import FileUploadField, { type UploadContext } from '@/components/FileUploadField';
 
 // ── Contrast-checked tokens ────────────────────────────────────────────────
 // BOUNDARY: 3.21:1 on the #EDE7D8 page, 3.33:1 on the #F0EBDD card surface.
@@ -59,7 +61,7 @@ export function focusQuestion(questionId: string): void {
   const card = document.getElementById(questionCardId(questionId));
   if (!card) return;
   card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  const control = card.querySelector<HTMLElement>('textarea, input, [role="combobox"], [role="radio"], [role="checkbox"]');
+  const control = card.querySelector<HTMLElement>('textarea, input:not([type="file"]), [role="combobox"], [role="radio"], [role="checkbox"], button[data-upload]');
   (control ?? card).focus({ preventScroll: true });
 }
 
@@ -70,6 +72,7 @@ function errorMessage(q: CustomQuestion): string {
     case 'paragraph': return 'Please answer this one: a few sentences is enough.';
     case 'number': return 'Please enter a number.';
     case 'date': return 'Please pick a date.';
+    case 'file_upload': return 'Please upload a file.';
     case 'checkboxes': return 'Please pick at least one.';
     case 'multiple_choice':
     case 'dropdown': return 'Please choose one.';
@@ -94,17 +97,17 @@ function QuestionNumeral({ n, done }: { n: number; done: boolean }) {
       className="relative inline-flex items-center justify-center flex-shrink-0"
       style={{
         width: 26, height: 26, borderRadius: 999,
-        background: done
-          ? `linear-gradient(135deg, ${NEU.green}, ${NEU.forest})`
-          : `linear-gradient(135deg, ${NEU.gold}, ${NEU.deepGold})`,
-        boxShadow: done ? `0 2px 7px color-mix(in srgb, ${NEU.forest} 27%, transparent)` : `0 2px 7px color-mix(in srgb, ${NEU.deepGold} 33%, transparent)`,
+        // Owner, 31 Oct 2026 ("colours here don't make sense"): the number sits on the
+        // conference's main colour in its on-main ink; a finished question turns to the accent.
+        background: done ? 'var(--gv-accent)' : 'var(--gv-main)',
+        boxShadow: done ? '0 2px 7px color-mix(in srgb, var(--gv-accent) 33%, transparent)' : '0 2px 7px color-mix(in srgb, var(--gv-main) 27%, transparent)',
         transition: `background 320ms ${EASE}, box-shadow 320ms ${EASE}`,
       }}
     >
       <span
         style={{
           position: 'absolute', fontFamily: OUTFIT, fontWeight: 900, fontSize: 12,
-          color: NEU.forest, fontVariantNumeric: 'tabular-nums',
+          color: 'var(--gv-on-main)', fontVariantNumeric: 'tabular-nums',
           opacity: done ? 0 : 1,
           transform: done ? 'scale(0.25)' : 'scale(1)',
           filter: done ? 'blur(4px)' : 'blur(0px)',
@@ -122,7 +125,7 @@ function QuestionNumeral({ n, done }: { n: number; done: boolean }) {
           transition: `opacity 260ms ${EASE}, transform 260ms ${EASE}, filter 260ms ${EASE}`,
         }}
       >
-        <Check size={14} strokeWidth={3.2} style={{ color: NEU.gold }} />
+        <Check size={14} strokeWidth={3.2} style={{ color: 'var(--gv-on-accent)' }} />
       </span>
     </span>
   );
@@ -580,8 +583,12 @@ function PortalSelect({
 
 // ── The card ───────────────────────────────────────────────────────────────
 export default function ApplicationQuestionCard({
-  question: q, index, value, onChange, hasError, solo = false, compact = false,
+  question: q, index, value, onChange, hasError, solo = false, compact = false, upload, onUploadingChange,
 }: {
+  /** Where a file_upload answer goes (the conference, and the user when signed in). */
+  upload?: UploadContext;
+  /** A file_upload card says when its upload starts and ends. */
+  onUploadingChange?: (busy: boolean) => void;
   question: CustomQuestion;
   /** 1-based position within the current page. */
   index: number;
@@ -668,6 +675,9 @@ export default function ApplicationQuestionCard({
         </p>
       )}
 
+      {/* The conference's document for this question (prompt 19), above the answer. */}
+      {q.doc && <div style={{ marginLeft: 38 }}><QuestionDocLink doc={q.doc} /></div>}
+
       {q.type === 'paragraph' && (
         <EssayField q={q} value={str} onChange={onChange} hasError={hasError} describedBy={describedBy} />
       )}
@@ -683,9 +693,21 @@ export default function ApplicationQuestionCard({
           variant="well"
           describedBy={describedBy}
           invalid={hasError}
+          anyYear
           value={str}
           onChange={(iso) => onChange(iso)}
           placeholder={q.placeholder ?? 'Pick a date'}
+        />
+      )}
+      {q.type === 'file_upload' && (
+        <FileUploadField
+          questionId={q.id}
+          value={str}
+          onChange={(path) => onChange(path)}
+          upload={upload}
+          describedBy={describedBy}
+          invalid={hasError}
+          onUploadingChange={onUploadingChange}
         />
       )}
       {q.type === 'multiple_choice' && (

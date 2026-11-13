@@ -21,7 +21,7 @@ import {
   type EmailTokenContext, type EmailTokenKey,
 } from '@/lib/emailTokens';
 import { ALWAYS_ON_EMAILS, ALWAYS_ON_LINE } from './alwaysOnEmails';
-import { EVENT_REGISTRY, queueEventEmail, getEventLabel, notifyIfNeeded, turnOnDefaultEmail, turnOffDefaultEmail, eventOnWhenMissing, newTemplateStartsEnabled, hasDraftContent, type EventDef, type EventKey } from '@/lib/emailEvents';
+import { EVENT_REGISTRY, joinFieldLabels, queueEventEmail, getEventLabel, notifyIfNeeded, turnOnDefaultEmail, turnOffDefaultEmail, eventOnWhenMissing, newTemplateStartsEnabled, hasDraftContent, type EventDef, type EventKey } from '@/lib/emailEvents';
 import { EASE, NEU, NEU_GRADIENTS, Emoji3D, NeuIconDisc, type NeuGradient } from '@/components/neu';
 import {
   SOFT, GREEN_INK, RED,
@@ -194,6 +194,9 @@ interface OutboxDetailRow {
   error: string | null;
   sent_at: string | null;
   recipient_application_id: string | null;
+  /** Our default copy went instead of the organiser's: their copy used these
+   *  fields, which this person did not have yet (owner, 6 Nov 2026). */
+  fallback_fields?: string[] | null;
 }
 
 /** One row of the whole outbox, summary columns only (no bodies). This is what
@@ -218,6 +221,9 @@ interface AutoSendGroup {
   delivered: number;
   failed: number;
   pending: number;
+  /** Rows that went out as our default copy (fallback_fields), and their fields. */
+  fallback: number;
+  fallbackFields: string[];
   rows: OutboxFeedRow[];
 }
 
@@ -258,8 +264,22 @@ interface SwapMetadata {
   app_b?: string;
   member_a?: string;
   member_b?: string;
-  before?: { a?: string; b?: string };
-  after?: { a?: string; b?: string };
+  /** Old swaps: one word per side. A seat change (delegation_request_move) carries a string. */
+  before?: { a?: string; b?: string } | string;
+  after?: { a?: string; b?: string } | string;
+  /** Request Reshuffling (5 Nov 2026): a seat change of one person, decided by respond_delegation_move_request. */
+  action?: 'place' | 'unplace';
+  member?: string;
+}
+
+/** A seat-change request (it has metadata.action); old swap requests do not. */
+function isMoveRequest(m: SwapMetadata | null | undefined): boolean {
+  return !!m && typeof m.action === 'string';
+}
+
+/** One side of an old swap's before / after. */
+function swapSide(v: SwapMetadata['before'], side: 'a' | 'b'): string | undefined {
+  return v && typeof v === 'object' ? v[side] : undefined;
 }
 
 interface InboxRequest {
@@ -293,7 +313,7 @@ interface InboxProfile {
 
 const KIND_CHIP: Record<string, { label: string; color: string; Icon: typeof HelpCircle }> = {
   question: { label: 'Question', color: '#1B3828', Icon: HelpCircle },
-  swap_request: { label: 'Swap request', color: GOLD_INK, Icon: Repeat },
+  swap_request: { label: 'Seat change', color: GOLD_INK, Icon: Repeat },
   swap_notice: { label: 'Swap', color: '#6B5F52', Icon: Repeat },
 };
 
@@ -318,7 +338,7 @@ const STACK_BLUR = [0, 0.9, 1.7, 2.5];
 
 const INBOX_KIND_OPTIONS = [
   { value: 'question', label: 'Question' },
-  { value: 'swap_request', label: 'Swap request' },
+  { value: 'swap_request', label: 'Seat change' },
   { value: 'swap_notice', label: 'Swap' },
 ];
 
@@ -1787,7 +1807,7 @@ function CommunicationsPageInner() {
     const supabase = getAuthedClient(accessToken);
     const { data } = await supabase
       .from('email_outbox')
-      .select('id, template_id, email_send_id, recipient_application_id, recipient_email, subject, status, error, sent_at, created_at, send_after')
+      .select('id, template_id, email_send_id, recipient_application_id, recipient_email, subject, status, error, sent_at, created_at, send_after, fallback_fields')
       .eq('conference_id', conferenceId)
       .order('created_at', { ascending: false })
       .limit(4000);
@@ -2024,11 +2044,15 @@ function CommunicationsPageInner() {
         g = {
           key, eventKey, day, latestAt: r.created_at,
           label: eventKey ? getEventLabel(eventKey) : (r.subject || '(No subject)'),
-          count: 0, delivered: 0, failed: 0, pending: 0, rows: [],
+          count: 0, delivered: 0, failed: 0, pending: 0, fallback: 0, fallbackFields: [], rows: [],
         };
         map.set(key, g);
       }
       g.count += 1;
+      if ((r.fallback_fields?.length ?? 0) > 0) {
+        g.fallback += 1;
+        for (const f of r.fallback_fields ?? []) if (!g.fallbackFields.includes(f)) g.fallbackFields.push(f);
+      }
       if (r.status === 'sent') g.delivered += 1;
       else if (r.status === 'failed') g.failed += 1;
       else g.pending += 1;
@@ -3124,7 +3148,7 @@ function CommunicationsPageInner() {
     const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase
       .from('email_outbox')
-      .select('id, recipient_email, status, error, sent_at, recipient_application_id')
+      .select('id, recipient_email, status, error, sent_at, recipient_application_id, fallback_fields')
       .eq('email_send_id', sendId);
     setOutboxBySend(prev => ({ ...prev, [sendId]: (data ?? []) as OutboxDetailRow[] }));
   }
@@ -3562,6 +3586,11 @@ function CommunicationsPageInner() {
           </ProfileLink>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
+          {(r.fallback_fields?.length ?? 0) > 0 && (
+            <span className="text-xs" style={{ color: RED, fontFamily: OUTFIT }}>
+              {`Default copy: no ${joinFieldLabels([...(r.fallback_fields ?? [])].sort())} yet`}
+            </span>
+          )}
           {r.status === 'failed' && r.error && (() => {
             const failure = friendlyDeliveryError(r.error, r.recipient_email);
             return (
@@ -3768,6 +3797,26 @@ function CommunicationsPageInner() {
     clearErr('communications-swap');
     const supabase = getAuthedClient(session.access_token);
 
+    // A seat change (Request Reshuffling): one RPC makes or declines the change,
+    // writes the decision message and closes the thread. Nothing else is written here.
+    if (isMoveRequest(req.metadata)) {
+      setSwapActing(true);
+      try {
+        const { data, error } = await supabase.rpc('respond_delegation_move_request', { p_request: req.id, p_approve: approve, p_note: null });
+        if (error) { notifyErr(friendlyError(error, 'The decision could not be saved.'), 'communications-swap'); return; }
+        const result = (data ?? {}) as { ok?: boolean; error?: string };
+        if (result.ok !== true) { notifyErr(plainOrFallback(result.error, 'The decision could not be saved.'), 'communications-swap'); return; }
+        setInboxRequests(prev => prev.map(r => (r.id === req.id ? { ...r, status: 'closed', last_message_at: new Date().toISOString(), seen_by_organizer: true } : r)));
+        void loadInbox();
+        window.dispatchEvent(new CustomEvent('gv-inbox-read-changed'));
+      } catch (e) {
+        notifyErr(friendlyError(e, 'The decision could not be saved.'), 'communications-swap');
+      } finally {
+        setSwapActing(false);
+      }
+      return;
+    }
+
     if (approve) {
       // The swap itself is a server-computed RPC whose ok/error result gates
       // everything else, so it stays awaited, busy-state on the Approve/
@@ -3949,11 +3998,14 @@ function CommunicationsPageInner() {
         createdAt: m.created_at,
       })),
       swap: isSwap ? {
-        lines: [
-          `${req.metadata.member_a ?? 'Member A'}: ${req.metadata.before?.a ?? 'Not set'} → ${req.metadata.after?.a ?? 'Not set'}`,
-          `${req.metadata.member_b ?? 'Member B'}: ${req.metadata.before?.b ?? 'Not set'} → ${req.metadata.after?.b ?? 'Not set'}`,
-        ],
+        lines: isMoveRequest(req.metadata)
+          ? [`${req.metadata.member ?? 'Member'}: ${typeof req.metadata.before === 'string' ? req.metadata.before : 'Not set'} → ${typeof req.metadata.after === 'string' ? req.metadata.after : 'Not set'}`]
+          : [
+            `${req.metadata.member_a ?? 'Member A'}: ${swapSide(req.metadata.before, 'a') ?? 'Not set'} → ${swapSide(req.metadata.after, 'a') ?? 'Not set'}`,
+            `${req.metadata.member_b ?? 'Member B'}: ${swapSide(req.metadata.before, 'b') ?? 'Not set'} → ${swapSide(req.metadata.after, 'b') ?? 'Not set'}`,
+          ],
         canDecide: req.kind === 'swap_request' && req.status === 'open',
+        isChange: isMoveRequest(req.metadata),
       } : null,
     };
   })() : null;
@@ -4213,6 +4265,11 @@ function CommunicationsPageInner() {
                           {g.pending > 0 && <span style={{ color: GOLD_INK, fontWeight: 700 }}>{g.pending} sending</span>}
                           <span className="ml-auto flex-shrink-0">{formatDate(g.latestAt)}</span>
                         </div>
+                        {g.fallback > 0 && (
+                          <p className="mt-1.5 [overflow-wrap:anywhere]" style={{ fontSize: 12, color: RED, fontWeight: 700, fontFamily: OUTFIT, margin: '6px 0 0' }}>
+                            {`${g.fallback === 1 ? '1 person' : `${g.fallback} people`} got our default copy: your version uses ${joinFieldLabels([...g.fallbackFields].sort())}, which they do not have yet.`}
+                          </p>
+                        )}
                         <div className="mt-3 pt-3 flex flex-col gap-2" style={{ borderTop: '1px solid rgba(27,56,40,0.09)' }}>
                           <div>
                             <button

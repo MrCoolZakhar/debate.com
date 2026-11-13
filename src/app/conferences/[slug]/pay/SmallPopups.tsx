@@ -13,6 +13,7 @@ import { notifyOk } from '@/lib/appNotify';
 import { DANGER, INK_SOFT } from './payKit';
 import { money, type PayItem } from './payApi';
 import { cancelStartedPayment, reportRefundNotReceived, requestRefund } from './manualApi';
+import { compareMoneyItems } from '@/lib/moneyItemOrder';
 
 const REASON_MAX = 500;
 
@@ -59,7 +60,7 @@ export function RefundRequestPopup({ items, preselect, onClose, onDone }: {
     <Shell label="Request a refund" onClose={onClose} busyRef={busyRef} small>
       <h2 style={{ margin: 0, paddingRight: 40, fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em' }}>Request a Refund</h2>
       <div className="gv-pay-rows">
-        {items.map(i => (
+        {[...items].sort(compareMoneyItems).map(i => (
           <label key={i.invoice_id} className="gv-pay-row" style={{ alignItems: 'center', cursor: 'pointer' }}>
             <span className="flex items-center gap-3" style={{ minWidth: 0 }}>
               <input type="checkbox" checked={ticked.has(i.invoice_id)} disabled={busy} style={{ width: 20, height: 20, accentColor: 'var(--gv-main)' }}

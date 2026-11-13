@@ -63,7 +63,7 @@ function startOfDay(d: Date): Date {
 export function DatePicker({
   value, onChange, min, max, placeholder = 'Select a date', disabled, initialView,
   id, describedBy, invalid = false, variant = 'default',
-  withTime = false, clearable = false, zoneNote, futureOnly = false,
+  withTime = false, clearable = false, zoneNote, futureOnly = false, anyYear = false,
 }: {
   value: string;
   onChange: (iso: string) => void;
@@ -107,6 +107,14 @@ export function DatePicker({
    * current year. A value already saved in the past still shows as it is.
    */
   futureOnly?: boolean;
+  /**
+   * A date that can be any year, past or future (a conference's own Date
+   * question on an application form; prompt 17): the year list runs from the
+   * current year plus 20 down to the current year minus 100, an empty picker
+   * opens on the current month with nothing chosen, and no day is dimmed.
+   * Pass it without min, max or futureOnly.
+   */
+  anyYear?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const selected = useMemo(() => parseISO(value), [value]);
@@ -158,9 +166,17 @@ export function DatePicker({
   // Since prompt 139 the list always STARTS at the current year: a past-only
   // picker (a birthday: max up to today, no min) counts down from it, every
   // other picker counts up from it. The year in view is always included.
+  // A third range, `anyYear` (a form's own Date question): newest first, from
+  // the current year plus 20 down to the current year minus 100, so the open
+  // list lands on this year with future years above it and past years below.
   const years = useMemo(() => {
     const viewYear = view.getFullYear();
     const nowYear = new Date().getFullYear();
+    if (anyYear) {
+      const hi = Math.max(nowYear + 20, viewYear);
+      const lo = Math.min(nowYear - 100, viewYear);
+      return Array.from({ length: hi - lo + 1 }, (_, i) => hi - i);
+    }
     const pastOnly = !futureOnly && !!maxDate && !minDate && maxDate.getFullYear() <= nowYear;
     if (pastOnly) {
       const hi = Math.max(nowYear, viewYear);
@@ -170,7 +186,7 @@ export function DatePicker({
     const lo = Math.min(nowYear, viewYear);
     const hi = Math.max(maxDate ? maxDate.getFullYear() : nowYear + 20, viewYear, nowYear);
     return Array.from({ length: hi - lo + 1 }, (_, i) => lo + i);
-  }, [view, minDate, maxDate, futureOnly]);
+  }, [view, minDate, maxDate, futureOnly, anyYear]);
   const btnRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ top: number; left: number; compact: boolean } | null>(null);

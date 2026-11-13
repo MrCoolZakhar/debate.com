@@ -60,6 +60,9 @@ import { normaliseCommitteeLanguage, DEFAULT_COMMITTEE_LANGUAGE } from '@/lib/co
 import { readLiveSeatUse, liveSeatUseLines, clearFloorOfSeats, type LiveSeatUse } from '@/lib/liveSeatRemoval';
 import { notifyErr } from '@/lib/appNotify';
 
+// A seat's code: the country's code, else the seat's own name (characters, custom seats).
+const seatCode = (name: string): string => getCountryByName(name)?.code ?? name;
+
 // ── Design constants ──────────────────────────────────────────────────────────
 
 const EASE = 'cubic-bezier(0.22,1,0.36,1)';
@@ -878,12 +881,28 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
 
   async function doEdit(supabase: ReturnType<typeof getAuthedClient>, forceRemoval: boolean, forceDoubleOff = false, forceLive = false): Promise<'ok' | 'needs_confirm_removal' | 'needs_confirm_double_off' | 'needs_confirm_live' | 'fail'> {
     const ex = existing!;
-    const baseNames = baselineRoster.map(r => r.name);
+    // A seat renamed in place (the pencil) is a RENAME, never a removal: the seat
+    // keeps its delegate, application and live-room row under the new name (owner,
+    // 3 Nov 2026, after HultMUN's crisis delegates lost their characters to a
+    // rename). A rename onto another saved seat's name or code stays remove + add.
+    const renames = roster.flatMap((r) => {
+      const from = r.origName;
+      if (!from || from === r.name || !baselineRoster.some((b) => b.name === from)) return [];
+      const others = baselineRoster.filter((b) => b.name !== from);
+      const to = r.name.toLowerCase();
+      const toCode = seatCode(r.name).toLowerCase();
+      if (others.some((b) => b.name.toLowerCase() === to || seatCode(b.name).toLowerCase() === toCode)) return [];
+      return [{ from, to: r.name }];
+    });
+    const renameTo = new Map(renames.map((x) => [x.from, x.to]));
+    // The saved roster as it reads once the renames land: every diff below runs on it.
+    const base = baselineRoster.map((b) => (renameTo.has(b.name) ? { ...b, name: renameTo.get(b.name)! } : b));
+    const baseNames = base.map(r => r.name);
     const nextNames = roster.map(r => r.name);
-    const baseTier = new Map(baselineRoster.map(r => [r.name, r.importance]));
-    const baseObs = new Map(baselineRoster.map(r => [r.name, !!r.isObserver]));
-    const baseLogo = new Map(baselineRoster.map(r => [r.name, r.logoUrl ?? null]));
-    const baseGroup = new Map(baselineRoster.map(r => [r.name, r.groupId ?? null]));
+    const baseTier = new Map(base.map(r => [r.name, r.importance]));
+    const baseObs = new Map(base.map(r => [r.name, !!r.isObserver]));
+    const baseLogo = new Map(base.map(r => [r.name, r.logoUrl ?? null]));
+    const baseGroup = new Map(base.map(r => [r.name, r.groupId ?? null]));
     const added = roster.filter(r => !baseNames.includes(r.name));
     const removed = baseNames.filter(c => !nextNames.includes(c));
     // Rows kept across the edit whose importance tier the organiser changed.
@@ -964,6 +983,44 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
       console.error('[committee-editor]', message);
       sessErrors.push(what);
     };
+
+    // Renames first, so every later write by name finds the new name. Order per
+    // seat: the slot (an allocation's code must match a slot), its allocations, the
+    // assigned applications, then the live room.
+    for (const { from, to } of renames) {
+      const code = seatCode(to);
+      const { data: sUpd, error: sErr } = await supabase.from('committee_country_slots')
+        .update({ country_name: to, country_code: code })
+        .eq('conference_committee_id', ex.id)
+        .eq('country_name', from)
+        .select('id');
+      if (sErr || !sUpd || sUpd.length === 0) {
+        if (sErr) console.error('[committee-editor] rename slot', sErr);
+        setError(`Could not rename "${from}". Please try again.`);
+        return 'fail';
+      }
+      const { error: aErr } = await supabase.from('conference_allocations')
+        .update({ country_name: to, country_code: code })
+        .eq('conference_committee_id', ex.id)
+        .eq('country_name', from);
+      if (aErr) {
+        console.error('[committee-editor] rename allocations', aErr);
+        setError(`"${from}" was renamed, but its delegate could not be moved with it. Please check Assignment.`);
+        return 'fail';
+      }
+      const { error: apErr } = await supabase.from('applications')
+        .update({ assigned_country_name: to, assigned_country_code: code })
+        .eq('assigned_committee_id', ex.id)
+        .eq('assigned_country_name', from);
+      if (apErr) console.error('[committee-editor] rename applications', apErr);
+      if (sessDb) {
+        const { error: e } = await sessDb.from('delegates')
+          .update({ country: to })
+          .eq('committee_id', ex.session_id!)
+          .eq('country', from);
+        if (e) noteSess(`"${to}" still shows its old name in the live room`, e.message);
+      }
+    }
 
     if (removed.length > 0) {
       await supabase.from('conference_allocations').delete().eq('conference_committee_id', ex.id).in('country_name', removed);
@@ -1054,7 +1111,7 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
     // art differs from what it resolved to at mount is rewritten, whether the
     // cause was its own flag, its group, or its group's flag.
     if (sessDb) {
-      const baseRow = new Map(baselineRoster.map((r) => [r.name, r]));
+      const baseRow = new Map(base.map((r) => [r.name, r]));
       const movedArt = roster.filter((r) => {
         const before = baseRow.get(r.name);
         return before && resolvedSeatArt(before, baselineGroups) !== resolvedSeatArt(r, groups);
@@ -1281,7 +1338,7 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
   // that lands closes directly, without asking.
   const [confirmLeave, setConfirmLeave] = useState(false);
   const baselineSeatNames = new Set(baselineRoster.map(r => r.name.trim().toLowerCase()));
-  const addedSeats = roster.filter(r => !baselineSeatNames.has(r.name.trim().toLowerCase())).length;
+  const addedSeats = roster.filter(r => !r.origName && !baselineSeatNames.has(r.name.trim().toLowerCase())).length;
   const requestClose = () => {
     if (saving) return;
     if (addedSeats > 0) { setConfirmLeave(true); return; }
@@ -1638,6 +1695,7 @@ export function CommitteeEditorModal({ conference, committee, onSaved, onClose, 
         setInitialRoster(
           (slots ?? []).map((r: { country_name: string; importance: string | null; is_observer: boolean | null; logo_url: string | null; group_id: string | null }) => ({
             name: r.country_name,
+            origName: r.country_name,
             importance: (r.importance as RosterEntry['importance']) ?? 'standard',
             isObserver: r.is_observer ?? false,
             logoUrl: r.logo_url ?? null,

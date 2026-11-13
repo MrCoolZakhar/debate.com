@@ -59,7 +59,10 @@ export default function PayGoPage() {
         setConf(row);
         const o = await readPayOverview(row.id);
         if (!alive) return;
-        const url = safeHttps(o.conference.payment_url);
+        // An extra payment method's link (prompt 31): /pay/go?way=<id>.
+        const wayId = new URLSearchParams(window.location.search).get('way');
+        const way = wayId ? o.conference.ways.find(w => w.id === wayId) ?? null : null;
+        const url = safeHttps(wayId ? way?.payment_url : o.conference.payment_url);
         setState(url ? { kind: 'go', url } : { kind: 'nolink' });
       } catch (e) {
         if (alive) setState({ kind: 'error', text: friendlyError(e, 'The payment page could not be found. Go back to your payments tab') });

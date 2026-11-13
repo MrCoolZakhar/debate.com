@@ -144,7 +144,8 @@ export interface JobMyResult {
   unlimited: boolean;
 }
 
-type Fail = { ok: false; message: string };
+/** answered: the server read the listing and said no (gone, hidden, closed to this viewer), not a failed read. */
+type Fail = { ok: false; message: string; answered?: boolean };
 
 const READ_FAIL = 'We could not load the job board. Check your connection and try again.';
 
@@ -195,7 +196,7 @@ export async function fetchJobListing(id: string): Promise<JobListingResult | Fa
     const { data, error } = await client.rpc('job_listing_get', { p_id: id });
     if (error || !data) return { ok: false, message: friendlyError(error, fallback) };
     const d = data as { ok?: boolean; message?: string };
-    if (!d.ok) return { ok: false, message: d.message || fallback };
+    if (!d.ok) return { ok: false, message: d.message || fallback, answered: true };
     return data as JobListingResult;
   } catch (e) {
     return { ok: false, message: friendlyError(e, fallback) };

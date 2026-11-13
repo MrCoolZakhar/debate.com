@@ -64,6 +64,7 @@ import { reportCrash } from '@/lib/reportCrash';
 const LOAD_WATCHDOG_MS = 12_000;
 import { useServerNow } from '@/lib/applicationWindow';
 import { RoleApplyCards, type RoleTile } from './RoleApplyCards';
+import OtherRolesBlock from './OtherRolesBlock';
 import { useFitSticky } from './useFitSticky';
 import { ContactOrganisers, conferenceContactEmails, copyEmailWithToast } from './ContactOrganisers';
 import { BottomToastHost } from './BottomToast';
@@ -685,9 +686,11 @@ export interface ConferenceDetailClientProps {
   /** Server-built "About" section (ConferenceAbout.tsx) for a thin
    *  description, mounted right below the description on Overview. */
   aboutFallback?: React.ReactNode;
+  /** The same About facts without a card or heading, drawn inside the description card. */
+  aboutInline?: React.ReactNode;
 }
 
-export default function ConferenceDetailClient({ initialView, initialRole = null, initialConference = null, initialCommittees = [], overviewFooter = null, placeLinks = null, aboutFallback = null }: ConferenceDetailClientProps) {
+export default function ConferenceDetailClient({ initialView, initialRole = null, initialConference = null, initialCommittees = [], overviewFooter = null, placeLinks = null, aboutFallback = null, aboutInline = null }: ConferenceDetailClientProps) {
   const params = useParams<{ slug: string }>();
   const slug = params.slug;
   const router = useRouter();
@@ -2325,7 +2328,10 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                     About the Conference
                   </h2>
                   {conference.description ? (
-                    <ConferenceDescription text={conference.description} />
+                    <>
+                      <ConferenceDescription text={conference.description} />
+                      {aboutInline}
+                    </>
                   ) : (
                     <button
                       type="button"
@@ -2346,7 +2352,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                   )}
                 </SectionCard>
               )}
-              {pane === 'overview' && aboutFallback}
+              {pane === 'overview' && !conference.description && aboutFallback}
 
 
               {/* Organiser */}
@@ -2900,6 +2906,25 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                             >
                               View your dashboard
                             </a>
+                            {/* Several roles per person (9 Nov 2026): the other roles they can still apply for. */}
+                            <OtherRolesBlock
+                              slug={slug}
+                              apps={myApplications}
+                              primaryRole={myApp.role}
+                              tiles={enabledRoles.map((r): RoleTile => {
+                                const windowStatus = getRoleWindowStatus(r);
+                                return {
+                                  role: r.role,
+                                  label: roleLabel(r.role),
+                                  state: windowStatus === 'closed' ? 'closed' : windowStatus === 'opens-soon' ? 'opens-soon' : 'open',
+                                  price: delegatePriceLabel(displayRolePrice(r, conference.fee_currency, now)),
+                                  opensLabel: windowStatus === 'opens-soon' && r.applications_open_at
+                                    ? `Opens ${fmtWindowDate(r.applications_open_at)}`
+                                    : null,
+                                };
+                              })}
+                              onPick={(role) => { router.push(`/conferences/${slug}/apply?role=${role}`); }}
+                            />
                           </>
                         );
                       })()
@@ -3850,7 +3875,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
               <input
                 id="public-banner-upload"
                 type="file"
-                accept="image/jpeg,image/png,image/webp"
+                accept="image/*"
                 style={{ display: 'none' }}
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) handleAssetSelect('banners', f); e.target.value = ''; }}
               />

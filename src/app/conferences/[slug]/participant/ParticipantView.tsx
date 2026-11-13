@@ -11,7 +11,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { ClipboardList, CreditCard, FileText, FolderOpen, Gavel, Landmark, LayoutDashboard, LifeBuoy, LogOut, MessageCircle, Pencil, Radio, Trophy, Users, X } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
-import { getAuthedClient } from '@/lib/supabase-auth';
+import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
 import { roleFeeToday } from '@/lib/freeRegistration';
 import { type FormBlock } from '@/lib/customQuestions';
 import { SectionCardSkeleton } from '@/components/Skeleton';
@@ -35,6 +35,7 @@ import ApplyPointer from './ApplyPointer';
 import ConferenceDocsSection, { useConferenceDocs, docForRole, DOC_READER_STATUSES } from './ConferenceDocsSection';
 import ConferenceDocsExtra, { useMyConferenceDocs, requiredOutstanding, DocsRequiredNotice } from './ConferenceDocsExtra';
 import DelegationOverview from './delegation/overview/DelegationOverview';
+import LeaderUnderReviewCard from './LeaderUnderReviewCard';
 import type { ParticipantApplication, ParticipantRoleConfig, ParticipantAllocation, ParticipantCommittee } from './types';
 import { friendlyError, UserFacingError } from '@/lib/friendlyError';
 
@@ -124,6 +125,8 @@ function pageNextStep(o: {
   roleStep: NextStep | null;
   /** False while the conference has not set up payments: Pay now is drawn locked. */
   paymentsReady?: boolean | null;
+  /** A delegation leader whose Delegation section is not open yet (it opens on acceptance). */
+  leaderWaiting?: boolean;
 }): NextStep | null {
   const pay = { label: 'Pay now', href: `/conferences/${o.conferenceSlug}/pay`, lockedSlug: o.paymentsReady === false ? o.conferenceSlug : undefined };
   if (o.locked) {
@@ -132,7 +135,12 @@ function pageNextStep(o: {
   if (o.app.status === 'submitted') {
     return o.payNow
       ? { kind: 'action', line: 'Pay your registration fee while the organisers review your application.', action: pay }
-      : { kind: 'done', line: 'The organisers are reviewing your application. You will get an email when they decide.' };
+      : {
+          kind: 'done',
+          line: o.leaderWaiting
+            ? 'The organisers are reviewing your application. Once it is accepted you can invite your delegates from the Delegation section. You will get an email when they decide.'
+            : 'The organisers are reviewing your application. You will get an email when they decide.',
+        };
   }
   if (o.payNow) return { kind: 'action', line: 'Pay your registration fee to confirm your place.', action: pay };
   if (o.app.status === 'checked-in') return { kind: 'done', line: 'You are checked in. Enjoy the conference.' };
@@ -322,6 +330,29 @@ export default function ParticipantView({
     }
   }
 
+  // A special fee is never hidden (owner, 12 Nov 2026): a person at a special
+  // price owes that, so it is today's fee for the gate and the status row
+  // (special_fee_reason, read once per selected application, keyed on its id).
+  const specialAppId = myApplications.length > 0
+    ? ((holdsInitialRole ? myApplications.find(a => a.role === initialRole) : null) ?? pickDefault(myApplications)).id
+    : null;
+  const [specialFee, setSpecialFee] = useState<{ appId: string; special: number | null } | null>(null);
+  useEffect(() => {
+    if (!specialAppId) return;
+    let alive = true;
+    void (async () => {
+      try {
+        const client = await getFreshAuthedClient();
+        if (!client) return;
+        const { data, error } = await client.rpc('special_fee_reason', { p_application_id: specialAppId });
+        const d = (data ?? null) as { ok?: boolean; special?: number | null } | null;
+        if (!alive || error || !d?.ok) return;
+        setSpecialFee({ appId: specialAppId, special: d.special === null || d.special === undefined ? null : Number(d.special) });
+      } catch { /* keep the normal fee */ }
+    })();
+    return () => { alive = false; };
+  }, [specialAppId]);
+
   if (participantDataLoading) {
     return (
       <div className="flex flex-col gap-6">
@@ -373,9 +404,10 @@ export default function ParticipantView({
   const paymentTiming = roleConfig?.payment_timing ?? 'anytime';
   // Locked only when the organiser turned on "Hide dashboard until payment"
   // and this role charges a fee today (see getGateState).
-  const gateState = getGateState(paymentTiming, selected.status, selected.payment_status, roleFeeToday(roleConfig), roleConfig?.hide_dashboard_until_paid === true);
+  const specialToday = specialFee && specialFee.appId === selected.id && specialFee.special !== null && Number.isFinite(specialFee.special) ? specialFee.special : null;
+  const feeToday = specialToday ?? roleFeeToday(roleConfig);
+  const gateState = getGateState(paymentTiming, selected.status, selected.payment_status, feeToday, roleConfig?.hide_dashboard_until_paid === true);
 
-  const feeToday = roleFeeToday(roleConfig);
   const isDelegateRole = DELEGATE_ROLES.has(selected.role);
   const isLeader = (selected.role === 'faculty-advisor' || selected.role === 'head-delegate') && !!selected.society_id;
   const gateOpen = gateState === 'full';
@@ -432,6 +464,7 @@ export default function ParticipantView({
     // A role step only counts while that role's dashboard is on the page.
     roleStep: gateOpen ? roleStep : null,
     paymentsReady,
+    leaderWaiting: isLeader && !gateOpen,
   });
 
   // Opens another section from Overview (the delegation Overview): the desktop
@@ -741,6 +774,8 @@ export default function ParticipantView({
             </Pane>
             ) : (
             <Pane show={activeSection === 'overview'}>
+              {/* A leader under review: why there is no Delegation section yet (owner, 4 Nov 2026). */}
+              {isLeader && selected.status === 'submitted' && !gateOpen && <LeaderUnderReviewCard />}
               {docsNotice}
               {roleOverview}
             </Pane>

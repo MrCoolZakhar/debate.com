@@ -70,9 +70,19 @@ export function rowAmount(fee: number, r: FinRow): number {
 export function roleLabel(role: string) {
   const map: Record<string, string> = {
     delegate: 'Delegate', chair: 'Chair', 'head-delegate': 'Head Del.',
-    'faculty-advisor': 'Advisor', observer: 'Observer',
+    'faculty-advisor': 'Advisor', observer: 'Observer', secretariat: 'Secretariat', staff: 'Staff',
   };
   return map[role] ?? role;
+}
+
+/** Full role names, for places with room for them (Special Fees). */
+export const ROLE_ORDER_FULL = ['delegate', 'head-delegate', 'faculty-advisor', 'observer', 'chair', 'secretariat', 'staff'];
+export function roleLabelFull(role: string) {
+  const map: Record<string, string> = {
+    delegate: 'Delegate', 'head-delegate': 'Head Delegate', 'faculty-advisor': 'Faculty Advisor',
+    observer: 'Observer', chair: 'Chair', secretariat: 'Secretariat', staff: 'Staff',
+  };
+  return map[role] ?? role.replace(/-/g, ' ');
 }
 
 export function RoleIcon({ role, size = 10 }: { role: string; size?: number }) {

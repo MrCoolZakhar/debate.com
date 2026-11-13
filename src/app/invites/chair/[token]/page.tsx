@@ -55,12 +55,15 @@ export default function ChairInvitePage() {
   const pathname = usePathname();
   const params = useParams<{ token: string }>();
   const token = params.token;
-  const { user, session, loading: authLoading } = useAuth();
+  const { user, session, signOut, loading: authLoading } = useAuth();
 
   const [invite, setInvite] = useState<InviteData | null>(null);
   const [loading, setLoading] = useState(true);
   const [responding, setResponding] = useState<'accept' | 'decline' | null>(null);
   const [error, setError] = useState('');
+  // Signed in with another account than the invited one (code wrong_account): offer Sign out.
+  const [wrongAccount, setWrongAccount] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
 
   // ── Auth gate — preserves the token by redirecting back to this exact path.
   useEffect(() => {
@@ -93,7 +96,7 @@ export default function ChairInvitePage() {
     const supabase = getAuthedClient(session.access_token);
     const { data, error: rpcErr } = await supabase.rpc('respond_chair_invite', { p_token: token, p_accept: accept });
     setResponding(null);
-    const result = data as { ok: boolean; error?: string } | null;
+    const result = data as { ok: boolean; error?: string; code?: string } | null;
     // Both failure branches are the SAME event, so they share ONE report — a
     // transport error and an ok:false both mean the invite was not answered.
     // Only ACCEPT is reported: the chair is locked out of a conference they
@@ -104,7 +107,10 @@ export default function ChairInvitePage() {
       // outcome (27 Sep 2026: it filled the error reports), shown as written and
       // never reported.
       const alreadyAnswered = !rpcErr && /^This invite was already /.test(result?.error ?? '');
-      if (accept && !alreadyAnswered) {
+      // Another account than the invited one: expected, never reported; the person signs out and in.
+      const wrong = !rpcErr && result?.code === 'wrong_account';
+      setWrongAccount(wrong);
+      if (accept && !alreadyAnswered && !wrong) {
         reportBlocked('accept chair invite', rpcErr ?? new Error(result?.error ?? 'rpc returned ok:false'), {
           conferenceSlug: invite?.slug ?? null,
           inviteStatus: invite?.status ?? null,
@@ -196,6 +202,24 @@ export default function ChairInvitePage() {
                   <p className="text-xs mb-4 rounded-lg px-3 py-2" style={{ color: '#8B2020', fontFamily: OUTFIT, backgroundColor: 'rgba(139,32,32,0.07)', border: '1px solid rgba(139,32,32,0.25)' }}>
                     {error}
                   </p>
+                )}
+                {wrongAccount && (
+                  <div className="mb-4">
+                    <button
+                      type="button"
+                      disabled={signingOut}
+                      onClick={async () => {
+                        if (signingOut) return;
+                        setSigningOut(true);
+                        // The page's own auth gate then asks for sign-in and comes back to this invite.
+                        try { await signOut(); } finally { setSigningOut(false); }
+                      }}
+                      className="rounded-full px-5 py-2.5 font-bold text-sm focus:outline-none"
+                      style={{ border: '1.5px solid rgba(27,56,40,0.35)', background: '#FFFFFF', color: NEU.ink, fontFamily: OUTFIT, cursor: signingOut ? 'default' : 'pointer' }}
+                    >
+                      {signingOut ? 'Signing out' : 'Sign out'}
+                    </button>
+                  </div>
                 )}
 
                 <div className="flex gap-3">

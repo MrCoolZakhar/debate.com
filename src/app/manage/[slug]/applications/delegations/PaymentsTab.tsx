@@ -11,6 +11,7 @@
 import { useMemo } from 'react';
 import Link from 'next/link';
 import { formatCents } from '@/app/manage/[slug]/financials/shared';
+import { compareMoneyItems } from '@/lib/moneyItemOrder';
 import { memberName, type DelegationMemberLite } from '../delegationRows';
 import type { DelegationsData, DelegationView } from './useDelegationsData';
 import { FONT, INK, INK_SOFT, OK_GREEN, OWE, PopupSection, ROW_LINE, linkStyle } from './kit';
@@ -33,17 +34,34 @@ const STATUS: Record<string, { label: string; color: string }> = {
 
 const GRID = 'minmax(0,1.3fr) minmax(0,1fr) 120px 120px 110px';
 
+/** The delegation's usual order: faculty advisors, head delegates, delegates. */
+const ROLE_RANK: Record<string, number> = { 'faculty-advisor': 0, 'head-delegate': 1, delegate: 2 };
+
 export default function PaymentsTab<M extends DelegationMemberLite>({ row, data, currency, slug }: {
   row: DelegationView<M>;
   slug: string;
   data: DelegationsData<M>;
   currency: string;
 }) {
+  // Owner, 10 Nov 2026: no cancelled items, and no member fee a delegation
+  // ticket paid (the ticket that paid it is already listed). The delegation's
+  // own items first (Delegate Ticket 1, 2, 3..., then Advisor Tickets, then
+  // the Registration Fee), then each member's own, members in the usual order.
   const invoices = useMemo(() => {
     const ids = new Set(row.members.map(m => m.id));
-    return data.invoices
-      .filter(i => i.society_id === row.id || (!!i.application_id && ids.has(i.application_id)))
-      .sort((a, b) => (a.status === 'void' ? 1 : 0) - (b.status === 'void' ? 1 : 0));
+    const memberRank = new Map(
+      [...row.members]
+        .sort((a, b) => (ROLE_RANK[a.role] ?? 3) - (ROLE_RANK[b.role] ?? 3) || memberName(a).localeCompare(memberName(b)))
+        .map((m, i) => [m.id, i] as const),
+    );
+    const listed = data.invoices.filter(i =>
+      (i.society_id === row.id || (!!i.application_id && ids.has(i.application_id)))
+      && i.status !== 'void'
+      && !(i.status === 'waived' && /^Covered by/i.test((i.label ?? '').trim())));
+    const own = listed.filter(i => i.society_id === row.id).sort(compareMoneyItems);
+    const members = listed.filter(i => i.society_id !== row.id).sort((a, b) =>
+      (memberRank.get(a.application_id ?? '') ?? 1e9) - (memberRank.get(b.application_id ?? '') ?? 1e9) || compareMoneyItems(a, b));
+    return [...own, ...members];
   }, [data.invoices, row.id, row.members]);
   const byId = useMemo(() => new Map(row.members.map(m => [m.id, m] as const)), [row.members]);
 

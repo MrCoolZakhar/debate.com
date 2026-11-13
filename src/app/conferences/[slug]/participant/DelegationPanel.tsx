@@ -58,7 +58,7 @@ interface SwapActivityRow {
   id: string;
   user_id: string;
   created_at: string;
-  metadata: { society_id?: string; member_a?: string; member_b?: string };
+  metadata: { society_id?: string; member_a?: string; member_b?: string; action?: string; member?: string };
 }
 
 // ── The roster (my_delegation_roster) ───────────────────────────────────────
@@ -507,7 +507,9 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
         {/* Deliberately NOT CV-linked: the two names come from the request's
             metadata as bare strings with no user id. */}
         <p className="text-[14px] [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: OUTFIT, margin: 0 }}>
-          Swap of {pendingSwapRequest.metadata.member_a ?? 'a delegate'} and {pendingSwapRequest.metadata.member_b ?? 'a delegate'} requested by {pendingRequesterName} on {formatReleaseDate(new Date(pendingSwapRequest.created_at).getTime())}.{' '}
+          {pendingSwapRequest.metadata.action
+            ? <>A seat change for {pendingSwapRequest.metadata.member ?? 'a delegate'}</>
+            : <>Swap of {pendingSwapRequest.metadata.member_a ?? 'a delegate'} and {pendingSwapRequest.metadata.member_b ?? 'a delegate'}</>} requested by {pendingRequesterName} on {formatReleaseDate(new Date(pendingSwapRequest.created_at).getTime())}.{' '}
           <span style={{ color: '#6B5F52' }}>The organising team makes it.</span>
         </p>
       </div>

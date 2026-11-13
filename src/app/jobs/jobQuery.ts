@@ -109,6 +109,11 @@ export function writeJobQuery(q: JobQuery): string {
   return str ? `/jobs?${str}` : '/jobs';
 }
 
+/** True when any filter or the search is set (the tab and the open listing are not filters). */
+export function hasActiveFilters(q: JobQuery): boolean {
+  return writeJobQuery({ ...q, tab: EMPTY_JOB_QUERY.tab, listing: null }) !== '/jobs';
+}
+
 /** The server's filter object for a query (the tab and the listing are not filters). */
 export function jobFiltersOf(q: JobQuery): JobFilters {
   return {

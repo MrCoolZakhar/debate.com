@@ -29,6 +29,7 @@ import {
   kindInfo, linkHost, openConferenceDoc, openStoredFile, replaceDocumentReturn, submitDocumentReturn,
   type ConferenceDoc, type MyConferenceDoc, type MyConferenceDocs,
 } from '@/lib/conferenceDocuments';
+import RequiredTag from './RequiredTag';
 
 const RETURN_LINK_SECONDS = 300;
 const GOLD_TEXT = '#8A6410';
@@ -84,7 +85,6 @@ const CSS = `
 .gv-cdx-link:disabled{opacity:0.6;cursor:default}
 .gv-cdx-side{flex-shrink:0;display:flex;flex-direction:column;align-items:flex-end;gap:4px;align-self:flex-start}
 .gv-cdx-links{display:flex;align-items:center;gap:14px;flex-wrap:wrap;justify-content:flex-end}
-.gv-cdx-req{display:inline-flex;align-items:center;padding:2px 9px;border-radius:999px;background:rgba(139,32,32,0.1);color:#8B2020;font-size:12px;font-weight:800;line-height:1.5}
 .gv-cdx-link:focus{outline:none}
 .gv-cdx-link:focus-visible{outline:2px solid ${FOREST};outline-offset:2px;border-radius:4px}
 .gv-cdx-back{margin-top:12px;padding:12px 14px;border-radius:12px;background:#FFFFFF;box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--gv-main) 8%, transparent);display:flex;flex-direction:column;gap:8px}
@@ -191,7 +191,7 @@ export default function ConferenceDocsExtra({ conferenceId, data, onChanged }: {
                   <p className="gv-cdx-sub">{sourceLine(doc)}</p>
                 </div>
                 <div className="gv-cdx-side">
-                  {doc.ask_back && doc.required && <span className="gv-cdx-req">Required</span>}
+                  {doc.ask_back && doc.required && <RequiredTag />}
                   <div className="gv-cdx-links">
                     {canOpen && (
                       <button type="button" className="gv-cdx-link" disabled={busyId === `doc:${doc.id}`} onClick={() => openDoc(doc)} aria-label={`Open ${doc.title}`}>

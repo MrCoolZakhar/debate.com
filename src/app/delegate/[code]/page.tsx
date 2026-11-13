@@ -486,13 +486,13 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
     }
   };
 
-  /* Pre-flight. The bucket rejects non-PDFs and anything over 10 MB, and that
+  /* Pre-flight. The bucket rejects non-PDFs and anything over 25 MB, and that
      rejection only ever reached the delegate as the generic upload-failed line,
      which reads like a connection problem. Check both here, before the request.
      The message is composed from the file's own name and size plus a symbolic
      rule so it stays readable in every locale without a new translation key. */
-  const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
-  const FILE_RULE = 'PDF ≤ 10 MB';
+  const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
+  const FILE_RULE = 'PDF ≤ 25 MB';
   const acceptFile = async (file: File | null | undefined) => {
     if (!file) return;
     const isPdf = file.type

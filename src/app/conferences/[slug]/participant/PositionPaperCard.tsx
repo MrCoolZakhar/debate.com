@@ -22,6 +22,7 @@ import { CardHeading, CARD_TITLE_STYLE, INK_SOFT } from './dashboardKit';
 import type { ParticipantAllocation } from './types';
 import { useScrollLock } from '@/hooks/useScrollLock';
 import DocTile, { TileAction } from './delegation/overview/DocTile';
+import RequiredTag from './RequiredTag';
 import { friendlyError } from '@/lib/friendlyError';
 import { isNoiseError, reportBlocked } from '@/lib/reportCrash';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
@@ -89,13 +90,17 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
   /** Told what this card already read (no extra query), so the phone
    *  dashboard's "next step" never asks for a paper that is already in, or
    *  for one the committee is not taking. Null while the read is pending. */
-  onPaperState?: (state: { enabled: boolean; submitted: boolean } | null) => void;
+  onPaperState?: (state: { enabled: boolean; submitted: boolean; hidden?: boolean } | null) => void;
 }) {
   const { user, session } = useAuth();
   const router = useRouter();
 
   const [dragOver, setDragOver] = useState(false);
   const [ppEnabled, setPpEnabled] = useState(false);
+  // Mandatory Submission (prompt 19): the committee wants a paper from everyone.
+  const [ppRequired, setPpRequired] = useState(false);
+  // The committee's switches have been read once (a closed committee hides the paper only then).
+  const [ppKnown, setPpKnown] = useState(false);
   const [myPositionPaper, setMyPositionPaper] = useState<PositionPaper | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const [ppFileState, setPPFile] = useState<File | null>(null);
@@ -114,8 +119,8 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
 
   const paperSubmitted = !!myPositionPaper && myPositionPaper.status !== 'rejected';
   useEffect(() => {
-    onPaperState?.(paperLoad === 'ok' ? { enabled: ppEnabled, submitted: paperSubmitted } : null);
-  }, [onPaperState, paperLoad, ppEnabled, paperSubmitted]);
+    onPaperState?.(paperLoad === 'ok' ? { enabled: ppEnabled, submitted: paperSubmitted, hidden: ppKnown && !ppEnabled && !myPositionPaper } : null);
+  }, [onPaperState, paperLoad, ppEnabled, paperSubmitted, ppKnown, myPositionPaper]);
 
   // The session captured in React state goes stale on a tab left open (its
   // access_token expires; supabase-js refreshes its own copy). Ask the auth
@@ -133,10 +138,13 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
     if (!supabase) return;
     const { data: ccData } = await supabase
       .from('conference_committees')
-      .select('pp_submissions_enabled')
+      .select('pp_submissions_enabled, pp_required')
       .eq('id', myAllocation.conference_committee_id)
       .single();
-    setPpEnabled((ccData as { pp_submissions_enabled?: boolean } | null)?.pp_submissions_enabled ?? false);
+    const cc = ccData as { pp_submissions_enabled?: boolean; pp_required?: boolean } | null;
+    setPpEnabled(cc?.pp_submissions_enabled ?? false);
+    setPpRequired(cc?.pp_required === true);
+    if (cc) setPpKnown(true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [myAllocation?.conference_committee_id, session?.access_token, client]);
 
@@ -451,7 +459,9 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
       );
     }
     if (!ppEnabled) {
-      return <DocTile Icon={FileText} title="Position paper" line={dueWords ? `Opens later. ${dueWords}` : 'Not open yet'} />;
+      // Papers closed and none on file: no tile at all (prompt 19, OAKMUN).
+      if (ppKnown) return null;
+      return <DocTile Icon={FileText} title="Position paper" line={dueWords ?? 'Loading'} />;
     }
     return (
       <>
@@ -459,6 +469,7 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
         <DocTile
           Icon={FileText}
           title="Position paper"
+          tag={ppRequired ? <RequiredTag /> : undefined}
           line={dueWords ?? 'Not submitted yet'}
           lineColor={deadlineSoon || deadlinePassed ? '#8A5A2E' : undefined}
           action={<TileAction Icon={Upload} label={ppUploading ? 'Uploading' : 'Upload'} busy={ppUploading} onClick={pick} />}
@@ -632,11 +643,16 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
   const collapsedStyle = myPositionPaper ? (ppStatusMap[myPositionPaper.status] ?? ppStatusMap.submitted) : NOT_SUBMITTED_STYLE;
   const collapsedLabel = myPositionPaper ? `Replacing ${myPositionPaper.status}` : 'Not submitted';
 
+  // Papers closed and none on file: no card at all (prompt 19, OAKMUN). A paper
+  // on file (a sent-back one included) keeps its card above.
+  if (!ppEnabled && !myPositionPaper && ppKnown && paperLoad === 'ok') return null;
+
   return (
     <SectionCard>
       <div className="flex items-center justify-between gap-3">
         <h3 style={CARD_TITLE_STYLE}>Position Paper</h3>
-        <span style={{ color: collapsedStyle.color, fontSize: 13, fontFamily: OUTFIT, fontWeight: 700 }}>
+        <span className="inline-flex items-center gap-2" style={{ color: collapsedStyle.color, fontSize: 13, fontFamily: OUTFIT, fontWeight: 700 }}>
+          {ppEnabled && ppRequired && !myPositionPaper && <RequiredTag />}
           {collapsedLabel}
         </span>
       </div>

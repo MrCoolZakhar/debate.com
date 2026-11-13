@@ -3,7 +3,7 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Search, X } from 'lucide-react';
 import { NEU, OUTFIT } from '@/components/neu';
-import { fetchGifs, type GifItem } from '@/lib/gifClient';
+import { fetchGifs, normaliseGifQuery, type GifItem } from '@/lib/gifClient';
 import type { TFn } from './chatTokens';
 
 /** Hard cap on how many GIFs one picker holds (five pages). Keeps memory and decode work flat. */
@@ -61,7 +61,7 @@ function GifPicker({ onPick, onClose, lang, t }: {
   useEffect(() => { inputRef.current?.focus({ preventScroll: true }); }, []);
 
   useEffect(() => {
-    const id = setTimeout(() => setDebounced(query.trim()), 300);
+    const id = setTimeout(() => setDebounced(normaliseGifQuery(query)), 450);
     return () => clearTimeout(id);
   }, [query]);
 

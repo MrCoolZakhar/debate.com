@@ -9,11 +9,11 @@
 
 import { useState, useEffect } from 'react';
 import { notifyErr, clearErr } from '@/lib/appNotify';
-import { Package, Plus, Trash2 } from 'lucide-react';
+import { Package, Plus } from 'lucide-react';
 import type { Conference } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
-import { useConfirmModal } from '@/components/ConfirmModal';
+import { friendlyError } from '@/lib/friendlyError';
 import { CurrencyChip, ConferenceCurrencyLine } from '@/components/ConferenceCurrency';
 import GSelect from '@/components/GSelect';
 import {
@@ -46,7 +46,9 @@ interface Addon {
   created_at: string;
 }
 
-export default function AddonsSection({ conference, bare = false, renderStats }: {
+export default function AddonsSection({ conference, bare = false, renderStats, soldFor }: {
+  /** How many bought it (financials_addon_stats); undefined while not read. Delete shows only at 0. */
+  soldFor?: (addonId: string) => number | undefined;
   conference: Conference;
   /** Inside a pop-up (prompt 94): no section header and no top margin. */
   bare?: boolean;
@@ -54,7 +56,14 @@ export default function AddonsSection({ conference, bare = false, renderStats }:
   renderStats?: (addonId: string) => React.ReactNode;
 }) {
   const { session } = useAuth();
-  const { confirm, modal: confirmModal } = useConfirmModal();
+  // The row asking "Delete …?" in place, and the row being edited in place.
+  const [askingId, setAskingId] = useState<string | null>(null);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editLabel, setEditLabel] = useState('');
+  const [editDesc, setEditDesc] = useState('');
+  const [editAmount, setEditAmount] = useState('');
+  const [editErr, setEditErr] = useState('');
+  const [editBusy, setEditBusy] = useState(false);
 
   const [addons, setAddons] = useState<Addon[]>([]);
   const [loading, setLoading] = useState(true);
@@ -159,16 +168,45 @@ export default function AddonsSection({ conference, bare = false, renderStats }:
       .finally(() => markBusy(a.id, false));
   }
 
-  async function handleDelete(a: Addon) {
-    if (!session || busyIds.has(a.id) || a.id.startsWith('temp-')) return;
-    const { confirmed } = await confirm({
-      title: `Delete ${a.label}?`,
-      body: 'Existing invoices for this add-on are unaffected. This only stops it from being offered to new applicants.',
-      confirmLabel: 'Delete',
-      danger: true,
-    });
-    if (!confirmed) return;
+  function startEdit(a: Addon) {
+    setAskingId(null);
+    setEditId(a.id);
+    setEditLabel(a.label);
+    setEditDesc(a.description ?? '');
+    setEditAmount((a.amount_cents / 100).toFixed(2));
+    setEditErr('');
+  }
 
+  /** Edit in place (prompt 38): open unpaid picks move to the new price (trigger zz_addon_reprice_open). */
+  async function saveEdit(a: Addon) {
+    if (!session || editBusy) return;
+    const amt = Number(editAmount);
+    if (!editLabel.trim()) { setEditErr('Give the add-on a label.'); return; }
+    if (!Number.isFinite(amt) || amt <= 0) { setEditErr('Enter an amount greater than zero.'); return; }
+    setEditBusy(true);
+    setEditErr('');
+    try {
+      const supabase = getAuthedClient(session.access_token);
+      const patch = { label: editLabel.trim(), description: editDesc.trim() || null, amount_cents: Math.round(amt * 100) };
+      const { data, error: updateError } = await supabase
+        .from('addons')
+        .update(patch)
+        .eq('id', a.id)
+        .eq('conference_id', conference.id)
+        .select('id');
+      if (updateError || !data || data.length !== 1) { setEditErr(friendlyError(updateError, `Could not save ${a.label}. Please try again.`)); return; }
+      setAddons(cur => cur.map(x => (x.id === a.id ? { ...x, ...patch } : x)));
+      setEditId(null);
+    } catch (e) {
+      setEditErr(friendlyError(e, `Could not save ${a.label}. Please try again.`));
+    } finally {
+      setEditBusy(false);
+    }
+  }
+
+  function handleDelete(a: Addon) {
+    if (!session || busyIds.has(a.id) || a.id.startsWith('temp-')) return;
+    setAskingId(null);
     setError('');
     clearErr('financials-addons');
     markBusy(a.id, true);
@@ -176,16 +214,19 @@ export default function AddonsSection({ conference, bare = false, renderStats }:
 
     (async () => {
       const supabase = getAuthedClient(session.access_token);
-      const { error: deleteError } = await supabase
+      const { data, error: deleteError } = await supabase
         .from('addons')
         .delete()
         .eq('id', a.id)
-        .eq('conference_id', conference.id);
+        .eq('conference_id', conference.id)
+        .select('id');
       if (deleteError) throw deleteError;
+      if (!data || data.length !== 1) throw new Error('add-on not deleted');
     })()
-      .catch(() => {
+      .catch((e: unknown) => {
         setAddons(cur => [a, ...cur.filter(x => x.id !== a.id)]);
-        notifyErr(`Could not delete ${a.label}, it was restored. Please try again.`, 'financials-addons');
+        // The database refuses an add-on someone bought, with its own sentence (hint addon_in_use).
+        notifyErr(friendlyError(e, `Could not delete ${a.label}. Please try again.`), 'financials-addons');
       })
       .finally(() => markBusy(a.id, false));
   }
@@ -289,51 +330,75 @@ export default function AddonsSection({ conference, bare = false, renderStats }:
           <NeuCard style={{ padding: '6px 0', overflow: 'hidden' }}>
             {addons.map((a, i) => {
               const busy = busyIds.has(a.id) || a.id.startsWith('temp-');
+              const sold = soldFor ? soldFor(a.id) : undefined;
+              const linkBtn: React.CSSProperties = { border: 'none', background: 'none', padding: 0, cursor: busy ? 'default' : 'pointer', color: NEU.forest, fontFamily: OUTFIT, fontWeight: 700, fontSize: 12.5, textDecoration: 'underline', textUnderlineOffset: 3 };
               return (
                 <div
                   key={a.id}
-                  className="flex items-center gap-3 flex-wrap px-5 py-3"
+                  className="flex items-center gap-x-3 gap-y-2 flex-wrap px-5 py-3"
                   style={{ ...(i > 0 ? { borderTop: '1px solid rgba(221,212,192,0.55)' } : {}), opacity: busy ? 0.6 : 1 }}
                 >
-                  {/* An old inactive add-on is faded and marked Hidden, with "Offer again" (prompt 106). */}
+                  {/* A stopped add-on is faded and marked Stopped, with Sell again (prompt 38). */}
                   <div className="min-w-0" style={{ flex: '1 1 200px', opacity: a.active ? 1 : 0.5 }}>
                     <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: NEU.ink }}>
                       {a.label}
                     </p>
                     <p style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.muted }}>
-                      {targetLabel(a.applies_to)}
+                      {targetLabel(a.applies_to)}{!a.active ? ' · Stopped' : ''}
                     </p>
                     {renderStats ? renderStats(a.id) : null}
                   </div>
-                  <span style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: NEU.ink, fontVariantNumeric: 'tabular-nums', opacity: a.active ? 1 : 0.5 }}>
+                  <span style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: NEU.ink, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', opacity: a.active ? 1 : 0.5 }}>
                     {formatMoney(a.amount_cents / 100, a.currency)}
                   </span>
-                  {!a.active && (
-                    <span className="flex items-center gap-2" style={{ fontFamily: OUTFIT, fontSize: 12 }}>
-                      <span style={{ fontWeight: 700, color: NEU.muted }}>Hidden</span>
-                      <button type="button" onClick={() => handleToggleActive(a)} disabled={busy}
-                        className="focus:outline-none focus-visible:underline"
-                        style={{ border: 'none', background: 'none', padding: 0, cursor: busy ? 'default' : 'pointer', color: NEU.forest, fontWeight: 700, fontSize: 12, textDecoration: 'underline', textUnderlineOffset: 3 }}>
-                        Offer again
+                  {askingId === a.id ? (
+                    <div role="alertdialog" aria-label={`Delete ${a.label}`} className="flex items-center gap-3 flex-wrap" style={{ flexBasis: '100%', fontFamily: OUTFIT, fontSize: 13 }}>
+                      <span className="[overflow-wrap:anywhere]" style={{ color: NEU.ink }}>Delete {a.label}? Anyone who picked it and has not paid loses it from their list.</span>
+                      <button type="button" disabled={busy} onClick={() => handleDelete(a)} className="focus:outline-none" style={{ ...linkBtn, color: '#8B2020' }}>Delete</button>
+                      <button type="button" onClick={() => setAskingId(null)} className="focus:outline-none" style={linkBtn}>Cancel</button>
+                    </div>
+                  ) : editId !== a.id && (
+                    <span className="flex items-center gap-3 flex-wrap">
+                      <button type="button" disabled={busy} onClick={() => startEdit(a)} className="focus:outline-none" style={linkBtn}>Edit</button>
+                      <button type="button" disabled={busy} onClick={() => handleToggleActive(a)} className="focus:outline-none" style={linkBtn}>
+                        {a.active ? 'Stop selling' : 'Sell again'}
                       </button>
+                      {sold === 0 && (
+                        <button type="button" disabled={busy} onClick={() => { setEditId(null); setAskingId(a.id); }} className="focus:outline-none" style={{ ...linkBtn, color: '#8B2020' }}>Delete</button>
+                      )}
                     </span>
                   )}
-                  <button
-                    onClick={() => handleDelete(a)}
-                    disabled={busy}
-                    className="focus:outline-none flex-shrink-0"
-                    style={{ border: 'none', background: 'transparent', cursor: busy ? 'default' : 'pointer', color: '#8B2020', opacity: busy ? 0.5 : 1 }}
-                    title="Delete"
-                  >
-                    <Trash2 size={15} strokeWidth={2.2} />
-                  </button>
+                  {editId === a.id && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" style={{ flexBasis: '100%' }}>
+                      <div>
+                        <label htmlFor={`addon-edit-label-${a.id}`} style={fieldLabelStyle}>Label</label>
+                        <input id={`addon-edit-label-${a.id}`} type="text" value={editLabel} onChange={e => setEditLabel(e.target.value)} style={inputStyle} />
+                      </div>
+                      <div>
+                        <label htmlFor={`addon-edit-desc-${a.id}`} style={fieldLabelStyle}>Description · optional</label>
+                        <input id={`addon-edit-desc-${a.id}`} type="text" value={editDesc} onChange={e => setEditDesc(e.target.value)} style={inputStyle} />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label htmlFor={`addon-edit-amount-${a.id}`} style={fieldLabelStyle}>Amount</label>
+                        <div className="flex items-stretch gap-2" style={{ maxWidth: 360 }}>
+                          <input id={`addon-edit-amount-${a.id}`} type="number" min={0.01} step="0.01" value={editAmount} onChange={e => setEditAmount(e.target.value)} style={inputStyle} />
+                          <CurrencyChip code={conference.fee_currency} width={118} />
+                        </div>
+                        <p style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.muted, marginTop: 6 }}>People who picked it and have not paid yet move to the new price. Paid ones keep theirs.</p>
+                      </div>
+                      {editErr && <p role="alert" className="sm:col-span-2" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600, color: '#8B2020', margin: 0 }}>{editErr}</p>}
+                      <div className="sm:col-span-2 flex items-center gap-3">
+                        <NeuButton onClick={() => { void saveEdit(a); }} disabled={editBusy}>{editBusy ? 'Saving' : 'Save'}</NeuButton>
+                        <button type="button" onClick={() => setEditId(null)} className="focus:outline-none" style={linkBtn}>Cancel</button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}
           </NeuCard>
         )}
       </div>
-      {confirmModal}
     </section>
   );
 }

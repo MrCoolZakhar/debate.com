@@ -156,9 +156,10 @@ export default function SeatCard({ seat, committee, payments, paperTile, emptyAc
 
       <TopicsList topics={committee.topics} />
 
-      {/* The two tiles side by side; stacked on a narrow card. */}
+      {/* The two tiles side by side; stacked on a narrow card. A tile that
+          renders nothing (papers closed, none on file) leaves the other full width. */}
       <div className="@container min-w-0">
-        <div className="grid gap-2.5 grid-cols-1 @[380px]:grid-cols-2">
+        <div className="grid gap-2.5 grid-cols-1 @[380px]:grid-cols-2 [&>*:only-child]:col-span-full">
           <GuideTile committeeId={ccId} />
           {paperTile}
         </div>

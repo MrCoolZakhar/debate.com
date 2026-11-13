@@ -14,6 +14,9 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import { DANGER, DEEP_GOLD, GREEN, INK_SOFT } from './payKit';
 import { money, shortDate, type PayItem } from './payApi';
+import { compareMoneyItems } from '@/lib/moneyItemOrder';
+import { specialFeeSentence, type SpecialFeeInfo } from '@/lib/specialFeeReason';
+import SpecialFeeInfoButton from '@/components/SpecialFeeInfoButton';
 
 export const PAYABLE_STATES = new Set(['unpaid', 'rejected', 'refunded']);
 
@@ -95,7 +98,10 @@ function NotChargedLine({ it }: { it: PayItem }) {
   );
 }
 
-export default function ItemList({ items, selected, onToggle, onReceipt, onRemove, below, locked, onLock, onRequestRefund, onNotReceived, onViewProof, discounts }: {
+export default function ItemList({ items, selected, onToggle, onReceipt, onRemove, below, locked, onLock, onRequestRefund, onNotReceived, onViewProof, discounts, special, conferenceName }: {
+  /** Tickets at a special price (special_fee_items), by invoice id: named "Special …" with an i. */
+  special?: Map<string, SpecialFeeInfo>;
+  conferenceName?: string;
   items: PayItem[];
   /** Items held by a started payment (my_started_payments.locked). */
   locked?: Record<string, { batch_id: string; status: string; mine: boolean }>;
@@ -160,7 +166,8 @@ export default function ItemList({ items, selected, onToggle, onReceipt, onRemov
 
   return (
     <div className="gv-pay-items" role="list" aria-label="Your items">
-      {items.map(it => {
+      {/* Delegate Ticket 1, 2, 3... in number order (owner, 10 Nov 2026; display only). */}
+      {[...items].sort(compareMoneyItems).map(it => {
         if ((it.state === 'waived' || it.state === 'covered') && it.not_charged) return <NotChargedLine key={it.invoice_id} it={it} />;
         const lock = locked?.[it.invoice_id];
         const tick = canTick(it, locked);
@@ -179,7 +186,12 @@ export default function ItemList({ items, selected, onToggle, onReceipt, onRemov
               )}
             </span>
             <div style={{ minWidth: 0 }}>
-              <p className="gv-pay-name">{it.label}</p>
+              <p className="gv-pay-name">
+                {special?.has(it.invoice_id) ? `Special ${it.label}` : it.label}
+                {special?.has(it.invoice_id) && (
+                  <SpecialFeeInfoButton text={specialFeeSentence(special.get(it.invoice_id)!, conferenceName ?? '', (n, cur) => money(Math.round(n * 100), cur))} />
+                )}
+              </p>
               {it.for_name && <p className="gv-pay-for">for {it.for_name}</p>}
               {st && Icon && (st.text === 'In a started payment' && onLock ? (
                 <button type="button" className="gv-pay-state" onClick={() => onLock(it.invoice_id)}

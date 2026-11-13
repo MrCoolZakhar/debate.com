@@ -24,8 +24,8 @@
 //
 // Because the backfill flattens the group step, the preference order below is
 // the same order effectiveSlotArt applies:
-//     seat crest  →  group crest (already folded into logoUrl)  →  national
-//     flag  →  nothing (the surface's own initials/globe fallback)
+//     seat crest  →  group crest (already folded into logoUrl)  →  press
+//     outlet logo  →  national flag  →  nothing (the surface's own initials/globe fallback)
 //
 // If you ever change the precedence in one of the two functions, change it in
 // the other in the same commit, or a delegate's crest in the room stops
@@ -40,6 +40,7 @@
 
 import { getCountryByName } from '@/lib/countries';
 import type { SlotArt } from '@/lib/slotGroups';
+import { pressOutletLogo } from '@/lib/pressOutlets';
 
 export type { SlotArt };
 
@@ -89,6 +90,9 @@ export function partyTextColor(hex: string | null | undefined): string {
 /** What to draw for a seat in a live session. */
 export function sessionSeatArt(d: SessionSeat): SlotArt {
   if (d.logoUrl) return { kind: 'logo', url: d.logoUrl, label: d.country };
+  // A press seat named for an outlet draws the outlet's logo (after any crest, before a flag).
+  const outlet = pressOutletLogo(d.country);
+  if (outlet) return { kind: 'logo', url: outlet, label: d.country };
   const country = getCountryByName(d.country);
   if (country) return { kind: 'flag', code: country.code.toUpperCase() };
   return { kind: 'none' };
