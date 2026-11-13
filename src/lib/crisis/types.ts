@@ -45,6 +45,28 @@ export interface CrisisSettings {
   zoneTypes: ZoneType[];
   /** Custom troop types (a name, a picture, a sight range, details) a unit on the map can be made from (docs/crisis/sql/029, part 32). */
   customUnitTypes: CustomUnitType[];
+  /** Chairs also see the other cabinets' characters, cabinet directives and meetings, read only (docs/crisis/sql/037). Default off. */
+  chairsSeeAllCabinets: boolean;
+  /** Delegates may ask characters of another cabinet to a meeting (docs/crisis/sql/037). Default on. */
+  crossCabinetMeetings: boolean;
+  /** Owners on the map that are neither a cabinet nor a delegate (docs/crisis/sql/037). Written only by crisis_add_party / crisis_edit_party / crisis_remove_party. */
+  thirdParties: ThirdParty[];
+}
+
+/** A third party on the map: owns land, areas, zones and units through owner_cabinet_id like a cabinet does. */
+export interface ThirdParty { id: string; name: string; color: string }
+
+export function readThirdParties(s: { thirdParties?: unknown }): ThirdParty[] {
+  const raw = Array.isArray(s.thirdParties) ? s.thirdParties : [];
+  const out: ThirdParty[] = [];
+  for (const e of raw) {
+    if (!e || typeof e !== 'object') continue;
+    const o = e as Record<string, unknown>;
+    if (typeof o.id !== 'string' || typeof o.name !== 'string' || !o.name.trim()) continue;
+    const color = typeof o.color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(o.color) ? o.color : '#7A6F5A';
+    out.push({ id: o.id, name: o.name.trim(), color });
+  }
+  return out;
 }
 
 export const DEFAULT_SETTINGS: CrisisSettings = {
@@ -64,6 +86,9 @@ export const DEFAULT_SETTINGS: CrisisSettings = {
   hideCabinetLocations: false,
   zoneTypes: [],
   customUnitTypes: [],
+  chairsSeeAllCabinets: false,
+  crossCabinetMeetings: true,
+  thirdParties: [],
 };
 
 export function readSettings(raw: unknown): CrisisSettings {
@@ -77,6 +102,9 @@ export function readSettings(raw: unknown): CrisisSettings {
     hideCabinetLocations: s.hideCabinetLocations === true,
     zoneTypes: readZoneTypes(s),
     customUnitTypes: readCustomUnitTypes(s),
+    chairsSeeAllCabinets: s.chairsSeeAllCabinets === true,
+    crossCabinetMeetings: s.crossCabinetMeetings !== false,
+    thirdParties: readThirdParties(s),
   };
 }
 

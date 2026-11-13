@@ -23,6 +23,7 @@ const RPC_MESSAGES: Record<string, string> = {
   crisis_reply_required: 'Write a reply before sending.',
   crisis_bad_role: 'Pick a role for this person.',
   crisis_bad_patch: 'That setting could not be saved.',
+  crisis_bad_owner: 'That owner no longer exists. Pick another one and send again.',
 };
 
 export function crisisError(error: unknown, fallback = 'Something went wrong. Try again.'): string {
@@ -747,7 +748,33 @@ export async function loadResourceLastChanges(ref: CrisisRef): Promise<Array<{ r
   return must(res, 'Could not load the resources.') as Array<{ resource_id: string; delta: number; amount_after: number; reason: string | null; created_at: string }>;
 }
 
-export type RequestMeetingResult = { ok: true; id: string; status: MeetingStatus } | { ok: false; reason: 'nobody' };
+export type RequestMeetingResult = { ok: true; id: string; status: MeetingStatus } | { ok: false; reason: 'nobody' | 'other_cabinet' };
+
+/** The characters the caller may ask to a meeting: names and pictures only (docs/crisis/sql/037). Other cabinets are included while crossCabinetMeetings is on, even when otherCabinets is 'hidden'. */
+export type MeetingPerson = Pick<Character, 'id' | 'cabinet_id' | 'name' | 'status' | 'picture_url'>;
+export async function loadMeetingPeople(ref: CrisisRef): Promise<MeetingPerson[]> {
+  const client = await c(ref);
+  const res = await client.rpc('crisis_meeting_people', { p_crisis: ref.id });
+  return (must(res, 'Could not load who you can meet.') as MeetingPerson[] | null) ?? [];
+}
+
+// Third parties on the map (docs/crisis/sql/037). Each needs the map power.
+export type AddPartyResult = { ok: true; id: string; existing: boolean } | { ok: false; reason: 'name' | 'too_many' };
+export async function addThirdParty(ref: CrisisRef, name: string, color: string): Promise<AddPartyResult> {
+  const client = await c(ref);
+  const res = await client.rpc('crisis_add_party', { p_crisis: ref.id, p_name: name, p_color: color });
+  return must(res, 'Could not add that owner. Try again.') as AddPartyResult;
+}
+export async function editThirdParty(ref: CrisisRef, id: string, name: string, color: string): Promise<{ ok: boolean; reason?: 'name' }> {
+  const client = await c(ref);
+  const res = await client.rpc('crisis_edit_party', { p_crisis: ref.id, p_id: id, p_name: name, p_color: color });
+  return must(res, 'Could not save that owner. Try again.') as { ok: boolean; reason?: 'name' };
+}
+export async function removeThirdParty(ref: CrisisRef, id: string): Promise<void> {
+  const client = await c(ref);
+  const res = await client.rpc('crisis_remove_party', { p_crisis: ref.id, p_id: id });
+  must(res, 'Could not remove that owner. Try again.');
+}
 export async function requestMeeting(ref: CrisisRef, m: { character_ids: string[]; intention: string; duration_minutes: number; wanted_time?: string | null }): Promise<RequestMeetingResult> {
   const client = await c(ref);
   const res = await client.rpc('crisis_request_meeting', { p_crisis: ref.id, p: m });
