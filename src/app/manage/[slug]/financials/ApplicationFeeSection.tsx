@@ -23,10 +23,6 @@ import {
 import { inputStyle, fieldLabelStyle } from './shared';
 import { InfoHint } from '../settings/applicationsUi';
 
-// The house confirm sits at z-index 50; this section also lives inside the
-// Financials pop-ups (z-index 9090), so while the turn-off question is open
-// its backdrop is lifted above them.
-
 interface SurchargeRow {
   id: string;
   label: string;

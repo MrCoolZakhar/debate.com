@@ -23,7 +23,7 @@ import { notifyOk } from '@/lib/appNotify';
 import { isChoiceType, normalizeBlocks, questionsOf, usableOptions } from '@/lib/customQuestions';
 import { STORE_CSS } from '../store/storeKit';
 import { DASH_CSS, READ_ONLY_LINE } from './dashboardKit';
-import { formatMoney, ROLE_ORDER_FULL, roleLabel, roleLabelFull } from './shared';
+import { formatMoney, ROLE_ORDER_FULL, roleLabelFull } from './shared';
 
 const FONT = 'var(--font-brand), sans-serif';
 const INK = '#1C1410';
@@ -476,7 +476,7 @@ export default function SpecialFeesPopup({ conference, readOnly, onClose }: {
             {!hasLiveChoice && (
               <div style={{ marginBottom: 6 }}>
                 <p className="[overflow-wrap:anywhere]" style={{ margin: '0 0 8px', fontFamily: FONT, fontSize: 14, color: INK }}>
-                  No application questions with choices have been set up for {roleLabel(draft.role)} yet.
+                  No application questions with choices have been set up for {roleLabelFull(draft.role)} yet.
                 </p>
                 <a href={`/manage/${conference.slug}/settings?tab=applications&role=${encodeURIComponent(draft.role)}&step=form`} className="gv-st-btn gv-st-outline" style={{ textDecoration: 'none' }}>
                   Set up application questions
