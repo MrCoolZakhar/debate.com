@@ -1957,7 +1957,10 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
   /** The selected unit's sight ring: a press anywhere on its line starts the resize, like its round handle. */
   const sightCtl = useRef<{ active: boolean; hit: (p: { x: number; y: number }) => boolean; begin: () => void; move: (ll: Pt) => void; end: () => void } | null>(null);
 
-  // Characters standing on one spot are fanned out a little so none covers another; zooming in separates them.
+  // Characters standing on one spot are packed tightly around it so none covers another; zooming in separates them.
+  // A crowd never becomes a big ring: the more people stand together, the smaller their circles (down to half size)
+  // and the closer they pack, in a sunflower pattern centred on the spot. Inside a crowd the name labels hide; the full
+  // name stays in each circle's tooltip.
   const regroupFrame = useRef<number | null>(null);
   const regroupChars = useCallback(() => {
     if (regroupFrame.current !== null) return;
@@ -1966,24 +1969,53 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
       const map = mapRef.current;
       if (!map) return;
       const size = compact ? 24 : 34;
-      const gap = size * 1.08;
+      const near = size * 1.08;
       const items = [...charMarkers.current.entries()]
         .filter(([, m]) => !m.el.dataset.drag)
         .map(([id, m]) => ({ id, m, p: map.project(m.marker.getLngLat()) }))
         .sort((a, b) => (a.id < b.id ? -1 : 1));
+      // Shrinks the marker box itself (so the click target and the centring follow) and draws the portrait inside it at that
+      // scale. Never a CSS scale on the marker element: MapLibre positions it with a transform that a scale would shrink too.
+      const place = (m: { marker: MLMarker; el: HTMLElement }, dx: number, dy: number, scale: number) => {
+        m.marker.setOffset([Math.round(dx), Math.round(dy)]);
+        const px = `${Math.round(size * scale)}px`;
+        m.el.style.width = px;
+        m.el.style.height = px;
+        const disc = m.el.querySelector<HTMLElement>('.wm-char-disc');
+        if (disc) {
+          disc.style.transformOrigin = '0 0';
+          disc.style.transform = scale === 1 ? '' : `scale(${scale})`;
+        }
+        const lab = m.el.querySelector<HTMLElement>('.wm-char-name');
+        if (lab) lab.style.display = scale < 1 ? 'none' : '';
+      };
+      // Crowds: everyone within reach of anyone already in the crowd joins it.
       const done = new Set<string>();
       for (const a of items) {
         if (done.has(a.id)) continue;
-        const group = items.filter((b) => !done.has(b.id) && Math.hypot(a.p.x - b.p.x, a.p.y - b.p.y) < gap);
-        for (const g of group) done.add(g.id);
-        if (group.length < 2) { a.m.marker.setOffset([0, 0]); continue; }
-        const cx = group.reduce((t, g) => t + g.p.x, 0) / group.length;
-        const cy = group.reduce((t, g) => t + g.p.y, 0) / group.length;
+        const group = [a];
+        done.add(a.id);
+        for (let i = 0; i < group.length; i++) {
+          for (const b of items) {
+            if (done.has(b.id)) continue;
+            if (Math.hypot(group[i].p.x - b.p.x, group[i].p.y - b.p.y) < near) { group.push(b); done.add(b.id); }
+          }
+        }
+        if (group.length < 2) { place(a.m, 0, 0, 1); continue; }
         const n = group.length;
-        const r = n === 2 ? gap / 2 : gap / (2 * Math.sin(Math.PI / n));
+        const cx = group.reduce((t, g) => t + g.p.x, 0) / n;
+        const cy = group.reduce((t, g) => t + g.p.y, 0) / n;
+        const scale = n <= 3 ? 1 : Math.max(0.5, Math.sqrt(3 / n));
+        const step = size * scale * 1.06;
+        if (n === 2) {
+          group.forEach((g, k) => place(g.m, cx + (k === 0 ? -step / 2 : step / 2) - g.p.x, cy - g.p.y, scale));
+          continue;
+        }
+        const golden = Math.PI * (3 - Math.sqrt(5));
         group.forEach((g, k) => {
-          const ang = n === 2 ? (k === 0 ? Math.PI : 0) : -Math.PI / 2 + (2 * Math.PI * k) / n;
-          g.m.marker.setOffset([Math.round(cx + r * Math.cos(ang) - g.p.x), Math.round(cy + r * Math.sin(ang) - g.p.y)]);
+          const r = step * 0.6 * Math.sqrt(k + 0.5);
+          const ang = k * golden - Math.PI / 2;
+          place(g.m, cx + r * Math.cos(ang) - g.p.x, cy + r * Math.sin(ang) - g.p.y, scale);
         });
       }
     });

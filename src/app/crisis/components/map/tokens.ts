@@ -68,8 +68,10 @@ export interface CharacterSpec {
 }
 
 /** The surname: the last word of the name (the full name is the title and the accessible name). */
+/** The last word of a name, ignoring a part in brackets ("Georges Danton (Cordeliers)" is "Danton"). */
 export function surnameOf(name: string): string {
-  const parts = name.trim().split(/\s+/);
+  const bare = name.replace(/\s*\([^)]*\)\s*$/, '').trim() || name.trim();
+  const parts = bare.split(/\s+/);
   return parts[parts.length - 1] || name;
 }
 
@@ -98,7 +100,7 @@ export function paintCharacter(el: HTMLElement, c: CharacterSpec): void {
     disc.appendChild(img);
   } else {
     const ini = document.createElement('span');
-    ini.textContent = c.name.trim().split(/\s+/).map((w) => w[0] ?? '').slice(0, 2).join('').toUpperCase();
+    ini.textContent = (c.name.replace(/\s*\([^)]*\)\s*$/, '').trim() || c.name.trim()).split(/\s+/).map((w) => w[0] ?? '').slice(0, 2).join('').toUpperCase();
     ini.style.fontSize = `${Math.round(c.size * 0.38)}px`;
     disc.style.background = safeColor(c.color);
     disc.appendChild(ini);
