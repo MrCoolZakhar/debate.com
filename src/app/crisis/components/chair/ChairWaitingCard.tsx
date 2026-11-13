@@ -8,7 +8,7 @@ import { CheckCircle2, Gavel } from 'lucide-react';
 import type { Directive } from '@/lib/crisis/types';
 import { Card, CardTitle, CK, Skeleton, Tick } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
-import { AuthorStack, ChairDirectiveRow, directiveAuthor } from './chairDirectiveKit';
+import { AuthorStack, ChairDirectiveRow, directiveAuthor, isOwnClarify } from './chairDirectiveKit';
 
 export default function ChairWaitingCard({ directives }: { directives: Directive[] | null }) {
   const { cabinetId, core } = useCrisis();
@@ -19,8 +19,11 @@ export default function ChairWaitingCard({ directives }: { directives: Directive
   );
   const waiting = useMemo(() => mine.filter((d) => d.status === 'awaiting_chair').sort((a, b) => a.created_at.localeCompare(b.created_at)), [mine]);
   const changes = useMemo(() => mine.filter((d) => d.status === 'changes_requested').sort((a, b) => b.updated_at.localeCompare(a.updated_at)), [mine]);
-  const authors = useMemo(() => waiting.map((d) => directiveAuthor(d, core.characters, core.members, core.cabinets)), [waiting, core.characters, core.members, core.cabinets]);
-  const urgent = waiting.length > 0;
+  // The backroom needs more detail from the cabinet: the chair answers (oldest question first).
+  const detail = useMemo(() => mine.filter((d) => isOwnClarify(d, cabinetId)).sort((a, b) => (a.answered_at ?? a.updated_at).localeCompare(b.answered_at ?? b.updated_at)), [mine, cabinetId]);
+  const authors = useMemo(() => [...waiting, ...detail].map((d) => directiveAuthor(d, core.characters, core.members, core.cabinets)), [waiting, detail, core.characters, core.members, core.cabinets]);
+  const total = waiting.length + detail.length;
+  const urgent = total > 0;
 
   return (
     <Card
@@ -34,7 +37,7 @@ export default function ChairWaitingCard({ directives }: { directives: Directive
           <span className="inline-flex items-center" style={{ gap: 8 }}>
             <AuthorStack list={authors} />
             <span className="inline-flex items-baseline" style={{ gap: 6 }}>
-              <b style={{ fontSize: 28, fontWeight: 800, lineHeight: 1, fontVariantNumeric: 'tabular-nums', color: urgent ? CK.red : CK.muted }}><Tick value={waiting.length} /></b>
+              <b style={{ fontSize: 28, fontWeight: 800, lineHeight: 1, fontVariantNumeric: 'tabular-nums', color: urgent ? CK.red : CK.muted }}><Tick value={total} /></b>
               <span style={{ fontSize: 13, fontWeight: 700, color: urgent ? CK.red : CK.inkSoft }}>waiting</span>
             </span>
           </span>
@@ -47,16 +50,24 @@ export default function ChairWaitingCard({ directives }: { directives: Directive
           <div className="grid gap-2"><Skeleton h={46} r={12} /><Skeleton h={46} r={12} /></div>
         ) : (
           <>
-            {waiting.length === 0 ? (
+            {total === 0 ? (
               <p className="flex items-center gap-2" style={{ margin: 0, fontSize: 14, color: CK.inkSoft }}>
                 <CheckCircle2 size={17} strokeWidth={1.5} aria-hidden style={{ color: CK.ok }} />
                 Nothing is waiting for you
               </p>
             ) : (
-              <div>{waiting.map((d) => <ChairDirectiveRow key={`${d.id}@${d.updated_at}`} d={d} />)}</div>
+              <div>
+                {waiting.map((d) => <ChairDirectiveRow key={`${d.id}@${d.updated_at}`} d={d} />)}
+                {detail.length > 0 && (
+                  <div style={{ marginTop: waiting.length ? 12 : 0 }}>
+                    <p style={{ margin: '0 0 2px', fontSize: 12, fontWeight: 800, color: CK.red }}>More detail needed: the backroom asked your cabinet</p>
+                    {detail.map((d) => <ChairDirectiveRow key={`${d.id}@${d.answered_at ?? d.updated_at}`} d={d} />)}
+                  </div>
+                )}
+              </div>
             )}
             {changes.length > 0 && (
-              <div style={{ marginTop: waiting.length ? 12 : 10 }}>
+              <div style={{ marginTop: total ? 12 : 10 }}>
                 <p style={{ margin: '0 0 2px', fontSize: 12, fontWeight: 800, color: CK.muted }}>Back with the author for changes</p>
                 <div>{changes.map((d) => <ChairDirectiveRow key={d.id} d={d} muted />)}</div>
               </div>

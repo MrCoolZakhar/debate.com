@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CalendarCheck, Hourglass, MailOpen, Users, X, type LucideIcon } from 'lucide-react';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
-import { cancelMeeting, crisisError, listMeetings, loadWorld } from '@/lib/crisis/api';
+import { cancelMeeting, crisisError, listMeetings } from '@/lib/crisis/api';
 import { useCrisisLive } from '@/lib/crisis/live';
 import type { Meeting } from '@/lib/crisis/types';
 import { Btn, Card, CK, Skeleton } from '../../crisisKit';
@@ -17,8 +17,9 @@ import StaffMeetingCard from './StaffMeetingCard';
 import { InTheRoom, MeetingClockReadout } from './MeetingClock';
 import { meetingInProgress } from '@/lib/crisis/meetings';
 import { useClockOverlay } from '@/lib/crisis/meetingClockStore';
-import { AnswerList, AvatarStack, Fact, InviteButtons, NameList, StatusLine, requesterName, useMyCharacterId, usePeople, hasWhen, whenText, type Person } from './meetingKit';
+import { AnswerList, AvatarStack, Fact, InviteButtons, NameList, StatusLine, requesterName, useMyCharacterId, hasWhen, whenText } from './meetingKit';
 import { useMeetingResponses } from './useMeetingResponses';
+import { useMeetingPeopleData } from './MeetingRequestsStrip';
 import { serverNow } from '@/lib/serverClock';
 
 const isActive = (m: Meeting) => m.status === 'awaiting_delegates' || m.status === 'pending' || m.status === 'approved';
@@ -31,7 +32,6 @@ export default function MeetingsPage() {
   const meetings = useClockOverlay(fetched);
   const seq = useRef(0);
   const loaded = useRef(false);
-  const [world, setWorld] = useState<Person[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(() => serverNow());
   const isDelegate = role === 'delegate';
@@ -57,15 +57,11 @@ export default function MeetingsPage() {
 
   useEffect(() => {
     const t = window.setTimeout(() => { void load(); }, 0);
-    let cancelled = false;
-    if (isDelegate) {
-      loadWorld(ref).then((w) => { if (!cancelled) setWorld(w.map((x) => ({ id: x.id, name: x.name, picture_url: x.picture_url, cabinet_id: x.cabinet_id, status: x.status }))); }).catch(() => { /* own cabinet still works */ });
-    }
-    return () => { cancelled = true; window.clearTimeout(t); };
-  }, [ref, isDelegate, load]);
+    return () => { window.clearTimeout(t); };
+  }, [ref, load]);
   useCrisisLive(ref.id, ['crisis_meetings'], () => { void load(); });
 
-  const people = usePeople(core.characters, world);
+  const { people, pickable } = useMeetingPeopleData(ref, true);
   const mine = useMemo(() => (meetings ?? []), [meetings]);
   const active = useMemo(() => mine.filter(isActive), [mine]);
   // Invitations waiting for MY answer: asked by someone else, naming my character, and I have not answered yet.
@@ -98,7 +94,7 @@ export default function MeetingsPage() {
       <div style={{ paddingBottom: 40, width: '100%', minWidth: 0 }}>
         {heading}
         <div className="grid items-start" style={{ gap: 18, gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 460px), 1fr))' }}>
-          <AskMeeting refx={ref} people={people} cabinets={core.cabinets} myCharacterId={characterId} onDone={() => void load()} />
+          <AskMeeting refx={ref} people={people} pickable={pickable} cabinets={core.cabinets} myCharacterId={characterId} onDone={() => void load()} />
           <div>
             {invites.length > 0 && (
               <section aria-label="Invitations" style={{ marginBottom: 22 }}>

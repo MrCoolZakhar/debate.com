@@ -20,6 +20,7 @@ import { Btn, CK, useScrollLock } from '../../crisisKit';
 import { crisisBase, useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { crisisDisplay } from '../../displayFont';
 import { DirectiveBody } from '../directives/attachedImage';
+import { listCoauthors } from './delegateData';
 import { kindIcon, verdictOf, whenLabel } from './directiveUi';
 
 const WATCH_MS = 1500;
@@ -80,7 +81,7 @@ const CSS = `
 
 export default function DelegateReplyPrompt() {
   const v = useCrisis();
-  const { ref, memberId } = v;
+  const { ref, memberId, core } = v;
   const router = useRouter();
   const pathname = usePathname();
   const enabled = v.role === 'delegate' && !!memberId;
@@ -91,9 +92,14 @@ export default function DelegateReplyPrompt() {
   const [blocked, setBlocked] = useState(false);
   const [cursor, setCursor] = useState(0);
   const [notes, setNotes] = useState<Record<string, DirectiveNote[]>>({});
+  const [coauthored, setCoauthored] = useState<Set<string>>(() => new Set());
   const panel = useRef<HTMLDivElement>(null);
 
-  const mine = useMemo(() => (rows ?? []).filter((d) => !!memberId && d.author_member_id === memberId && hasReply(d)), [rows, memberId]);
+  // The character I play now: a co-author of a cabinet directive is told, too, when the backroom needs more detail on it.
+  const myCharacterId = (core.members.find((m) => m.id === memberId) ?? null)?.character_id ?? v.characterId;
+  const mine = useMemo(() => (rows ?? []).filter((d) => !!memberId && hasReply(d) && (
+    d.author_member_id === memberId || (d.kind === 'committee' && d.status === 'clarify' && coauthored.has(d.id))
+  )), [rows, memberId, coauthored]);
 
   // The first time this device ever loads, what is already there counts as seen.
   useEffect(() => {
@@ -112,8 +118,13 @@ export default function DelegateReplyPrompt() {
 
   const load = useCallback(async () => {
     if (!enabled) return;
+    // Co-authorship first, so the first-load seeding below already counts the co-authored directives.
+    try {
+      const mineIds = (await listCoauthors(ref)).filter((c) => !!myCharacterId && c.character_id === myCharacterId).map((c) => c.directive_id);
+      setCoauthored((old) => (old.size === mineIds.length && mineIds.every((x) => old.has(x)) ? old : new Set(mineIds)));
+    } catch { /* without it only the author's own replies are shown */ }
     try { setRows(await listDirectives(ref)); } catch { /* the next ping retries; a prompt must never show an error */ }
-  }, [enabled, ref]);
+  }, [enabled, ref, myCharacterId]);
   useEffect(() => { void Promise.resolve().then(load); }, [load]);
 
   const watch = useCallback(() => { setBlocked(otherDialogOpen()); }, []);

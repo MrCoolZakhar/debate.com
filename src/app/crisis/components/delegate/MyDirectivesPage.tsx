@@ -15,7 +15,7 @@ import DirectiveDeepLink from '../notifications/DirectiveDeepLink';
 import { DirectiveCard, type PersonRef } from './MyDirectives';
 import DraftCard from './DraftCard';
 import { requestOpenDraft, useSavedDrafts } from './draftStore';
-import { listAllNotes, listCoauthors } from './delegateData';
+import { isCoauthorOf, listAllNotes, listCoauthors } from './delegateData';
 import type { WorldCharacter } from './DirectiveForm';
 
 type FilterKey = 'waiting' | 'answered' | 'changes' | 'withdrawn' | 'drafts' | 'all';
@@ -151,6 +151,7 @@ export default function MyDirectivesPage() {
           myMemberId={memberId}
           author={personOf(openOne.author_character_id)}
           isAuthor={openOne.author_member_id === memberId}
+          canReply={openOne.author_member_id === memberId || (openOne.kind === 'committee' && isCoauthorOf(coauthors, openOne.id, myCharacterId))}
           answeredBy={memberName(openOne.answered_by)}
           onChanged={() => { void read(ref); }}
           onClose={() => setOpenId(null)}

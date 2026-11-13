@@ -104,11 +104,13 @@ export function useCrisisGate(conf: string, crisis: string, identityKey: string)
 
   // Pings about another cabinet's directives, resources and news are not for this viewer: drop them before any page reads again.
   const viewerRole = resolved?.role ?? null;
+  // A chair sees both cabinets when the Crisis Director allows it, so no cabinet's pings are dropped for them then.
+  const chairSeesAll = viewerRole === 'chair' && !!core && readSettings(core.crisis.settings).chairsSeeAllCabinets;
   useEffect(() => {
     if (!crisisId || !viewerRole) return;
-    setLiveViewerCabinet(crisisId, isStaff(viewerRole) ? null : cabinetId);
+    setLiveViewerCabinet(crisisId, isStaff(viewerRole) || chairSeesAll ? null : cabinetId);
     return () => setLiveViewerCabinet(crisisId, null);
-  }, [crisisId, viewerRole, cabinetId]);
+  }, [crisisId, viewerRole, cabinetId, chairSeesAll]);
 
   const live = useCrisisLive(crisisId, ['crises', 'crisis_cabinets', 'crisis_members', 'crisis_characters'], () => { void reloadCore(); });
 

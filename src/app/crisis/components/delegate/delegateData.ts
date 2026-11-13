@@ -22,3 +22,8 @@ export async function listCoauthors(ref: CrisisRef): Promise<Array<{ directive_i
   if (res.error) throw new UserFacingError(crisisError(res.error, 'Could not load the co-authors.'));
   return (res.data ?? []) as Array<{ directive_id: string; character_id: string }>;
 }
+
+/** Is this character listed as a co-author of the directive? */
+export function isCoauthorOf(coauthors: Array<{ directive_id: string; character_id: string }>, directiveId: string, characterId: string | null): boolean {
+  return !!characterId && coauthors.some((c) => c.directive_id === directiveId && c.character_id === characterId);
+}

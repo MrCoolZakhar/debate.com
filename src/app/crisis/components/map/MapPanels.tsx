@@ -15,8 +15,10 @@ import { ZONE_COLORS, ZONE_NAME_MAX, ZONE_NO_TYPE_COLOR, type ZoneType } from '@
 import { CUSTOM_UNIT_DETAILS_MAX, safePictureUrl, unitDetailsOf, unitPictureOf, type CustomUnitType } from '@/lib/crisis/unitTypes';
 import { KIND_META, KIND_ORDER } from './mapData';
 import { glyphSvg } from './glyphs';
+import { OwnerMenu, PartyInline, useParty, type PartyMode } from './partyKit';
 
-export interface PanelCabinet { id: string; name: string; short: string; color: string }
+/** A cabinet, or (party) a third party that owns things on the map; both are listed as owners. */
+export interface PanelCabinet { id: string; name: string; short: string; color: string; party?: boolean }
 
 export interface UnitDraft {
   name: string;
@@ -208,10 +210,6 @@ function toggled(list: string[], id: string, on: boolean): string[] {
   return on ? [...without, id] : without;
 }
 
-function ownerOptions(cabinets: PanelCabinet[]) {
-  return [{ value: '', label: 'Nobody' }, ...cabinets.map((c) => ({ value: c.id, label: c.name }))];
-}
-
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return <div style={{ marginBottom: 10 }}><FieldLabel>{label}</FieldLabel>{children}</div>;
 }
@@ -231,34 +229,73 @@ export function PictureDisc({ src, size = 26, ring }: { src: string | null; size
 }
 function TypeDisc({ type, size }: { type: CustomUnitType; size: number }) { return <PictureDisc src={type.picture_url ?? null} size={size} />; }
 
-/** One row of choices that wraps: the cabinets, and optionally "Nobody". */
+/** One row of choices that wraps: the cabinets, the third parties, and optionally "Nobody". With the map power, "Someone else…" adds a party in place. */
 export function OwnerPicker({ value, cabinets, withNobody, disabled, ariaLabel, onChange }: {
   /** undefined: nobody has been chosen yet (not even "Nobody"). */
   value: string | null | undefined; cabinets: PanelCabinet[]; withNobody?: boolean; disabled?: boolean; ariaLabel: string; onChange: (id: string | null) => void;
 }) {
-  const options: Array<{ id: string | null; label: string; title: string; color: string; dashed?: boolean }> = [
-    ...cabinets.map((c) => ({ id: c.id as string | null, label: c.short, title: c.name, color: c.color })),
+  const api = useParty();
+  const [mode, setMode] = useState<PartyMode>(null);
+  const parties = cabinets.filter((c) => c.party);
+  const options: Array<{ id: string | null; label: string; title: string; color: string; dashed?: boolean; party?: boolean }> = [
+    ...cabinets.filter((c) => !c.party).map((c) => ({ id: c.id as string | null, label: c.short, title: c.name, color: c.color })),
+    ...parties.map((c) => ({ id: c.id as string | null, label: c.short, title: c.name, color: c.color, party: true })),
     ...(withNobody ? [{ id: null as string | null, label: 'Nobody', title: 'Nobody', color: CK.inkSoft, dashed: true }] : []),
   ];
   return (
-    <div role="radiogroup" aria-label={ariaLabel} className="flex flex-wrap" style={{ background: CK.well, borderRadius: 11, padding: 3, gap: 2 }}>
-      {options.map((o) => {
-        const on = o.id === value;
-        return (
+    <div>
+      <div role="radiogroup" aria-label={ariaLabel} className="flex flex-wrap" style={{ background: CK.well, borderRadius: 11, padding: 3, gap: 2 }}>
+        {options.map((o) => {
+          const on = o.id === value;
+          return (
+            <span key={o.id ?? 'nobody'} className="inline-flex items-center" style={{ background: on ? CK.card : 'transparent', borderRadius: 8, boxShadow: on ? CK.shadowSm : 'none' }}>
+              <button
+                type="button" role="radio" aria-checked={on} title={o.title} disabled={disabled}
+                onClick={() => onChange(o.id)}
+                className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] inline-flex items-center"
+                style={{
+                  gap: 6, border: 0, padding: o.party && api ? '5px 4px 5px 10px' : '5px 10px', borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: disabled ? 'not-allowed' : 'pointer',
+                  background: 'transparent', color: on ? CK.forest : CK.inkSoft, fontFamily: CK.font,
+                }}
+              >
+                <Dot color={o.color} dashed={o.dashed} />
+                <span style={{ overflowWrap: 'anywhere', textAlign: 'left' }}>{o.label}</span>
+              </button>
+              {o.party && api && o.id && (
+                <>
+                  <button type="button" aria-label={`Change ${o.title}`} title="Rename or recolour" disabled={disabled} onClick={() => setMode({ kind: 'edit', id: o.id as string })} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]" style={{ border: 0, background: 'transparent', cursor: 'pointer', color: CK.inkSoft, lineHeight: 0, padding: '5px 3px', borderRadius: 7 }}>
+                    <Pencil size={12} strokeWidth={1.5} aria-hidden />
+                  </button>
+                  <button type="button" aria-label={`Remove ${o.title}`} title="Remove" disabled={disabled} onClick={() => setMode({ kind: 'remove', id: o.id as string })} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]" style={{ border: 0, background: 'transparent', cursor: 'pointer', color: CK.inkSoft, lineHeight: 0, padding: '5px 6px 5px 3px', borderRadius: 7 }}>
+                    <Trash2 size={12} strokeWidth={1.5} aria-hidden />
+                  </button>
+                </>
+              )}
+            </span>
+          );
+        })}
+        {api && (
           <button
-            key={o.id ?? 'nobody'} type="button" role="radio" aria-checked={on} title={o.title} disabled={disabled}
-            onClick={() => onChange(o.id)}
+            type="button" disabled={disabled} onClick={() => setMode({ kind: 'new' })}
             className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] inline-flex items-center"
-            style={{
-              gap: 6, border: 0, padding: '5px 10px', borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: disabled ? 'not-allowed' : 'pointer',
-              background: on ? CK.card : 'transparent', color: on ? CK.forest : CK.inkSoft, boxShadow: on ? CK.shadowSm : 'none', fontFamily: CK.font,
-            }}
+            style={{ gap: 5, border: 0, padding: '5px 10px', borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: disabled ? 'not-allowed' : 'pointer', background: 'transparent', color: CK.forest, fontFamily: CK.font }}
           >
-            <Dot color={o.color} dashed={o.dashed} />
-            <span style={{ overflowWrap: 'anywhere', textAlign: 'left' }}>{o.label}</span>
+            <Plus size={13} strokeWidth={1.5} aria-hidden />Someone else…
           </button>
-        );
-      })}
+        )}
+      </div>
+      {mode && api && (
+        <div style={{ marginTop: 8, padding: 10, borderRadius: 11, background: CK.card, boxShadow: `inset 0 0 0 1px ${CK.hair}` }}>
+          <PartyInline
+            mode={mode} parties={parties} api={api} onCancel={() => setMode(null)}
+            onDone={(r) => {
+              setMode(null);
+              if (r?.added) onChange(r.added);
+              else if (r?.removed && r.removed === value) onChange(null);
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -351,7 +388,7 @@ export function UnitEditor({
     finally { setUploading(false); }
   };
   const [amountErr, setAmountErr] = useState(false);
-  const others = cabinets.filter((c) => c.id !== d.owner);
+  const others = cabinets.filter((c) => !c.party && c.id !== d.owner);
   const valid = d.name.trim().length > 0;
   const submit = () => {
     if (!amountOk(d.amountText)) { setAmountErr(true); return; }
@@ -406,11 +443,21 @@ export function UnitEditor({
       )}
     </div>
   );
+  const ownerNow = d.owner ? cabinets.find((c) => c.id === d.owner) ?? null : null;
   const ownerField = (
     <Field label="Owner">
-      <GSelect
-        size="sm" value={d.owner ?? ''} aria-label="Owner" options={ownerOptions(cabinets)}
-        onChange={(v) => form.set({ owner: v || null, revealed: v ? d.revealed.filter((x) => x !== v) : d.revealed }, true)}
+      <OwnerMenu
+        value={d.owner ?? null} choices={cabinets} ariaLabel="Owner"
+        onChange={(v) => form.set({ owner: v, revealed: v ? d.revealed.filter((x) => x !== v) : d.revealed }, true)}
+        triggerClassName="flex items-center w-full text-left"
+        triggerStyle={{ gap: 8, minHeight: 30, padding: '3px 8px 3px 9px', borderRadius: 8, border: `1px solid ${CK.hair}`, background: '#fff', cursor: 'pointer', fontSize: 12.5, fontWeight: 500, color: CK.ink, fontFamily: CK.font }}
+        trigger={(
+          <>
+            <Dot color={ownerNow?.color ?? CK.inkSoft} dashed={!ownerNow} />
+            <span style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>{ownerNow ? ownerNow.name : d.owner ? 'Someone else' : 'Nobody'}</span>
+            <ChevronDown size={14} strokeWidth={1.5} aria-hidden style={{ flex: 'none', color: CK.inkSoft }} />
+          </>
+        )}
       />
     </Field>
   );
@@ -835,7 +882,7 @@ export function ZoneEditor({
         </div>
         {f.vis === 'cabinets' && (
           <div style={{ marginTop: 6 }}>
-            {cabinets.map((c) => (
+            {cabinets.filter((c) => !c.party).map((c) => (
               <CheckRow key={c.id} label={c.name} color={c.color} checked={f.revealed.includes(c.id)} onChange={(on) => setF({ ...f, revealed: toggled(f.revealed, c.id, on) })} />
             ))}
             {f.revealed.length === 0 && <p style={{ margin: '4px 0 0', fontSize: 12, color: CK.red, fontWeight: 600 }}>Choose at least one cabinet.</p>}

@@ -94,13 +94,18 @@ export default function DirectiveThread({ d, notes, names, who, character, accen
     const t0 = new Date(d.created_at).getTime();
     const out: Item[] = [{ key: 'directive', side: 'delegate', at: d.created_at, sort: t0, who, pic: authorPic, body: d.body, tag: 'Directive', charId: character?.id }];
     for (const n of notes ?? []) {
-      const fromAuthor = !n.internal && !!n.member_id && n.member_id === d.author_member_id;
       const member = n.member_id ? names.members.get(n.member_id) : undefined;
+      const fromAuthor = !n.internal && !!n.member_id && n.member_id === d.author_member_id;
+      // On a CABINET directive its own side also answers the backroom: a co-author (named) and the cabinet's chair (labelled "Chair").
+      const fromCabinet = !fromAuthor && !n.internal && d.kind === 'committee' && !!member && (member.role === 'chair' || member.role === 'delegate');
+      const cabinetWho = member?.role === 'chair' ? 'Chair' : member?.display_name ?? 'Cabinet';
+      const mine = fromAuthor || fromCabinet;
       out.push({
-        key: n.id, side: fromAuthor ? 'delegate' : 'staff', at: n.created_at, sort: new Date(n.created_at).getTime(),
-        who: fromAuthor ? who : memberName(n.member_id, names, 'Staff'),
-        pic: fromAuthor ? authorPic : <StaffPic member={member} size={30} />, charId: fromAuthor ? character?.id : undefined,
-        body: n.body, internal: n.internal, tag: !fromAuthor && !n.internal ? 'Seen by the delegate' : undefined,
+        key: n.id, side: mine ? 'delegate' : 'staff', at: n.created_at, sort: new Date(n.created_at).getTime(),
+        who: fromAuthor ? who : fromCabinet ? cabinetWho : memberName(n.member_id, names, 'Staff'),
+        pic: fromAuthor ? authorPic : fromCabinet ? <Avatar name={cabinetWho} src={member?.picture_url ?? null} size={30} color={accent} /> : <StaffPic member={member} size={30} />,
+        charId: fromAuthor ? character?.id : undefined,
+        body: n.body, internal: n.internal, tag: !mine && !n.internal ? (d.kind === 'committee' ? 'Seen by the cabinet' : 'Seen by the delegate') : undefined,
       });
     }
     if (d.reply) {

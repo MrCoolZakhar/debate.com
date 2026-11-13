@@ -125,7 +125,7 @@ const sameJson = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.
 export function describeMapEdits(set: EditSet | null, env: Pick<CardEnv, 'data' | 'cabById'>): string[] {
   if (!set || !setSize(set)) return [];
   const names = new Map((env.data?.countries ?? []).map((c) => [c.key, c.name]));
-  const who = (id: string | null) => (id ? env.cabById.get(id)?.name ?? 'a cabinet' : 'nobody');
+  const who = (id: string | null) => (id ? env.cabById.get(id)?.name ?? 'someone else' : 'nobody');
   const baseRegion = new Map((env.data?.regions ?? []).map((r) => [r.region_key, r]));
   const baseShape = new Map((env.data?.shapes ?? []).map((x) => [x.id, x]));
   const out: string[] = [];

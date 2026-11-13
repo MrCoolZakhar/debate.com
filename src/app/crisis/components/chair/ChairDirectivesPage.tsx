@@ -30,12 +30,12 @@ const FILTERS: Array<{ id: Filter; label: string }> = [
 
 const isClosed = (d: Directive): boolean => d.status === 'answered' || d.status === 'rejected' || d.status === 'withdrawn';
 
-/** How the reader says a directive's state to a chair, and what its button says. */
-const READ_ONLY: ReaderReadOnly = {
+/** How the reader says a directive's state to a chair, and what its button says. Another cabinet's directive is only ever opened, never decided. */
+const readOnlyFor = (cabinetId: string | null): ReaderReadOnly => ({
   stateOf: (d) => chairVerdict(d, 16),
-  actionLabel: (d) => (d.status === 'awaiting_chair' ? 'Decide' : 'Open'),
+  actionLabel: (d) => (d.status === 'awaiting_chair' && (!cabinetId || d.cabinet_id === cabinetId) ? 'Decide' : 'Open'),
   when: (d, now) => (d.answered_at && (d.status === 'answered' || d.status === 'rejected') ? `Answered ${agoLabel(d.answered_at, now)}` : `Sent ${agoLabel(d.created_at, now)}`),
-};
+});
 
 function newestFirst(a: Directive, b: Directive): number {
   return b.created_at.localeCompare(a.created_at) || b.no - a.no;
@@ -82,22 +82,32 @@ export default function ChairDirectivesPage() {
   }, [read]);
   useCrisisLive(ref.id, ['crisis_directives'], () => { void read(); });
 
+  const readOnly = useMemo(() => readOnlyFor(cabinetId), [cabinetId]);
+  // With "Chairs see both cabinets" on, a chair reads every cabinet's directives (read only for the other one); a cabinet picker narrows it.
+  const seesAll = settings.chairsSeeAllCabinets && core.cabinets.length > 1;
+  const [cabPick, setCabPick] = useState('');
   // A chair reads their cabinet's directives; personal and joint ones only when the crisis allows it.
   const readable = useMemo(() => (rows ?? []).filter((d) => {
-    if (cabinetId && d.cabinet_id !== cabinetId) return false;
+    if (seesAll ? !!cabPick && d.cabinet_id !== cabPick : !!cabinetId && d.cabinet_id !== cabinetId) return false;
     if (d.kind === 'committee') return true;
     return settings.chairReadsPersonal && (d.kind === 'personal' || d.kind === 'joint');
-  }).sort(newestFirst), [rows, cabinetId, settings.chairReadsPersonal]);
+  }).sort(newestFirst), [rows, cabinetId, seesAll, cabPick, settings.chairReadsPersonal]);
 
+  // What is waiting for THIS chair's own decision: only their own cabinet's cabinet directives.
   const counts = useMemo(() => {
     const c: Record<ChairGroup, number> = { waiting: 0, changes: 0, backroom: 0, answered: 0, rejected: 0, withdrawn: 0 };
-    for (const d of readable) c[chairGroup(d)] += 1;
+    for (const d of readable) {
+      // The other cabinet's directive waiting for ITS chair is not waiting for you: it shows under All only.
+      if (chairGroup(d) === 'waiting' && cabinetId && d.cabinet_id !== cabinetId) continue;
+      c[chairGroup(d)] += 1;
+    }
     return c;
-  }, [readable]);
+  }, [readable, cabinetId]);
+  const waitingMine = counts.waiting;
 
   // With nothing waiting, open on All instead of an empty list (until the chair picks a filter themselves).
   const active: Filter = !pickedFilter && rows !== null && counts.waiting === 0 ? 'all' : filter;
-  const shown = useMemo(() => (active === 'all' ? readable : readable.filter((d) => chairGroup(d) === active)), [readable, active]);
+  const shown = useMemo(() => (active === 'all' ? readable : readable.filter((d) => chairGroup(d) === active && !(active === 'waiting' && cabinetId && d.cabinet_id !== cabinetId))), [readable, active, cabinetId]);
 
   const loadMore = async () => {
     if (loadingMore || !rows) return;
@@ -132,7 +142,7 @@ export default function ChairDirectivesPage() {
 
   // The directive in front: the one picked, else the first of the filter.
   const front = useMemo(() => shown.find((d) => d.id === focusId) ?? shown[0] ?? null, [shown, focusId]);
-  const urgent = counts.waiting > 0;
+  const urgent = waitingMine > 0;
 
   return (
     <div style={{ paddingTop: 8 }}>
@@ -144,7 +154,7 @@ export default function ChairDirectivesPage() {
         </h1>
         {rows !== null && (
           <span className="inline-flex items-baseline" style={{ gap: 6 }}>
-            <b style={{ fontSize: 28, fontWeight: 800, lineHeight: 1, fontVariantNumeric: 'tabular-nums', color: urgent ? CK.red : CK.muted }}><Tick value={counts.waiting} /></b>
+            <b style={{ fontSize: 28, fontWeight: 800, lineHeight: 1, fontVariantNumeric: 'tabular-nums', color: urgent ? CK.red : CK.muted }}><Tick value={waitingMine} /></b>
             <span style={{ fontSize: 13, fontWeight: 700, color: urgent ? CK.red : CK.inkSoft }}>waiting for you</span>
           </span>
         )}
@@ -177,8 +187,31 @@ export default function ChairDirectivesPage() {
         })}
       </div>
 
+      {seesAll && (
+        <div role="group" aria-label="Show a cabinet" className="flex flex-wrap items-center" style={{ gap: 8, marginBottom: 14 }}>
+          {[{ id: '', name: 'Both cabinets', color: CK.forest }, ...core.cabinets.map((c) => ({ id: c.id, name: c.id === cabinetId ? `${c.name} (yours)` : c.name, color: c.color || CK.forest }))].map((c) => {
+            const on = cabPick === c.id;
+            return (
+              <button
+                key={c.id || 'all'}
+                type="button"
+                aria-pressed={on}
+                onClick={() => setCabPick(c.id)}
+                className="inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+                style={{
+                  gap: 7, border: 0, cursor: 'pointer', fontFamily: CK.font, fontSize: 13, fontWeight: 700, borderRadius: 11, padding: '7px 12px',
+                  background: on ? c.color : 'transparent', color: on ? '#FFF' : CK.inkSoft, boxShadow: on ? CK.shadowSm : `inset 0 0 0 1px ${CK.hair}`, overflowWrap: 'anywhere',
+                }}
+              >
+                {c.name}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {rows !== null && !settings.chairReadsPersonal && (
-        <p style={{ margin: '0 0 12px', fontSize: 14, color: CK.inkSoft }}>You see the cabinet directives of your cabinet. The Crisis Director can let chairs see every directive of their cabinet.</p>
+        <p style={{ margin: '0 0 12px', fontSize: 14, color: CK.inkSoft }}>{seesAll ? 'You see the cabinet directives of both cabinets and can decide only the ones of your own cabinet. The Crisis Director can let chairs see every directive.' : 'You see the cabinet directives of your cabinet. The Crisis Director can let chairs see every directive of their cabinet.'}</p>
       )}
 
       {rows === null ? (
@@ -199,7 +232,7 @@ export default function ChairDirectivesPage() {
           lane={active === 'answered' ? 'answered' : 'open'}
           now={now}
           onChanged={() => { void read(); }}
-          readOnly={READ_ONLY}
+          readOnly={readOnly}
         />
       )}
 

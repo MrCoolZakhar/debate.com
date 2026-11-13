@@ -76,6 +76,18 @@ export function setSize(s: EditSet | null | undefined): number {
   return ids.size;
 }
 
+/** Every owner (a cabinet or a third party) that a set hands something to. */
+export function ownersInSet(s: EditSet | null | undefined): Set<string> {
+  const out = new Set<string>();
+  if (!s) return out;
+  for (const r of s.regions) if (r.owner_cabinet_id) out.add(r.owner_cabinet_id);
+  for (const o of s.owners) if (o.owner_cabinet_id) out.add(o.owner_cabinet_id);
+  for (const a of s.addShapes) if (a.owner_cabinet_id) out.add(a.owner_cabinet_id);
+  for (const u of s.units ?? []) if (u.owner_cabinet_id) out.add(u.owner_cabinet_id);
+  for (const a of s.unitAdds ?? []) if (a.owner_cabinet_id) out.add(a.owner_cabinet_id);
+  return out;
+}
+
 export function applyLocal(d: MapData, s: EditSet, crisisId: string): MapData {
   let regions = d.regions;
   for (const r of s.regions) {

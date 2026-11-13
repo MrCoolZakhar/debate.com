@@ -37,7 +37,7 @@ export default function DirectiveComposer({ d, reply, who, effectsButton }: {
   return (
     <div className="flex flex-col" style={{ flex: 'none', gap: 9, padding: '11px 18px 12px 22px', background: CK.card, boxShadow: `0 -1px 0 ${CK.hair}`, borderRadius: '0 0 var(--dp-r) var(--dp-r)' }}>
       {d.status === 'clarify' && d.reply && !editing && (
-        <p style={{ margin: 0, fontSize: 12.5, color: CK.inkSoft }}>You asked for more detail. The delegate’s answer comes back into the queue.</p>
+        <p style={{ margin: 0, fontSize: 12.5, color: CK.inkSoft }}>You asked for more detail. {d.kind === 'committee' ? 'The cabinet’s answer' : 'The delegate’s answer'} comes back into the queue.</p>
       )}
       {other && !answeredView && (
         <p className="flex items-center" style={{ margin: 0, gap: 7, fontSize: 12.5, fontWeight: 700, color: CK.goldDeep }}>

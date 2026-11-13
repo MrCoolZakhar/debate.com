@@ -34,9 +34,16 @@ export function useWorld(): WorldData | null {
 export interface ChangeCtx { cabinets: Map<string, Cabinet>; world: WorldData | null; characters: Map<string, Character> }
 
 export function useChangeCtx(): ChangeCtx {
-  const { core } = useCrisis();
+  const { core, settings } = useCrisis();
   const world = useWorld();
-  const cabinets = useMemo(() => new Map(core.cabinets.map((c) => [c.id, c])), [core.cabinets]);
+  // Owners are cabinets and third parties (docs/crisis/sql/037): a party is drawn like a cabinet, its name as the short name.
+  const cabinets = useMemo(() => {
+    const m = new Map<string, Cabinet>(core.cabinets.map((c) => [c.id, c]));
+    settings.thirdParties.forEach((p, i) => {
+      if (!m.has(p.id)) m.set(p.id, { id: p.id, crisis_id: '', conference_committee_id: null, name: p.name, short_name: p.name, color: p.color, sort: 1000 + i, logo_url: null });
+    });
+    return m;
+  }, [core.cabinets, settings.thirdParties]);
   const characters = useMemo(() => new Map(core.characters.map((c) => [c.id, c])), [core.characters]);
   return useMemo(() => ({ cabinets, world, characters }), [cabinets, world, characters]);
 }
@@ -151,7 +158,7 @@ export function CabinetChip({ id, ctx }: { id: string | null; ctx: ChangeCtx }) 
   return (
     <span className="inline-flex items-center" style={{ gap: 5, fontWeight: 800, color: cab ? CK.ink : CK.muted, background: cab ? cabinetTint(color, 0.12) : CK.well, borderRadius: 8, padding: '1px 8px 1px 6px', overflowWrap: 'anywhere' }}>
       <span aria-hidden style={{ width: 9, height: 9, borderRadius: '50%', background: color, flex: 'none' }} />
-      {cab ? (cab.short_name || cab.name) : 'Nobody'}
+      {cab ? (cab.short_name || cab.name) : id ? 'Someone else' : 'Nobody'}
     </span>
   );
 }

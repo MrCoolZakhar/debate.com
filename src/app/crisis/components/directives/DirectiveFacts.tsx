@@ -58,7 +58,7 @@ export default function DirectiveFacts({ d, names, editing, onChanged, compact =
 
   const answered = d.status === 'answered';
   const waitLabelText = answered ? 'Answered' : d.status === 'clarify' ? 'Status' : 'Waiting since';
-  const waitValue = answered ? agoLabel(d.answered_at, now) : d.status === 'clarify' ? 'Waiting for the delegate' : waitLabel(d.waiting_since, now);
+  const waitValue = answered ? agoLabel(d.answered_at, now) : d.status === 'clarify' ? (d.kind === 'committee' ? 'Waiting for the cabinet' : 'Waiting for the delegate') : waitLabel(d.waiting_since, now);
   const sev = d.status === 'queued' || d.status === 'claimed' ? waitSeverity(d.waiting_since, now) : 'ok';
   const covertShown = d.covert && !d.themes.some((t) => t.toLowerCase() === 'covert');
 

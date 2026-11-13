@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Check, Hourglass, X } from 'lucide-react';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
-import { crisisError, listMeetings, loadWorld, type CrisisRef } from '@/lib/crisis/api';
+import { crisisError, listMeetings, loadMeetingPeople, loadWorld, type CrisisRef } from '@/lib/crisis/api';
 import { useCrisisLive } from '@/lib/crisis/live';
 import type { Cabinet, Meeting, Member } from '@/lib/crisis/types';
 import { Btn, CK, fieldStyle, agoLabel } from '../../crisisKit';
@@ -42,17 +42,41 @@ export function usePendingMeetings(ref: CrisisRef, enabled: boolean): { pending:
   return { pending, reload };
 }
 
-/** Everyone a request can name. Staff already have every character; a chair reads the world list once. */
-export function useMeetingPeople(ref: CrisisRef, enabled: boolean): Map<string, Person> {
+/**
+ * Everyone a meeting can name, and who the viewer may ASK to a meeting. Staff already have every character. Everyone else
+ * reads crisis_meeting_people (names and pictures of the characters they may invite, other cabinets included while
+ * crossCabinetMeetings is on, even when otherCabinets hides them) plus the world list for details. `pickable` is the set of
+ * ids the picker may offer (null until the first read answered; staff are not limited). Reloaded on every meeting or
+ * character change; the live hook's own poll (every 20 s while the channel is down) covers a missed ping.
+ */
+export function useMeetingPeopleData(ref: CrisisRef, enabled: boolean): { people: Map<string, Person>; pickable: Set<string> | null } {
   const { core, staff } = useCrisis();
   const [world, setWorld] = useState<Person[]>([]);
-  useEffect(() => {
+  const [pickable, setPickable] = useState<Set<string> | null>(null);
+  const reload = useCallback(async () => {
     if (!enabled || staff) return;
-    let cancelled = false;
-    loadWorld(ref).then((w) => { if (!cancelled) setWorld(w.map((x) => ({ id: x.id, name: x.name, picture_url: x.picture_url, cabinet_id: x.cabinet_id }))); }).catch(() => { /* names fall back to Unknown */ });
-    return () => { cancelled = true; };
+    const [w, mp] = await Promise.allSettled([loadWorld(ref), loadMeetingPeople(ref)]);
+    const next = new Map<string, Person>();
+    if (w.status === 'fulfilled') for (const x of w.value) next.set(x.id, { id: x.id, name: x.name, picture_url: x.picture_url, cabinet_id: x.cabinet_id, status: x.status });
+    if (mp.status === 'fulfilled') {
+      for (const x of mp.value) next.set(x.id, { id: x.id, name: x.name, picture_url: x.picture_url, cabinet_id: x.cabinet_id, status: x.status });
+      setPickable(new Set(mp.value.map((x) => x.id)));
+    }
+    // A failed read keeps what is on screen; names fall back to the characters the core already holds.
+    if (next.size) setWorld([...next.values()]);
   }, [ref, enabled, staff]);
-  return usePeople(core.characters, world);
+  useEffect(() => {
+    const t = window.setTimeout(() => { void reload(); }, 0);
+    return () => window.clearTimeout(t);
+  }, [reload]);
+  useCrisisLive(enabled && !staff ? ref.id : null, ['crisis_meetings', 'crisis_characters', 'crisis_members'], () => { void reload(); });
+  const people = usePeople(core.characters, world);
+  return { people, pickable: staff ? null : pickable };
+}
+
+/** Everyone a request can name (see useMeetingPeopleData). */
+export function useMeetingPeople(ref: CrisisRef, enabled: boolean): Map<string, Person> {
+  return useMeetingPeopleData(ref, enabled).people;
 }
 
 function Row({ m, refx, people, cabinets, members, canDecide, compact, now, onDecided }: {

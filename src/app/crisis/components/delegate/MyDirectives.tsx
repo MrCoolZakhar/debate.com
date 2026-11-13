@@ -25,6 +25,7 @@ import DirectiveDialog from './DirectiveDialog';
 import DraftCard from './DraftCard';
 import { requestOpenDraft, useSavedDrafts } from './draftStore';
 import DirectiveDeepLink from '../notifications/DirectiveDeepLink';
+import { isCoauthorOf } from './delegateData';
 import { KIND_WORD, kindIcon, verdictOf } from './directiveUi';
 import { plainText } from '../directives/attachedImage';
 
@@ -168,11 +169,17 @@ export default function MyDirectives({
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
   const { drafts, remove: removeDraft } = useSavedDrafts(cref.id, myMemberId);
-  // Cabinet directives are not shown here; the order is the priority above.
+  const { core, characterId: ctxCharacterId } = useCrisis();
+  const liveMember = core.members.find((m) => m.id === myMemberId) ?? null;
+  const myCharacterId = liveMember ? liveMember.character_id : ctxCharacterId;
+  // May this person write to the backroom about this directive: its author and, on a cabinet directive, its co-authors.
+  const canReplyTo = (d: Directive): boolean => (!!myMemberId && d.author_member_id === myMemberId) || (d.kind === 'committee' && isCoauthorOf(coauthors, d.id, myCharacterId));
+  // Cabinet directives are not shown here, except one the backroom needs more detail on that this person can answer (they must act
+  // on it); the order is the priority above.
   const shown = useMemo(() => {
-    const mine = (directives ?? []).filter((d) => !isCabinetDirective(d));
+    const mine = (directives ?? []).filter((d) => !isCabinetDirective(d) || (d.status === 'clarify' && ((!!myMemberId && d.author_member_id === myMemberId) || isCoauthorOf(coauthors, d.id, myCharacterId))));
     return mine.sort((a, b) => priorityOf(a) - priorityOf(b) || sortStamp(b).localeCompare(sortStamp(a)));
-  }, [directives]);
+  }, [directives, coauthors, myCharacterId, myMemberId]);
   const clarify = shown.filter((d) => d.status === 'clarify');
   const rest = shown.filter((d) => d.status !== 'clarify');
   const openDraft = (id: string) => (onOpenDraft ? onOpenDraft(id) : requestOpenDraft(cref.id, myMemberId, id));
@@ -238,6 +245,7 @@ export default function MyDirectives({
           myMemberId={myMemberId}
           author={personOf(openOne.author_character_id)}
           isAuthor={openOne.author_member_id === myMemberId}
+          canReply={canReplyTo(openOne)}
           answeredBy={memberName(openOne.answered_by)}
           onChanged={onChanged}
           onClose={() => setOpenId(null)}

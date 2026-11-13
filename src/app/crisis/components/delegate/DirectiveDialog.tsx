@@ -50,14 +50,17 @@ function BubbleView({ b, lead, onEdit, editor }: { b: Bubble; lead?: string; onE
 }
 
 export default function DirectiveDialog({
-  cref, d, notes, withNames, myMemberId, author, isAuthor, answeredBy, onChanged, onClose, onSendAgain,
+  cref, d, notes, withNames, myMemberId, author, isAuthor, canReply = isAuthor, answeredBy, onChanged, onClose, onSendAgain,
 }: {
   cref: CrisisRef; d: Directive; notes: DirectiveNote[]; withNames: string[]; myMemberId: string | null;
-  author: PersonRef; isAuthor: boolean; answeredBy: string | null; onChanged: () => void; onClose: () => void;
+  author: PersonRef; isAuthor: boolean;
+  /** May write to the backroom: the author and, on a cabinet directive, its co-authors. Defaults to the author. */
+  canReply?: boolean;
+  answeredBy: string | null; onChanged: () => void; onClose: () => void;
   /** A directive its chair sent back: copy it into a new directive and close this pop-up. */
   onSendAgain?: () => void;
 }) {
-  const { settings } = useCrisis();
+  const { settings, core } = useCrisis();
   const sentBack = isChairSendBack(d);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
@@ -243,13 +246,22 @@ export default function DirectiveDialog({
     }
     for (const n of notes) {
       const ov = noteEdits[n.id];
-      out.push({ key: n.id, mine: n.member_id === myMemberId, who: n.member_id === myMemberId ? 'You' : sentBack ? 'Your chair' : 'Backroom', at: n.created_at, body: ov?.body ?? n.body, sort: new Date(n.created_at).getTime(), edited: !!(n.edited_at || ov) });
+      const own = n.member_id === myMemberId;
+      // On a cabinet directive the cabinet's own side (co-authors and the chair) answers the backroom too: those notes sit on the
+      // directive's side, named, and the chair is labelled "Chair".
+      const m = !own && !sentBack && d.kind === 'committee' && n.member_id ? core.members.find((x) => x.id === n.member_id) : undefined;
+      const cabinetSide = !!m && (m.role === 'chair' || m.role === 'delegate');
+      out.push({
+        key: n.id, mine: own || cabinetSide,
+        who: own ? 'You' : cabinetSide ? (m?.role === 'chair' ? 'Chair' : m?.display_name ?? 'Cabinet') : sentBack ? 'Your chair' : 'Backroom',
+        at: n.created_at, body: ov?.body ?? n.body, sort: new Date(n.created_at).getTime(), edited: !!(n.edited_at || ov),
+      });
     }
     return out.sort((a, b) => a.sort - b.sort);
-  }, [d, notes, isAuthor, author.name, answeredBy, myMemberId, sentBack, noteEdits]);
+  }, [d, notes, isAuthor, author.name, answeredBy, myMemberId, sentBack, noteEdits, core.members]);
   const lastBubble = thread[thread.length - 1];
   const lastNote = lastBubble ? notes.find((n) => n.id === lastBubble.key) : undefined;
-  const editableNoteId = isAuthor && !sentBack && !withdrawn && !showEdit && lastNote && lastNote.member_id === myMemberId
+  const editableNoteId = canReply && !sentBack && !withdrawn && !showEdit && lastNote && lastNote.member_id === myMemberId
     && (!d.answered_at || new Date(d.answered_at).getTime() < new Date(lastNote.created_at).getTime())
     ? lastNote.id : null;
 
@@ -400,7 +412,7 @@ export default function DirectiveDialog({
             <Btn tone="ghost" icon={<X size={15} strokeWidth={1.6} />} disabled={saving} onClick={cancelEdit}>Cancel</Btn>
           </div>
         )}
-        {isAuthor && !sentBack && !withdrawn && !showEdit && (
+        {canReply && !sentBack && !withdrawn && !showEdit && (
           <div style={barStyle}>
             <div className="flex items-end" style={{ gap: 8 }}>
               <label htmlFor={`note-${d.id}`} className="sr-only">Write to the backroom</label>

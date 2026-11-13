@@ -28,6 +28,16 @@ export function useRequestedChairDirective(): Directive | null {
   return useSyncExternalStore(subscribe, () => requested, () => null);
 }
 
+/** A cabinet directive of the chair's OWN cabinet that the backroom asked more detail on: the chair answers it (ChairClarify). */
+export function isOwnClarify(d: Pick<Directive, 'kind' | 'status' | 'cabinet_id'>, cabinetId: string | null): boolean {
+  return d.kind === 'committee' && d.status === 'clarify' && (!cabinetId || d.cabinet_id === cabinetId);
+}
+
+/** A cabinet directive of the chair's own cabinet that waits for the chair's decision. */
+export function isOwnWaiting(d: Pick<Directive, 'kind' | 'status' | 'cabinet_id'>, cabinetId: string | null): boolean {
+  return d.kind === 'committee' && d.status === 'awaiting_chair' && (!cabinetId || d.cabinet_id === cabinetId);
+}
+
 // ───────────── who wrote it ─────────────
 
 export interface DirectiveAuthor { name: string; picture_url: string | null; color: string }

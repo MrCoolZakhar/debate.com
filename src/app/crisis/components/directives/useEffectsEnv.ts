@@ -5,6 +5,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { notifyErr } from '@/lib/appNotify';
+import type { Cabinet } from '@/lib/crisis/types';
 import { crisisError, loadMap, loadResources, type CrisisRef } from '@/lib/crisis/api';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { loadCountries, type CountryOption } from './countryPick';
@@ -21,7 +22,7 @@ export function useEffectsEnv({ crisisRef, powers, effects, setEffects, authorCh
   cabinetId: string | null;
   openMap: (req: MapRequest) => void;
 }): CardEnv {
-  const { core } = useCrisis();
+  const { core, settings } = useCrisis();
   const [data, setData] = useState<StageData | null>(null);
 
   useEffect(() => {
@@ -36,9 +37,16 @@ export function useEffectsEnv({ crisisRef, powers, effects, setEffects, authorCh
     return () => { cancelled = true; };
   }, [crisisRef]);
 
-  const cabById = useMemo(() => new Map(core.cabinets.map((c) => [c.id, c])), [core.cabinets]);
+  // Owners on the map are cabinets and third parties (docs/crisis/sql/037); a party is looked up like a cabinet, its name as its name.
+  const cabById = useMemo(() => {
+    const m = new Map<string, Cabinet>(core.cabinets.map((c) => [c.id, c]));
+    settings.thirdParties.forEach((p, i) => {
+      if (!m.has(p.id)) m.set(p.id, { id: p.id, crisis_id: '', conference_committee_id: null, name: p.name, short_name: p.name, color: p.color, sort: 1000 + i, logo_url: null });
+    });
+    return m;
+  }, [core.cabinets, settings.thirdParties]);
   const charById = useMemo(() => new Map(core.characters.map((c) => [c.id, c])), [core.characters]);
-  const cabinetColors = useMemo(() => core.cabinets.map((c) => ({ id: c.id, color: c.color })), [core.cabinets]);
+  const cabinetColors = useMemo(() => [...cabById.values()].map((c) => ({ id: c.id, color: c.color })), [cabById]);
   const typeById = useMemo(() => new Map((data?.types ?? []).map((t, i) => [t.id, { t, i }])), [data]);
   const baseHolder = useMemo(() => new Map((data?.regions ?? []).map((r) => [r.region_key, r.owner_cabinet_id])), [data]);
 

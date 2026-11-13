@@ -21,7 +21,7 @@ import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { amount as fmtAmount } from '@/lib/crisis/format';
 import { readMapFocus, type MapFocus } from '@/lib/crisis/mapFocus';
 import {
-  clearMapDraftVersioned, crisisError, loadMap, loadMapDraftVersioned, saveCharacter, saveMapDraftVersioned, saveUnit, uploadCrisisImage,
+  addThirdParty, clearMapDraftVersioned, crisisError, editThirdParty, loadMap, loadMapDraftVersioned, removeThirdParty, saveCharacter, saveMapDraftVersioned, saveUnit, uploadCrisisImage,
 } from '@/lib/crisis/api';
 import { customTypeOf, unitPictureOf } from '@/lib/crisis/unitTypes';
 import { UserFacingError } from '@/lib/friendlyError';
@@ -33,10 +33,10 @@ import {
 } from '@/lib/crisis/geo';
 import { useCrisisLive } from '@/lib/crisis/live';
 import {
-  applyLocal, diffData, emptySet, isEmptySet, parseSet, saveSet, sendSet, setSize, tidySet,
+  applyLocal, diffData, emptySet, isEmptySet, ownersInSet, parseSet, saveSet, sendSet, setSize, tidySet,
   type CharMove, type EditSet, type MapData, type ShapeInfo, type StageOptions, type UnitChange,
 } from './mapEdits';
-import type { MapShape, MapUnit, UnitKind } from '@/lib/crisis/types';
+import type { MapShape, MapUnit, ThirdParty, UnitKind } from '@/lib/crisis/types';
 import { ZONE_NO_TYPE_COLOR, type ZoneType } from '@/lib/crisis/zones';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { Btn, CK, Segmented, cabinetTint } from '../../crisisKit';
@@ -68,6 +68,7 @@ import { BRUSH_DEFAULT_KM, brushKmForPixels, planErase, planPaint } from './brus
 import { ownedCountryTerrs, planEraseCountries, writeCountryCuts } from './eraseCountries';
 import { useBrush, type BrushMode } from './brushTool';
 import MapToolbar, { TOOLBAR_CSS, type Tool } from './MapToolbar';
+import { PartyContext, type PartyApi } from './partyKit';
 import { loadProvinces, provinceAt, type Province } from './provinces';
 import {
   CharacterCard, KindPicker, NewTerritoryPanel, PlaceUnitPanel, TerritoryCard, UnitEditor, UnitViewer, ZoneEditor, ZoneInfoCard, ZonesPanel,
@@ -317,7 +318,16 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
     () => core.cabinets.map((c) => ({ id: c.id, name: c.name, short: c.short_name || c.name, color: safeColor(c.color) })),
     [core.cabinets],
   );
-  const cabById = useMemo(() => new Map(cabinets.map((c) => [c.id, c])), [cabinets]);
+  // Third parties (docs/crisis/sql/037) own land, areas, zones and units like a cabinet does. `madeHere` keeps the ones added
+  // on this screen until the settings reload shows them. cabById resolves every owner (cabinets and parties) to a name and colour;
+  // `cabinets` stays the real cabinets, for everything that is not an owner (who sees what, the view-as list).
+  const [madeHere, setMadeHere] = useState<Map<string, ThirdParty>>(() => new Map());
+  const allParties = useMemo<PanelCabinet[]>(() => {
+    const m = new Map<string, ThirdParty>(madeHere);
+    for (const p of settings.thirdParties) m.set(p.id, p);
+    return [...m.values()].map((p) => ({ id: p.id, name: p.name, short: p.name, color: safeColor(p.color), party: true }));
+  }, [madeHere, settings.thirdParties]);
+  const cabById = useMemo(() => new Map<string, PanelCabinet>([...cabinets, ...allParties].map((c) => [c.id, c])), [cabinets, allParties]);
 
   // ── data ──
   const isStage = !!stage;
@@ -471,7 +481,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
   const [waterOn, setWaterOn] = useState(true);
   const [regionsOn, setRegionsOn] = useState(false);
   const [zonesOn, setZonesOn] = useState(true);
-  const staffViewer = viewAs !== 'all' && cabById.has(viewAs) ? viewAs : null;
+  const staffViewer = viewAs !== 'all' && cabinets.some((c) => c.id === viewAs) ? viewAs : null;
   const viewer: string | null = staff ? staffViewer : cabinetId;
   const fogActive = !!viewer && (staff && !compact ? fogOn : true);
 
@@ -537,6 +547,60 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
   const [chipPick, setChipOwner] = useState<string | null | undefined>(undefined);
   const chipOwner: string | null = chipPick === undefined ? defaultOwner : chipPick === null || cabById.has(chipPick) ? chipPick : defaultOwner;
   const chipColor = chipOwner ? cabById.get(chipOwner)?.color ?? null : null;
+  // Who can be picked as an owner: every cabinet, and the third parties that own something on the map or in the unsent changes
+  // (or were added on this screen, or are the one in use right now). One that owns nothing is not offered.
+  const ownedIds = useMemo(() => {
+    const inUse = new Set<string>(ownersInSet(draftSet));
+    for (const r of data?.regions ?? []) if (r.owner_cabinet_id) inUse.add(r.owner_cabinet_id);
+    for (const sh of data?.shapes ?? []) if (sh.owner_cabinet_id) inUse.add(sh.owner_cabinet_id);
+    for (const u of data?.units ?? []) if (u.owner_cabinet_id) inUse.add(u.owner_cabinet_id);
+    return inUse;
+  }, [data, draftSet]);
+  const draftOwner = draft?.owner ?? null;
+  const ownerChoices = useMemo<PanelCabinet[]>(
+    () => [...cabinets, ...allParties.filter((p) => ownedIds.has(p.id) || madeHere.has(p.id) || p.id === chipOwner || p.id === draftOwner)],
+    [cabinets, allParties, ownedIds, madeHere, chipOwner, draftOwner],
+  );
+
+  // Adding, changing and removing third parties (each needs the map power; without it the pickers show no such controls).
+  const cabByIdRef = useRef(cabById);
+  useEffect(() => { cabByIdRef.current = cabById; });
+  const partyApi = useMemo<PartyApi>(() => ({
+    create: async (name, color) => {
+      try {
+        const res = await addThirdParty(ref, name, color);
+        if (!res.ok) {
+          notifyErr(res.reason === 'too_many' ? 'There are too many owners already. Remove one that is not needed first.' : 'Give it a name of 1 to 60 letters.', 'crisis-map');
+          return null;
+        }
+        setMadeHere((prev) => new Map(prev).set(res.id, { id: res.id, name, color }));
+        return res.id;
+      } catch (e) { notifyErr(crisisError(e, 'Could not add that owner. Try again.'), 'crisis-map'); return null; }
+    },
+    edit: async (id, name, color) => {
+      try {
+        const res = await editThirdParty(ref, id, name, color);
+        if (!res.ok) { notifyErr('Give it a name of 1 to 60 letters.', 'crisis-map'); return false; }
+        setMadeHere((prev) => (prev.has(id) ? new Map(prev).set(id, { id, name, color }) : prev));
+        return true;
+      } catch (e) { notifyErr(crisisError(e, 'Could not save that owner. Try again.'), 'crisis-map'); return false; }
+    },
+    remove: async (id) => {
+      const name = cabByIdRef.current.get(id)?.name ?? 'That owner';
+      // The unsent changes may still hand things to it, and the database would refuse them when they are sent.
+      if (ownersInSet(draftRef.current).has(id)) { notifyErr(`Send or take back the unsent changes that use ${name} first.`, 'crisis-map'); return false; }
+      try {
+        await removeThirdParty(ref, id);
+        setMadeHere((prev) => { if (!prev.has(id)) return prev; const n = new Map(prev); n.delete(id); return n; });
+        setChipOwner((cur) => (cur === id ? undefined : cur));
+        setDraft((d) => (d && d.owner === id ? { ...d, owner: null } : d));
+        notifyOk(`${name} removed. Its land is nobody's now.`, 'crisis-map');
+        void reload();
+        return true;
+      } catch (e) { notifyErr(crisisError(e, 'Could not remove that owner. Try again.'), 'crisis-map'); return false; }
+    },
+  }), [ref, reload]);
+
   // The brush: its size in km. The first time a brush is picked the size suits how far the map is zoomed.
   const [brushKm, setBrushKm] = useState(BRUSH_DEFAULT_KM);
   const brushTouched = useRef(false);
@@ -748,7 +812,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
     }
     if (tip) {
       if (!withTip) { tip.style.display = 'none'; return; }
-      const owner = u.owner_cabinet_id ? cabById.get(u.owner_cabinet_id)?.name ?? 'A cabinet' : 'Nobody';
+      const owner = u.owner_cabinet_id ? cabById.get(u.owner_cabinet_id)?.name ?? 'Someone else' : 'Nobody';
       const name = document.createElement('b'); name.textContent = u.name;
       const what = document.createElement('div'); what.textContent = look ? look.what : `${KIND_META[u.kind].label} · ${fmtAmount(u.strength)} · ${owner}`;
       const dist = document.createElement('div');
@@ -1067,7 +1131,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
     const d = dataRef.current;
     if (!d) return;
     const name = nameOf(t, d);
-    const who = owner ? cabById.get(owner)?.name ?? 'a cabinet' : 'nobody';
+    const who = owner ? cabById.get(owner)?.name ?? 'someone else' : 'nobody';
     const set = emptySet(); const back = emptySet();
     if (t.kind === 'country') {
       const row = d.regions.find((r) => r.region_key === t.key);
@@ -1116,7 +1180,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
       // An area never cuts a country: it lies on top of it. Only extending the cabinet's own country moves a country's border.
       const others = target?.kind === 'country' ? allOthers : areaClaimOthers(allOthers, dr.owner);
       const growth = target ? differenceM(multi, target.multi) : multi;
-      const holder = dr.owner ? cabById.get(dr.owner)?.name ?? 'that cabinet' : 'nobody';
+      const holder = dr.owner ? cabById.get(dr.owner)?.name ?? 'that owner' : 'nobody';
       if (target && areaOf(growth) <= AREA_EPS) { notifyErr(`That land already belongs to ${holder}.`, 'crisis-map'); return; }
       let plan = planClaim(growth, dr.owner, target ? { id: target.id, multi: target.multi } : null, others, !!dr.owner);
       if (target?.kind !== 'country') plan = tidyAreaClaim(plan, dr.owner, others, null);
@@ -1335,7 +1399,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
   const paintLand = useCallback((stroke: Multi, owner: string, label: string | null, text: string, km = BRUSH_DEFAULT_KM, fromStroke = false) => {
     const d = dataRef.current;
     if (!d) return;
-    const holder = cabById.get(owner)?.name ?? 'that cabinet';
+    const holder = cabById.get(owner)?.name ?? 'that owner';
     const set = emptySet(); const back = emptySet();
     let gone: string[] = [];
     let grown = false;
@@ -1393,11 +1457,11 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
   const strokeDone = useCallback((mode: BrushMode, stroke: Multi) => {
     if (!(editable && canMap)) return;
     if (mode === 'erase') {
-      eraseLand(stroke, 'You erased land', null, 'There is no land held by a cabinet under the brush.', brushKm, true);
+      eraseLand(stroke, 'You erased land', null, 'There is no land held by an owner under the brush.', brushKm, true);
       return;
     }
-    if (!chipOwner) { notifyErr('Pick a cabinet to paint with, or use Erase to take land away.', 'crisis-map'); return; }
-    paintLand(stroke, chipOwner, null, `You painted land for ${cabById.get(chipOwner)?.name ?? 'a cabinet'}`, brushKm, true);
+    if (!chipOwner) { notifyErr('Pick an owner to paint with, or use Erase to take land away.', 'crisis-map'); return; }
+    paintLand(stroke, chipOwner, null, `You painted land for ${cabById.get(chipOwner)?.name ?? 'someone else'}`, brushKm, true);
   }, [editable, canMap, chipOwner, cabById, eraseLand, paintLand, brushKm]);
 
   /** Who controls a zone (null: nobody). */
@@ -1408,8 +1472,8 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
     set.owners.push({ id, owner_cabinet_id: owner });
     back.owners.push({ id, owner_cabinet_id: z.owner_cabinet_id ?? null });
     const name = z.label?.trim() || 'the zone';
-    const was = z.owner_cabinet_id ? cabById.get(z.owner_cabinet_id)?.name ?? 'a cabinet' : 'nobody';
-    const text = owner ? `You gave control of ${name} to ${cabById.get(owner)?.name ?? 'a cabinet'}` : `You took control of ${name} away from ${was}`;
+    const was = z.owner_cabinet_id ? cabById.get(z.owner_cabinet_id)?.name ?? 'someone else' : 'nobody';
+    const text = owner ? `You gave control of ${name} to ${cabById.get(owner)?.name ?? 'someone else'}` : `You took control of ${name} away from ${was}`;
     void applyEdits(set, text, () => back, null, { fail: 'Could not change who controls the zone.' });
   }, [cabById, applyEdits]);
 
@@ -1419,7 +1483,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
     if (!d) return;
     const owner = chipOwner;
     const toggle = (cur: string | null): string | null => (owner === null || cur === owner ? null : owner);
-    const who = owner ? cabById.get(owner)?.name ?? 'a cabinet' : 'nobody';
+    const who = owner ? cabById.get(owner)?.name ?? 'someone else' : 'nobody';
     // A zone sits over the land: a click on one gives its control. Alt goes through zones and provinces to the area or country under them.
     const through = (e.originalEvent as MouseEvent).altKey;
     if (zonesOn && !through) {
@@ -3398,7 +3462,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
       const was = draft.editId ? data?.shapes.find((x) => x.id === draft.editId) ?? null : null;
       panel = (
         <ZoneEditor
-          key={draft.sid} isNew={!draft.editId} phase={draft.phase} types={zoneTypes} cabinets={cabinets}
+          key={draft.sid} isNew={!draft.editId} phase={draft.phase} types={zoneTypes} cabinets={ownerChoices}
           initial={was ? zoneFormOf(was, zoneTypes) : { name: '', type: null, color: ZONE_NO_TYPE_COLOR, description: '', vis: 'public', revealed: [], owner: null }}
           pointCount={draft.points.length} minPoints={MIN_POINTS} canUndo={draftCanUndo} busy={busy}
           infoOnly={draft.infoOnly}
@@ -3412,9 +3476,9 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
       panel = (
         <NewTerritoryPanel
           key={draft.sid} phase={draft.phase} owner={draft.ownerChosen || draft.owner !== null ? draft.owner : undefined} pointCount={draft.points.length}
-          minPoints={MIN_POINTS} cabinets={cabinets} busy={busy}
+          minPoints={MIN_POINTS} cabinets={ownerChoices} busy={busy}
           ownerHint={
-            draft.owner && touching.includes(draft.owner) ? `It joins the land of ${cabById.get(draft.owner)?.name ?? 'that cabinet'} that it touches.`
+            draft.owner && touching.includes(draft.owner) ? `It joins the land of ${cabById.get(draft.owner)?.name ?? 'that owner'} that it touches.`
               : draft.ownerChosen ? undefined
                 : touching.length > 1 ? 'It touches the land of more than one cabinet. Choose who holds it.'
                   : 'It does not touch any cabinet\'s land. Choose who holds it.'
@@ -3431,7 +3495,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
     } else if (tool === 'zones' && canZones && !selZoneRow) {
       panel = (
         <ZonesPanel
-          zones={zones} types={zoneTypes} cabinets={cabinets} onDraw={beginZone} onClose={() => changeTool('select')}
+          zones={zones} types={zoneTypes} cabinets={ownerChoices} onDraw={beginZone} onClose={() => changeTool('select')}
           onPick={(id) => {
             setSelZone(id);
             const z = zones.find((x) => x.id === id);
@@ -3444,7 +3508,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
     } else if (selZoneRow) {
       panel = (
         <ZoneInfoCard
-          key={selZoneRow.id} zone={selZoneRow} cabinets={cabinets}
+          key={selZoneRow.id} zone={selZoneRow} cabinets={ownerChoices}
           staff={staff && !staffViewer} canEdit={canZones} canControl={canZones}
           onControl={(id) => setZoneController(selZoneRow.id, id)}
           onEdit={() => { changeTool('zones'); editZone(selZoneRow.id); }} onClose={() => setSelZone(null)}
@@ -3454,7 +3518,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
       if (addKind && newUnit) {
         panel = (
           <UnitEditor
-            key="new-unit" isNew busy={busy} cabinets={cabinets}
+            key="new-unit" isNew busy={busy} cabinets={ownerChoices}
             customTypes={customTypes} onUploadPicture={(f) => uploadCrisisImage(ref, f)}
             initial={{
               name: addCustom?.name ?? '', kind: addKind, strength: 1, owner: defaultOwner, note: '', revealed: [],
@@ -3474,12 +3538,12 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
       panel = unitEditing ? (
         <UnitEditor
           key={u.id}
-          isNew={false} busy={busy} cabinets={cabinets} initial={unitDraftOf(u)} customTypes={customTypes} onUploadPicture={(f) => uploadCrisisImage(ref, f)}
+          isNew={false} busy={busy} cabinets={ownerChoices} initial={unitDraftOf(u)} customTypes={customTypes} onUploadPicture={(f) => uploadCrisisImage(ref, f)}
           onSubmit={(d) => submitUnit(d, u, true)} onDelete={() => { void removeUnit(u); }} onClose={() => setSelUnit(null)}
         />
       ) : (
         <UnitViewer
-          key={u.id} unit={u} cabinets={cabinets} customTypes={customTypes} onClose={() => setSelUnit(null)}
+          key={u.id} unit={u} cabinets={ownerChoices} customTypes={customTypes} onClose={() => setSelUnit(null)}
           revealed={viewer && u.owner_cabinet_id !== viewer && u.revealed_to.includes(viewer) ? (staff ? `Revealed to ${cabById.get(viewer)?.short ?? 'this side'}` : 'Revealed to you') : null}
         />
       );
@@ -3496,7 +3560,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
       panel = (
         <TerritoryCard
           key={isCountry ? `c:${t.key}` : `a:${t.id}`}
-          name={nameOf(t, data)} kind={t.kind} owner={selOwner} cabinets={cabinets}
+          name={nameOf(t, data)} kind={t.kind} owner={selOwner} cabinets={ownerChoices}
           editable={editable && canMap} detailed={selDetailed} busy={busy}
           edited={isCountry ? overrides.has(t.key) : false}
           info={!isCountry && selShape && !isStage ? { label: selShape.label ?? '', description: selShape.description ?? '' } : null}
@@ -3624,6 +3688,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
   ) : null;
 
   return (
+    <PartyContext.Provider value={canMap ? partyApi : null}>
     <div
       ref={rootRef} className="wm-root" data-compact={compact ? '1' : undefined} data-stage={isStage ? '1' : undefined} data-fs={fs.active ? '1' : undefined}
       style={stage ? ({ '--wm-stage-h': `${stage.height}px` } as CSSProperties) : undefined}
@@ -3651,7 +3716,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
           <MapToolbar
             tool={tool} onTool={changeTool}
             allowed={{ give: editable && canMap, paint: editable && canMap, erase: editable && canMap, draw: editable && canMap, zones: canZones, unit: unitEditing }}
-            cabinets={cabinets} owner={chipOwner} onOwner={setChipOwner}
+            cabinets={ownerChoices} owner={chipOwner} onOwner={setChipOwner}
             brushKm={brushKm} onBrushKm={(km) => { brushTouched.current = true; setBrushKm(km); }}
             history={editable && (canMap || canUnits || canChars)} canUndo={panelCanUndo || (draftOn && draftCanUndo) || !!terrEdit || historyN > 0} canRedo={panelCanRedo || (draftOn ? draftCanRedo : redoN > 0)} busy={busy}
             undoLabel={undoLabel} redoLabel={redoLabel} undoInFields={draftOn && !!draft && draft.phase === 'draw' && draft.points.length > 0}
@@ -3709,7 +3774,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
               <p style={{ margin: '0 0 4px', fontSize: 13.5, fontWeight: 700, color: CK.ink, overflowWrap: 'anywhere' }}>Move {pendingMove.name} here?</p>
               {pendingUnit && (
                 <p style={{ margin: '0 0 9px', fontSize: 12.5, color: CK.inkSoft, overflowWrap: 'anywhere' }}>
-                  {KIND_META[pendingUnit.kind].label} · {fmtAmount(pendingUnit.strength)} · {pendingUnit.owner_cabinet_id ? cabById.get(pendingUnit.owner_cabinet_id)?.name ?? 'A cabinet' : 'Nobody'}
+                  {KIND_META[pendingUnit.kind].label} · {fmtAmount(pendingUnit.strength)} · {pendingUnit.owner_cabinet_id ? cabById.get(pendingUnit.owner_cabinet_id)?.name ?? 'Someone else' : 'Nobody'}
                   {' · '}{kmText(kmBetween([pendingUnit.lng, pendingUnit.lat], [pendingMove.lng, pendingMove.lat]))}
                 </p>
               )}
@@ -3725,7 +3790,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
 
         <div className="wm-legend">
           <div>
-            {cabinets.map((c) => <span key={c.id}><i style={{ background: c.color }} />{c.name}</span>)}
+            {[...cabinets, ...allParties.filter((p) => ownedIds.has(p.id))].map((c) => <span key={c.id}><i style={{ background: c.color }} />{c.name}</span>)}
             {legendZoneTypes.map((t) => <span key={t.id} title={t.description || undefined}><i className="wm-zsw" style={{ background: `${t.color}33`, borderColor: t.color }} />{t.name}</span>)}
             {showRings && !compact && <span title="Spies are never spotted, even inside a sight range."><i style={{ border: `1.5px dashed ${CK.red}`, background: 'transparent' }} />Sight range (spies stay hidden)</span>}
             {viewer && !compact && shownUnits.some((u) => u.owner_cabinet_id !== viewer && u.revealed_to.includes(viewer)) && (
@@ -3737,5 +3802,6 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
         </div>
       </div>
     </div>
+    </PartyContext.Provider>
   );
 }

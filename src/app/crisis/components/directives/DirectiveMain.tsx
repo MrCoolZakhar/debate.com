@@ -101,7 +101,7 @@ export default function DirectiveMain({ directive: d, reply, notesVersion = 0, o
           <div className="flex items-center justify-between" style={{ gap: 10 }}>
             <p className="inline-flex items-center flex-wrap" style={{ margin: 0, gap: '2px 12px', fontSize: 12.5, fontWeight: 700, color: 'rgba(255,232,214,0.88)' }}>
               <span className="inline-flex items-center" style={{ gap: 6 }}><KindIcon size={15} strokeWidth={1.5} aria-hidden />{KIND_LABEL[d.kind]}</span>
-              {d.status === 'clarify' && <span className="inline-flex items-center" style={{ gap: 5 }}><Clock size={13} strokeWidth={1.6} aria-hidden />Waiting for the delegate</span>}
+              {d.status === 'clarify' && <span className="inline-flex items-center" style={{ gap: 5 }}><Clock size={13} strokeWidth={1.6} aria-hidden />{d.kind === 'committee' ? 'Waiting for the cabinet' : 'Waiting for the delegate'}</span>}
             </p>
             <span className="inline-flex items-center" style={{ gap: 8 }}>
               {nav}

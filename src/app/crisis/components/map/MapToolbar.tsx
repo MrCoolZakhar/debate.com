@@ -8,10 +8,10 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ChevronDown, Eraser, Flag, Hexagon, Maximize2, Minimize2, MousePointer2, Paintbrush, Pencil, Redo2, Shield, SlidersHorizontal, Undo2 } from 'lucide-react';
-import GSelect from '@/components/GSelect';
 import { CK } from '../../crisisKit';
 import { BRUSH_MAX_KM, BRUSH_MIN_KM, kmFromSlider, sliderFromKm } from './brush';
 import type { PanelCabinet } from './MapPanels';
+import { OwnerMenu } from './partyKit';
 import { kmText } from './sight';
 import { safeColor } from './tokens';
 
@@ -19,9 +19,9 @@ export type Tool = 'select' | 'give' | 'paint' | 'erase' | 'draw' | 'zones' | 'u
 
 const TOOLS: Array<{ tool: Tool; label: string; key: string; Icon: typeof Flag; title: string }> = [
   { tool: 'select', label: 'Select', key: 'V', Icon: MousePointer2, title: 'Select a unit, a country, a territory or a zone' },
-  { tool: 'give', label: 'Give land', key: 'G', Icon: Flag, title: 'Click a country, province, territory or zone to give it to the cabinet in the chip' },
-  { tool: 'paint', label: 'Paint', key: 'B', Icon: Paintbrush, title: 'Paint land for the cabinet in the chip with a round brush' },
-  { tool: 'erase', label: 'Erase', key: 'E', Icon: Eraser, title: 'Erase land held by a cabinet with a round brush' },
+  { tool: 'give', label: 'Give land', key: 'G', Icon: Flag, title: 'Click a country, province, territory or zone to give it to the owner in the chip' },
+  { tool: 'paint', label: 'Paint', key: 'B', Icon: Paintbrush, title: 'Paint land for the owner in the chip with a round brush' },
+  { tool: 'erase', label: 'Erase', key: 'E', Icon: Eraser, title: 'Erase land held by an owner with a round brush' },
   { tool: 'draw', label: 'Draw area', key: 'D', Icon: Pencil, title: 'Draw a new territory by dragging, or by clicking points' },
   { tool: 'zones', label: 'Zones', key: 'Z', Icon: Hexagon, title: 'Draw and reshape zones: blockade lines, no-fly zones and other areas that are not territory' },
   { tool: 'unit', label: 'Units', key: 'U', Icon: Shield, title: 'Add a unit to the map' },
@@ -106,11 +106,11 @@ function hintFor(p: MapToolbarProps, ownerName: string): string {
     case 'give':
       return p.owner
         ? `Click a country, ${p.provincesReady ? 'a state or province, ' : ''}a territory or a zone to give it to ${ownerName}. Click land ${ownerName} already holds to give it back to nobody. Hold Alt to click through a zone${p.provincesReady ? ' or a province' : ''}.`
-        : 'Click a country, a territory or a zone to take it away from whoever holds it, because Nobody is picked. Pick a cabinet in the chip to give land.';
+        : 'Click a country, a territory or a zone to take it away from whoever holds it, because Nobody is picked. Pick an owner in the chip to give land.';
     case 'paint':
       return p.owner
-        ? `Press and drag to paint land for ${ownerName}. Land of another cabinet under the brush is taken from it. [ and ] change the brush size; hold Shift and drag to move the map.`
-        : 'Pick a cabinet in the chip to paint with. To take land away, use Erase.';
+        ? `Press and drag to paint land for ${ownerName}. Land of another owner under the brush is taken from it. [ and ] change the brush size; hold Shift and drag to move the map.`
+        : 'Pick an owner in the chip to paint with. To take land away, use Erase.';
     case 'erase':
       return 'Press and drag to erase land a cabinet holds: painted and drawn land, and countries a cabinet holds. What is left of a country becomes that cabinet\'s drawn land. Countries nobody holds stay as they are. [ and ] change the brush size.';
     case 'draw':
@@ -172,14 +172,6 @@ export default function MapToolbar(p: MapToolbarProps) {
     return () => document.removeEventListener('keydown', onKey);
   }, []);
 
-  const options = [
-    ...p.cabinets.map((c) => ({
-      value: c.id, label: c.name,
-      icon: <i className="wm-chip-dot" aria-hidden style={{ background: safeColor(c.color) }} />,
-    })),
-    { value: '', label: 'Nobody', icon: <i className="wm-chip-dot" aria-hidden style={{ border: `2px dashed ${CK.inkSoft}` }} /> },
-  ];
-
   return (
     <div ref={wrap} className="wm-tb-wrap">
       <div className="wm-tb-row">
@@ -197,11 +189,12 @@ export default function MapToolbar(p: MapToolbarProps) {
         </div>
 
         {showChip && (
-          <GSelect
-            bare value={p.owner ?? ''} options={options} onChange={(v) => p.onOwner(v || null)} panelMinWidth={230}
-            aria-label={`${VERB[p.tool]} ${ownerName}. Choose another cabinet`}
-            title="The cabinet that Give land, Paint, Draw area and zone control work for"
-            triggerContent={(
+          <OwnerMenu
+            value={p.owner} choices={p.cabinets} onChange={p.onOwner} panelMinWidth={250}
+            ariaLabel={`${VERB[p.tool]} ${ownerName}. Choose another owner`}
+            title="The owner that Give land, Paint, Draw area and zone control work for"
+            triggerStyle={{ border: 0, background: 'transparent', padding: 0, cursor: 'pointer', font: 'inherit', color: 'inherit' }}
+            trigger={(
               <span className="wm-chip" style={{ borderColor: ownerColor, background: owner ? `${ownerColor}14` : '#fff' }}>
                 <i className="wm-chip-dot" aria-hidden style={owner ? { background: ownerColor } : { border: `2px dashed ${CK.inkSoft}` }} />
                 <span>

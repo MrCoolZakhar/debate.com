@@ -11,8 +11,8 @@ import { MEETING_DEFAULT, MEETING_MAX, MEETING_MIN, type Person, AvatarStack } f
 
 const clampMinutes = (n: number) => Math.min(MEETING_MAX, Math.max(MEETING_MIN, Math.round(n)));
 
-export default function AskMeeting({ refx, people, cabinets, myCharacterId, onDone }: {
-  refx: CrisisRef; people: Map<string, Person>; cabinets: Cabinet[]; myCharacterId: string | null; onDone: () => void;
+export default function AskMeeting({ refx, people, pickable, cabinets, myCharacterId, onDone }: {
+  refx: CrisisRef; people: Map<string, Person>; pickable: Set<string> | null; cabinets: Cabinet[]; myCharacterId: string | null; onDone: () => void;
 }) {
   const [picked, setPicked] = useState<string[]>([]);
   const [intention, setIntention] = useState('');
@@ -26,12 +26,15 @@ export default function AskMeeting({ refx, people, cabinets, myCharacterId, onDo
   const groups = useMemo(() => {
     const mineCab = myCharacterId ? people.get(myCharacterId)?.cabinet_id ?? null : null;
     // Nobody can meet a spare (nobody plays it) or a dead character.
-    const all = [...people.values()].filter((p) => p.id !== myCharacterId && p.status !== 'spare' && p.status !== 'dead');
+    // Only people the database lets this delegate ask: their own cabinet always, the others while cross cabinet meetings are on.
+    // Until that list has answered, only the own cabinet is offered.
+    const allowed = (p: Person) => (pickable ? pickable.has(p.id) : !!mineCab && p.cabinet_id === mineCab);
+    const all = [...people.values()].filter((p) => p.id !== myCharacterId && p.status !== 'spare' && p.status !== 'dead' && allowed(p));
     const order = [...cabinets].sort((a, b) => (a.id === mineCab ? -1 : b.id === mineCab ? 1 : a.sort - b.sort));
     const out = order.map((cab) => ({ cab, list: all.filter((p) => p.cabinet_id === cab.id).sort((a, b) => a.name.localeCompare(b.name)) })).filter((g) => g.list.length);
     const loose = all.filter((p) => !p.cabinet_id || !cabinets.some((c) => c.id === p.cabinet_id));
     return { out, loose };
-  }, [people, cabinets, myCharacterId]);
+  }, [people, pickable, cabinets, myCharacterId]);
 
   const toggle = (id: string) => { setHint(null); setSentNote(null); setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id])); };
 
@@ -42,7 +45,7 @@ export default function AskMeeting({ refx, people, cabinets, myCharacterId, onDo
     setBusy(true);
     try {
       const r = await requestMeeting(refx, { character_ids: picked, intention: intention.trim(), duration_minutes: length });
-      if (!r.ok) { setHint('Pick at least one other character to meet.'); return; }
+      if (!r.ok) { setHint(r.reason === 'other_cabinet' ? 'Meetings with other cabinets are turned off.' : 'Pick at least one other character to meet.'); return; }
       notifyOk(r.status === 'awaiting_delegates' || r.status === 'pending' ? 'Meeting asked for' : 'Meeting set', 'crisis-meeting');
       setPicked([]); setIntention(''); setMinutes(String(MEETING_DEFAULT)); setHint(null);
       setSentNote(r.status === 'awaiting_delegates' ? 'Sent to the others first. It goes to the crisis team once they answer, or in 5 minutes.' : null);

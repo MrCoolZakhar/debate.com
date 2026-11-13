@@ -42,7 +42,8 @@ async function loadRooms(ref: CrisisRef, cabinets: Array<{ id: string; name: str
  *  its clock) and, collapsed, what was held. Requests waiting for a yes or no are listed first. A chair sees these and may run
  *  the clock; only the backroom decides (owner, 1 Nov 2026). */
 function ChairMeetings() {
-  const { ref, core, cabinetId } = useCrisis();
+  const { ref, core, cabinetId, settings } = useCrisis();
+  const seesAll = settings.chairsSeeAllCabinets;
   const people = useMeetingPeople(ref, true);
   const [fetched, setFetched] = useState<Meeting[] | null>(null);
   const meetings = useClockOverlay(fetched);
@@ -61,12 +62,13 @@ function ChairMeetings() {
   }, [load]);
   useCrisisLive(ref.id, ['crisis_meetings'], () => { void load(); });
 
-  // Only meetings that involve a character of this cabinet.
-  const mine = useMemo(() => (meetings ?? []).filter((m) => {
+  // Only meetings that involve a character of this cabinet (both cabinets when the Crisis Director lets chairs see both).
+  const involvesMine = useCallback((m: Meeting): boolean => {
     if (!cabinetId) return true;
     const ids = [...m.character_ids, ...(m.requested_by_character ? [m.requested_by_character] : [])];
     return ids.some((id) => (people.get(id)?.cabinet_id ?? core.characters.find((c) => c.id === id)?.cabinet_id) === cabinetId);
-  }), [meetings, cabinetId, people, core.characters]);
+  }, [cabinetId, people, core.characters]);
+  const mine = useMemo(() => (meetings ?? []).filter((m) => seesAll || involvesMine(m)), [meetings, seesAll, involvesMine]);
   const approved = useMemo(
     () => mine.filter((m) => m.status === 'approved').sort((x, y) => Number(meetingInProgress(y)) - Number(meetingInProgress(x)) || new Date(y.decided_at ?? y.created_at).getTime() - new Date(x.decided_at ?? x.created_at).getTime()),
     [mine],
@@ -110,7 +112,7 @@ function ChairMeetings() {
             <StaffMeetingCard key={m.id} m={m} refx={ref} people={people} cabinets={core.cabinets} members={core.members} canAct={false} onChanged={() => void load()} now={now} responses={responses} />
           ))}
           {approved.map((m) => (
-            <StaffMeetingCard key={m.id} m={m} refx={ref} people={people} cabinets={core.cabinets} members={core.members} canAct={false} canClock onChanged={() => void load()} now={now} />
+            <StaffMeetingCard key={m.id} m={m} refx={ref} people={people} cabinets={core.cabinets} members={core.members} canAct={false} canClock={involvesMine(m)} onChanged={() => void load()} now={now} />
           ))}
           <MeetingHistory meetings={past} people={people} now={now} />
         </>
@@ -139,7 +141,7 @@ const DASH_CSS = `
 
 export default function ChairHome() {
   const v = useCrisis();
-  const { ref, cabinetId, core } = v;
+  const { ref, cabinetId, core, settings } = v;
   const { items: news } = useCrisisNews(ref);
 
   const [rooms, setRooms] = useState<Room[] | null>(null);
@@ -194,7 +196,8 @@ export default function ChairHome() {
   const crisis = core.crisis;
   const typeById = useMemo(() => new Map((res?.types ?? []).map((t) => [t.id, t])), [res]);
   const cabinetRes = (res?.resources ?? []).filter((r) => r.cabinet_id && (cabinetId ? r.cabinet_id === cabinetId : true));
-  const cabinetList = useMemo(() => cabinetDirectivesOf(directives, cabinetId), [directives, cabinetId]);
+  // Both cabinets' cabinet directives when chairs see both (the other one's rows open read only).
+  const cabinetList = useMemo(() => cabinetDirectivesOf(directives, settings.chairsSeeAllCabinets ? null : cabinetId), [directives, cabinetId, settings.chairsSeeAllCabinets]);
 
   return (
     <div className="fr-wrap">
