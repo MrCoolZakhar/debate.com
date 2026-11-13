@@ -14,7 +14,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react';
 import type { GeoJSONSource, Map as MLMap, MapMouseEvent, Marker as MLMarker } from 'maplibre-gl';
 import type { Feature, FeatureCollection, Geometry } from 'geojson';
-import { Building2, Cloud, Droplets, Eye, Layers, Send, SquareDashed, UserRound, Users } from 'lucide-react';
+import { Building2, Cloud, Droplets, Eye, Landmark as LandmarkIcon, Layers, Send, SquareDashed, UserRound, Users } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import GSelect from '@/components/GSelect';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
@@ -57,6 +57,8 @@ import { SIGHT_MAX_KM, kmFromPointer, kmText, sightHandleAt, sightKmOf, sightRin
 import {
   addCityLayers, createCityLabels, fillCities, loadCities, setCitiesVisible, type City,
 } from './cities';
+import { LANDMARK_CSS, LandmarkPopover, createLandmarkLayer, type LandmarkLayer } from './landmarks';
+import { MAX_ZOOM_DEEP, MAX_ZOOM_PLAIN, OLDMAP_ATTRIBUTION, OLDMAP_CSS, OLDMAP_ATTRIBUTION_ZOOM, setOldMap } from './oldMap';
 import {
   KIND_META, centroidOf, clampLat, clampLng, loadWorldData, shapePoints, type CountryLabel, type LngLat, type WorldData,
 } from './mapData';
@@ -146,6 +148,8 @@ interface Live {
   onRelease: () => void;
   onUnitClick: (id: string) => void;
   onCharClick: (id: string) => void;
+  /** A landmark was pressed: open its card (only while Select is the tool). */
+  onLandmark: (id: string) => void;
   onUnitMoved: (id: string, lng: number, lat: number) => void;
   onUnitDrag: (id: string, lng: number, lat: number) => void;
   onCharMoved: (id: string, lng: number, lat: number) => void;
@@ -359,6 +363,9 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
   // Staff edits wait in the shared draft while the setting is on (never inside a directive's reply).
   const canChars = staff && !isStage && mayEditCharacters(v.role, settings);
   const draftMode = staff && !isStage && settings.mapChangesWait && (canMap || canUnits || canChars);
+  // The old map of France underneath, and the places the crisis names (both are crisis settings).
+  const oldMapOn = settings.historicalMap === 'etatmajor';
+  const landmarks = settings.landmarks;
   const draftModeRef = useRef(false);
   useEffect(() => { draftModeRef.current = draftMode; draftRef.current = draftSet; });
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -478,6 +485,11 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
   const [charsOn, setCharsOn] = useState(true);
   const [rangesOn, setRangesOn] = useState(true);
   const [citiesOn, setCitiesOn] = useState(true);
+  const [landmarksOn, setLandmarksOn] = useState(true);
+  /** The landmark whose card is open. */
+  const [lmSel, setLmSel] = useState<string | null>(null);
+  /** The old map is faded in enough to need its attribution line. */
+  const [oldMapShown, setOldMapShown] = useState(false);
   const [waterOn, setWaterOn] = useState(true);
   const [regionsOn, setRegionsOn] = useState(false);
   const [zonesOn, setZonesOn] = useState(true);
@@ -716,6 +728,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
   const labelsRef = useRef<CountryLabel[]>([]);
   const syncLabelsRef = useRef<(() => void) | null>(null);
   const cityCtl = useRef<ReturnType<typeof createCityLabels> | null>(null);
+  const landmarkCtl = useRef<LandmarkLayer | null>(null);
   const nameCtl = useRef<ReturnType<typeof createNameLabels> | null>(null);
   const citiesRef = useRef<City[]>([]);
   const [mapError, setMapError] = useState<string | null>(null);
@@ -1912,8 +1925,8 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
     for (const [x, y] of pts) { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y); }
     // Everything inside one region (several points within about 2 degrees): zoom in as far as the map goes, otherwise stay at country level.
     const city = pts.length > 1 && maxX - minX < 2 && maxY - minY < 2;
-    map.fitBounds([[minX, minY], [maxX, maxY]], { padding: compact || isStage ? 50 : 110, maxZoom: city ? 13 : 5.5, duration: 0 });
-  }, [shownUnits, core.characters, compact, isStage]);
+    map.fitBounds([[minX, minY], [maxX, maxY]], { padding: compact || isStage ? 50 : 110, maxZoom: city ? (oldMapOn ? 13.5 : 13) : 5.5, duration: 0 });
+  }, [shownUnits, core.characters, compact, isStage, oldMapOn]);
 
   /** The outline point under the pointer, if it is within reach of the selected territory's outline. */
   const edgeAt = useCallback((map: MLMap, multi: Multi, point: { x: number; y: number }, ll: { lng: number; lat: number }): EdgeHit | null => {
@@ -2062,6 +2075,12 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
   // ── map events read the latest state through this ──
   useEffect(() => {
     liveRef.current = {
+      onLandmark: (id) => {
+        if (tool !== 'select' || stageKind === 'unit' || draft || pendingMoveRef.current) return;
+        // A landmark card never opens over another open panel: that panel closes first.
+        clearSelection();
+        setLmSel((cur) => (cur === id ? null : id));
+      },
       onMapClick: (e) => {
         const map = mapRef.current;
         if (!map) return;
@@ -2406,7 +2425,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
           center: [-30, 28],
           zoom: 1.5,
           minZoom: 0.8,
-          maxZoom: 9,
+          maxZoom: MAX_ZOOM_PLAIN,
           renderWorldCopies: false,
           attributionControl: false,
           // Keeps the drawn frame so screenshots and image exports see the map (owner wants every update checked).
@@ -2465,6 +2484,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
           nameCtl.current = createNameLabels(m, ml);
           const labels = createCityLabels(m, ml);
           cityCtl.current = labels;
+          landmarkCtl.current = createLandmarkLayer(m, ml, (id) => liveRef.current?.onLandmark(id));
           void loadCities().then((list) => {
             if (cancelled) return;
             citiesRef.current = list;
@@ -2534,6 +2554,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
       labelMarkers.clear();
       syncLabelsRef.current = null;
       cityCtl.current?.destroy(); cityCtl.current = null;
+      landmarkCtl.current?.destroy(); landmarkCtl.current = null;
       nameCtl.current?.destroy(); nameCtl.current = null;
       if (fogFrame.current !== null) { window.cancelAnimationFrame(fogFrame.current); fogFrame.current = null; }
       fogCanvas.current = null;
@@ -2544,12 +2565,36 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
     };
   }, []);
 
+  // ── the old map underneath, and how deep the map may zoom ──
+  // Street level is only useful with the old map (or a landmark) to look at, so the map stops at 9 without them.
+  const deepZoom = oldMapOn || landmarks.length > 0;
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!world || !map) return;
+    map.setMaxZoom(deepZoom ? MAX_ZOOM_DEEP : MAX_ZOOM_PLAIN);
+    whenStyleReady(map, () => setOldMap(map, oldMapOn));
+    if (!oldMapOn) return;
+    const sync = () => setOldMapShown(map.getZoom() >= OLDMAP_ATTRIBUTION_ZOOM);
+    map.on('zoom', sync);
+    map.on('load', sync);
+    map.once('idle', sync);
+    return () => { map.off('zoom', sync); map.off('load', sync); setOldMapShown(false); };
+  }, [world, oldMapOn, deepZoom]);
+
+  // ── landmarks: pins from regional zoom, a card on a click ──
+  useEffect(() => { landmarkCtl.current?.setLandmarks(landmarks); }, [world, landmarks]);
+  useEffect(() => { landmarkCtl.current?.setOn(landmarksOn); }, [world, landmarksOn]);
+  useEffect(() => { landmarkCtl.current?.setSelected(lmSel); }, [world, lmSel, landmarks]);
+  const lmOpen = landmarks.find((l) => l.id === lmSel) ?? null;
+  const closeLandmark = useCallback(() => setLmSel(null), []);
+
   // The Give land hover reads the tool from the map element (the handler is made once).
   useEffect(() => {
     const map = mapRef.current;
     if (!world || !map) return;
     const el = map.getCanvasContainer();
     el.dataset.tool = canMap && editable ? tool : '';
+    if (hostRef.current) hostRef.current.dataset.lmtool = tool === 'select' ? 'on' : 'off';
     if (draft) el.dataset.busy = '1'; else delete el.dataset.busy;
     el.style.cursor = penOn ? PEN_CURSOR : tool === 'paint' || tool === 'erase' || (tool === 'unit' && addKind) ? 'crosshair' : tool === 'give' ? 'pointer' : '';
     if (draft || tool === 'draw' || tool === 'paint' || tool === 'erase') map.doubleClickZoom.disable(); else map.doubleClickZoom.enable();
@@ -3689,6 +3734,11 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
         <button type="button" className="wm-tool" aria-pressed={citiesOn} onClick={() => setCitiesOn((c) => !c)} title="Show or hide capitals and big cities">
           <Building2 size={17} strokeWidth={1.5} /><span>Cities</span>
         </button>
+        {landmarks.length > 0 && (
+          <button type="button" className="wm-tool" aria-pressed={landmarksOn} onClick={() => setLandmarksOn((l) => !l)} title="Show or hide named places, such as the Jacobin Club. They show when you zoom in close.">
+            <LandmarkIcon size={17} strokeWidth={1.5} /><span>Landmarks</span>
+          </button>
+        )}
         {!compact && (
           <button type="button" className="wm-tool" aria-pressed={zonesOn} onClick={() => setZonesOn((z) => !z)} title="Show or hide zones: blockade lines, no-fly zones and other areas that are not territory">
             <Layers size={17} strokeWidth={1.5} /><span>Zones</span>
@@ -3731,7 +3781,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
       ref={rootRef} className="wm-root" data-compact={compact ? '1' : undefined} data-stage={isStage ? '1' : undefined} data-fs={fs.active ? '1' : undefined}
       style={stage ? ({ '--wm-stage-h': `${stage.height}px` } as CSSProperties) : undefined}
     >
-      <style>{MAP_CSS + TOOLBAR_CSS + FULLSCREEN_CSS}</style>
+      <style>{MAP_CSS + TOOLBAR_CSS + FULLSCREEN_CSS + LANDMARK_CSS + OLDMAP_CSS}</style>
 
       {compact ? (
         <div className="wm-top">
@@ -3802,6 +3852,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
             <circle data-p="from" r={5} fill="#FFFFFF" stroke={DRAFT} strokeWidth={2.5} />
           </svg>
           <div ref={dragTip} className="wm-dragtip" aria-hidden />
+          {oldMapOn && oldMapShown && <div className="wm-attrib">{OLDMAP_ATTRIBUTION}</div>}
           {hint && (
             <div className="wm-topleft">
               <div className="wm-hint">{hint}</div>
@@ -3839,6 +3890,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
           {!compact && !isStage && <div>{lastShown ? `Last change ${clock(lastShown.at)} · ${lastShown.text}` : staff && !last ? 'No changes yet this visit' : 'Updates live'}</div>}
         </div>
       </div>
+      {lmOpen && landmarksOn && !selUnit && !selTerr && !selChar && !selZone && <LandmarkPopover key={lmOpen.id} mapRef={mapRef} landmark={lmOpen} onClose={closeLandmark} />}
     </div>
     </PartyContext.Provider>
   );

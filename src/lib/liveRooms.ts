@@ -319,6 +319,11 @@ export async function resolveEntryHref(
   e: LiveEntry,
   ctx: { accessToken: string | null; chairName: string; chairRole?: 'head' | 'co' },
 ): Promise<string> {
+  // A delegate of a Gavelling Crisis committee goes to the crisis, not to a seat in the room (owner, 13 Nov 2026).
+  if (e.role === 'delegate' && !isPressSeat(e)) {
+    const crisis = await crisisOfRoom(e.room.sessionCode);
+    if (crisis) return `/crisis/${encodeURIComponent(crisis.conference_slug)}/${encodeURIComponent(crisis.crisis_slug)}`;
+  }
   if (e.role !== 'chair') return liveEntryHref(e);
   const raw = ctx.chairName.trim();
   if (!ctx.accessToken || !raw) return liveEntryHref(e);
@@ -328,6 +333,18 @@ export async function resolveEntryHref(
   if (!res) return liveEntryHref(e);
   if (ctx.chairRole === 'head' && !res.moderator) await takeGavelForThisDevice(e.room.sessionId, e.room.sessionCode, name);
   return `/chair/${e.room.sessionCode}?chairName=${encodeURIComponent(name)}`;
+}
+
+/** The crisis a room belongs to (crisis_for_room, anon), or null. Read inline so the gate never loads the crisis code. */
+async function crisisOfRoom(code: string): Promise<{ conference_slug: string; crisis_slug: string } | null> {
+  try {
+    const { data, error } = await supabase.rpc('crisis_for_room', { p_code: code });
+    if (error || !data || typeof data !== 'object') return null;
+    const d = data as { conference_slug?: unknown; crisis_slug?: unknown };
+    return typeof d.conference_slug === 'string' && typeof d.crisis_slug === 'string' ? { conference_slug: d.conference_slug, crisis_slug: d.crisis_slug } : null;
+  } catch {
+    return null;
+  }
 }
 
 async function roomSeatNames(committeeId: string): Promise<string[]> {

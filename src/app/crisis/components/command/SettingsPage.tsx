@@ -118,6 +118,10 @@ function SettingsBody() {
               title="Map changes wait until you send them" checked={s.mapChangesWait} onChange={(on) => save('mapChangesWait', on)}
               hint="On: moves, borders and territory stay in one draft the crisis team shares, until someone presses Send to delegates. Delegates keep seeing the sent map. Off: every change reaches delegates at once."
             />
+            <ToggleRow
+              title="Old map of France underneath" checked={s.historicalMap === 'etatmajor'} onChange={(on) => save('historicalMap', on ? 'etatmajor' : 'none')}
+              hint="Draws the État-major map of France (1820 to 1866) under the crisis map, with streets as they were before Haussmann. It shows from regional zoom and lets the map zoom in to street level."
+            />
           </Card>
         )}
 
