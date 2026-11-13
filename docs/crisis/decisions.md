@@ -192,3 +192,10 @@ Feedback from their Crisis Director, now built (SQL part 37, docs/crisis/sql/037
 - Clarifications on cabinet directives: the writer, co-authors or the cabinet's chair answer; the chair gets the
   question as a pop-up and on the Front Room, and an answer goes straight back to the backroom (no second chair approval).
 - The map opens on where the characters are when there are no units yet.
+
+Round 24 (13 Nov 2026, Hult MUN set-up):
+- "Chairs see both cabinets" is ON by default (SQL part 38); Hult has it on.
+- Hult's in-world date is 25 June 1791, 09:00. Characters carry public-domain portraits from Wikimedia Commons, stored in our own crisis-media bucket (no portrait exists of Jean-François Varlet).
+- The live-room pop-up sends a delegate of a crisis committee to the crisis, not to a seat.
+- Old map underneath (setting historicalMap = 'etatmajor'): IGN's État-major map of France (1820 to 1866), open data, served through /api/crisis-tiles so visitors never call a third party; the map then zooms to street level (16). Zone and territory fills thin out over it.
+- Landmarks (settings.landmarks): named places with a description, shown from street zoom with a Landmarks toggle; read only for now. Hult's 30 landmarks, 6 districts and 47 sections came from their Google My Maps file (districts and sections are zones of the types District and Section).

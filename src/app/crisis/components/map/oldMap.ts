@@ -22,7 +22,7 @@ const TILES = '/api/crisis-tiles/etatmajor/{z}/{x}/{y}';
 const BOUNDS: [number, number, number, number] = [-5.5, 41.2, 9.8, 51.2];
 
 /** The fills that would hide the old map, and what they are (restored when the old map goes). Shapes: tint 1 or 0.26. */
-const FILLS: Array<{ id: string; layer: 'c-own' | 'c-base-fill' | 'shape-area-fill'; plain: unknown; thin: unknown }> = [
+const FILLS: Array<{ id: string; layer: 'c-own' | 'c-base-fill' | 'shape-area-fill' | 'zone-fill'; plain: unknown; thin: unknown }> = [
   { id: 'c-own', layer: 'c-own', plain: 1, thin: 0.55 },
   { id: 'c-base-fill', layer: 'c-base-fill', plain: 0.5, thin: 0.2 },
   {
@@ -30,6 +30,8 @@ const FILLS: Array<{ id: string; layer: 'c-own' | 'c-base-fill' | 'shape-area-fi
     plain: ['case', ['has', 'tint'], 1, 0.26],
     thin: ['case', ['has', 'tint'], 0.4, 0.14],
   },
+  // Zones (districts, sections) keep their outline and name over the old map, with only a breath of colour.
+  { id: 'zone-fill', layer: 'zone-fill', plain: 0.2, thin: 0.035 },
 ];
 
 /** Opacity by zoom: nothing out at country level, half at 8, nearly full from 10. */
