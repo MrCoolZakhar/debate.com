@@ -686,6 +686,17 @@ export function RoleSheet(props: RoleSheetProps) {
                         value={config.preference_mode ?? 'none'}
                         onPick={(v) => { if (v !== (config.preference_mode ?? 'none')) props.onSave({ preference_mode: v }); }}
                       />
+                      {(config.preference_mode === 'committees_and_countries' || config.preference_mode === 'countries_only') && (
+                        <div className="gvk-rows mt-3">
+                          <SwitchRow
+                            label="Remove Taken Allocations"
+                            desc="Applicants can't see or pick allocations that are already taken."
+                            hint={<InfoHint label="About Remove Taken Allocations" text="On: allocations you have already given out are hidden from this role's preference step, so nobody ranks them. Off: every allocation shows and can be ranked, which suits conferences that reshuffle allocations later. This does not change your public page." />}
+                            checked={config.remove_taken_allocations !== false}
+                            onChange={(v) => props.onSave({ remove_taken_allocations: v })}
+                          />
+                        </div>
+                      )}
                     </Section>
                   )}
 

@@ -68,7 +68,8 @@ export default function DelegateBroadcastCards({ code, broadcasts, enabled, topP
         kind: 'broadcast',
         title: press
           ? t('bc_press_from').replace('{name}', b.authorLabel || t('bc_press'))
-          : b.source === 'crisis' && b.authorLabel ? b.authorLabel : t('notif_broadcast_title'),
+          : b.source === 'crisis' && b.authorLabel ? b.authorLabel
+          : b.source === 'admin' ? t('bc_admins_title') : t('notif_broadcast_title'),
         body: b.message,
         ttlMs: press ? PRESS_TTL_MS : null,
         onExpire: () => markSeen(code, id),

@@ -4,18 +4,18 @@ How Claude adds Gavelling listings (owner, 19 Oct 2026: "adding listings should 
 
 ## Each run
 
-1. **How many:** **10 to 20 new listings** per run (owner, 19 Oct 2026): the day's 10 planned candidates first, then up to 10 more from the reserve list, in order. **Never re-check or update a listing that already exists** (owner, 19 Oct 2026: "no need to re check the already uploaded conferences every day"). A candidate already on Gavelling, as a listing or an organiser's conference, is skipped. Take the run's candidates from **This week's plan** below, in order; when a day's candidate fails (no website of its own, no dates, past, already on Gavelling, a mymun event), take the next unused one from the reserve list.
+1. **How many:** **10 new listings every run** (owner, 29 Oct 2026: "let's just try to hit 10"; was 10 to 20). Keep going until 10 are added: the day's planned candidates first, then the reserve list in order, then a city-and-month search. Stop at 10. **Never re-check or update a listing that already exists** (owner, 19 Oct 2026: "no need to re check the already uploaded conferences every day"). A candidate already on Gavelling, as a listing or an organiser's conference, is skipped. Take the run's candidates from **This week's plan** below, in order; when a day's candidate fails (no website or Instagram of its own, no dates, past, already on Gavelling, a mymun event), take the next unused one. A conference with no website but its own public Instagram is NOT a failure: list it from its Instagram.
 2. **Where (owner, 19 Oct 2026: a heavy focus on Europe, as proof of quality):** about **7 of every 10** new listings are European conferences: well-run university and school conferences across the UK, the Netherlands, Germany, France, Spain, Italy, Belgium, Switzerland, Austria, Ireland, the Nordics, Poland, the Czech Republic, Portugal, Greece, the Baltics and so on (well-known ones first: e.g. LSE, Oxford, Cambridge, Edinburgh, King's, UCL, Leiden, Maastricht, Groningen, Rotterdam, Berlin, Munich, Heidelberg, Sciences Po, Madrid, Barcelona, Rome, Bologna, Geneva, Vienna, Prague, Warsaw, Riga, Tallinn, Helsinki, Stockholm, Copenhagen). The other 3: India, Pakistan, Egypt, the United Arab Emirates and big international conferences elsewhere (e.g. the US university circuit). Rotate cities and countries across runs so no single country floods the list.
 3. **Only upcoming:** start date today or later, preferably within the next 12 months.
 
 ## Finding candidates
 
 - Use web search (Claude's search tool) for things like "Model United Nations 2026 Lahore", "MUN conference Mumbai January 2027", "MUN Cairo 2027", "university Model UN conference 2027".
-- **mymun pages may appear in results. Use them only to learn that a conference exists**, with one exception: the expected delegate number when the conference's own site gives none (see `expected_delegates`). Never copy anything else from mymun (their text, images, fees, dates). Go to the conference's OWN website (or its own Linktree / public page) and take every fact from there. If a conference has no website or public page of its own, skip it.
+- **mymun pages may appear in results. Use them only to learn that a conference exists**, with one exception: the expected delegate number when the conference's own site gives none (see `expected_delegates`). Never copy anything else from mymun (their text, images, fees, dates). Go to the conference's OWN website, Linktree, public page or Instagram and take every fact from there. Skip it only when it has none of these.
 - **Never list IEUMUN** (IE University, Madrid; owner, 20 Oct 2026), in any edition. It is hidden and the job must not add it again.
 - Never list a conference run by mymun itself (MUN London, MUN Paris, MUN Bruxelles, MUN Rome, and any "mymun" branded event).
 - Check robots.txt of the conference's site before fetching pages; respect it.
-- **Instagram:** only use what is visible without logging in; do not log in, do not scrape feeds. If committees and topics are only on Instagram behind a login, leave them out.
+- **Instagram is a full source** (owner, 29 Oct 2026: many conferences post their dates, committees and topics there). Search `site:instagram.com "<name>"` or the conference's handle and read its bio, Linktree and the announcement posts visible without logging in (dates reveal, committee reveal, topic reveal, venue). Take dates, city, committees, topics, delegate numbers and the contact address from there, put each post URL in `sources`, and send `instagram_url`. Never log in and never scrape whole feeds; what needs a login is left out. Instagram dates must be for the coming edition (check the post date), never last year's.
 
 ## Before adding one
 
@@ -60,24 +60,30 @@ A listing goes live only when it passes the quality bar (real dates, a place, a 
 - Never touch a conference whose `listed_by` is `organiser`. The upsert refuses anyway.
 - Never call any function that sends email. The upsert sends none.
 
-## This week's plan (20 to 26 October 2026)
+## This week's plan (10 to 16 November 2026)
 
-Written 19 Oct 2026. Names are candidates, not facts: every date and detail still comes from the conference's own site, and a candidate that fails a check is skipped for the next one in the reserve. About 7 of every 10 are European. Already on Gavelling and never added again: BERMUN, BIMUN ESADE, BIMUN/SINUB, CBSMUN, HMUN Dubai, HNMUN, ILMUNC India, MUNoV, OxIMUN, PRAMUN, LIMUN.
+Written 9 Nov 2026. Names are candidates, not facts: every date and detail still comes from the conference's own site, and a candidate that fails a check is skipped for the next one in the reserve. About 7 of every 10 are European. Most named candidates still fail because the conference has no 2027 date on its own site yet; move on fast and fall back to city-and-month searches ("Model United Nations March 2027 <city>"), which found most of last week's additions. **instagram.com's robots.txt disallows ClaudeBot** (found 9 Nov), so Instagram cannot be read; a conference with only an Instagram is skipped until that changes.
+
+Already on Gavelling and never added again (besides the earlier lists): HKMUN, Doha MUN, LEMUN, HMUN Haarlem, AlejMUN, IMP Paris, FioMUN, MUN'ICP Reims, RIMUN Reims, KarMUN, SailMUN, DukeMUN, CMUNC, RCIMUN, VNMUN, ETHMUN Crisis, ROCKMUN, HagaMUN, ZISMUN, MUNDP, INDMUN, BrainsMUN, UNMUN (Pamplona), SCMUN (Athens), and on 9 Nov VMUN (Vancouver), IMUN Roma, Milano, Napoli and Catania, IMS Bologna, UCBMUN, MDMUN (Miami), QMUN Chester and YMAU (Addis Ababa). Seven IMUN and seven FWWMUN editions are listed: add no more of either series unless a day cannot reach 10 otherwise (the IMUN Middle School Roma, Napoli, Torino, Padova and Bari editions are dated and wait in reserve). Never used because robots.txt names ClaudeBot: BrisMUN, MAMUN (Mannheim), EdMUN, MSKMUN (Athens), WASAMUN, MarkMUN (markmun.ca), USC SCMUN, TrojanMUN, Harvard MUN India and Australia, Yale MUN Australia and Singapore (plus the earlier HNMUN-LA, ConMUN, TMUN, HarvardMUN Canada). Skipped as online with no place: NOMUN (Nordic Diplomacy Initiative).
 
 | Day | Europe (7) | Elsewhere (3) |
 |---|---|---|
-| Tue 20 Oct | LSEMUN (London), KCLMUN (London), Cambridge CUIMUN, DurMUN (Durham), EdMUN (Edinburgh), WarMUN (Warwick), TCD MUN (Dublin) | THIMUN Qatar (Doha), LUMUN (Lahore), CIMUN (Cairo) |
-| Wed 21 Oct | THIMUN (The Hague), Leiden LIDMUN, MaMUN (Maastricht), EuroMUN (Maastricht), GrMUN (Groningen), RMUN (Rotterdam), AMUN (Amsterdam) | YMUN (Yale, New Haven), Dubai MUN (DMUN), Delhi Public School MUN |
-| Thu 22 Oct | MUNich (Munich), HeidelMUN (Heidelberg), HamMUN (Hamburg), FrankMUN (Frankfurt), CologneMUN, DresdenMUN, ZuMUN (Zurich) | NMUN New York, Karachi MUN (KMUN), AUC MUN (Cairo) |
-| Fri 23 Oct | PIMUN (Paris), Sciences Po MUN (Paris), LyonMUN, StrasMUN (Strasbourg), GIMUN (Geneva), BelMUN (Brussels), LUXMUN (Luxembourg) | ChoMUN (Chicago), Mumbai MUN, Abu Dhabi MUN |
-| Sat 24 Oct | RomeMUN (Rome), BoMUN (Bologna), MilanMUN, MadMUN (Madrid), LxMUN (Lisbon), PortoMUN, AthensMUN | CMUNCE (Columbia, New York), Islamabad MUN, Sharjah MUN |
-| Sun 25 Oct | VIMUN (Vienna), BudMUN (Budapest), WMUN (Warsaw), KrakMUN (Krakow), RIGAMUN (Riga), TalMUN (Tallinn), ViMUN (Vilnius) | NCSC (Georgetown, Washington), Bangalore MUN, Alexandria MUN |
-| Mon 26 Oct | HELMUN (Helsinki), SMUN (Stockholm), LundMUN (Lund), CopMUN (Copenhagen), OsloMUN, AarhusMUN, GöteborgMUN | UPenn ILMUNC (Philadelphia), Hyderabad MUN, Doha MUN |
+| Tue 10 Nov | VisMUN (Krakow), LVMUN (Riga), BiaMUN (Bialystok), a Vilnius MUN, a Sofia MUN, a Cluj or Iasi MUN, a Bucharest university MUN | Tenby Ipoh MUN (own site), RUYAMUN (Amman, 2027 edition), HMUNA (Nairobi, 2027 edition) |
+| Wed 11 Nov | GIMUN (Geneva), HELIMUN (Helsinki, exact days), ZuMUN (Zurich), MUIMUN (Münster), MUNoH (Hamburg), GöMUN (Göttingen), St Leonards MUN | LMUN (Lagos, 2027), AIMUN (Abuja), CIMUN AUC (Cairo) |
+| Thu 12 Nov | TEIMUN (The Hague), LSEMUN, KCLMUN, WarwickMUN, SOTONMUN, LeedsMUN, NottsMUN | GIKMUN (Topi), ACMUN (Aitchison), NUST MUN |
+| Fri 13 Nov | Salzburg, Graz and Innsbruck MUNs, Gent MUN, a Liège or Louvain-la-Neuve MUN, EPFLMUN (Lausanne), Basel MUN | AUSMUN (Sharjah), THIMUN Qatar, LFIGPMUN (Dubai) |
+| Sat 14 Nov | SevIMUN (Seville), MUNUSAL (Salamanca), a Granada or Málaga MUN, UC MUN (Coimbra), a Braga MUN, UNIC MUN (Cyprus), a Malta MUN | GUMUN (Georgetown), NYUMUN, UFMUN |
+| Sun 15 Nov | SCANDMUN, OsloMUN, Uppsala and Lund MUNs, a Stockholm university MUN, DurMUN, GlasMUN | a Mumbai, Delhi or Bangalore university conference, Kuwait MUN, Bahrain MUN |
+| Mon 16 Nov | city-and-month searches in France and Germany (Lyon, Bordeaux, Lille, Toulouse, Cologne, Düsseldorf, Leipzig) | Muscat MUN, Riyadh International MUN, a Jordan school MUN |
 
-**Reserve** (in order): St Andrews MUN, GlasMUN (Glasgow), ManMUN (Manchester), BristolMUN, ExMUN (Exeter), Utrecht MUN, NijMUN (Nijmegen), MannMUN (Mannheim), BonnMUN school edition, BaselMUN, LuxMUN school edition, SalzMUN (Salzburg), PragueMUN (university), BratMUN (Bratislava), ValMUN (Valencia), SevMUN (Seville), FloMUN (Florence), TurinMUN, CorkMUN, GalwayMUN, YorkMUN, NottMUN (Nottingham), LeedsMUN, SheffMUN (Sheffield), BathMUN, OxIMUN school edition, CamMUN school conference, The Hague MUN school (THIMUN Online), Tilburg MUN, Eindhoven MUN, Ghent MUN, LeuvenMUN, AntwerpMUN, FreiburgMUN, TübingenMUN, GöttingenMUN, MünsterMUN, LausanneMUN, BernMUN, InnsbruckMUN, GrazMUN, LjubljanaMUN, ZagrebMUN, BelgradeMUN, SofiaMUN, BucharestMUN, ThessMUN (Thessaloniki), MaltaMUN, CyprusMUN, NaplesMUN, PaduaMUN, GranadaMUN, BilbaoMUN, CoimbraMUN, ReykjavikMUN; elsewhere: BMUN (Berkeley), SMUNC (Stanford), Lahore Grammar MUN, Chennai MUN, Kuwait MUN, MUNUC (Chicago school), PMUNC (Princeton), McMUN (Montreal), NAIMUN (Georgetown school), Kolkata MUN, Pune MUN, Peshawar MUN, Riyadh MUN, Muscat MUN, Bahrain MUN.
+**Reserve** (in order): any of the above that a later day finds dated; city-and-month searches in Spain (outside Madrid and Barcelona), Portugal, Greece, Belgium, Austria, the Baltics, Romania and Bulgaria; the IMUN Middle School editions (Italy); elsewhere: Kenya, Nigeria, South Africa, Malaysia, the US high school circuit (Foundations for Leadership's other conferences, state university high school conferences).
 
 At the end of the week, write next week's plan here the same way, dropping everything that was added or skipped.
 
 ## Report
 
 End each run with a short report: each listing added or updated (name, city, dates, slug, live or private, why private if so), candidates skipped and why (already on Gavelling, no own website, past, mymun's own event), and anything that needs Peter.
+
+## Blocklist (29 Oct 2026, owner)
+
+Peter asked for the three hidden listings (CWMUN Paris, CWMUN Rome, IEUMUN) to be deleted completely and never added again. Deleting the row would have dropped the "archived" guard, so `gavelling_listing_blocklist` (RLS on, no policies) now holds each one's listing key without the year (`cwmunparis`, `cwmunrome`, `ieumun`), and `upsert_gavelling_listing` returns `{ok:false, reason:'blocked'}` for any edition of them. The job skips a `blocked` answer like `removed` and never tries to get round it under another name or acronym. To delete another listing for good: add its row to the blocklist first, then delete the conference.

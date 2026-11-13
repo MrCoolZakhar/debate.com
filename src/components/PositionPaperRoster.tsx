@@ -75,8 +75,10 @@ function StatusBadge({ status }: { status: string }) {
 
 export default function PositionPaperRoster({
   conferenceSlug, currentUserId, deadline, allocations, papers, messagesByPaper, busyIds, onApprove, onReject, statusFilter,
-  conferenceCommitteeId,
+  conferenceCommitteeId, required = false,
 }: {
+  /** Mandatory Submission is on (open papers, pp_required): a seat with no paper reads "Missing". */
+  required?: boolean;
   conferenceSlug: string;
   /** The committee these seats belong to. When given, seats with a custom
    *  crest (or a group crest) draw it instead of the flag; without it every
@@ -194,7 +196,7 @@ export default function PositionPaperRoster({
 
             <div className="flex items-center gap-2 flex-wrap" style={{ marginLeft: 'auto' }}>
               {!paper ? (
-                <span style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 600, color: '#9A8A78' }}>No submission</span>
+                <span style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 600, color: '#9A8A78' }}>{required ? 'Missing' : 'No submission'}</span>
               ) : (
                 <>
                   {unread > 0 && (

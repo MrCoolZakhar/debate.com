@@ -74,7 +74,7 @@ export type ActivityKind =
   | 'chair_invite' | 'organiser_invite' | 'import_invite'
   | 'proof_rejected' | 'payment_due' | 'reply' | 'draft' | 'allocation' | 'accepted'
   | 'org_applications' | 'org_proofs' | 'org_inbox' | 'org_aid'
-  | 'document_due' | 'document_sent_back' | 'org_document_returns'
+  | 'document_due' | 'document_sent_back' | 'org_document_returns' | 'paper_due'
   | 'review_due';
 
 export type ActivityTone = 'red' | 'orange';
@@ -123,6 +123,8 @@ interface Raw {
   country_name?: string | null; country_code?: string | null; count?: number | null; new_count?: number | null;
   request_id?: string | null;
   document_id?: string | null; due_at?: string | null; required?: boolean | null; note?: string | null;
+  /** paper_due: the deadline has passed. */
+  overdue?: boolean | null;
 }
 
 const ROLE_WORD: Record<string, string> = {
@@ -225,6 +227,16 @@ function shape(r: Raw): ActivityItem | null {
       const due = shortDate(r.due_at);
       return { ...base, kind: 'document_due', title: `Send back ${name}`,
         detail: due ? `${conf} · due ${due}` : conf, href: `/conferences/${slug}/role` };
+    }
+    case 'paper_due': {
+      // Mandatory Submission (prompt 24): from 7 days before the deadline until handed in.
+      const late = r.overdue === true;
+      const due = shortDate(r.due_at);
+      const detail = [(r.committee ?? '').trim(), conf, due ? `${late ? 'was due' : 'due'} ${due}` : '']
+        .filter(Boolean).join(' · ');
+      return { ...base, kind: 'paper_due', tone: late ? 'red' : 'orange',
+        title: late ? 'Your position paper is late' : 'Hand in your position paper',
+        detail, href: `/conferences/${slug}/role` };
     }
     case 'document_sent_back': {
       const name = (r.title ?? '').trim() || 'Your document';

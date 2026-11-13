@@ -137,6 +137,8 @@ export interface RoleSetupConfig {
   allow_resubmission: boolean;
   hide_dashboard_until_paid?: boolean;
   preference_mode: string;
+  /** Applicants cannot see or pick allocations already given out (default on). */
+  remove_taken_allocations?: boolean;
   collect_mun_experience: boolean;
 }
 

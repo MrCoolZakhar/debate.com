@@ -25,6 +25,7 @@ import GuidePlate from './GuidePlate';
 import ArticleToc from './ArticleToc';
 import RelatedGuides from './RelatedGuides';
 import BlogChrome from './BlogChrome';
+import BlogVideo from './BlogVideo';
 import { collectHeadings, insertBeforeMiddleH2 } from './prose';
 import { TopBanner, MiddleBanner, BottomBanner, leadsWithOrganisers } from './ProductBanners';
 import { AuthorByline, AuthorBox } from './AuthorCredit';
@@ -221,6 +222,11 @@ export default function ArticleLayout({
 
           <div className="mt-14">
             <RelatedGuides currentSlug={post.slug} />
+          </div>
+
+          {/* The full chair guide video, as on /sessions (owner, 31 Oct 2026). */}
+          <div className="mt-14">
+            <BlogVideo />
           </div>
         </div>
       </div>

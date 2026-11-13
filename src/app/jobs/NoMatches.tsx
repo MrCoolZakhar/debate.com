@@ -4,7 +4,9 @@
 //
 // When the filters match nothing, the right pane on a laptop (and the list on
 // a phone, under "No roles match these filters.") offers to save the search
-// as an alert instead of an empty pane. SaveAlertAction already handles
+// as an alert instead of an empty pane. With no filter or search set (an
+// empty board, `empty`) it says there are no open roles yet, without Clear
+// filters, and offers an alert for new roles. SaveAlertAction already handles
 // signed-out people (sign-in) and members without Unlimited (the pop-up).
 
 import { BellPlus } from 'lucide-react';
@@ -16,9 +18,11 @@ const INK = '#1C1410';
 const INK_SOFT = '#5C5140';
 const FOREST = '#1B3828';
 
-export default function NoMatches({ query, onClear, compact = false }: {
+export default function NoMatches({ query, onClear, compact = false, empty = false }: {
   query: JobQuery;
   onClear: () => void;
+  /** No filter or search is set: the board itself has no open roles. */
+  empty?: boolean;
   /** The phone version under the list's own sentence: no repeated heading card. */
   compact?: boolean;
 }) {
@@ -38,19 +42,19 @@ export default function NoMatches({ query, onClear, compact = false }: {
           <BellPlus size={22} strokeWidth={2.2} />
         </span>
       )}
-      {!compact && <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: INK }}>No matches found</h2>}
+      {!compact && <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: INK }}>{empty ? 'There are no open roles yet' : 'No matches found'}</h2>}
       <p style={{ margin: 0, maxWidth: '46ch', fontSize: 15, lineHeight: 1.55, color: INK_SOFT }}>
-        Save this search as an alert to know when roles that match it are posted.
+        {empty ? 'Save an alert to know when new roles are posted.' : 'Save this search as an alert to know when roles that match it are posted.'}
       </p>
       <SaveAlertAction query={query} />
-      <button
+      {!empty && <button
         type="button"
         onClick={onClear}
         className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] rounded"
         style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: FONT, fontSize: 14, fontWeight: 700, color: INK, textDecoration: 'underline', textUnderlineOffset: 3 }}
       >
         Clear filters
-      </button>
+      </button>}
     </div>
   );
 }

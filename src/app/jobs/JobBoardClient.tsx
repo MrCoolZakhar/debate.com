@@ -43,7 +43,7 @@ import JobCard, { JobCardSkeleton } from './JobCard';
 import JobFilters from './JobFilters';
 import JobListing from './JobListing';
 import {
-  EMPTY_JOB_QUERY, jobFilterKey, jobFiltersOf, readJobQuery, writeJobQuery,
+  EMPTY_JOB_QUERY, hasActiveFilters, jobFilterKey, jobFiltersOf, readJobQuery, writeJobQuery,
   type JobQuery, type JobTab,
 } from './jobQuery';
 
@@ -339,6 +339,7 @@ export default function JobBoardClient({ initialQuery, initialPage, initialError
       appliedAt={appliedAt.get(selectedId) ?? null}
       onChanged={() => { if (userId) void loadMy(); }}
       onSelectListing={select}
+      onSeeAll={() => commit({ ...queryRef.current, listing: null })}
       inviteNote={(() => {
         const inv = inviteParam ? invites.find((i) => i.invite_id === inviteParam && i.id === selectedId) : null;
         return inv ? { short: inv.conference.short || inv.conference.name || 'A conference', message: inv.message } : null;
@@ -454,12 +455,14 @@ export default function JobBoardClient({ initialQuery, initialPage, initialError
                     <>Nothing saved yet. <button type="button" className="gv-jobs-link" onClick={() => changeTab('all')}>Browse all roles</button></>
                   ) : tab === 'applications' ? (
                     <>You have not applied through the Job Board yet. <button type="button" className="gv-jobs-link" onClick={() => changeTab('all')}>Browse all roles</button></>
+                  ) : !hasActiveFilters(query) ? (
+                    <>There are no open roles yet.</>
                   ) : (
                     <>No roles match these filters. <button type="button" className="gv-jobs-link" onClick={clearAll}>Clear filters</button></>
                   )}
                 </p>
                 {/* Phones: under the sentence, the offer to save the search as an alert (prompt 12). */}
-                {tab === 'all' && !wide && <NoMatches query={query} onClear={clearAll} compact />}
+                {tab === 'all' && !wide && <NoMatches query={query} onClear={clearAll} compact empty={!hasActiveFilters(query)} />}
                 </>
               ) : (
                 <ul className="gv-jobs-list" style={{ opacity: board.k === 'loading' && tab === 'all' ? 0.55 : 1 }}>
@@ -510,7 +513,7 @@ export default function JobBoardClient({ initialQuery, initialPage, initialError
                   {listing ?? (!listLoading && (
                     tab === 'all' && items.length === 0 && board.k !== 'error'
                       // No results: offer to save the search as an alert (prompt 12).
-                      ? <NoMatches query={query} onClear={clearAll} />
+                      ? <NoMatches query={query} onClear={clearAll} empty={!hasActiveFilters(query)} />
                       : (
                         <div className="gv-jobs-pane-empty">
                           <p style={{ margin: 0 }}>Choose a role on the left to read it here</p>

@@ -29,8 +29,16 @@ interface SwapMetadata {
   app_b?: string;
   member_a?: string;
   member_b?: string;
-  before?: { a?: string; b?: string };
-  after?: { a?: string; b?: string };
+  /** A seat change (Request Reshuffling, 5 Nov 2026) carries strings and one member. */
+  before?: { a?: string; b?: string } | string;
+  after?: { a?: string; b?: string } | string;
+  action?: 'place' | 'unplace';
+  member?: string;
+}
+
+/** One side of an old swap's before / after. */
+function swapSide(v: SwapMetadata['before'], side: 'a' | 'b'): string | undefined {
+  return v && typeof v === 'object' ? v[side] : undefined;
 }
 
 interface RequestRow {
@@ -475,12 +483,20 @@ export default function RequestsPanel({ conferenceId, applicationId, myApplicati
               <p style={{ fontSize: 12, fontWeight: 700, color: GOLD_DEEP, fontFamily: OUTFIT, margin: '0 0 6px 0' }}>
                 Swap details
               </p>
-              <p className="text-sm" style={{ color: NEU.ink, fontFamily: OUTFIT, margin: 0 }}>
-                {selectedRequest.metadata.member_a ?? 'Member A'}: {selectedRequest.metadata.before?.a ?? 'None'} → {selectedRequest.metadata.after?.a ?? 'None'}
-              </p>
-              <p className="text-sm mt-1" style={{ color: NEU.ink, fontFamily: OUTFIT, margin: '4px 0 0 0' }}>
-                {selectedRequest.metadata.member_b ?? 'Member B'}: {selectedRequest.metadata.before?.b ?? 'None'} → {selectedRequest.metadata.after?.b ?? 'None'}
-              </p>
+              {typeof selectedRequest.metadata.action === 'string' ? (
+                <p className="text-sm" style={{ color: NEU.ink, fontFamily: OUTFIT, margin: 0 }}>
+                  {selectedRequest.metadata.member ?? 'Member'}: {typeof selectedRequest.metadata.before === 'string' ? selectedRequest.metadata.before : 'None'} → {typeof selectedRequest.metadata.after === 'string' ? selectedRequest.metadata.after : 'None'}
+                </p>
+              ) : (
+                <>
+                  <p className="text-sm" style={{ color: NEU.ink, fontFamily: OUTFIT, margin: 0 }}>
+                    {selectedRequest.metadata.member_a ?? 'Member A'}: {swapSide(selectedRequest.metadata.before, 'a') ?? 'None'} → {swapSide(selectedRequest.metadata.after, 'a') ?? 'None'}
+                  </p>
+                  <p className="text-sm mt-1" style={{ color: NEU.ink, fontFamily: OUTFIT, margin: '4px 0 0 0' }}>
+                    {selectedRequest.metadata.member_b ?? 'Member B'}: {swapSide(selectedRequest.metadata.before, 'b') ?? 'None'} → {swapSide(selectedRequest.metadata.after, 'b') ?? 'None'}
+                  </p>
+                </>
+              )}
             </NeuInset>
           )}
           {selectedRequest.kind === 'swap_request' && selectedRequest.status === 'open' && (

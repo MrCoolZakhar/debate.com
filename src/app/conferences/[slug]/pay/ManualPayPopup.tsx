@@ -8,6 +8,7 @@
 //         blocked); this pop-up says so and offers "Open it again"
 //   qr    the QR on the right, large enough to scan, tap to enlarge
 //   bank  the bank details on the right, each with a copy button, and the amount
+//   phone the number people pay to (payment_phone_for) and the amount, each with a copy button (1 Nov 2026)
 // The proof upload sits on the left with the instructions. Finish calls
 // attach_proof (or replace_proof in 'replace' mode). X keeps the started
 // payment; it is never cancelled by closing.
@@ -31,7 +32,7 @@ import { PurchaseShell, PURCHASE_CSS } from '@/components/purchase/purchaseKit';
 import { notifyOk } from '@/lib/appNotify';
 import { DANGER, DEEP_GOLD, INK_SOFT } from './payKit';
 import { money, type PayOverview } from './payApi';
-import { attachProof, finishWithoutProof, qrLink, replaceProof, resubmitProof } from './manualApi';
+import { attachProof, finishWithoutProof, qrLink, readPaymentPhone, readWayPhone, replaceProof, resubmitProof } from './manualApi';
 import ProofDrop from './ProofDrop';
 
 export type ManualMode = 'pay' | 'upload' | 'replace' | 'resubmit';
@@ -101,8 +102,11 @@ function InPersonBlock({ instructions, total, heading }: { instructions: string 
   );
 }
 
-export default function ManualPayPopup({ conference, batchId, totalCents, currency, mode, tabOpened, reason, onStartNew, onClose, onDone, askWithoutProof, noProofYet }: {
+export default function ManualPayPopup({ conference, batchId, totalCents, currency, mode, tabOpened, reason, onStartNew, onClose, onDone, askWithoutProof, noProofYet, wayId }: {
+  /** For an extra payment method (prompt 31) this is the conference with that method's details laid over it. */
   conference: PayOverview['conference'];
+  /** The extra payment method paid through (prompt 31); its phone number is read from it. */
+  wayId?: string | null;
   batchId: string;
   totalCents: number;
   currency: string;
@@ -142,6 +146,7 @@ export default function ManualPayPopup({ conference, batchId, totalCents, curren
     void qrLink(conference.qr_path).then(u => { if (alive) setQr(u); });
     return () => { alive = false; };
   }, [kind, conference.qr_path, showWay]);
+  const phone = usePaymentPhone(kind === 'phone' && showWay ? conference.id : null, wayId);
 
   const finish = async () => {
     if (busyRef.current || !path) return;
@@ -188,6 +193,7 @@ export default function ManualPayPopup({ conference, batchId, totalCents, curren
       )}
       {kind === 'qr' && <QrBlock qr={qr} onEnlarge={() => setQrBig(true)} fileBase={conference.acronym || conference.slug} total={total} />}
       {kind === 'bank' && <BankRows bank={conference.bank} total={total} />}
+      {kind === 'phone' && <PhoneRows phone={phone} total={total} />}
       {inPerson && <InPersonBlock instructions={instructions} total={total} heading="How to Pay" />}
     </div>
   );
@@ -381,10 +387,35 @@ function BankRows({ bank, total }: { bank: PayOverview['conference']['bank']; to
   );
 }
 
+/** The number people pay to, read once the pop-up opens (undefined = still reading). */
+function usePaymentPhone(conferenceId: string | null, wayId?: string | null): string | null | undefined {
+  const [phone, setPhone] = useState<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (!conferenceId) return;
+    let alive = true;
+    void (wayId ? readWayPhone(wayId) : readPaymentPhone(conferenceId)).then(p => { if (alive) setPhone(p); });
+    return () => { alive = false; };
+  }, [conferenceId, wayId]);
+  return phone;
+}
+
+function PhoneRows({ phone, total }: { phone: string | null | undefined; total: string }) {
+  return (
+    <div style={{ padding: '6px 16px', borderRadius: 14, background: '#FFFFFF' }}>
+      {phone ? <CopyRow label="Phone number to pay" value={phone} />
+        : phone === null ? <p className="gv-pay-quiet">The organizers have not added a phone number yet</p>
+        : <p className="gv-pay-quiet">Loading the phone number</p>}
+      <CopyRow label="Amount to send" value={total} />
+    </div>
+  );
+}
+
 /** A started payment's QR ("Payment QR") or bank details ("Bank Details"): small, as tall as its content. */
-export function PaymentWayPopup({ conference, kind, totalCents, currency, onClose }: {
+export function PaymentWayPopup({ conference, kind, totalCents, currency, onClose, wayId }: {
   conference: PayOverview['conference'];
-  kind: 'qr' | 'bank' | 'in_person';
+  /** The extra payment method (prompt 31) whose details these are. */
+  wayId?: string | null;
+  kind: 'qr' | 'bank' | 'in_person' | 'phone';
   totalCents: number;
   currency: string;
   onClose: () => void;
@@ -399,7 +430,8 @@ export function PaymentWayPopup({ conference, kind, totalCents, currency, onClos
     void qrLink(conference.qr_path).then(u => { if (alive) setQr(u); });
     return () => { alive = false; };
   }, [kind, conference.qr_path]);
-  const title = kind === 'qr' ? 'Payment QR' : kind === 'in_person' ? 'Payment Instructions' : 'Bank Details';
+  const phone = usePaymentPhone(kind === 'phone' ? conference.id : null, wayId);
+  const title = kind === 'qr' ? 'Payment QR' : kind === 'in_person' ? 'Payment Instructions' : kind === 'phone' ? 'Phone Number' : 'Bank Details';
 
   return (
     <>
@@ -416,6 +448,7 @@ export function PaymentWayPopup({ conference, kind, totalCents, currency, onClos
           )}
           {kind === 'in_person' ? <InPersonBlock instructions={instructions} total={total} /> : kind === 'qr'
             ? (conference.qr_path ? <QrBlock qr={qr} onEnlarge={() => setQrBig(true)} fileBase={conference.acronym || conference.slug} total={total} /> : <p className="gv-pay-quiet">The organizers have not added a QR code yet</p>)
+            : kind === 'phone' ? <PhoneRows phone={phone} total={total} />
             : <BankRows bank={conference.bank} total={total} />}
           <div><button type="button" className="gv-pay-btn gv-pay-outline" onClick={onClose}>Close</button></div>
         </div>

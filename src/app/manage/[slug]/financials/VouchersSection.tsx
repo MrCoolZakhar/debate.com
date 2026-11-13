@@ -15,11 +15,11 @@
 import { notifyErr, clearErr } from '@/lib/appNotify';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNow } from '@/lib/useNow';
-import { Ban, Dices, Plus, Search, Ticket, Trash2 } from 'lucide-react';
+import { Ban, Dices, Plus, Search, Ticket } from 'lucide-react';
 import type { Conference } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
-import { useConfirmModal } from '@/components/ConfirmModal';
+import { friendlyError } from '@/lib/friendlyError';
 import { currencySymbol, formatFeeAmount } from '@/lib/finance';
 import { convertApprox } from '@/lib/fxRates';
 import {
@@ -100,6 +100,11 @@ const inputStyle: React.CSSProperties = {
   fontVariantNumeric: 'tabular-nums',
 };
 
+const vLink: React.CSSProperties = {
+  border: 'none', background: 'none', padding: 0, cursor: 'pointer', color: NEU.forest,
+  fontFamily: OUTFIT, fontWeight: 700, fontSize: 12.5, textDecoration: 'underline', textUnderlineOffset: 3, whiteSpace: 'nowrap',
+};
+
 const fieldLabelStyle: React.CSSProperties = {
   fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, letterSpacing: '0.12em',
   color: NEU.muted, textTransform: 'uppercase', display: 'block', marginBottom: 6,
@@ -121,7 +126,16 @@ export default function VouchersSection({
 }) {
   const now = useNow();
   const { session, user } = useAuth();
-  const { confirm, modal: confirmModal } = useConfirmModal();
+  // The row asking "Delete …?" in place, and the row being edited in place (prompt 38).
+  const [askingId, setAskingId] = useState<string | null>(null);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [eCode, setECode] = useState('');
+  const [eKind, setEKind] = useState<VoucherKind>('percent');
+  const [eAmount, setEAmount] = useState('');
+  const [eMax, setEMax] = useState('');
+  const [eExpiry, setEExpiry] = useState('');
+  const [eErr, setEErr] = useState('');
+  const [eBusy, setEBusy] = useState(false);
 
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
   const [loading, setLoading] = useState(true);
@@ -245,17 +259,19 @@ export default function VouchersSection({
 
     (async () => {
       const supabase = getAuthedClient(session.access_token);
-      const { error: updateError } = await supabase
+      const { data, error: updateError } = await supabase
         .from('vouchers')
         .update({ active: !prev })
         .eq('id', v.id)
         .eq('scope', 'conference')
-        .eq('conference_id', conference.id);
+        .eq('conference_id', conference.id)
+        .select('id');
       if (updateError) throw updateError;
+      if (!data || data.length !== 1) throw new Error('voucher not updated');
     })()
-      .catch(() => {
+      .catch((e: unknown) => {
         setVouchers(cur => cur.map(x => (x.id === v.id ? { ...x, active: prev } : x)));
-        notifyErr(`Could not ${prev ? 'deactivate' : 'activate'} ${v.code}, the change was reverted.`, 'financials-vouchers');
+        notifyErr(friendlyError(e, `Could not ${prev ? 'stop offering' : 'offer again'} ${v.code}. The change was reverted.`), 'financials-vouchers');
       })
       .finally(() => markBusy(v.id, false));
   }
@@ -263,16 +279,61 @@ export default function VouchersSection({
   // ── Delete, only at 0 redemptions (redeemed vouchers deactivate instead,
   // so redemption history stays intact). Confirm first, optimistic remove,
   // restore the exact row on failure.
-  async function handleDelete(v: Voucher) {
-    if (!session || busyIds.has(v.id) || v.id.startsWith('temp-') || v.redeemed_count > 0) return;
-    const { confirmed } = await confirm({
-      title: `Delete Voucher ${v.code}?`,
-      body: 'It has never been redeemed, so it can be removed permanently. Participants will no longer be able to apply it.',
-      confirmLabel: 'Delete',
-      danger: true,
-    });
-    if (!confirmed) return;
+  function startEdit(v: Voucher) {
+    setAskingId(null);
+    setEditId(v.id);
+    setECode(v.code);
+    setEKind(v.kind);
+    setEAmount(String(v.amount));
+    setEMax(v.max_redemptions === null ? '' : String(v.max_redemptions));
+    setEExpiry(v.expires_at ? new Date(v.expires_at).toISOString().slice(0, 10) : '');
+    setEErr('');
+  }
 
+  /** Edit in place: only the fields that changed; a used voucher keeps its code and discount (trigger aa_voucher_guard). */
+  async function saveEdit(v: Voucher) {
+    if (!session || eBusy) return;
+    const patch: Partial<Voucher> = {};
+    const max = eMax.trim() === '' ? null : Number(eMax);
+    if (max !== null && (!Number.isInteger(max) || max < 1)) { setEErr('The limit must be a whole number above zero, or empty for no limit.'); return; }
+    if (max !== v.max_redemptions) patch.max_redemptions = max;
+    const exp = eExpiry ? new Date(`${eExpiry}T23:59:59`).toISOString() : null;
+    if ((exp ?? '') !== (v.expires_at ? new Date(`${new Date(v.expires_at).toISOString().slice(0, 10)}T23:59:59`).toISOString() : '')) patch.expires_at = exp;
+    if (v.redeemed_count === 0) {
+      const c = sanitizeCode(eCode.trim());
+      if (c.length < 3) { setEErr('The code needs at least 3 letters or numbers.'); return; }
+      const amt = Number(eAmount);
+      if (!Number.isFinite(amt) || amt <= 0) { setEErr('Enter an amount greater than zero.'); return; }
+      if (eKind === 'percent' && amt > 100) { setEErr('Percentage discounts can be at most 100%.'); return; }
+      if (c !== v.code) patch.code = c;
+      if (eKind !== v.kind) { patch.kind = eKind; patch.currency = eKind === 'flat' ? conference.fee_currency : null; }
+      if (amt !== v.amount) patch.amount = amt;
+    }
+    if (Object.keys(patch).length === 0) { setEditId(null); return; }
+    setEBusy(true);
+    setEErr('');
+    try {
+      const supabase = getAuthedClient(session.access_token);
+      const { data, error: updateError } = await supabase
+        .from('vouchers')
+        .update(patch)
+        .eq('id', v.id)
+        .eq('scope', 'conference')
+        .eq('conference_id', conference.id)
+        .select('id');
+      if (updateError || !data || data.length !== 1) { setEErr(friendlyError(updateError, `Could not save ${v.code}. Please try again.`)); return; }
+      setVouchers(cur => cur.map(x => (x.id === v.id ? { ...x, ...patch } : x)));
+      setEditId(null);
+    } catch (e) {
+      setEErr(friendlyError(e, `Could not save ${v.code}. Please try again.`));
+    } finally {
+      setEBusy(false);
+    }
+  }
+
+  function handleDelete(v: Voucher) {
+    if (!session || busyIds.has(v.id) || v.id.startsWith('temp-') || v.redeemed_count > 0) return;
+    setAskingId(null);
     setError('');
     clearErr('financials-vouchers');
     markBusy(v.id, true);
@@ -280,18 +341,20 @@ export default function VouchersSection({
 
     (async () => {
       const supabase = getAuthedClient(session.access_token);
-      const { error: deleteError } = await supabase
+      const { data, error: deleteError } = await supabase
         .from('vouchers')
         .delete()
         .eq('id', v.id)
         .eq('scope', 'conference')
         .eq('conference_id', conference.id)
-        .eq('redeemed_count', 0); // server-side guard against a racing redemption
+        .eq('redeemed_count', 0) // server-side guard against a racing redemption
+        .select('id');
       if (deleteError) throw deleteError;
+      if (!data || data.length !== 1) throw new Error('voucher not deleted');
     })()
-      .catch(() => {
+      .catch((e: unknown) => {
         setVouchers(cur => [v, ...cur.filter(x => x.id !== v.id)]);
-        notifyErr(`Could not delete ${v.code}, it was restored. Please try again.`, 'financials-vouchers');
+        notifyErr(friendlyError(e, `Could not delete ${v.code}. Please try again.`), 'financials-vouchers');
       })
       .finally(() => markBusy(v.id, false));
   }
@@ -559,49 +622,67 @@ export default function VouchersSection({
 
                     <span className="flex-1" />
 
-                    {/* Active toggle */}
-                    <button
-                      type="button"
-                      onClick={() => handleToggleActive(v)}
-                      disabled={rowBusy}
-                      title={v.active
-                        ? (v.redeemed_count > 0 ? 'Deactivate, redeemed vouchers are kept for history, not deleted' : 'Deactivate')
-                        : 'Reactivate'}
-                      className="focus:outline-none"
-                      style={{
-                        padding: '6px 14px', minHeight: 36, borderRadius: 999, border: 'none',
-                        cursor: rowBusy ? 'default' : 'pointer',
-                        fontFamily: OUTFIT, fontSize: 13, fontWeight: 800,
-                        background: v.active
-                          ? `linear-gradient(135deg, ${NEU_GRADIENTS.green[0]}, ${NEU_GRADIENTS.green[1]})`
-                          : NEU.base,
-                        color: v.active ? '#FFFFFF' : NEU.muted,
-                        boxShadow: v.active ? `0 3px 8px color-mix(in srgb, ${NEU_GRADIENTS.green[0]} 33%, transparent), ${NEU.outSm}` : NEU.inSm,
-                        transition: `box-shadow 200ms ${EASE}`,
-                      }}
-                    >
-                      {v.active ? 'Active' : 'Inactive'}
-                    </button>
-
-                    {/* Delete, only when never redeemed */}
-                    {v.redeemed_count === 0 && (
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(v)}
-                        disabled={rowBusy}
-                        aria-label={`Delete voucher ${v.code}`}
-                        title="Delete (never redeemed)"
-                        className="inline-flex items-center justify-center focus:outline-none"
-                        style={{
-                          width: 28, height: 28, borderRadius: 10, border: 'none',
-                          cursor: rowBusy ? 'default' : 'pointer',
-                          backgroundColor: 'rgba(139,32,32,0.08)', color: '#8B2020',
-                        }}
-                      >
-                        <Trash2 size={13} strokeWidth={2.2} />
-                      </button>
+                    {/* Actions (prompt 38): Edit, Stop offering / Offer again, Delete while never used. */}
+                    {!v.active && <span style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: NEU.muted }}>Stopped</span>}
+                    {askingId === v.id ? (
+                      <span role="alertdialog" aria-label={`Delete ${v.code}`} className="flex items-center gap-3 flex-wrap" style={{ fontFamily: OUTFIT, fontSize: 13 }}>
+                        <span style={{ color: NEU.ink }}>Delete {v.code}?</span>
+                        <button type="button" disabled={rowBusy} onClick={() => handleDelete(v)} className="focus:outline-none" style={{ ...vLink, color: '#8B2020' }}>Delete</button>
+                        <button type="button" onClick={() => setAskingId(null)} className="focus:outline-none" style={vLink}>Cancel</button>
+                      </span>
+                    ) : editId !== v.id && (
+                      <span className="flex items-center gap-3 flex-wrap">
+                        <button type="button" disabled={rowBusy} onClick={() => startEdit(v)} className="focus:outline-none" style={vLink}>Edit</button>
+                        <button type="button" disabled={rowBusy} onClick={() => handleToggleActive(v)} className="focus:outline-none" style={vLink}>
+                          {v.active ? 'Stop offering' : 'Offer again'}
+                        </button>
+                        {v.redeemed_count === 0 && (
+                          <button type="button" disabled={rowBusy} onClick={() => { setEditId(null); setAskingId(v.id); }} className="focus:outline-none" style={{ ...vLink, color: '#8B2020' }}>Delete</button>
+                        )}
+                      </span>
                     )}
                   </div>
+                  {editId === v.id && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" style={{ marginTop: 12 }}>
+                      {v.redeemed_count === 0 ? (
+                        <>
+                          <div>
+                            <label htmlFor={`v-edit-code-${v.id}`} style={fieldLabelStyle}>Code</label>
+                            <input id={`v-edit-code-${v.id}`} type="text" value={eCode} onChange={e => setECode(sanitizeCode(e.target.value))} style={inputStyle} />
+                          </div>
+                          <div>
+                            <span style={fieldLabelStyle}>Discount</span>
+                            <div className="flex items-stretch gap-2 flex-wrap">
+                              {(['percent', 'flat'] as const).map(k => (
+                                <button key={k} type="button" onClick={() => setEKind(k)} className="focus:outline-none"
+                                  style={{ ...vLink, textDecoration: eKind === k ? 'underline' : 'none', color: eKind === k ? NEU.forest : NEU.muted }}>
+                                  {k === 'percent' ? 'Percent' : `Amount (${conference.fee_currency})`}
+                                </button>
+                              ))}
+                              <input aria-label="Discount amount" type="number" min={0.01} step="0.01" value={eAmount} onChange={e => setEAmount(e.target.value)} style={{ ...inputStyle, maxWidth: 160 }} />
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <p className="sm:col-span-2" style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.inkSoft, margin: 0 }}>
+                          {v.code} · {discountLabel(v, displayCurrency)}. Used {v.redeemed_count} {v.redeemed_count === 1 ? 'time' : 'times'}, so the code and discount are locked.
+                        </p>
+                      )}
+                      <div>
+                        <label htmlFor={`v-edit-max-${v.id}`} style={fieldLabelStyle}>Limit · optional</label>
+                        <input id={`v-edit-max-${v.id}`} type="number" min={1} step={1} value={eMax} onChange={e => setEMax(e.target.value)} placeholder="No limit" style={inputStyle} />
+                      </div>
+                      <div>
+                        <span style={fieldLabelStyle}>Expiry · optional</span>
+                        <DatePicker futureOnly value={eExpiry} onChange={setEExpiry} min={new Date().toISOString().slice(0, 10)} placeholder="No expiry" />
+                      </div>
+                      {eErr && <p role="alert" className="sm:col-span-2" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600, color: '#8B2020', margin: 0 }}>{eErr}</p>}
+                      <div className="sm:col-span-2 flex items-center gap-3">
+                        <NeuButton onClick={() => { void saveEdit(v); }} disabled={eBusy}>{eBusy ? 'Saving' : 'Save'}</NeuButton>
+                        <button type="button" onClick={() => setEditId(null)} className="focus:outline-none" style={vLink}>Cancel</button>
+                      </div>
+                    </div>
+                  )}
                 </NeuCard>
               );
             })}
@@ -628,7 +709,6 @@ export default function VouchersSection({
         Discounts apply at signup.
       </p>
 
-      {confirmModal}
     </section>
   );
 }

@@ -72,8 +72,11 @@ export const EVENT_REGISTRY = [
   { key: 'pledge_received', label: 'Delegation Spots Paid', description: 'Sent to a delegation leader when you confirm their delegation tickets are paid.', defaultDelivery: 'immediate' },
   { key: 'added_to_delegation', label: 'Added to Delegation', description: 'Sent when a delegate joins a delegation.', defaultDelivery: 'immediate' },
   { key: 'removed_from_delegation', label: 'Removed from Delegation', description: 'Sent when a delegate leaves a delegation.', defaultDelivery: 'manual' },
-  { key: 'spot_received', label: 'Spot Received', description: "Coming soon. Today Gavelling sends its own 'Your spot is covered' email when a delegation ticket covers someone.", defaultDelivery: 'immediate' },
-  { key: 'spot_lost', label: 'Spot Lost', description: 'Coming soon. Sent when someone loses the place a delegation ticket covered, for example after a refund.', defaultDelivery: 'immediate' },
+  // Fee Covered (owner, 6 Nov 2026): sent ONLY by the database when a member becomes
+  // paid by their delegation; a pledge sends nothing. Spot Lost is retired (never
+  // listed; kept for old rows).
+  { key: 'spot_received', label: 'Fee Covered', description: 'Sent to a delegate when their delegation pays the ticket that covers them.', defaultDelivery: 'immediate' },
+  { key: 'spot_lost', label: 'Spot Lost', description: 'Retired 6 Nov 2026. A pledge or its removal sends nothing.', defaultDelivery: 'immediate' },
   { key: 'not_attending', label: 'Marked Not Attending', description: 'Sent when a delegate is marked not attending.', defaultDelivery: 'manual' },
   { key: 'attendance_restored', label: 'Attendance Restored', description: "Sent when a delegate's attendance is restored.", defaultDelivery: 'immediate' },
   { key: 'documents_published', label: 'Study guide released', description: "Sent automatically to a committee's delegates when its study guide release time passes.", defaultDelivery: 'immediate' },
@@ -236,8 +239,10 @@ export type PreferenceRow = Partial<Record<PreferenceField, boolean | null>>;
 // invitation the recipient's own organizer sent, they stop the moment that
 // invitation is answered or an account exists, and they stop for good after
 // the third. Their real opt-out is answering the invite.
-// Events queueEventEmail still sends when a merge field is unresolved (see the
-// guard there). Everything else is held back rather than showing ⚠field⚠.
+// A merge field the person does not have yet (owner, 6 Nov 2026): the row is
+// rebuilt from OUR default copy for that person and flagged (fallback_fields),
+// never held. Only when even the default copy cannot be filled does the guard
+// hold it, except for these events, which still send (with the marker).
 const UNRESOLVED_HOLD_EXEMPT = new Set<string>([
   'payment_available', 'payment_received', 'fee_waived', 'aid_approved', 'aid_denied',
   'session_chair_invite', 'session_join_invite',
@@ -406,6 +411,14 @@ export interface QueueEventEmailResult {
    *  to put in its place. An empty email is worse than no email, so the row is
    *  never written. Normally 0 — every event a person receives has a default. */
   heldEmpty?: number;
+  /** Recipients who got OUR default copy because the organiser's copy uses a
+   *  field they do not have yet (owner, 6 Nov 2026). They were sent: their ids
+   *  are in queuedApplicationIds. */
+  fallbackDefault?: number;
+  /** The fields the organiser's copy needed for them, e.g. ['committee']. */
+  fallbackFields?: string[];
+  /** Their display names, as the email greeted them. */
+  fallbackNames?: string[];
 }
 
 /** True when the outcome should surface a DraftNotice-style nudge, the two
@@ -437,6 +450,27 @@ export function heldUnresolvedMessage(result: QueueEventEmailResult): string | n
   if (n === 0) return null;
   const fields = (result.unresolvedFields ?? []).map(k => EMAIL_TOKEN_LABELS[k as keyof typeof EMAIL_TOKEN_LABELS] ?? k).join(', ');
   return `The "${result.eventLabel ?? result.eventKey}" email was not sent to ${n === 1 ? '1 person' : `${n} people`}: it uses ${fields || 'a field'} and they have none yet. Edit the email in Communications, or assign them first.`;
+}
+
+/** "committee", "committee and country", "committee, country and fee": the
+ *  token labels joined for a sentence. */
+export function joinFieldLabels(keys: string[]): string {
+  const labels = keys.map(k => EMAIL_TOKEN_LABELS[k as keyof typeof EMAIL_TOKEN_LABELS] ?? k);
+  if (labels.length <= 1) return labels[0] ?? 'a field';
+  return `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}`;
+}
+
+/** The organiser's note when some people got our default copy instead of
+ *  theirs (a field they do not have yet), or null when nobody did. */
+export function fallbackDefaultMessage(result: QueueEventEmailResult): string | null {
+  const n = result.fallbackDefault ?? 0;
+  if (n === 0) return null;
+  const label = result.eventLabel ?? result.eventKey;
+  const fields = joinFieldLabels(result.fallbackFields ?? []);
+  const name = (result.fallbackNames ?? [])[0]?.trim();
+  return n === 1
+    ? `${name || '1 person'} got our default "${label}" email: your version uses ${fields}, which they do not have yet.`
+    : `${n} people got our default "${label}" email: your version uses ${fields}, which they do not have yet.`;
 }
 
 /** A template row counts as "drafted" only once it actually has WORDS in it.
@@ -698,6 +732,12 @@ export async function queueEventEmail(
   const defaultFlat = flattenBlocksToPlainText(defaultBlocks, renderConf);
 
   let heldEmpty = 0;
+  const fallbackNames: string[] = [];
+  /** The ⚠field⚠ markers a reader would SEE (subject and rendered HTML). */
+  const markersOf = (r: { subject: string; body_html: string }) => [
+    ...r.subject.matchAll(new RegExp(UNRESOLVED_MARKER_PATTERN)),
+    ...r.body_html.matchAll(new RegExp(UNRESOLVED_MARKER_PATTERN)),
+  ].map(m => m[1]);
   const rows = recipients.flatMap(app => {
     const ctx: EmailTokenContext = {
       delegate_name: app.profiles?.display_name ?? app.invited_name ?? null,
@@ -717,52 +757,78 @@ export async function queueEventEmail(
       ctx.co_delegate_email = coDelegate.partnerEmail;
     }
 
-    // Body: the chosen copy, and our default the moment it renders to nothing.
-    let bodyBlocks = blocks;
-    let body = resolveTokens(flatBody, ctx);
-    let isDefault = !useDraft;
-    if (!body.trim()) {
-      bodyBlocks = defaultBlocks;
-      body = resolveTokens(defaultFlat, ctx);
-      isDefault = true;
-    }
-    // A double-delegation seat: the co-delegate row, in their words or ours.
-    if (coDelegate && coDelegate.capacity >= 2) {
-      bodyBlocks = withCoDelegateFact(bodyBlocks, coDelegate);
-      body = resolveTokens(flattenBlocksToPlainText(bodyBlocks, renderConf), ctx);
-    }
-    // Subject: the same rule, independently. A drafted body with a blank
-    // subject line keeps the body and borrows our subject.
-    let subject = emailCardSubject(resolveTokens(isDefault ? defaultSubject : subjectSource, ctx), renderConf, isDefault);
-    if (!subject.trim()) subject = emailCardSubject(resolveTokens(defaultSubject, ctx), renderConf, true);
+    // One row from one copy: the organiser's (or ours when undrafted), or our
+    // default copy (the fallback below). Null when it renders to nothing.
+    const build = (srcBlocks: EmailBlock[], srcFlat: string, srcSubject: string, srcIsDefault: boolean) => {
+      // Body: the chosen copy, and our default the moment it renders to nothing.
+      let bodyBlocks = srcBlocks;
+      let body = resolveTokens(srcFlat, ctx);
+      let isDefault = srcIsDefault;
+      if (!body.trim()) {
+        bodyBlocks = defaultBlocks;
+        body = resolveTokens(defaultFlat, ctx);
+        isDefault = true;
+      }
+      // A double-delegation seat: the co-delegate row, in their words or ours.
+      if (coDelegate && coDelegate.capacity >= 2) {
+        bodyBlocks = withCoDelegateFact(bodyBlocks, coDelegate);
+        body = resolveTokens(flattenBlocksToPlainText(bodyBlocks, renderConf), ctx);
+      }
+      // Subject: the same rule, independently. A drafted body with a blank
+      // subject line keeps the body and borrows our subject.
+      let subject = emailCardSubject(resolveTokens(isDefault ? defaultSubject : srcSubject, ctx), renderConf, isDefault);
+      if (!subject.trim()) subject = emailCardSubject(resolveTokens(defaultSubject, ctx), renderConf, true);
+      if (!body.trim() || !subject.trim()) return null;
+      return {
+        conference_id: conferenceId,
+        template_id: template.id,
+        recipient_application_id: app.id,
+        recipient_email: app.profiles?.email ?? app.invited_email ?? null,
+        subject,
+        body,
+        body_html: renderEmailHtml({
+          blocks: bodyBlocks, conference: renderConf, ctx, variant: 'transactional', event: eventKey, isDefault,
+          // Per-recipient, so a `facts` row asking for 'country' or 'committee'
+          // draws THIS delegate's flag and THIS committee's emblem.
+          media: {
+            countryCode: app.assigned_country_code ?? null,
+            committeeEmblem: app.assigned_committee?.logo_url ?? null,
+            committeeName: app.assigned_committee?.name ?? null,
+            committeeTopic: app.assigned_committee?.topics?.[0] ?? null,
+            seatLogo: seatLogoFor(app),
+          },
+        }),
+        status: 'pending' as const,
+        ...(opts?.sendAfter ? { send_after: opts.sendAfter } : {}),
+        /** The organiser's copy used fields this person does not have yet, so
+         *  our default copy went instead (owner, 6 Nov 2026). Null normally. */
+        fallback_fields: null as string[] | null,
+      };
+    };
 
+    const row = build(blocks, flatBody, subjectSource, !useDraft);
     // Nothing to say, in their words or ours: an event with no default copy
     // (the SQL-queued reminders) and an empty template. Never queued, always
     // counted, and reported beside the merge-field holds below.
-    if (!body.trim() || !subject.trim()) { heldEmpty++; return []; }
+    if (!row) { heldEmpty++; return []; }
 
-    return [{
-      conference_id: conferenceId,
-      template_id: template.id,
-      recipient_application_id: app.id,
-      recipient_email: app.profiles?.email ?? app.invited_email ?? null,
-      subject,
-      body,
-      body_html: renderEmailHtml({
-        blocks: bodyBlocks, conference: renderConf, ctx, variant: 'transactional', event: eventKey, isDefault,
-        // Per-recipient, so a `facts` row asking for 'country' or 'committee'
-        // draws THIS delegate's flag and THIS committee's emblem.
-        media: {
-          countryCode: app.assigned_country_code ?? null,
-          committeeEmblem: app.assigned_committee?.logo_url ?? null,
-          committeeName: app.assigned_committee?.name ?? null,
-          committeeTopic: app.assigned_committee?.topics?.[0] ?? null,
-          seatLogo: seatLogoFor(app),
-        },
-      }),
-      status: 'pending' as const,
-      ...(opts?.sendAfter ? { send_after: opts.sendAfter } : {}),
-    }];
+    // Default copy instead of holding (owner, 6 Nov 2026): the organiser's copy
+    // still shows a field this person does not have yet (a committee before
+    // allocation), so this one recipient gets OUR default copy, flagged with
+    // the missing fields. Only when even the default shows a marker does the
+    // guard below hold it (or send it for the exempt events).
+    if (useDraft && defaultEmail) {
+      const missingHere = markersOf(row);
+      if (missingHere.length > 0) {
+        const alt = build(defaultBlocks, defaultFlat, defaultSubject, true);
+        if (alt && markersOf(alt).length === 0) {
+          alt.fallback_fields = [...new Set(missingHere)].sort();
+          fallbackNames.push(ctx.delegate_name ?? '');
+          return [alt];
+        }
+      }
+    }
+    return [row];
   });
   if (heldEmpty > 0) {
     console.warn(`[queueEventEmail] held ${heldEmpty} "${eventKey}" email(s): the copy rendered empty and there is no default to fall back to.`);
@@ -779,10 +845,7 @@ export async function queueEventEmail(
   const holdExempt = ALWAYS_SEND_EVENTS.has(eventKey) || UNRESOLVED_HOLD_EXEMPT.has(eventKey);
   const missing = new Set<string>();
   const sendable = rows.filter(r => {
-    const keys = [
-      ...r.subject.matchAll(new RegExp(UNRESOLVED_MARKER_PATTERN)),
-      ...r.body_html.matchAll(new RegExp(UNRESOLVED_MARKER_PATTERN)),
-    ].map(m => m[1]);
+    const keys = markersOf(r);
     for (const k of keys) missing.add(k);
     return keys.length === 0 || holdExempt;
   });
@@ -791,17 +854,26 @@ export async function queueEventEmail(
     console.warn(`[queueEventEmail] "${eventKey}" sent with unresolved fields (exempt from the hold): ${[...missing].sort().join(', ')}`);
   }
   const unresolvedFields = [...missing].sort();
+  // Rows that went out as our default copy (fallback_fields), for the organiser's note.
+  const fallbackOf = (sent: { fallback_fields: string[] | null }[]) => {
+    const fb = sent.filter(r => (r.fallback_fields?.length ?? 0) > 0);
+    return {
+      fallbackDefault: fb.length,
+      fallbackFields: [...new Set(fb.flatMap(r => r.fallback_fields ?? []))].sort(),
+      fallbackNames: fallbackNames.slice(),
+    };
+  };
   if (heldUnresolved > 0) {
     console.warn(`[queueEventEmail] held ${heldUnresolved} "${eventKey}" email(s) with unresolved fields: ${unresolvedFields.join(', ')}`);
   }
   if (sendable.length === 0) {
-    return { outcome, drafted: useDraft, queued: 0, queuedApplicationIds: [], eventKey, eventLabel, heldUnresolved, unresolvedFields, heldEmpty };
+    return { outcome, drafted: useDraft, queued: 0, queuedApplicationIds: [], eventKey, eventLabel, heldUnresolved, unresolvedFields, heldEmpty, ...fallbackOf(sendable) };
   }
 
   const { error } = await supabase.from('email_outbox').insert(sendable);
   if (error) {
     console.error(`[queueEventEmail] email_outbox insert failed for "${eventKey}" (${sendable.length} row${sendable.length === 1 ? '' : 's'}):`, error.message);
-    return { outcome, drafted: useDraft, queued: 0, queuedApplicationIds: [], eventKey, eventLabel, heldUnresolved, unresolvedFields, heldEmpty };
+    return { outcome, drafted: useDraft, queued: 0, queuedApplicationIds: [], eventKey, eventLabel, heldUnresolved, unresolvedFields, heldEmpty, fallbackDefault: 0 };
   }
 
   // A scheduled row (send_after set) is left for the server-side cron to
@@ -821,6 +893,7 @@ export async function queueEventEmail(
     heldUnresolved,
     unresolvedFields,
     heldEmpty,
+    ...fallbackOf(sendable),
   };
 }
 

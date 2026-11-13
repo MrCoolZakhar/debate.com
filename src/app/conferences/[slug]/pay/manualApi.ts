@@ -27,6 +27,9 @@ export interface StartedPayment {
   proof_uploaded_at: string | null;
   replaced_count: number;
   review_note: string | null;
+  /** The extra payment method it was started with (prompt 31); null for the main method. */
+  payment_way_id?: string | null;
+  payment_way_name?: string | null;
   items: { invoice_id: string; label: string; kind: string; amount_cents: number; invoice_status: string }[];
 }
 
@@ -85,6 +88,20 @@ export function startManualPayment(invoiceIds: string[], code?: string | null) {
   const withCode = !!code && code.trim() !== '';
   return call(withCode ? 'start_manual_payment_with_code' : 'start_manual_payment',
     withCode ? { p_invoice_ids: invoiceIds, p_code: code!.trim() } : { p_invoice_ids: invoiceIds },
+    'Your payment could not be started. Try again in a moment.', a => ({
+    batchId: String(a.batch_id ?? ''),
+    expiresAt: typeof a.expires_at === 'string' ? a.expires_at : null,
+    totalCents: typeof a.total_cents === 'number' ? a.total_cents : 0,
+    currency: typeof a.currency === 'string' ? a.currency : 'USD',
+    resumed: a.resumed === true,
+    free: a.free === true,
+  }));
+}
+
+/** Starts a payment through one of the conference's EXTRA payment methods (prompt 31).
+ *  Same answer as start_manual_payment_with_code; code 'way_gone' = the method was removed. */
+export function startManualPaymentWay(invoiceIds: string[], wayId: string, code?: string | null) {
+  return call('start_manual_payment_way', { p_invoice_ids: invoiceIds, p_way_id: wayId, p_code: code && code.trim() !== '' ? code.trim() : null },
     'Your payment could not be started. Try again in a moment.', a => ({
     batchId: String(a.batch_id ?? ''),
     expiresAt: typeof a.expires_at === 'string' ? a.expires_at : null,
@@ -167,6 +184,30 @@ export async function qrLink(path: string): Promise<string | null> {
   try {
     const c = await client();
     return c.storage.from('conference-assets').getPublicUrl(path).data.publicUrl ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** manual kind 'phone' (1 Nov 2026): the number people pay to, read on its own so my_pay_overview stays as it is. */
+export async function readPaymentPhone(conferenceId: string): Promise<string | null> {
+  try {
+    const c = await client();
+    const { data, error } = await c.rpc('payment_phone_for', { p_conference: conferenceId });
+    if (error || typeof data !== 'string') return null;
+    return data.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+/** An extra 'phone' payment method's number (prompt 31), like readPaymentPhone for the main one. */
+export async function readWayPhone(wayId: string): Promise<string | null> {
+  try {
+    const c = await client();
+    const { data, error } = await c.rpc('payment_way_phone', { p_way_id: wayId });
+    if (error || typeof data !== 'string') return null;
+    return data.trim() || null;
   } catch {
     return null;
   }

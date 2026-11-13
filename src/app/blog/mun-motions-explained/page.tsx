@@ -122,7 +122,7 @@ export default function Article4() {
         </p>
 
         <H2>3. The Most Common MUN Motions</H2>
-        <ReferenceSheet id="motions" caption="The common motions, the vote each needs and what to say." />
+        <ReferenceSheet variant="side" id="motions" caption="The common motions, the vote each needs and what to say." />
 
         <FactCard title="Motion to Open / Continue the Speakers List">Opens or reopens the General Speakers List after a caucus. Requires: none specified (chair may open it directly). Vote threshold: typically no vote needed. The chair opens it as a matter of course.</FactCard>
 

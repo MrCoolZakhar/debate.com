@@ -1,8 +1,9 @@
 'use client';
 
+import { useState } from 'react';
 import { sortCvEntries } from '@/lib/cvOrder';
 import Link from 'next/link';
-import { ArrowRight, Lock, ScrollText } from 'lucide-react';
+import { ArrowRight, Download, Loader2, Lock, ScrollText } from 'lucide-react';
 import { getCountryByName } from '@/lib/countries';
 import { CircleFlag } from '@/components/CircleFlag';
 import { BrandLogo } from '@/components/BrandLogo';
@@ -11,6 +12,8 @@ import { CVStatsRow, TimelineEntry } from '../../account/cv/CVTimeline';
 import { Eyebrow, OUTFIT, MONO } from '../../account/accountUi';
 import PublicCVSignupPrompt from '@/components/PublicCVSignupPrompt';
 import ProfileAvatarMenu from '@/components/ProfileAvatar';
+import { downloadCvPdf, CV_PDF_FAILED } from '@/components/cv/downloadCvPdf';
+import { notifyErr } from '@/lib/appNotify';
 
 export interface PublicProfile {
   id: string;
@@ -32,6 +35,7 @@ export default function PublicCVClient({ profile, entries: rawEntries, isPrivate
 }) {
   // Dated first, then year-in-name, undated at the bottom (src/lib/cvOrder.ts).
   const entries = sortCvEntries(rawEntries);
+  const [pdfBusy, setPdfBusy] = useState(false);
   if (!profile) {
     return (
       <div className="flex flex-col items-center justify-center text-center px-6" style={{ minHeight: '70vh' }}>
@@ -57,6 +61,22 @@ export default function PublicCVClient({ profile, entries: rawEntries, isPrivate
   const name = profile.display_name || 'Delegate';
   const initial = name.trim().charAt(0).toUpperCase() || 'D';
 
+  // The PDF is built from the entries and profile this page already shows, and
+  // only when the CV is public: a private CV has no download.
+  async function handleDownloadPdf() {
+    if (!profile || pdfBusy) return;
+    setPdfBusy(true);
+    const ok = await downloadCvPdf({
+      name,
+      avatarUrl: profile.avatar_url,
+      nationality: profile.nationality,
+      entries,
+      shareUrl: `${window.location.origin}${window.location.pathname}`,
+    });
+    setPdfBusy(false);
+    if (!ok) notifyErr(CV_PDF_FAILED);
+  }
+
   return (
     <div className="min-h-full">
       <style>{`@keyframes gvRise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }`}</style>
@@ -81,7 +101,7 @@ export default function PublicCVClient({ profile, entries: rawEntries, isPrivate
 
       <main className="mx-auto w-full max-w-3xl px-4 md:px-6 pb-20">
         {/* Hero: avatar + name + nationality */}
-        <section className="flex items-center gap-4 md:gap-5 py-8" style={{ animation: 'gvRise 480ms cubic-bezier(0.2,0,0,1) both', animationDelay: '0ms' }}>
+        <section className="flex flex-wrap items-center gap-4 md:gap-5 py-8" style={{ animation: 'gvRise 480ms cubic-bezier(0.2,0,0,1) both', animationDelay: '0ms' }}>
           {profile.avatar_url ? (
             /* eslint-disable-next-line @next/next/no-img-element */
             <img
@@ -115,6 +135,20 @@ export default function PublicCVClient({ profile, entries: rawEntries, isPrivate
               </div>
             )}
           </div>
+          {!isPrivate && entries.length > 0 && (
+            <button
+              type="button"
+              onClick={handleDownloadPdf}
+              disabled={pdfBusy}
+              aria-busy={pdfBusy}
+              aria-label={`Download ${name}'s MUN CV as a PDF`}
+              className="inline-flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] disabled:opacity-60 md:ml-auto"
+              style={{ minHeight: 44, padding: '0 18px', borderRadius: 10, border: '1px solid rgba(27,56,40,0.35)', backgroundColor: 'transparent', color: '#1B3828', fontFamily: OUTFIT, fontWeight: 700, fontSize: 13.5, cursor: pdfBusy ? 'default' : 'pointer' }}
+            >
+              {pdfBusy ? <Loader2 size={16} strokeWidth={1.5} className="animate-spin" aria-hidden /> : <Download size={16} strokeWidth={1.5} aria-hidden />}
+              Download PDF
+            </button>
+          )}
         </section>
 
         {isPrivate ? (

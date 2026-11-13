@@ -65,6 +65,10 @@ export interface RosterEntry {
   isObserver?: boolean;
   logoUrl?: string | null;
   groupId?: string | null;
+  /** The seat's name as saved, set only on rows loaded from an existing committee.
+   *  Every edit spreads the row, so it survives a rename; the committee editor
+   *  reads it to save a rename as a rename, keeping the seat's delegate. */
+  origName?: string;
 }
 
 export const entry = (name: string, importance: ImportanceTier = 'standard', isObserver = false): RosterEntry => ({ name, importance, isObserver, logoUrl: null, groupId: null });

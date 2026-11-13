@@ -19,6 +19,7 @@ import { NEU, OUTFIT } from '@/components/neu';
 import Avatar from '@/components/Avatar';
 import ProfileLink from '@/components/ProfileLink';
 import { type CustomAnswers, normalizeBlocks, questionsOf, displayAnswer } from '@/lib/customQuestions';
+import { APPLICATION_UPLOADS_BUCKET } from '@/lib/applicationUploads';
 import { friendlyError } from '@/lib/friendlyError';
 import { notifyErr, clearErr } from '@/lib/appNotify';
 
@@ -193,6 +194,7 @@ export default function AidRequestsSection({ conferenceId, conferenceSlug, aidBl
     // applied to spot pricing server-side at checkout — never auto-waive the
     // advisor's own role fee for those.
     const { amount: fee } = roleFeeFor(r.applications.role);
+    let waivedNow = false;
     if (!r.society_id && granted >= fee) {
       const { data: waiveData, error: waiveError } = await supabase
         .from('applications')
@@ -205,24 +207,48 @@ export default function AidRequestsSection({ conferenceId, conferenceSlug, aidBl
         await loadRequests();
         return;
       }
-      try {
-        const waiveResult = await queueEventEmail(supabase, conferenceId, 'fee_waived', [r.application_id]);
-        notifyIfNeeded(waiveResult, pushDraftNotice);
-      } catch {
-        notifyErr('Aid approved, but the fee-waived notification email could not be queued.', 'aid');
-      }
+      waivedNow = true;
     }
 
+    // One action, emails in order (owner, 6 Nov 2026): Aid Approved now, Fee
+    // Waived a day later through the database (dropped on the day if the
+    // waiver is gone; at once when Aid Approved is off).
     try {
       const result = await queueEventEmail(supabase, conferenceId, 'aid_approved', [r.application_id]);
       notifyIfNeeded(result, pushDraftNotice);
     } catch {
       notifyErr('Aid approved, but the notification email could not be queued.', 'aid');
     }
+    if (waivedNow) {
+      try {
+        const { data: later, error: laterError } = await supabase.rpc('queue_email_later', {
+          p_application_id: r.application_id, p_event: 'fee_waived', p_after: 'aid_approved',
+        });
+        if (laterError || (later as { ok?: boolean } | null)?.ok !== true) {
+          notifyErr('Aid approved, but the fee waived email could not be queued.', 'aid');
+        }
+      } catch {
+        notifyErr('Aid approved, but the fee waived email could not be queued.', 'aid');
+      }
+    }
 
     setBusyId(null);
     setReviewId(null);
     await loadRequests();
+  }
+
+  /** A file answer on an aid request: a 10-minute signed link made inside the click. */
+  async function openAidFile(path: string) {
+    if (!path) return;
+    // The tab opens inside the click, before any await, so it is never blocked.
+    const tab = window.open('', '_blank');
+    if (tab) tab.opener = null;
+    const client = await getFreshAuthedClient();
+    const { data, error } = client
+      ? await client.storage.from(APPLICATION_UPLOADS_BUCKET).createSignedUrl(path, 600)
+      : { data: null, error: true };
+    if (error || !data?.signedUrl) { tab?.close(); notifyErr("This file can't be opened right now.", 'aid'); return; }
+    if (tab) tab.location.href = data.signedUrl; else window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
   }
 
   async function openDenyConfirm(r: AidRequestRow) {
@@ -475,9 +501,21 @@ export default function AidRequestsSection({ conferenceId, conferenceSlug, aidBl
                           </span>
                         )}
                       </p>
+                      {q.type === 'file_upload' && ans ? (
+                        // A file answer: signed inside the click (organisers read the conference's folder).
+                        <button
+                          type="button"
+                          onClick={() => { void openAidFile(String(reviewing.custom_answers?.[q.id] ?? '')); }}
+                          className="text-sm text-left focus:outline-none [overflow-wrap:anywhere]"
+                          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: '#1C1410', fontFamily: OUTFIT, fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}
+                        >
+                          {ans}
+                        </button>
+                      ) : (
                       <p className="text-sm" style={{ color: ans ? '#1C1410' : '#9A8A78', fontFamily: OUTFIT, fontStyle: ans ? 'normal' : 'italic' }}>
                         {ans || 'No answer provided.'}
                       </p>
+                      )}
                     </div>
                   );
                 })}

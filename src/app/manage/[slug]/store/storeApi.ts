@@ -153,6 +153,25 @@ export function spotlightPrice(p: PlacementPrice | undefined, days: number): num
   return Math.floor(days / 7) * p.week_price + Math.min((days % 7) * p.day_price, p.week_price);
 }
 
+/** The week deal, read from the prices (prompt 19): a full week costs the
+ *  same as `sameAsDays` days, `savePct` off seven single days. Null when a
+ *  week is simply seven days (Region, Country). */
+export function spotlightWeekDeal(p: PlacementPrice | undefined): { savePct: number; sameAsDays: number } | null {
+  if (!p || p.day_price <= 0 || p.day_price * 7 <= p.week_price) return null;
+  return {
+    savePct: Math.round((1 - p.week_price / (p.day_price * 7)) * 100),
+    sameAsDays: Math.ceil(p.week_price / p.day_price),
+  };
+}
+
+/** Days that can be added at no extra cost: the chosen days already cost what
+ *  the next full week of days costs (the server caps a part week at the week price). */
+export function spotlightFreeDays(p: PlacementPrice | undefined, days: number): number {
+  if (!p || days <= 0 || days % 7 === 0) return 0;
+  const fullWeek = Math.ceil(days / 7) * 7;
+  return spotlightPrice(p, days) === spotlightPrice(p, fullWeek) ? fullWeek - days : 0;
+}
+
 /** "25 a week" when a week is the natural unit, else "1 a day". */
 export function priceLine(p: PlacementPrice | undefined): string {
   if (!p) return '…';

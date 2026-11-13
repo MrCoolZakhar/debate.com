@@ -71,7 +71,7 @@ function shortDay(iso: string | null | undefined): string | null {
 }
 
 export default function JobListing({
-  id, initialCard, initialDetail, onBack, scrollRoot, appliedAt, onChanged, inviteNote = null, onSelectListing,
+  id, initialCard, initialDetail, onBack, scrollRoot, appliedAt, onChanged, inviteNote = null, onSelectListing, onSeeAll,
 }: {
   id: string;
   /** The card from the list, so the header draws at once. */
@@ -90,11 +90,15 @@ export default function JobListing({
   inviteNote?: { short: string; message: string | null } | null;
   /** Opens another listing in this pane (More from this conference). */
   onSelectListing?: (id: string) => void;
+  /** Closes the listing and shows the board (See all roles on an unavailable listing). */
+  onSeeAll?: () => void;
 }) {
   const { user, loading: authLoading } = useAuth();
   const userId = user?.id ?? null;
   const [detail, setDetail] = useState<JobListingResult | null>(initialDetail && initialDetail.listing.id === id ? initialDetail : null);
   const [failed, setFailed] = useState<string | null>(null);
+  // The server answered no (not a failed read): offer the board, not Try again.
+  const [gone, setGone] = useState(false);
   const [loading, setLoading] = useState(!detail);
   const [saved, setSaved] = useState<boolean>(detail?.saved ?? false);
   const [saveBusy, setSaveBusy] = useState(false);
@@ -112,6 +116,7 @@ export default function JobListing({
     if (mine !== seq.current) return;
     if (!res.ok) {
       setFailed(res.message);
+      setGone(res.answered === true);
       setDetail(null);
     } else {
       setFailed(null);
@@ -215,7 +220,17 @@ export default function JobListing({
         {onBack && <BackLink onBack={onBack} />}
         <div className="gv-jl-card gv-jl-gone">
           <p style={{ margin: 0, fontSize: 16, lineHeight: 1.55, color: INK }}>{failed}</p>
-          <button type="button" className="gv-jl-link" onClick={() => { void load(); }}>Try again</button>
+          {gone ? (
+            <Link
+              href="/jobs"
+              className="gv-jl-link"
+              onClick={onSeeAll ? (e) => { e.preventDefault(); onSeeAll(); } : undefined}
+            >
+              See all roles
+            </Link>
+          ) : (
+            <button type="button" className="gv-jl-link" onClick={() => { void load(); }}>Try again</button>
+          )}
         </div>
       </div>
     );

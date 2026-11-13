@@ -25,7 +25,8 @@ import AuthLink from '@/components/auth/AuthLink';
 import SiteNav from '@/components/SiteNav';
 import Loader from '@/components/Loader';
 import { useAuth } from '@/components/AuthProvider';
-import { getAuthedClient } from '@/lib/supabase-auth';
+import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
+import { toSpecialFeeInfo, type SpecialFeeInfo } from '@/lib/specialFeeReason';
 import { activePhaseFee } from '@/lib/finance';
 import type { InvoiceRow } from '@/lib/invoices';
 import { themeCssVars } from '@/lib/theme';
@@ -39,7 +40,7 @@ import {
 import { PAY_CSS, INK, INK_SOFT } from './payKit';
 import {
   applyDiscount, cancelDiscount, discountsAvailable, money, quoteDiscount, readPayOverview, removeAddon, removePledgedTicket,
-  type DiscountQuote, type PayItem, type PayOverview, type PayRefund,
+  type DiscountQuote, type PayItem, type PayOverview, type PayRefund, type PayWay,
 } from './payApi';
 import DiscountCodePopup from './DiscountCodePopup';
 import { notifyOk } from '@/lib/appNotify';
@@ -51,7 +52,8 @@ import ReceiptsList, { ReceiptPopup } from './ReceiptsList';
 import ActionsColumn from './ActionsColumn';
 import VoucherPanel from './VoucherPanel';
 import { useSettleWait, SLOW_LINE, WAITING_LINE } from './settleWait';
-import { proofLink, readStarted, startManualPayment, type StartedInfo, type StartedPayment } from './manualApi';
+import { proofLink, readStarted, startManualPayment, startManualPaymentWay, type StartedInfo, type StartedPayment } from './manualApi';
+import PaymentMethodPicker, { KIND_LABEL } from './PaymentMethodPicker';
 import ManualPayPopup, { PaymentWayPopup, type ManualMode } from './ManualPayPopup';
 import StartedPayments from './StartedPayments';
 import { CancelStartedPopup, LockPopup, NotReceivedPopup, RefundRequestPopup } from './SmallPopups';
@@ -92,14 +94,44 @@ export default function PayPage() {
   const [hold, setHold] = useState<{ id: string; totalCents: number; currency: string } | null>(null);
   // Manual conferences (prompt 96): started payments, the pay / proof pop-up, locks, refunds.
   const [started, setStarted] = useState<StartedInfo | null>(null);
+  // Several roles per person (9 Nov 2026): role fees of applications that wait
+  // while another of this person's applications here is under review
+  // (application_payment_on_hold). Not tickable until one role is accepted.
+  const [heldInvoiceIds, setHeldInvoiceIds] = useState<Set<string>>(() => new Set());
+  // A special fee is never hidden (owner, 12 Nov 2026): tickets at a special price,
+  // by invoice id (special_fee_items), read after every overview read. Display only.
+  const [specialItems, setSpecialItems] = useState<Map<string, SpecialFeeInfo>>(() => new Map());
+  useEffect(() => {
+    const ids = (overview?.items ?? []).filter(i => i.kind === 'role_fee' || i.kind === 'pledge_spot').map(i => i.invoice_id);
+    if (ids.length === 0) return;
+    let alive = true;
+    void (async () => {
+      try {
+        const client = await getFreshAuthedClient();
+        if (!client) return;
+        const { data, error } = await client.rpc('special_fee_items', { p_invoice_ids: ids });
+        const d = (data ?? null) as { ok?: boolean; items?: ({ invoice_id: string } & Record<string, unknown>)[] } | null;
+        if (!alive || error || !d?.ok || !Array.isArray(d.items)) return;
+        const m = new Map<string, SpecialFeeInfo>();
+        for (const it of d.items) { const info = toSpecialFeeInfo(it); if (info && info.special !== null) m.set(it.invoice_id, info); }
+        setSpecialItems(m);
+      } catch { /* a failed read changes nothing */ }
+    })();
+    return () => { alive = false; };
+  }, [overview]);
   const [manualPop, setManualPop] = useState<{
     batchId: string; totalCents: number; currency: string; mode: ManualMode; tabOpened?: boolean;
     /** 'resubmit': the organizer's reason, and the payment's items for "Start a new payment". */
     reason?: string | null; itemIds?: string[];
     /** In-person payment (prompt 114): open asking "Finish without a proof?"; or add a first proof to a payment sent without one. */
     askWithout?: boolean; noProofYet?: boolean;
+    /** The extra payment method it was started with (prompt 31); null = the main method. */
+    wayId?: string | null;
   } | null>(null);
-  const [wayPop, setWayPop] = useState<{ kind: 'qr' | 'bank' | 'in_person'; totalCents: number; currency: string } | null>(null);
+  const [wayPop, setWayPop] = useState<{ kind: 'qr' | 'bank' | 'in_person' | 'phone'; totalCents: number; currency: string; wayId?: string | null } | null>(null);
+  // Several payment methods (prompt 31): "Select Your Payment Method" before paying or uploading a proof.
+  const [pickPop, setPickPop] = useState<{ mode: ManualMode; ids: string[]; code: string | null } | null>(null);
+  const [pickErr, setPickErr] = useState('');
   const [cancelFor, setCancelFor] = useState<string | null>(null);
   // Outstanding or Completed (prompt 101), kept in the URL as ?tab=completed.
   const [tab, setTabState] = useState<'outstanding' | 'completed'>('outstanding');
@@ -172,6 +204,22 @@ export default function PayPage() {
         if (cancelled) return;
         setOverview(o);
         setStarted(st);
+        // One check per application under review; then one read of their role-fee invoices.
+        {
+          const review = apps.filter(a => a.status === 'submitted');
+          const heldApps: string[] = [];
+          for (const a of review) {
+            const { data: onHold } = await supabase.rpc('application_payment_on_hold', { p_app: a.id });
+            if (onHold === true) heldApps.push(a.id);
+          }
+          let held = new Set<string>();
+          if (heldApps.length > 0) {
+            const { data: inv } = await supabase.from('invoices').select('id').in('application_id', heldApps).eq('kind', 'role_fee');
+            held = new Set(((inv ?? []) as { id: string }[]).map(r => r.id));
+          }
+          if (cancelled) return;
+          setHeldInvoiceIds(held);
+        }
         setLoadError('');
         setRoleConfigs((rc.data as RoleConfigRow[]) ?? []);
         setAddons((ad.data as ActiveAddon[]) ?? []);
@@ -273,7 +321,10 @@ export default function PayPage() {
     return () => { alive = false; };
   }, [selectedKey, appliedCode]);
 
-  const items = useMemo(() => overview?.items ?? [], [overview]);
+  const items = useMemo(
+    () => (overview?.items ?? []).map(i => (heldInvoiceIds.has(i.invoice_id) ? { ...i, payable: false } : i)),
+    [overview, heldInvoiceIds],
+  );
   // An item that costs nothing is never something to pay (OAKMUN, 14 Oct 2026:
   // a "Conference Registration Fee ₹0" sat on Outstanding).
   const outstandingItems = items.filter(i => OUTSTANDING_STATES.has(i.state) && (i.amount_cents > 0 || i.due_cents > 0));
@@ -355,17 +406,33 @@ export default function PayPage() {
 
   const receipt = receiptKey ? overview.payments.find(p => p.key === receiptKey) ?? null : null;
   const manual = c.method === 'manual';
+  // Extra payment methods beside the main one (prompt 31); [] for most conferences, and then nothing changes.
+  const ways = c.ways ?? [];
+  const hasWays = ways.length > 0;
+  const wayById = (id: string | null | undefined): PayWay | null => (id ? ways.find(w => w.id === id) ?? null : null);
+  /** The conference with an extra method's details laid over it, for the pop-ups that read them. */
+  const confFor = (way: PayWay | null): PayOverview['conference'] => way ? {
+    ...c, method: 'manual', manual_kind: way.manual_kind, payment_url: way.payment_url,
+    instructions: way.instructions, qr_path: way.qr_path, bank: way.bank,
+  } : c;
 
   // Manual: start (or resume) a payment for these items, then the proof pop-up.
   // `tab` is the payment page's tab, opened by the Pay click itself (prompt
   // 101): it is closed when the start fails and sent to /pay/go when it lands.
-  const startManual = async (ids: string[], mode: ManualMode, tab?: Window | null, code?: string | null) => {
+  const startManual = async (ids: string[], mode: ManualMode, tab?: Window | null, code?: string | null, way?: PayWay | null) => {
     if (startBusy || ids.length === 0) { tab?.close(); return; }
     setStartBusy(true); setNotice('');
-    const r = await startManualPayment(ids, code);
+    const r = way ? await startManualPaymentWay(ids, way.id, code) : await startManualPayment(ids, code);
     setStartBusy(false);
     if (!r.ok) {
       tab?.close();
+      if (r.code === 'way_gone') {
+        // The method was removed meanwhile: say so, re-read, and offer the list again.
+        setPickErr(r.error);
+        setPickPop({ mode, ids, code: code ?? null });
+        reload();
+        return;
+      }
       if (r.code === 'item_in_started_payment' && r.startedBatchId) {
         const mine = !!started?.payments.some(p => p.batch_id === r.startedBatchId);
         setLockFor({ batchId: r.startedBatchId, mine });
@@ -382,8 +449,8 @@ export default function PayPage() {
       reload();
       return;
     }
-    if (tab) tab.location.href = `/conferences/${slug}/pay/go`;
-    setManualPop({ batchId: r.batchId, totalCents: r.totalCents, currency: r.currency, mode, tabOpened: tab !== undefined ? !!tab : undefined });
+    if (tab) tab.location.href = `/conferences/${slug}/pay/go${way ? `?way=${encodeURIComponent(way.id)}` : ''}`;
+    setManualPop({ batchId: r.batchId, totalCents: r.totalCents, currency: r.currency, mode, tabOpened: tab !== undefined ? !!tab : undefined, wayId: way?.id ?? null });
     setSelected(new Set());
     reload();
   };
@@ -393,6 +460,12 @@ export default function PayPage() {
   const onPay = () => {
     const ids = chosen.map(i => i.invoice_id);
     const code = quote ? applied!.code : null;
+    if (hasWays && ids.length > 0) { setPickErr(''); setPickPop({ mode: 'pay', ids, code }); return; }
+    payMain(ids, code);
+  };
+
+  // Today's Pay: card, or the main manual method.
+  const payMain = (ids: string[], code: string | null) => {
     if (!manual) {
       if (code) { void payByCardWithCode(ids, code); return; }
       setPaying('card');
@@ -429,11 +502,36 @@ export default function PayPage() {
   // A started payment's way to pay: the link opens straight away (inside the
   // click); a QR or bank details open their own small pop-up.
   const kind = c.manual_kind ?? 'link';
-  const wayLabel = kind === 'qr' ? 'Open payment QR' : kind === 'bank' ? 'View bank details' : kind === 'in_person' ? 'Payment instructions'
-    : (c.payment_url ? 'Open payment page' : null);
+  const labelFor = (k: PayWay['manual_kind'], url: string | null) => k === 'qr' ? 'Open payment QR' : k === 'phone' ? 'View phone number' : k === 'bank' ? 'View bank details' : k === 'in_person' ? 'Payment instructions'
+    : (url ? 'Open payment page' : null);
+  const wayLabel = labelFor(kind, c.payment_url);
   const openWay = (p: StartedPayment) => {
-    if (kind === 'link') { if (c.payment_url) window.open(c.payment_url, '_blank', 'noopener,noreferrer'); return; }
-    setWayPop({ kind, totalCents: p.total_cents, currency: p.currency });
+    const way = wayById(p.payment_way_id);
+    const k = way ? way.manual_kind : kind;
+    const url = way ? way.payment_url : c.payment_url;
+    if (k === 'link') { if (url) window.open(url, '_blank', 'noopener,noreferrer'); return; }
+    setWayPop({ kind: k, totalCents: p.total_cents, currency: p.currency, wayId: way?.id ?? null });
+  };
+
+  // "Select Your Payment Method" picks (prompt 31). Each runs inside the click,
+  // so an extra method's payment link opens its tab before any await.
+  const pickMain = () => {
+    if (!pickPop) return;
+    const { ids, code, mode } = pickPop;
+    setPickPop(null); setPickErr('');
+    if (mode === 'pay') payMain(ids, code);
+    else void startManual(ids, mode, undefined, code);
+  };
+  const pickWay = (way: PayWay) => {
+    if (!pickPop || startBusy) return;
+    const { ids, code, mode } = pickPop;
+    let t: Window | null | undefined;
+    if (mode === 'pay' && way.manual_kind === 'link' && way.payment_url) {
+      t = window.open('', '_blank');
+      if (t) t.opener = null;
+    }
+    setPickPop(null); setPickErr('');
+    void startManual(ids, mode, t, code, way);
   };
 
   const openLock = (invoiceId: string) => {
@@ -496,11 +594,12 @@ export default function PayPage() {
   // item list's header below it (PayListHead): one definition, same handlers.
   const payAllTicked = chosen.length > 0 && chosen.length >= tickable.filter(i => i.currency === chosenCur).length;
   const clearChosen = () => { setSelected(new Set()); setNotice(''); };
-  const uploadProofButton = manual ? (
+  const uploadProofButton = manual || hasWays ? (
     <button type="button" className="gv-pay-btn gv-pay-outline" disabled={startBusy}
       title="Already paid? Tick the items you paid for, then upload your proof"
       onClick={() => {
         if (chosen.length === 0) { setNotice('Tick the items you paid for first'); return; }
+        if (hasWays) { setPickErr(''); setPickPop({ mode: 'upload', ids: chosen.map(i => i.invoice_id), code: null }); return; }
         void startManual(chosen.map(i => i.invoice_id), 'upload');
       }}>
       Upload proof
@@ -537,6 +636,11 @@ export default function PayPage() {
           <div className="gv-pay-head flex flex-col gap-5" style={{ minWidth: 0 }}>
             <BalanceHeader o={overview} />
             {!canPay && <PaymentsNotSetUp contactEmail={c.contact_email} />}
+            {heldInvoiceIds.size > 0 && (
+              <p role="status" className="[overflow-wrap:anywhere]" style={{ margin: 0, padding: '12px 16px', borderRadius: 14, fontFamily: 'var(--font-brand), sans-serif', fontSize: 14, lineHeight: 1.5, color: '#1C1410', backgroundColor: 'color-mix(in srgb, var(--gv-accent) 16%, transparent)', border: '1px solid color-mix(in srgb, var(--gv-accent) 36%, transparent)' }}>
+                You applied for more than one role here. You can pay once the organisers accept you for one of them.
+              </p>
+            )}
           </div>
 
           {/* Each tab is ONE wrapper: below 1024px .gv-pay-mid is display:contents, and a
@@ -566,6 +670,8 @@ export default function PayPage() {
                   ? <VoucherPanel conferenceId={c.id} applicationId={primary.application_id} discountCents={discount} currency={it.currency} onChanged={reload} />
                   : null}
                 discounts={quote ? new Map(quote.lines.filter(l => l.eligible && l.discount_cents > 0).map(l => [l.invoice_id, l.after_cents])) : undefined}
+                special={specialItems}
+                conferenceName={c.acronym || c.full_name}
               />
               {quote && quote.skipped.length > 0 && (
                 <p className="gv-pay-quiet">{quote.skipped.join(', ')} already {quote.skipped.length === 1 ? 'has' : 'have'} a discount</p>
@@ -594,21 +700,26 @@ export default function PayPage() {
             </div>
           ) : (
             <div className="flex flex-col gap-5" style={{ minWidth: 0 }}>
-              {canPay && manual && started && (
+              {canPay && (manual || hasWays) && started && (
                 <StartedPayments
                   payments={started.payments}
                   highlight={highlight}
-                  wayLabel={wayLabel}
-                  onUpload={(p) => setManualPop({ batchId: p.batch_id, totalCents: p.total_cents, currency: p.currency, mode: 'upload' })}
+                  wayLabel={manual ? wayLabel : null}
+                  wayFor={hasWays ? (p) => {
+                    const w = wayById(p.payment_way_id);
+                    if (w) return { label: labelFor(w.manual_kind, w.payment_url), inPerson: w.manual_kind === 'in_person' };
+                    return p.payment_way_id ? { label: null, inPerson: false } : null;
+                  } : undefined}
+                  onUpload={(p) => setManualPop({ batchId: p.batch_id, totalCents: p.total_cents, currency: p.currency, mode: 'upload', wayId: p.payment_way_id ?? null })}
                   onOpenWay={openWay}
                   onCancel={(p) => setCancelFor(p.batch_id)}
                   onViewProof={(path) => { void viewProof(path); }}
-                  onReplace={(p) => setManualPop({ batchId: p.batch_id, totalCents: p.total_cents, currency: p.currency, mode: 'replace', noProofYet: !p.proof_path })}
+                  onReplace={(p) => setManualPop({ batchId: p.batch_id, totalCents: p.total_cents, currency: p.currency, mode: 'replace', noProofYet: !p.proof_path, wayId: p.payment_way_id ?? null })}
                   inPerson={kind === 'in_person'}
-                  onFinishWithout={(p) => setManualPop({ batchId: p.batch_id, totalCents: p.total_cents, currency: p.currency, mode: 'upload', askWithout: true })}
+                  onFinishWithout={(p) => setManualPop({ batchId: p.batch_id, totalCents: p.total_cents, currency: p.currency, mode: 'upload', askWithout: true, wayId: p.payment_way_id ?? null })}
                   onRestart={(p) => setManualPop({
                     batchId: p.batch_id, totalCents: p.total_cents, currency: p.currency, mode: 'resubmit',
-                    reason: p.review_note, itemIds: p.items.map(i => i.invoice_id),
+                    reason: p.review_note, itemIds: p.items.map(i => i.invoice_id), wayId: p.payment_way_id ?? null,
                   })}
                 />
               )}
@@ -638,7 +749,7 @@ export default function PayPage() {
                   error={docListErr}
                 />
               )}
-              {!(manual && started && started.payments.length > 0) && overview.payments.length === 0
+              {!((manual || hasWays) && started && started.payments.length > 0) && overview.payments.length === 0
                 && notCharged.length === 0 && refundClosed.length === 0 && !(docsReady && myDocs && myDocs.documents.length > 0) && (
                 <div className="gv-pay-card" style={{ textAlign: 'center', padding: '28px 20px' }}>
                   <p style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>No payments yet</p>
@@ -698,7 +809,8 @@ export default function PayPage() {
 
       {manualPop && (
         <ManualPayPopup
-          conference={c}
+          conference={confFor(wayById(manualPop.wayId))}
+          wayId={wayById(manualPop.wayId)?.id ?? null}
           batchId={manualPop.batchId}
           totalCents={manualPop.totalCents}
           currency={manualPop.currency}
@@ -713,14 +825,31 @@ export default function PayPage() {
               const it = itemsById.get(id);
               return !!it && (it.state === 'unpaid' || it.state === 'rejected' || it.state === 'refunded') && it.due_cents > 0;
             });
+            const way = wayById(manualPop.wayId);
             setManualPop(null);
-            if (ids.length > 0) void startManual(ids, 'upload'); else { setNotice('These items no longer need paying'); reload(); }
+            if (ids.length === 0) { setNotice('These items no longer need paying'); reload(); }
+            // Its method was removed meanwhile: pick another one.
+            else if (manualPop.wayId && !way && hasWays) { setPickErr(''); setPickPop({ mode: 'upload', ids, code: null }); }
+            else void startManual(ids, 'upload', undefined, null, way);
           } : undefined}
           onClose={() => { setManualPop(null); reload(); }}
           onDone={() => { setManualPop(null); setTab('completed'); reload(); }}
         />
       )}
-      {wayPop && <PaymentWayPopup conference={c} kind={wayPop.kind} totalCents={wayPop.totalCents} currency={wayPop.currency} onClose={() => setWayPop(null)} />}
+      {wayPop && <PaymentWayPopup conference={confFor(wayById(wayPop.wayId))} wayId={wayById(wayPop.wayId)?.id ?? null} kind={wayPop.kind} totalCents={wayPop.totalCents} currency={wayPop.currency} onClose={() => setWayPop(null)} />}
+      {pickPop && (
+        <PaymentMethodPicker
+          mainName={c.main_name}
+          mainKind={c.method === 'stripe' ? KIND_LABEL.card : KIND_LABEL[c.manual_kind ?? 'link']}
+          showMain={pickPop.mode === 'pay' || manual}
+          ways={ways}
+          busy={startBusy}
+          error={pickErr}
+          onPickMain={pickMain}
+          onPickWay={pickWay}
+          onClose={() => { setPickPop(null); setPickErr(''); }}
+        />
+      )}
       {cancelFor && <CancelStartedPopup batchId={cancelFor} onClose={() => setCancelFor(null)} onDone={() => { setCancelFor(null); reload(); }} />}
       {lockFor && (
         <LockPopup

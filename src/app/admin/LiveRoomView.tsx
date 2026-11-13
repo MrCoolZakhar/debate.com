@@ -14,11 +14,10 @@
 // the recap (the organiser page's hand-off), and closing them brings the recap
 // back, so a pop-up never opens on top of another.
 //
-// Broadcast: conference rooms work today (platform admins pass
-// is_conference_organizer). A standalone room has no conference and the insert
-// policy on session_broadcasts requires one, so its tab is drawn disabled until
-// ADMIN_STANDALONE_BROADCAST_DB is switched on after
-// scratch-admin-live-rooms.sql is applied.
+// Broadcast (owner, 30 Oct 2026): any room, standalone or conference, signed
+// "Gavelling Admins" (session_broadcasts.source = 'admin', allowed only for
+// is_platform_admin() by the "Platform admins send broadcasts" policy,
+// migration admin_broadcasts_any_room).
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -33,9 +32,8 @@ import { CommitteeScoreboardModal } from '@/app/manage/[slug]/live/CommitteeScor
 import { SOFT } from '@/app/manage/[slug]/live/tokens';
 import { loadAdminRoom, type AdminRoom } from './liveRoomLoader';
 
-/** Flip to true only once scratch-admin-live-rooms.sql (the platform-admin
- *  INSERT policy on session_broadcasts) is live. */
-export const ADMIN_STANDALONE_BROADCAST_DB = false;
+/** On since 30 Oct 2026: the platform-admin INSERT policy is live. */
+export const ADMIN_STANDALONE_BROADCAST_DB = true;
 
 const REFRESH_MS = 15_000;
 
@@ -111,6 +109,7 @@ export default function LiveRoomView({ sessionId, conferenceId, nowPlaying, onCl
         conferenceId={standalone ? null : conference!.id}
         conferenceLabel={standalone ? 'Standalone session' : conference!.label}
         createdBy={authSession?.user?.id ?? null}
+        source="admin"
         targets={targets}
         onClose={() => setMode('recap')}
         onSent={() => setMode('recap')}

@@ -26,19 +26,41 @@ const CAP: Record<ConferenceAssetFolder, number> = { banners: 1600, logos: 512, 
 // Formats we should never rasterize/re-encode (vectors, animations) — upload as-is.
 const PASSTHROUGH = new Set(['image/svg+xml', 'image/gif']);
 
+// The types the 'conference-assets' bucket accepts (its allowed MIME list, 5 MB).
+// Any other image the browser can decode (AVIF, BMP, TIFF, HEIC in Safari...) is
+// always re-encoded to one of these; one it cannot decode is never uploaded.
+const ACCEPTED = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+
+/** "HEIC" from photo.heic, else from image/heic: the type named in the refusal. */
+function imageTypeWord(file: File): string {
+  const ext = file.name.includes('.') ? file.name.split('.').pop() ?? '' : '';
+  if (ext && /^[a-z0-9]{2,5}$/i.test(ext)) return ext.toUpperCase();
+  const sub = file.type.startsWith('image/') ? file.type.slice(6) : '';
+  return (sub.replace(/^x-/, '').split(/[+;]/)[0] || 'unknown').toUpperCase();
+}
+
+function unusableType(file: File): string {
+  return `This image type (${imageTypeWord(file)}) can't be used here. Upload a JPG, PNG, WebP or GIF instead.`;
+}
+
 /**
  * Downscale + re-encode an image File on a canvas before upload.
  *  - Only downscales when larger than the folder's cap (never upscales).
  *  - Banners export JPEG (q0.82); logos export PNG (transparency preserved).
  * Returns a compressed File, or the original file if compression can't help
- * or fails — the upload must never be blocked by this step.
+ * or fails — the upload must never be blocked by this step. A type the bucket
+ * does not take (not in ACCEPTED) is always re-encoded, even when larger, and
+ * answers `error` when it cannot be decoded at all (never uploaded as is).
  */
 async function compressImageFile(
   file: File,
   folder: ConferenceAssetFolder,
-): Promise<{ file: File; ext: string; contentType: string }> {
+): Promise<{ file: File; ext: string; contentType: string; error?: string }> {
   const originalExt = file.name.split('.').pop() || 'png';
-  const fallback = { file, ext: originalExt, contentType: file.type || 'image/png' };
+  const mustConvert = !ACCEPTED.has(file.type) && !PASSTHROUGH.has(file.type);
+  const fallback = mustConvert
+    ? { file, ext: originalExt, contentType: file.type, error: unusableType(file) }
+    : { file, ext: originalExt, contentType: file.type || 'image/png' };
 
   if (typeof document === 'undefined' || PASSTHROUGH.has(file.type)) return fallback;
 
@@ -69,7 +91,9 @@ async function compressImageFile(
     const blob: Blob | null = await new Promise((resolve) =>
       canvas.toBlob(resolve, outType, isLogo ? undefined : 0.82),
     );
-    if (!blob || blob.size >= file.size) return fallback; // no gain — keep original
+    if (!blob) return fallback;
+    // No gain: keep the original, but only when the bucket takes its type.
+    if (!mustConvert && blob.size >= file.size) return fallback;
 
     const base = file.name.replace(/\.[^.]+$/, '') || 'image';
     const compressed = new File([blob], `${base}.${outExt}`, { type: outType });
@@ -110,13 +134,14 @@ export async function uploadConferenceAsset(
   file: File,
 ): Promise<UploadConferenceAssetResult> {
   if (file.size > MAX_BYTES) {
-    return { error: 'Image must be under 5MB.' };
+    return { error: 'This image is larger than 5 MB. Upload a smaller one.' };
   }
   if (!file.type.startsWith('image/')) {
     return { error: 'Only image files are accepted.' };
   }
   // Shrink oversized art on the client before it ever leaves the browser.
-  const { file: outFile, ext, contentType } = await compressImageFile(file, folder);
+  const { file: outFile, ext, contentType, error: convertError } = await compressImageFile(file, folder);
+  if (convertError) return { error: convertError };
   const path = `${folder}/${conferenceId}-${Date.now()}.${ext}`;
   const { error } = await supabase.storage
     .from('conference-assets')

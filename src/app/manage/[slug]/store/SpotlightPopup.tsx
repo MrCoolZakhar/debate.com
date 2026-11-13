@@ -28,7 +28,7 @@ import { spotlightPreviewHref, storePreviewDescription } from '@/lib/spotlightPr
 import { PurchaseShell, ErrorLine, GoldButton, Eyebrow, INK, INK_SOFT, FOREST, GOLD, IVORY } from '@/components/purchase/purchaseKit';
 import {
   addDays, authedClient, credits as creditsWord, CONTINENT_LABELS, daysBetween, fmtDay, isoDay, PLACEMENTS,
-  rangeDays, rpcCall, sortRanges, spotlightPrice, totalDays, useStoreBuy, weeksLabel,
+  rangeDays, rpcCall, sortRanges, spotlightFreeDays, spotlightPrice, spotlightWeekDeal, totalDays, useStoreBuy, weeksLabel,
   type BundleDef, type CalendarDay, type Placement, type PlacementPrice, type Range, type Reach, type StoreAnswer,
 } from './storeApi';
 import { OUTFIT } from '@/components/neu';
@@ -350,6 +350,9 @@ export default function SpotlightPopup(props: SpotlightPopupProps) {
   const total = bundle
     ? bundle.price
     : spotlightPrice(price, chosenDays);
+  // The week deal and the free days left in a part week (prompt 19), from the prices.
+  const weekDeal = bundle ? null : spotlightWeekDeal(price);
+  const freeDays = bundle ? 0 : spotlightFreeDays(price, chosenDays);
   const after = total === null ? null : conferenceCredits - total;
   const allChosen = bundle
     ? bundle.items.every(it => totalDays(ranges[it.placement] ?? []) === it.days)
@@ -576,6 +579,12 @@ export default function SpotlightPopup(props: SpotlightPopupProps) {
             <>
               <span className="gv-sp-price-big">{price ? price.week_price : '…'}</span>
               <span className="gv-sp-price-unit">credits a week{price && price.day_price * 7 > price.week_price ? `, or ${price.day_price} a day` : ''}</span>
+              {weekDeal && (
+                <span className="gv-sp-deal-wrap">
+                  <span className="gv-sp-deal">Save {weekDeal.savePct}% on a full week</span>
+                  <span className="gv-sp-deal-line">A full week costs the same as {weekDeal.sameAsDays} days.</span>
+                </span>
+              )}
             </>
           )}
         </div>
@@ -684,6 +693,7 @@ export default function SpotlightPopup(props: SpotlightPopupProps) {
               {summaryDays > 0 ? `${summaryDays} ${summaryDays === 1 ? 'day' : 'days'}` : ''}
               {after !== null && summaryDays > 0 ? ` · ${after >= 0 ? `${after} conference credits after` : `${-after} more credits needed`}` : ''}
             </p>
+            {freeDays > 0 && <p className="gv-sp-total-meta">Add up to {freeDays} more {freeDays === 1 ? 'day' : 'days'} at no extra cost.</p>}
           </div>
           <div className="gv-sp-total-price" aria-live="polite">
             <span className="gv-sp-total-big">{total ?? '…'}</span>
@@ -726,6 +736,9 @@ const SPOT_CSS = `
 .gv-sp-see:focus-visible{outline:2px solid #1B3828;outline-offset:3px}
 @media (prefers-reduced-motion:reduce){.gv-sp-see{transition:none}.gv-sp-see:hover{transform:none}}
 .gv-sp-reach{font-size:22px;font-weight:800;color:${INK};font-variant-numeric:tabular-nums}
+.gv-sp-deal-wrap{flex-basis:100%;display:flex;flex-direction:column;align-items:flex-start;gap:4px}
+.gv-sp-deal{display:inline-flex;align-items:center;padding:3px 10px;border-radius:999px;background:${GOLD};color:${INK};font-size:12.5px;font-weight:700;line-height:1.4}
+.gv-sp-deal-line{font-size:12.5px;color:${INK_SOFT}}
 .gv-sp-price{margin-top:auto;padding-top:16px;border-top:1px solid rgba(28,20,16,0.12);display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
 .gv-sp-price-big{font-size:46px;font-weight:800;letter-spacing:-0.03em;line-height:1;font-variant-numeric:tabular-nums;color:${FOREST}}
 .gv-sp-price-unit{font-size:14px;font-weight:600;color:${INK_SOFT}}

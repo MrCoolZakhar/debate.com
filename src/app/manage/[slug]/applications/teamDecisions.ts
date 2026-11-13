@@ -17,7 +17,7 @@
 // exception is written for people and is surfaced as it is.
 
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
-import { queueEventEmail, notifyIfNeeded, heldUnresolvedMessage } from '@/lib/emailEvents';
+import { queueEventEmail, notifyIfNeeded, heldUnresolvedMessage, fallbackDefaultMessage } from '@/lib/emailEvents';
 import { notifyErr } from '@/lib/appNotify';
 import { UserFacingError } from '@/lib/friendlyError';
 import { poolForRole, fillFreeSpots } from '@/app/manage/[slug]/assignment/delegationShared';
@@ -58,14 +58,12 @@ export async function acceptTeamApplication(input: TeamAcceptInput): Promise<{ o
   try {
     const result = await queueEventEmail(supabase, input.conferenceId, 'application_accepted', [input.appId]);
     notifyIfNeeded(result, input.pushDraftNotice);
+    const fellBack = fallbackDefaultMessage(result);
+    if (fellBack) notifyErr(fellBack, 'email-held');
     const held = heldUnresolvedMessage(result);
     if (held) notifyErr(held, 'email-held');
     const acceptedIds = new Set(result.queuedApplicationIds ?? []);
-
-    if (input.paymentTiming === 'after_acceptance') {
-      const payResult = await queueEventEmail(supabase, input.conferenceId, 'payment_available', [input.appId], undefined, { suppressIds: acceptedIds });
-      notifyIfNeeded(payResult, input.pushDraftNotice);
-    }
+    // The payment email is queued by the database for a day after acceptance (trigger zzz_queue_accept_followups).
 
     const pool = poolForRole(input.role);
     if (input.societyId && pool) {

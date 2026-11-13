@@ -13,7 +13,8 @@ import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
 import { fetchAllRows, chunk } from '@/lib/fetchAllRows';
 import { useAuth } from '@/components/AuthProvider';
-import { queueEventEmail, notifyIfNeeded, turnOnDefaultEmail, heldUnresolvedMessage } from '@/lib/emailEvents';
+import { queueEventEmail, notifyIfNeeded, turnOnDefaultEmail, heldUnresolvedMessage, fallbackDefaultMessage } from '@/lib/emailEvents';
+import { applicationFileHref } from '@/lib/applicationUploads';
 import { queueAdHocEmail } from '@/lib/adHocEmail';
 import { readEmailAllowance, emailsShort, emailsShortSentence, isEmailAllowanceMessage } from '@/lib/emailAllowance';
 import GetMoreEmails from '../store/GetMoreEmails';
@@ -112,6 +113,9 @@ interface Application {
   organizer_note: string | null;
   resubmitted_at: string | null;
   custom_answers: CustomAnswers | null;
+  // The financial aid form's answers (a separate form from custom_answers);
+  // read only by the Excel export.
+  aid_custom_answers: CustomAnswers | null;
   assigned_committee_id: string | null;
   assigned_country_code: string | null;
   assigned_country_name: string | null;
@@ -2127,7 +2131,7 @@ export default function ApplicationsPage() {
         .select(`
           id, user_id, invited_email, invited_name, role, status, is_head_delegate, experience_level,
           experience_entries,
-          payment_status, submitted_at, checked_in_at, organizer_note, resubmitted_at, custom_answers,
+          payment_status, submitted_at, checked_in_at, organizer_note, resubmitted_at, custom_answers, aid_custom_answers,
           assigned_committee_id, assigned_country_code, assigned_country_name,
           self_paid, attending, pledge_type, spots_pledged, pledge_confirmed_at, society_id,
           aid_requested, aid_statement, aid_status, aid_requested_amount, fee_waiver_source,
@@ -2628,24 +2632,16 @@ export default function ApplicationsPage() {
         try {
           const result = await queueEventEmail(supabase, conference.id, 'application_accepted', [appId]);
           notifyIfNeeded(result, pushDraftNotice);
+          const fellBack = fallbackDefaultMessage(result);
+          if (fellBack) notifyErr(fellBack, 'email-held');
           const held = heldUnresolvedMessage(result);
           if (held) notifyErr(held, 'email-held');
-          // Consolidation: application_accepted wins over payment_available.
-          // payment_available only sends alone for this person when acceptance
-          // actually resolved to nothing (off/unconfigured) for them.
           const acceptedIds = new Set(result.queuedApplicationIds ?? []);
-
-          const roleConfig = roleConfigs.find(rc => rc.role === prevRow.role);
-          if (roleConfig?.payment_timing === 'after_acceptance') {
-            const payResult = await queueEventEmail(supabase, conference.id, 'payment_available', [appId], undefined, { suppressIds: acceptedIds });
-            notifyIfNeeded(payResult, pushDraftNotice);
-          }
+          // The payment email is queued by the database for a day after acceptance (trigger zzz_queue_accept_followups).
 
           // F13: acceptance is when auto-cover runs, newly accepted pool members
-          // absorb any free delegation-purchased spots, oldest-first. The fill
-          // helper emails spot_received for whoever it covers, suppressing the
-          // just-accepted person's own id so they don't get that on top of
-          // application_accepted (rule one wins) if the same action covers them.
+          // absorb any free delegation-purchased spots, oldest-first. It only
+          // marks them paid: the database sends Fee Covered (spot_received).
           const pool = poolForRole(prevRow.role);
           if (prevRow.society_id && pool) {
             await fillFreeSpots(supabase, conference.id, prevRow.society_id, pool, { suppressIds: acceptedIds });
@@ -2656,9 +2652,18 @@ export default function ApplicationsPage() {
 
         // Auto-cover may have promoted OTHER members to paid, reconcile.
         scheduleReconcile();
+        // Several roles per person (9 Nov 2026): the database may have deleted
+        // or withdrawn this person's other applications under review.
+        void loadApplications({ silent: true });
       })
-      .catch(() => {
+      .catch((err: unknown) => {
         restoreRow(prevRow);
+        // The database refuses a role this person cannot combine with one they hold.
+        const hint = (err as { hint?: unknown } | null)?.hint;
+        if (hint === 'holds_role') {
+          notifyErr(friendlyError(err, 'Could not accept the application. The change was reverted. Please try again.'));
+          return;
+        }
         setActionError('Could not accept the application. The change was reverted. Please try again.');
       });
   }
@@ -3665,8 +3670,8 @@ export default function ApplicationsPage() {
     }
   }
 
-  // The export is an Excel workbook (exportWorkbook.ts): the overview, then one
-  // answers sheet per role. Built from what the page already loaded; SheetJS
+  // The export is an Excel workbook (exportWorkbook.ts): an Overview sheet and a
+  // Full information sheet with every answer in its own column. Built from what the page already loaded; SheetJS
   // loads inside the click.
   async function handleExportExcel() {
     if (exportBusy) return;
@@ -3677,6 +3682,7 @@ export default function ApplicationsPage() {
         acronym: conference?.acronym,
         applications,
         roleConfigs,
+        aidQuestions: conference?.aid_questions,
         labels: {
           role: roleLabel,
           status: (st) => STATUS_PILL[st]?.label ?? st,
@@ -3802,16 +3808,21 @@ export default function ApplicationsPage() {
     // silently (owner, 20 Oct 2026: organizers never see who holds Unlimited,
     // so nothing on screen marks them). Priority never depends on status, so a
     // decision still leaves the row where it is.
+    //
+    // The priority applies ONLY to the to-decide group (owner, 31 Oct 2026: older
+    // accepted applications sitting above newer ones looked like a broken sort).
+    // The perk is being reviewed first; once decided, a row sorts newest first
+    // like everyone else, which also stops the order hinting who holds Unlimited.
     .sort((a, b) => {
       const atOpen = groupAtOpen.current;
+      const group = (x: Application) => atOpen?.get(x.id) ?? statusSortGroup(x.status);
       if (atOpen) {
-        const group = (x: Application) => atOpen.get(x.id) ?? statusSortGroup(x.status);
         const aG = group(a);
         const bG = group(b);
         if (aG !== bG) return aG - bG;
       }
-      const aP = jobExtras.priorityIds.has(a.id) ? 0 : 1;
-      const bP = jobExtras.priorityIds.has(b.id) ? 0 : 1;
+      const aP = group(a) === 0 && jobExtras.priorityIds.has(a.id) ? 0 : 1;
+      const bP = group(b) === 0 && jobExtras.priorityIds.has(b.id) ? 0 : 1;
       if (aP !== bP) return aP - bP;
       return (b.submitted_at ?? '').localeCompare(a.submitted_at ?? '');
     });
@@ -5419,6 +5430,20 @@ export default function ApplicationsPage() {
                   </span>
                 )}
                 <ApplicationSourceChip source={app.traffic_source} detail={app.traffic_detail} invited={!!app.invited_email} importedBy={leaderImports.get(app.id) ?? null} />
+                {/* Several roles per person (9 Nov 2026): the same person's other live applications here, from the rows already loaded. */}
+                {app.user_id && applications
+                  .filter(o => o.id !== app.id && o.user_id === app.user_id && ['submitted', 'accepted', 'assigned', 'checked-in'].includes(o.status))
+                  .map(o => (
+                    <button
+                      key={o.id}
+                      type="button"
+                      onClick={() => setReviewId(o.id)}
+                      className="focus:outline-none"
+                      style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 12, fontFamily: OUTFIT, fontWeight: 700, color: '#EED98A', textDecoration: 'underline', textUnderlineOffset: 3 }}
+                    >
+                      Also applied as {roleLabel(o.role)}
+                    </button>
+                  ))}
               </>
             )}
             actions={decisionControls(true)}
@@ -5428,7 +5453,10 @@ export default function ApplicationsPage() {
             showsPreferences={showsPreferences}
             feeCharged={roleChargesFee(app.role)}
             experienceLevel={expLabel}
-            answerItems={questions.map(q => ({ key: q.id, label: q.label, answer: displayAnswer(q, answers[q.id]), archived: !!q.archived }))}
+            answerItems={questions.map(q => ({
+              key: q.id, label: q.label, answer: displayAnswer(q, answers[q.id]), archived: !!q.archived,
+              ...(q.type === 'file_upload' && typeof answers[q.id] === 'string' && answers[q.id] ? { href: applicationFileHref(app.id, q.id) } : {}),
+            }))}
             orphanAnswers={orphanedAnswers.map(([key, value]) => ({ key, label: key, answer: Array.isArray(value) ? value.join(', ') : String(value ?? '') }))}
             listedExperience={munExperience}
             showListedExperience={isMunExperienceRole}

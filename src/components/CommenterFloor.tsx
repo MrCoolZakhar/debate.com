@@ -110,8 +110,11 @@ export default function CommenterFloor({
     return true;
   });
 
+  // min-h-min (28 Oct 2026): the floor and the comment dock share the column half and half,
+  // but the floor is never squeezed below its own content (a two-line topic, a long seat
+  // name), so nothing on it is clipped; the dock takes what is left.
   return (
-    <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden pt-2">
+    <div className="relative flex-1 min-h-min flex flex-col overflow-hidden pt-2">
       {marker}
       {floorCountry ? (
         <div className="flex-1 min-h-0 flex items-center gap-6 px-6 pb-3">

@@ -52,7 +52,7 @@ export interface FinancialsDashboard {
     is_free?: boolean;
     has_qr?: boolean;
     has_bank?: boolean;
-    manual_kind?: 'link' | 'qr' | 'bank' | 'in_person' | null;
+    manual_kind?: 'link' | 'qr' | 'bank' | 'in_person' | 'phone' | null;
     /** Prompt 114: the conference has payment instructions (what in-person payment needs). */
     has_instructions?: boolean;
     registration_fee: null | { label: string | null; amount_cents: number; currency: string; applies_to: string | null; active: boolean };
@@ -76,6 +76,8 @@ export interface ProofThing {
   items: ProofItem[];
   /** Prompt 114: an in-person payment finished without a file. */
   no_proof?: boolean;
+  /** Prompt 31: the payment method it was paid through, null when the conference has one method. */
+  payment_way_name?: string | null;
 }
 
 export type TodoKind = 'refund_request' | 'refund_not_received' | 'stripe_refund_to_match' | 'dispute' | 'refund_due';

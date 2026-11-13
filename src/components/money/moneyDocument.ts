@@ -169,21 +169,60 @@ export function detailsLabel(kind: MoneyDocKind): string {
   return kind === 'invoice' ? 'Invoice details' : kind === 'refund' ? 'Refund details' : 'Receipt details';
 }
 
-/** The table's columns: the header word and what each line shows. */
-export interface DocColumn { head: string; width: number | null; align: 'left' | 'right'; cell: (l: MoneyDocLine, doc: MoneyDoc) => string; soft?: boolean; strong?: boolean }
-export function docColumns(doc: Pick<MoneyDoc, 'kind'>): DocColumn[] {
+/**
+ * A display row: one stored line, or several of the same product at the same price on the same day
+ * ("Delegate Ticket 1", "Delegate Ticket 2"... become "Delegate Ticket", qty 2). Display only: the
+ * stored snapshot in doc.lines never changes. amount_cents (and paid_cents / original_cents) are the
+ * group's totals; unit_cents is one item's amount.
+ */
+export type MoneyDocRow = MoneyDocLine & { qty: number; unit_cents: number };
+const TRAILING_NUMBER = /\s+\d+$/;
+export function groupDocLines(doc: Pick<MoneyDoc, 'kind' | 'lines'>): MoneyDocRow[] {
+  const groups = new Map<string, { rows: MoneyDocLine[]; base: string }>();
+  for (const l of doc.lines) {
+    const base = (l.label ?? '').replace(TRAILING_NUMBER, '');
+    // A refund's date column is the date paid, so it is part of the key too.
+    const key = [base, l.amount_cents, docShortDate(l.date), doc.kind === 'refund' ? docShortDate(l.paid_date) : ''].join('\u0000');
+    const g = groups.get(key);
+    if (g) g.rows.push(l); else groups.set(key, { rows: [l], base });
+  }
+  return Array.from(groups.values()).map(({ rows, base }) => {
+    const first = rows[0];
+    if (rows.length === 1) return { ...first, qty: 1, unit_cents: first.amount_cents };
+    const sum = (f: (l: MoneyDocLine) => number | null | undefined) => rows.reduce((t, l) => t + (f(l) ?? 0), 0);
+    return {
+      ...first,
+      label: base,
+      qty: rows.length,
+      unit_cents: first.amount_cents,
+      amount_cents: sum(l => l.amount_cents),
+      ...(doc.kind === 'invoice' ? { paid_cents: sum(l => l.paid_cents) } : {}),
+      ...(doc.kind === 'refund' ? { original_cents: rows.every(l => l.original_cents == null) ? null : sum(l => l.original_cents) } : {}),
+    };
+  });
+}
+
+/** The table's columns: the header word and what each row shows. Qty (and Unit price) only when a row groups more than one item. */
+export interface DocColumn { head: string; width: number | null; align: 'left' | 'right'; cell: (l: MoneyDocRow, doc: MoneyDoc) => string; soft?: boolean; strong?: boolean }
+export function docColumns(doc: Pick<MoneyDoc, 'kind' | 'lines'>): DocColumn[] {
+  const grouped = groupDocLines(doc).some(r => r.qty > 1);
+  const qty: DocColumn = { head: 'Qty', width: 36, align: 'right', cell: l => String(l.qty) };
   if (doc.kind === 'refund') return [
     { head: 'Date paid', width: 96, align: 'left', soft: true, cell: l => docShortDate(l.paid_date) },
     { head: 'Description', width: null, align: 'left', cell: l => l.label },
+    ...(grouped ? [qty] : []),
     { head: 'Original price', width: 120, align: 'right', soft: true, cell: (l, d) => (l.original_cents == null ? '' : docMoney(l.original_cents, d.currency)) },
     { head: 'Refunded', width: 120, align: 'right', strong: true, cell: (l, d) => docMoney(l.amount_cents, d.currency) },
   ];
+  // With the two extra columns an invoice's money columns narrow a little so Description keeps room at A4.
+  const money = grouped && doc.kind === 'invoice' ? 100 : null;
   const cols: DocColumn[] = [
-    { head: 'Date', width: 96, align: 'left', soft: true, cell: l => docShortDate(l.date) },
+    { head: 'Date', width: grouped ? 88 : 96, align: 'left', soft: true, cell: l => docShortDate(l.date) },
     { head: 'Description', width: null, align: 'left', cell: l => l.label },
   ];
-  if (doc.kind === 'invoice') cols.push({ head: 'Paid', width: 110, align: 'right', soft: true, cell: (l, d) => docMoney(l.paid_cents ?? 0, d.currency) });
-  cols.push({ head: 'Amount', width: 120, align: 'right', strong: true, cell: (l, d) => docMoney(l.amount_cents, d.currency) });
+  if (grouped) cols.push(qty, { head: 'Unit price', width: money ?? 110, align: 'right', soft: true, cell: (l, d) => docMoney(l.unit_cents, d.currency) });
+  if (doc.kind === 'invoice') cols.push({ head: 'Paid', width: money ?? 110, align: 'right', soft: true, cell: (l, d) => docMoney(l.paid_cents ?? 0, d.currency) });
+  cols.push({ head: 'Amount', width: money ?? 120, align: 'right', strong: true, cell: (l, d) => docMoney(l.amount_cents, d.currency) });
   return cols;
 }
 

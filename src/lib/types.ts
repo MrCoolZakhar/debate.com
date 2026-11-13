@@ -205,7 +205,8 @@ export interface ChatBroadcastInfo {
   /** Only ever drawn after trustedBroadcastImageUrl (src/lib/chatAttachments.ts). */
   imageUrl: string | null;
   /** 'press' = a press release, drawn as "Press · <authorLabel>" with a newspaper disc. */
-  source?: 'organiser' | 'press' | 'crisis';
+  /** 'crisis' = Gavelling Crisis news (its outlet in authorLabel); 'admin' = sent by Gavelling's own admins from /admin, signed "Gavelling Admins". */
+  source?: 'organiser' | 'press' | 'crisis' | 'admin';
   authorLabel?: string | null;
 }
 

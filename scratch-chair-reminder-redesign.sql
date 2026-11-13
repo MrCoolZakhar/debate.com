@@ -1,7 +1,7 @@
 -- =============================================================================
 -- scratch-chair-reminder-redesign.sql
 --
--- NOT APPLIED. Waits for Peter (owner, 23 Oct 2026: "redesign all three emails -
+-- APPLIED 28 Oct 2026 from Claude Code at Peter's request, after the production deploy carried public/email/shots.
 -- they should reflect and show what they can actually do through some images").
 -- Apply through the chat's Supabase work, never from a Claude Code run.
 --

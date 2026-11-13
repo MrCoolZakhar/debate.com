@@ -7,7 +7,7 @@
 
 import { Document, Font, Image, Page, StyleSheet, Text, View } from '@react-pdf/renderer';
 import {
-  DOC_INK, DOC_RULE, DOC_SOFT, DOC_TINT, accentOf, accentText, billedLines, detailRows, detailsLabel, docColumns, docDate,
+  DOC_INK, DOC_RULE, DOC_SOFT, DOC_TINT, accentOf, accentText, billedLines, detailRows, detailsLabel, docColumns, docDate, groupDocLines,
   docStamp, docTitle, issuerName, totalRows, type MoneyDoc,
 } from './moneyDocument';
 
@@ -108,7 +108,7 @@ export default function MoneyDocumentPdf({ doc, logoSrc }: { doc: MoneyDoc; logo
                 <Text key={c.head} style={[s.label, { marginBottom: 0, textAlign: c.align }, c.width == null ? { flex: 1 } : { width: p(c.width) }]}>{c.head}</Text>
               ))}
             </View>
-            {doc.lines.map((l, i) => (
+            {groupDocLines(doc).map((l, i) => (
               <View key={i} wrap={false} style={[s.row, { paddingVertical: p(9), paddingHorizontal: p(12), borderBottomWidth: p(1), borderBottomColor: DOC_RULE }]}>
                 {cols.map(c => (
                   <Text key={c.head} style={[

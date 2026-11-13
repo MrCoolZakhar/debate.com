@@ -59,7 +59,7 @@ import {
   NoDelegationMatch, CreateDelegationButton, CreateDelegationRow, CreateDelegationDialog, RoleSwitchedNotice,
   type DelegationSwitchRole, useHeadDelegateAvailability,
 } from './CreateDelegationPrompt';
-import { NewDelegationCard } from './NewDelegationCard';
+import { NewDelegationCard, DelegationPlaceholder } from './NewDelegationCard';
 import {
   EMPTY_NEW_DELEGATION, hasNewDelegationProblems, newDelegationProblems, normalizeNewDelegation, societyInsertRow,
   type NewDelegationDetails,
@@ -75,6 +75,9 @@ import {
   Info, Coins, Pencil, Ban, Cake, CircleAlert,
 } from 'lucide-react';
 import { replaceUrlInPlace } from '@/lib/replaceUrlInPlace';
+import { CHARGED_ROLES, HOLDING_STATUSES, rolesCombine, roleWithArticle } from '@/lib/roleCombos';
+import { specialFeeSentence, ticketNameFor, toSpecialFeeInfo, type SpecialFeeInfo } from '@/lib/specialFeeReason';
+import SpecialFeeInfoButton from '@/components/SpecialFeeInfoButton';
 import { ListingApplyLine, ListingClaimNote, useListingClaim, useListingForApply, useListingCommitteePrefill } from './ListingApplyLine';
 
 /** Destructive-action red, matching /drafts/[token] exactly. */
@@ -131,6 +134,9 @@ interface RoleConfig {
   /** Chair/secretariat only (DB CHECK enforces this) — whether this role gets
    *  the dedicated MUN-experience step instead of the generic rank step. */
   collect_mun_experience: boolean;
+  /** Remove Taken Allocations (default on): taken allocations are hidden from
+   *  the preference picker; off, they show and can be ranked like any other. */
+  remove_taken_allocations?: boolean;
 }
 
 interface CommitteeOption {
@@ -871,7 +877,8 @@ function ConferenceApplyInner() {
   const [committees, setCommittees] = useState<CommitteeOption[]>([]);
   const [societies, setSocieties] = useState<Society[]>([]);
   const [existingApp, setExistingApp] = useState<ExistingApp | null | undefined>(undefined);
-  const [otherRoleApp, setOtherRoleApp] = useState<OtherActiveApp | null>(null);
+  // This person's other live applications at this conference (several roles per person, 9 Nov 2026).
+  const [otherRoleApps, setOtherRoleApps] = useState<OtherActiveApp[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   // Whether the signed-in user may preview this conference at all — set once
@@ -1073,6 +1080,8 @@ function ConferenceApplyInner() {
   const expTrackRef = useRef<HTMLDivElement | null>(null);
   const [customAnswers, setCustomAnswers] = useState<CustomAnswers>({});
   const [customMissingIds, setCustomMissingIds] = useState<string[]>([]);
+  // File answers still uploading on the questions page: Next waits for them (8 Nov 2026).
+  const [uploadsBusy, setUploadsBusy] = useState(0);
   // Custom questions render as one Section per page within this step.
   const [questionPage, setQuestionPage] = useState(0);
   // ── Jumping to ONE question (Overview → that answer; failed submit → the
@@ -1103,11 +1112,17 @@ function ConferenceApplyInner() {
   const [poolCovers, setPoolCovers] = useState(false);
   // The conference's Store pays applicants' credit (conference_credit_sponsored).
   const [creditSponsored, setCreditSponsored] = useState(false);
+  // False until conference_credit_sponsored has answered (or failed): Submit
+  // never opens the credits pop-up on a guess.
+  const [creditSponsoredLoaded, setCreditSponsoredLoaded] = useState(false);
   const sponsoredConfId = conference?.id ?? null;
   useEffect(() => {
     if (!sponsoredConfId) return;
     let cancelled = false;
-    void fetchConferenceCreditSponsored(sponsoredConfId).then(v => { if (!cancelled) setCreditSponsored(v); });
+    void fetchConferenceCreditSponsored(sponsoredConfId)
+      .then(v => { if (!cancelled) setCreditSponsored(v); })
+      .catch(() => { /* not sponsored as far as the page knows; the database decides at submit */ })
+      .finally(() => { if (!cancelled) setCreditSponsoredLoaded(true); });
     return () => { cancelled = true; };
   }, [sponsoredConfId]);
   const [recapOpen, setRecapOpen] = useState(false);
@@ -1233,6 +1248,9 @@ function ConferenceApplyInner() {
   const showCountryPick = prefMode === 'committees_and_countries' || prefMode === 'countries_only';
   const committeesOnly = prefMode === 'committees_only';
   const countriesOnly = prefMode === 'countries_only';
+  // Remove Taken Allocations (prompt 24): on, the picker hides taken allocations
+  // (a saved choice of one stays in the ranking); off, they are ordinary chips.
+  const hideTaken = roleConfig?.remove_taken_allocations !== false;
 
   // Availability, derived from the loaded slot + taken-allocation data.
   const committeeSlotInfo = (id: string) => {
@@ -1280,11 +1298,19 @@ function ConferenceApplyInner() {
   const hasUnlimited = financeProfile.has_active_subscription;
   const previewSocietyId = !isIndependent && !isObserver ? selectedSocietyId : null;
   const poolCovered = !!previewSocietyId && poolCovers;
-  // Gavelling-sponsored conferences: consume_credit_for_application always
-  // succeeds without consuming a credit (reason:'sponsored') — never gate or
-  // charge here, regardless of the applicant's own balance.
-  const creditsSponsored = conference?.credits_sponsored ?? false;
-  const canApply = creditsSponsored || isExemptRole || hasUnlimited || poolCovered || (creditBalance ?? 0) >= 1;
+  // The conference covers the credit when it is Gavelling-sponsored, free credits only, or has
+  // Store sponsorship credits left (conference_credit_sponsored); the database decides what is actually taken.
+  const creditsSponsored = (conference?.credits_sponsored ?? false) || creditSponsored;
+  // Only the column means Gavelling itself pays: the copy that says so reads this, never the wider rule.
+  const gavellingSponsored = conference?.credits_sponsored ?? false;
+  // Several roles per person (9 Nov 2026): one credit per person per conference,
+  // so a live application in another charged role means this one takes none.
+  const creditTakenElsewhere = !isExemptRole && otherRoleApps.some(o => CHARGED_ROLES.has(o.role));
+  // A role they already HOLD that cannot combine with this one: the wall below.
+  const heldBlocking = otherRoleApps.find(o => HOLDING_STATUSES.has(o.status) && !rolesCombine(o.role, role)) ?? null;
+  // Another application under review: no wall, one notice at the top of the form.
+  const otherUnderReview = otherRoleApps.find(o => o.status === 'submitted') ?? null;
+  const canApply = creditsSponsored || isExemptRole || hasUnlimited || poolCovered || creditTakenElsewhere || (creditBalance ?? 0) >= 1;
 
   // Redesign: the flow no longer opens on a price/credit ('role') step. It
   // starts straight at the Independent-vs-Delegation ('society') choice; any
@@ -1318,6 +1344,41 @@ function ConferenceApplyInner() {
   // 'role' used to be a real first step; the fallback outlived it and matched
   // no render branch. Clamp to the last real stage instead of a dead sentinel.
   const currentStepKind: StepKind = stepSequence[step - 1] ?? stepSequence[stepSequence.length - 1];
+
+  // A special fee is never hidden (owner, 12 Nov 2026): on the overview the
+  // fee comes from special_fee_quote for the answers on screen, read again
+  // 400 ms after any of them change. The last answer stays while a read runs;
+  // a failed read keeps the normal fee.
+  const [feeQuote, setFeeQuote] = useState<SpecialFeeInfo | null>(null);
+  const quoteConfId = conference?.id ?? null;
+  const quoteAppId = existingApp?.id ?? null;
+  const quoteCommittees = preferences.map(p => p.committeeId).join(',');
+  const quoteAnswers = JSON.stringify(customAnswers);
+  useEffect(() => {
+    if (currentStepKind !== 'overview' || !quoteConfId) return;
+    let cancelled = false;
+    const t = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const client = session ? getAuthedClient(session.access_token) : anonSupabase;
+          const { data, error } = await client.rpc('special_fee_quote', {
+            p_conference_id: quoteConfId,
+            p_role: role,
+            p_answers: JSON.parse(quoteAnswers),
+            p_level: experienceLevel || null,
+            p_committee_ids: quoteCommittees ? quoteCommittees.split(',') : [],
+            p_society_id: selectedSocietyId || null,
+            p_application_id: quoteAppId,
+          });
+          if (cancelled || error) return;
+          const d = (data ?? null) as { ok?: boolean } | null;
+          if (d?.ok) setFeeQuote(toSpecialFeeInfo(d));
+        } catch { /* keep the normal fee */ }
+      })();
+    }, 400);
+    return () => { cancelled = true; window.clearTimeout(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStepKind, quoteConfId, role, quoteAnswers, experienceLevel, quoteCommittees, selectedSocietyId, quoteAppId, !!session]);
 
   // A role switch mid-flow means a different question set (different pages),
   // so any in-progress section pagination is stale — start over. Forward/back
@@ -2223,8 +2284,7 @@ function ConferenceApplyInner() {
         .eq('conference_id', confData.id)
         .eq('user_id', user!.id)
         .neq('role', role)
-        .in('status', ['submitted', 'accepted', 'assigned', 'checked-in'])
-        .limit(1) : Promise.resolve({ data: null }),
+        .in('status', ['submitted', 'accepted', 'assigned', 'checked-in']) : Promise.resolve({ data: null }),
       authed ? supabase
         .from('profiles')
         .select('nationality, date_of_birth, is_ambassador, unlimited_conferences_remaining, mun_experience_level')
@@ -2256,13 +2316,13 @@ function ConferenceApplyInner() {
     const committeesData = (committeesRes.data as CommitteeOption[]) ?? [];
     const societiesData = (societiesRes.data as Society[]) ?? [];
     const appData = (appRes.data as ExistingApp) ?? null;
-    const otherAppData = ((otherAppRes.data as OtherActiveApp[]) ?? [])[0] ?? null;
+    const otherAppData = (otherAppRes.data as OtherActiveApp[] | null) ?? [];
 
     setRoleConfig((roleRes.data as RoleConfig) ?? null);
     setCommittees(committeesData);
     setSocieties(societiesData);
     setExistingApp(appData);
-    setOtherRoleApp(otherAppData);
+    setOtherRoleApps(otherAppData);
     const prof = profileRes.data as { nationality: string | null; date_of_birth: string | null; is_ambassador: boolean; unlimited_conferences_remaining: number; mun_experience_level: string | null } | null;
     const sub = subRes.data as { plan: string; status: string; current_period_end: string | null } | null;
     setMyNationality(prof?.nationality ?? null);
@@ -2729,6 +2789,29 @@ function ConferenceApplyInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, user, showMunExperienceStep, munCvRows]);
 
+  // Owner, 31 Oct 2026: "when applying ... automatically import the MUN CV from their
+  // profile". A NEW application with nothing on its experience list takes every MUN CV
+  // entry once, with its logo; the applicant can still remove any. A saved application or
+  // a restored draft keeps its own list (a draft restore replaces the list anyway).
+  const cvAutoImported = useRef(false);
+  useEffect(() => {
+    if (cvAutoImported.current || previewing || existingApp) return;
+    if (!munCvRows || munCvRows.length === 0) return;
+    cvAutoImported.current = true;
+    setExperienceEntries(prev => (prev.length > 0 ? prev : munCvRows.map(row => ({
+      id: crypto.randomUUID(),
+      source_cv_entry_id: row.id,
+      entry_type: row.entry_type,
+      conference_name: row.conference_name,
+      committee: row.committee,
+      allocation: row.allocation,
+      event_date: row.event_date,
+      awards: row.awards,
+      description: row.description,
+      logo_url: row.logo_url ?? null,
+    }))));
+  }, [munCvRows, previewing, existingApp]);
+
   // Delete handler wired into the shared CVEntryModal (only reachable when
   // editing an existing entry — the inline "add" flow never triggers it).
   async function handleDeleteCvEntry(id: string) {
@@ -2945,6 +3028,9 @@ function ConferenceApplyInner() {
     // A row this tab already filed is past the credit gate (the credit was
     // taken at insert), so a resume never reopens the pop-up.
     if (!isEditMode && !previewing && !!user && !canApply && !submittedAppIdRef.current) {
+      // Whether the conference covers the credit is not known yet: never open
+      // the credits pop-up on a guess. Nothing is written; the next press decides.
+      if (!creditSponsoredLoaded) { setSubmitting(false); return; }
       setSubmitError('');
       setSubmitting(false);
       goBuyCredits({ autoSubmit: true });
@@ -3012,6 +3098,10 @@ function ConferenceApplyInner() {
               .select('id')
               .single();
             if (socInsertError) {
+              // The name belongs to a delegation in use: the database's own sentence, not a fault to report.
+              if ((socInsertError as { hint?: string }).hint === 'delegation_name_taken') {
+                throw new UserFacingError(friendlyError(socInsertError, 'We could not create your delegation. Please try again.'));
+              }
               reportBlocked('create delegation', socInsertError, { conferenceSlug: slug, role });
               throw new UserFacingError('We could not create your delegation. Please try again.');
             }
@@ -3474,7 +3564,10 @@ function ConferenceApplyInner() {
   function renderOrderSummary() {
     const rc = roleConfig;
     if (!rc || isEditMode) return null;
-    const { amount: resolvedFee, phase: currentPhase } = activePhaseFee(rc);
+    const { amount: normalFee, phase: currentPhase } = activePhaseFee(rc);
+    // A special fee for these answers replaces the normal one (special_fee_quote).
+    const special = feeQuote && feeQuote.special !== null ? feeQuote : null;
+    const resolvedFee = special ? (special.special as number) : normalFee;
     if (!(resolvedFee > 0)) return null;
     // The voucher is only useful when the fee is paid AT application. When the
     // conference doesn't require payment to submit (pay after acceptance), the
@@ -3499,9 +3592,14 @@ function ConferenceApplyInner() {
 
         {/* Fee line, names the active fee phase when one applies */}
         <div style={{ ...summaryRow, marginBottom: 10 }}>
-          <span style={{ color: 'color-mix(in srgb, var(--gv-on-bg) 75%, transparent)' }}>
-            Registration fee
-            {currentPhase && (
+          <span className="min-w-0 [overflow-wrap:anywhere]" style={{ color: 'color-mix(in srgb, var(--gv-on-bg) 75%, transparent)' }}>
+            {special ? `Special ${ticketNameFor(role)}` : ticketNameFor(role)}
+            {special && (
+              <SpecialFeeInfoButton
+                text={specialFeeSentence(special, conference?.acronym || conference?.full_name || '', (n, cur) => formatFee(n, cur))}
+              />
+            )}
+            {currentPhase && !special && (
               <span style={{ color: NEU.muted, fontWeight: 600 }}>: {currentPhase.label || 'Current phase'}</span>
             )}
           </span>
@@ -3736,39 +3834,10 @@ function ConferenceApplyInner() {
                 Delegation chosen and Independent locked, its explanation (and a
                 way to apply as a delegate) shown on hover, focus or a tap
                 (owner, 12 Oct 2026: the step without pictures "looks ugly"). ── */}
-            {isInvoicingRole && (
-              <TwoTabPick
-                value="society"
-                onChange={(key) => { if (key === 'society') { setIsIndependent(false); setSocietyError(''); } }}
-                options={[
-                  {
-                    key: 'independent',
-                    label: 'Independent',
-                    image: '/onboarding/podium-01.jpg',
-                    sub: 'Applying on your own',
-                    disabled: true,
-                    disabledHint: (
-                      <>
-                        {role === 'faculty-advisor' ? 'Faculty advisors' : 'Head delegates'} lead a delegation. To apply on your own,{' '}
-                        <a
-                          href={`/conferences/${slug}/apply?role=delegate`}
-                          style={{ fontWeight: 700, textDecoration: 'underline', color: NEU.forest }}
-                        >
-                          apply as a delegate instead
-                        </a>
-                      </>
-                    ),
-                  },
-                  {
-                    key: 'society',
-                    label: 'With a delegation',
-                    image: '/onboarding/handshake-01.jpg',
-                    sub: role === 'faculty-advisor' ? 'The society or school you advise' : 'The society or school you lead',
-                  },
-                ]}
-              />
-            )}
-            {isInvoicingRole && <div className="mb-6" />}
+            {/* Head delegates and faculty advisors always lead a delegation, so
+                there is no Independent / With a delegation choice for them
+                (owner, 31 Oct 2026): straight to the delegation's name, then its
+                picture, city and country in one column. */}
             {!isInvoicingRole && (
               <TwoTabPick
                 value={isIndependent ? 'independent' : 'society'}
@@ -3979,18 +4048,48 @@ function ConferenceApplyInner() {
                     ? <NoDelegationMatch name={typedName} onCreate={openCreate} blockedReason={createBlocked} />
                     : <CreateDelegationButton name={typedName} onCreate={openCreate} blockedReason={createBlocked} />
                 )}
-                {creatingDelegation && conference && (
-                  <NewDelegationCard
-                    name={typedName}
-                    details={newDelegation}
-                    onChange={setNewDelegation}
-                    problems={newDelegationShownProblems}
-                    conferenceId={conference.id}
-                    userId={user?.id ?? null}
-                    accessToken={session?.access_token ?? null}
-                    previewing={previewing}
-                  />
-                )}
+                {conference && (creatingDelegation || isInvoicingRole) && (() => {
+                  const card = creatingDelegation ? (
+                    <NewDelegationCard
+                      name={typedName}
+                      details={newDelegation}
+                      onChange={setNewDelegation}
+                      problems={newDelegationShownProblems}
+                      conferenceId={conference.id}
+                      userId={user?.id ?? null}
+                      accessToken={session?.access_token ?? null}
+                      previewing={previewing}
+                      vertical={isInvoicingRole}
+                    />
+                  ) : (
+                    // Before a delegation is picked or started the left column is
+                    // never empty (owner, 31 Oct 2026): the delegation-to-be.
+                    <DelegationPlaceholder
+                      name={selectedSocietyId ? (societies.find(x => x.id === selectedSocietyId)?.name ?? typedName) : ''}
+                    />
+                  );
+                  if (!isInvoicingRole) return card;
+                  // Head delegates and faculty advisors (owner, 31 Oct 2026): two
+                  // columns, the delegation where Independent used to be and
+                  // the "With a delegation" picture beside it.
+                  return (
+                    <div className="grid items-stretch mt-4" style={{ gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
+                      <div className="min-w-0 [&>section]:mt-0 [&>section]:h-full">{card}</div>
+                      <div className="min-w-0">
+                        <TwoTabPick
+                          value="society"
+                          onChange={() => {}}
+                          options={[{
+                            key: 'society',
+                            label: 'With a delegation',
+                            image: '/onboarding/handshake-01.jpg',
+                            sub: role === 'faculty-advisor' ? 'The society or school you advise' : 'The society or school you lead',
+                          }]}
+                        />
+                      </div>
+                    </div>
+                  );
+                })()}
               </>
             )}
           </>
@@ -4393,7 +4492,7 @@ function ConferenceApplyInner() {
         {minPrefs > 0 && (
           <p className="mb-4" style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.muted }}>
             Pick and order at least <span style={{ fontWeight: 800, color: NEU.ink, fontVariantNumeric: 'tabular-nums' }}>{minPrefs}</span>
-            {atMax ? ' · maximum of 8 reached' : ' · rank up to 8'}. Taken options are greyed out.
+            {atMax ? ' · maximum of 8 reached' : ' · rank up to 8'}.{hideTaken ? ' Taken allocations are not shown.' : ''}
           </p>
         )}
 
@@ -4476,13 +4575,14 @@ function ConferenceApplyInner() {
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {info.slots.map(slot => {
-                      const taken = info.taken.has(slot.country_code);
+                      const isTaken = info.taken.has(slot.country_code);
+                      if (isTaken && hideTaken) return null;
                       return (
                         <CountryChip
                           key={slot.id}
                           code={slot.country_code}
                           name={slot.country_name}
-                          taken={taken || (atMax && !isCountrySelected(c.id, slot.country_code))}
+                          taken={atMax && !isCountrySelected(c.id, slot.country_code)}
                           selected={isCountrySelected(c.id, slot.country_code)}
                           onClick={() => toggleCountry(c, slot)}
                           reducedMotion={reducedMotion}
@@ -4510,7 +4610,7 @@ function ConferenceApplyInner() {
                     totalCount={info.total}
                     rank={null}
                     active={expanded || chosenHere > 0}
-                    disabled={info.full && chosenHere === 0}
+                    disabled={hideTaken && info.full && chosenHere === 0}
                     showAvailability={info.total > 0}
                     onClick={() => setExpandedCommitteeId(prev => (prev === c.id ? null : c.id))}
                     reducedMotion={reducedMotion}
@@ -4538,14 +4638,14 @@ function ConferenceApplyInner() {
                         </div>
                         <div className="flex flex-wrap gap-2">
                           {info.slots.map(slot => {
-                            const taken = info.taken.has(slot.country_code);
+                            if (hideTaken && info.taken.has(slot.country_code)) return null;
                             const selected = isCountrySelected(c.id, slot.country_code);
                             return (
                               <CountryChip
                                 key={slot.id}
                                 code={slot.country_code}
                                 name={slot.country_name}
-                                taken={taken || (atMax && !selected)}
+                                taken={atMax && !selected}
                                 selected={selected}
                                 onClick={() => toggleCountry(c, slot)}
                                 reducedMotion={reducedMotion}
@@ -4903,6 +5003,7 @@ function ConferenceApplyInner() {
         event_date: row.event_date,
         awards: row.awards,
         description: row.description,
+        logo_url: row.logo_url ?? null,
       }));
       setExperienceEntries(prev => [...prev, ...imported]);
     }
@@ -4967,21 +5068,9 @@ function ConferenceApplyInner() {
         extraChrome={wizardExtraChrome}
         onBack={step > 1 ? () => setStep(s => s - 1) : undefined}
         title="MUN Experience"
-        sub="The conferences you have chaired or staffed. Import them from your MUN CV or add them one by one."
+        sub="The conferences you have chaired or staffed. A conference you add here is saved to your MUN CV too."
       >
-        {sortedEntries.length > 0 && (
-          <div className="flex flex-col gap-3 mb-4">
-            {sortedEntries.map(entry => (
-              <CVSummaryRow
-                key={entry.id}
-                entry={{ ...entry, logo_url: null }}
-                onEdit={() => openEditEntry(entry)}
-                onRemove={() => removeEntry(entry.id)}
-              />
-            ))}
-          </div>
-        )}
-
+        {/* Owner, 31 Oct 2026: Add a conference sits at the very top of the step. */}
         <button
           type="button"
           onClick={openAddEntry}
@@ -5006,6 +5095,22 @@ function ConferenceApplyInner() {
           {sortedEntries.length > 0 ? 'Add another conference' : 'Add a conference'}
         </button>
 
+        {sortedEntries.length > 0 && (
+          <div className="flex flex-col gap-3 mt-4 mb-4">
+            {sortedEntries.map(entry => (
+              <CVSummaryRow
+                key={entry.id}
+                entry={{ ...entry, logo_url: entry.logo_url ?? null }}
+                onEdit={() => openEditEntry(entry)}
+                onRemove={() => removeEntry(entry.id)}
+              />
+            ))}
+          </div>
+        )}
+
+
+        {/* Owner, 31 Oct 2026: shown only when the CV has entries this application does not. */}
+        {munCvRows !== null && importableRows.length > 0 && (
         <div className="mt-4">
           <button
             type="button"
@@ -5036,8 +5141,11 @@ function ConferenceApplyInner() {
             </p>
           )}
         </div>
+        )}
 
-        {!previewing && (
+        {/* Shown only when this application holds conferences not yet on the MUN CV
+            (new ones save themselves; this catches a save that failed). */}
+        {!previewing && newEntries.length > 0 && (
         <div className="mt-3">
           <button
             type="button"
@@ -5108,12 +5216,44 @@ function ConferenceApplyInner() {
                 event_date: entry.event_date,
                 awards: entry.awards,
                 description: entry.description,
+                logo_url: entry.logo_url ?? munExpEditing?.logo_url ?? null,
               };
               setExperienceEntries(prev =>
                 munExpEditing
                   ? prev.map(e => (e.id === built.id ? built : e))
                   : [...prev, built]
               );
+              // Owner, 31 Oct 2026: a conference ADDED here also goes onto the applicant's
+              // MUN CV at once (edits stay on this application). Never from a preview.
+              if (!munExpEditing && !previewing && session && user) {
+                void (async () => {
+                  const supabase = getAuthedClient(session.access_token);
+                  const { data, error } = await supabase.from('mun_cv_entries').insert({
+                    user_id: user.id,
+                    source: 'manual',
+                    entry_type: entry.entry_type,
+                    conference_name: entry.conference_name,
+                    committee: entry.committee,
+                    allocation: entry.allocation,
+                    expertise_level: entry.expertise_level ?? null,
+                    event_date: entry.event_date,
+                    awards: entry.awards,
+                    award: entry.awards[0] ?? 'None',
+                    photos: entry.photos ?? [],
+                    description: entry.description,
+                    logo_url: entry.logo_url ?? null,
+                    conference_id: entry.conference_id ?? null,
+                  }).select('id').single();
+                  if (error || !data) {
+                    setCvSaveError('Added to this application, but it could not be saved to your MUN CV. Use the button below to try again.');
+                    return;
+                  }
+                  // Linked to its CV row, so it never counts as "new" or imports twice.
+                  setExperienceEntries(prev => prev.map(e => (e.id === built.id ? { ...e, source_cv_entry_id: data.id as string } : e)));
+                  await loadMunCvRows();
+                  await refreshCvCount();
+                })();
+              }
             }}
           />
         )}
@@ -5244,6 +5384,8 @@ function ConferenceApplyInner() {
                 }
               }}
               missingIds={customMissingIds}
+              upload={conference ? { conferenceId: conference.id, userId: user?.id ?? null } : undefined}
+              onUploadingChange={(b) => setUploadsBusy(n => Math.max(0, n + (b ? 1 : -1)))}
             />
           </div>
         )}
@@ -5252,6 +5394,7 @@ function ConferenceApplyInner() {
             carry one — "Skip this section →  →" was the first render. */}
         <WizardFooter
           onNext={handleContinueQuestions}
+          disabled={uploadsBusy > 0}
           nextLabel={
             returnStepAfterJump !== null
               ? 'Back to overview'
@@ -5290,6 +5433,8 @@ function ConferenceApplyInner() {
       ? 'Included with Gavelling Unlimited ∞'
       : creditSponsored
       ? creditSponsoredLine(conference?.acronym || conference?.full_name || 'The conference')
+      : creditTakenElsewhere
+      ? 'No credit needed: your other application here already used one.'
       : poolCovered
       ? 'Your delegation covers your credit'
       : 'This application uses 1 Gavelling credit';
@@ -5426,17 +5571,21 @@ function ConferenceApplyInner() {
                 decided the same way costLabel above decides it — never a
                 balance, plan, pool or Unlimited state, all of which need an
                 account and would just be a guess here. */}
-            {creditsSponsored ? (
+            {gavellingSponsored ? (
               <p className="text-xs mt-3" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
                 Credits for this conference have been sponsored by Gavelling, so applying is free.
               </p>
-            ) : isExemptRole ? null : (
+            ) : isExemptRole ? null : creditsSponsored ? (
+              <p className="text-xs mt-3" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+                {creditSponsoredLine(conference?.acronym || conference?.full_name || 'The conference')}
+              </p>
+            ) : (
               <p className="text-xs mt-3" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
                 Submitting this application uses 1 Gavelling credit.
               </p>
             )}
           </div>
-        ) : creditsSponsored ? (
+        ) : gavellingSponsored ? (
           <div
             className="relative rounded-2xl p-5 mb-4 flex items-center gap-3"
             style={{ background: 'linear-gradient(135deg, color-mix(in srgb, var(--gv-accent) 28%, transparent), color-mix(in srgb, var(--gv-main) 6%, transparent))', border: '1.5px solid color-mix(in srgb, var(--gv-accent) 55%, transparent)' }}
@@ -5473,7 +5622,7 @@ function ConferenceApplyInner() {
                 </div>
               </div>
 
-              {!isExemptRole && !hasUnlimited && !poolCovered && !creditSponsored && (
+              {!isExemptRole && !hasUnlimited && !poolCovered && !creditSponsored && !creditTakenElsewhere && (
                 <p className="text-xs" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
                   You have {creditBalanceLoading || creditBalance === null ? '…' : creditBalance} credit{creditBalance === 1 ? '' : 's'}.
                 </p>
@@ -5515,7 +5664,7 @@ function ConferenceApplyInner() {
         {/* Need more credits? Two quiet buttons that open the global purchase
             pop-ups (prices live there). Only when this role actually spends
             credits: never for sponsored / exempt / Unlimited / edit resubmits. */}
-        {!creditsSponsored && !isExemptRole && !hasUnlimited && !isEditMode && !guestGate && (
+        {!creditsSponsored && !isExemptRole && !hasUnlimited && !creditTakenElsewhere && !isEditMode && !guestGate && (
           <div className="mb-4">
             <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.2em', color: NEU.inkSoft, marginBottom: 10 }}>
               NEED MORE CREDITS?
@@ -5642,12 +5791,11 @@ function ConferenceApplyInner() {
   // nothing to gain by pretending it is stable. Never read in preview.
   const guestDraftRow = !previewing ? loadGuestDraft(slug, role) : null;
 
-  // One-active-application-per-conference: an active application under a
-  // different role blocks a fresh apply here, same wall treatment as
-  // "already applied". Checked BEFORE the same-role wall (and skipped
-  // entirely by canEdit) so editing/resubmitting one's own rejected or
-  // submitted application is never blocked by a second, unrelated role.
-  if (!canEdit && !previewing && otherRoleApp) {
+  // Several roles per person (9 Nov 2026): only a role they already HOLD that
+  // cannot combine with this one blocks a fresh apply here. Checked BEFORE the
+  // same-role wall (and skipped entirely by canEdit) so editing/resubmitting
+  // one's own application is never blocked by another role.
+  if (!canEdit && !previewing && heldBlocking) {
     return (
       <div className="min-h-screen flex flex-col" style={{ ...themeCssVars(activeTheme), backgroundColor: 'var(--gv-bg)' }}>
         <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
@@ -5655,18 +5803,17 @@ function ConferenceApplyInner() {
         <div className="relative z-10 flex-1 flex items-center justify-center px-6 py-20">
           <div className="rounded-2xl p-10 text-center max-w-sm w-full" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)' }}>
             <h2 className="font-semibold text-lg mb-2" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif" }}>
-              You&apos;ve Already Applied
+              You Already Hold a Role Here
             </h2>
             <p className="text-sm mb-6" style={{ color: 'var(--gv-muted)', fontFamily: "var(--font-brand), sans-serif" }}>
-              You already have an active {otherRoleApp.role.replace(/-/g, ' ')} application to this conference. Withdraw it or contact the organizing team if you need to change roles.
-              {guestDraftRow && ' The answers you just filled in are still saved in this browser, so if you withdraw it you can come back and finish.'}
+              You are {roleWithArticle(heldBlocking.role)} at {conference?.acronym || conference?.full_name || 'this conference'}. Each person holds one role at a conference, so contact the organisers if you want to switch.
             </p>
             <Link
-              href={`/conferences/${slug}`}
+              href={`/conferences/${slug}/role/${encodeURIComponent(heldBlocking.role)}`}
               className="inline-block rounded-xl py-2.5 px-6 font-bold text-sm focus:outline-none"
               style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', textDecoration: 'none', fontFamily: "var(--font-brand), sans-serif" }}
             >
-              View conference
+              Go to my role page
             </Link>
           </div>
         </div>
@@ -6200,6 +6347,15 @@ function ConferenceApplyInner() {
 
         <ListingApplyLine listing={applyListing} />
         <ListingClaimNote note={listingClaim.note} />
+        {/* Several roles per person (9 Nov 2026): another application under review never blocks this one. */}
+        {!isEditMode && !heldBlocking && otherUnderReview && (
+          <ListingClaimNote note={{
+            good: true,
+            text: rolesCombine(otherUnderReview.role, role)
+              ? `You already applied as ${roleWithArticle(otherUnderReview.role)}. You can hold both roles.`
+              : `You already applied as ${roleWithArticle(otherUnderReview.role)}. You can apply for this role too. If you are accepted for one, your other application closes.`,
+          }} />
+        )}
 
         {/* Another tab is writing this same draft. Non-blocking on purpose —
             they can finish and submit from here, they just aren't being

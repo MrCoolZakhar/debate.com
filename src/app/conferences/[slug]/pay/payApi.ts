@@ -76,13 +76,27 @@ export interface PayDelegation {
   leaders: { name: string | null; role: string; is_me: boolean; delegate_tickets: number; advisor_tickets: number }[];
 }
 
+/** An extra payment method payers can pick (prompt 31). Its phone number is read on its own (payment_way_phone). */
+export interface PayWay {
+  id: string;
+  name: string;
+  manual_kind: 'link' | 'qr' | 'bank' | 'in_person' | 'phone';
+  payment_url: string | null;
+  instructions: string | null;
+  qr_path: string | null;
+  bank: { account_name?: string; account_number?: string; swift?: string; bank_name?: string; reference?: string } | null;
+}
+
 export interface PayOverview {
   conference: {
     id: string; slug: string; acronym: string | null; full_name: string; currency: string;
-    method: 'stripe' | 'manual' | null; manual_kind: 'link' | 'qr' | 'bank' | 'in_person' | null;
+    method: 'stripe' | 'manual' | null; manual_kind: 'link' | 'qr' | 'bank' | 'in_person' | 'phone' | null;
     payment_url: string | null; instructions: string | null; qr_path: string | null;
     bank: { account_name?: string; account_number?: string; swift?: string; bank_name?: string; reference?: string } | null;
     ready: boolean; aid_open: boolean; contact_email: string | null;
+    /** Several payment methods (prompt 31): the main method's name, and the extra usable methods ([] for most conferences). */
+    main_name: string | null;
+    ways: PayWay[];
   };
   me: { application_id: string; role: string; status: string; payment_status: string; society_id: string | null; delegation: string | null; is_leader: boolean }[];
   items: PayItem[];
@@ -99,8 +113,9 @@ export async function readPayOverview(conferenceId: string): Promise<PayOverview
   if (error) throw error;
   const a = (data ?? {}) as Record<string, unknown>;
   if (a.ok !== true) throw new UserFacingError(plainOrFallback(a.error, 'Your payments could not be read. Try again in a moment.'));
+  const conf = (a.conference ?? {}) as PayOverview['conference'];
   return {
-    conference: a.conference as PayOverview['conference'],
+    conference: { ...conf, main_name: typeof conf.main_name === 'string' ? conf.main_name : null, ways: Array.isArray(conf.ways) ? conf.ways : [] },
     me: Array.isArray(a.me) ? (a.me as PayOverview['me']) : [],
     items: Array.isArray(a.items) ? (a.items as PayItem[]) : [],
     payments: Array.isArray(a.payments) ? (a.payments as PayPayment[]) : [],

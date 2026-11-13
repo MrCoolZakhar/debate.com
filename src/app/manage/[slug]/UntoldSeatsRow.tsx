@@ -1,6 +1,6 @@
 'use client';
 
-// "N seated delegates were never told their seat": a dashboard to-do row.
+// "N delegates never got their allocation": a dashboard to-do row.
 //
 // A delegate seated while allocation emails were off (or on manual release and
 // never released) sits in conference_allocations with allocation_sent = false.
@@ -54,7 +54,7 @@ export default function UntoldSeatsRow({ conferenceId, slug }: { conferenceId: s
         icon={Send}
         emoji="Envelope with arrow"
         gradient={NEU_GRADIENTS.amber}
-        title={`${count} seated delegate${count === 1 ? ' was' : 's were'} never told their seat`}
+        title={`${count} delegate${count === 1 ? '' : 's'} never got their allocation`}
         sub="They have a committee and country but no allocation email yet."
         onClick={open}
         action={(
