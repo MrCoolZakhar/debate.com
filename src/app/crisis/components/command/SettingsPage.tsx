@@ -171,6 +171,14 @@ function SettingsBody() {
                 hint="Off: delegates see where their own cabinet's characters stand on the map, and no one else's."
               />
             )}
+            <ToggleRow
+              title="Delegates can ask other cabinets to meetings" checked={s.crossCabinetMeetings} onChange={(on) => save('crossCabinetMeetings', on)}
+              hint="On: a delegate can invite characters from any cabinet to a meeting, by name and picture, even when they see nothing else of the other cabinets. Off: only their own cabinet."
+            />
+            <ToggleRow
+              title="Chairs see both cabinets" checked={s.chairsSeeAllCabinets} onChange={(on) => save('chairsSeeAllCabinets', on)}
+              hint="On: each chair also sees the other cabinet's characters, cabinet directives and meetings, read only. Chairs still approve only their own cabinet's directives."
+            />
             {full && (
               <ToggleRow
                 title="Delegates see where their own cabinet stands" checked={!s.hideCabinetLocations} onChange={(on) => save('hideCabinetLocations', !on)}
