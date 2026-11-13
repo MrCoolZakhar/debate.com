@@ -5,15 +5,17 @@
  * white area, just the pages stacked. No grey frame, no thumbnails, no browser
  * toolbar: the zoom lives with the caller (the paper page's card header).
  *
- * - `zoom` is a share of the page's natural width (1 = 100%); when that would
- *   overflow the column the pages fit the column instead.
+ * - `zoom` is a share of the COLUMN width (prompt 37): 1 = the page fits the
+ *   column, 0.5 = half of that, 2 = twice. No cap: a page wider than the
+ *   column makes the box scroll sideways (never the whole page), and the
+ *   reading position is kept, in proportion, when the zoom changes.
  * - Pages are drawn lazily: only the ones near the view hold a canvas.
  * - Anything that fails (the worker, CORS, a broken file) calls `onFailed`, and
  *   the caller shows its sentence with Download still working.
  * Only files in this project's storage are opened, public or signed (`isPdfJsUrl`, the same test PdfViewer uses).
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import { acquirePdf, isPdfJsUrl, outputScale, PDF_TO_CSS } from './pdfLoader';
 
@@ -31,6 +33,9 @@ export default function PlainPdfPages({ url, zoom, onFailed, className, style }:
   const [doc, setDoc] = useState<PDFDocumentProxy | null>(null);
   const [sizes, setSizes] = useState<PageSize[] | null>(null);
   const [width, setWidth] = useState(0);
+  // Where the reader is, as shares of the scroll box (the centre of the view),
+  // kept on every scroll so a zoom change can put them back in proportion.
+  const posRef = useRef({ x: 0.5, y: 0 });
   const failedRef = useRef(onFailed);
   useEffect(() => { failedRef.current = onFailed; }, [onFailed]);
 
@@ -53,7 +58,25 @@ export default function PlainPdfPages({ url, zoom, onFailed, className, style }:
     return () => { alive = false; handle.release(); };
   }, [url]);
 
-  // The column's width, so a zoom that would overflow fits it instead.
+  // Keep the reading position when the zoom changes (after the new layout).
+  useLayoutEffect(() => {
+    const el = box;
+    if (!el) return;
+    const { x, y } = posRef.current;
+    el.scrollTop = Math.max(0, y * el.scrollHeight - el.clientHeight / 2);
+    el.scrollLeft = Math.max(0, x * el.scrollWidth - el.clientWidth / 2);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [zoom]);
+  const remember = () => {
+    const el = box;
+    if (!el || el.scrollHeight === 0) return;
+    posRef.current = {
+      x: el.scrollWidth > 0 ? (el.scrollLeft + el.clientWidth / 2) / el.scrollWidth : 0.5,
+      y: el.scrollTop > 0 ? (el.scrollTop + el.clientHeight / 2) / el.scrollHeight : 0,
+    };
+  };
+
+  // The column's width: 100% zoom is a page that fits it.
   useEffect(() => {
     const el = box;
     if (!el) return;
@@ -64,12 +87,15 @@ export default function PlainPdfPages({ url, zoom, onFailed, className, style }:
 
   const pad = 24;
   return (
-    <div ref={setBox} className={className} style={{ overflow: 'auto', background: '#FFFFFF', ...style }}>
+    <div ref={setBox} onScroll={remember} className={className} style={{ overflow: 'auto', background: '#FFFFFF', ...style }}>
       {doc && sizes && width > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, padding: `${pad}px ${pad / 2}px` }}>
+        // max-content with a 100% floor: a page wider than the box makes the box
+        // scroll right instead of spilling left; below 100% the pages stay centred.
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, padding: `${pad}px ${pad / 2}px`, width: 'max-content', minWidth: '100%', boxSizing: 'border-box' }}>
           {sizes.map((sz, i) => {
             const natural = sz.w * PDF_TO_CSS;
-            const scale = Math.min(zoom, (width - pad) / natural) * PDF_TO_CSS;
+            const fit = (width - pad) / natural;
+            const scale = fit * zoom * PDF_TO_CSS;
             return <PdfPage key={i} doc={doc} n={i + 1} cssW={sz.w * scale} cssH={sz.h * scale} scale={scale} root={box} />;
           })}
         </div>

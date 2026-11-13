@@ -267,7 +267,7 @@ export default function PositionPaperPage() {
 
   const [loading, setLoading] = useState(true);
   // The pdf.js viewer (prompt 141): 75% of the page's width by default, 50% to 200%.
-  const [pdfZoom, setPdfZoom] = useState(0.75);
+  const [pdfZoom, setPdfZoom] = useState(1);
   const [pdfFailed, setPdfFailed] = useState(false);
   const [confTheme, setConfTheme] = useState<ConferenceTheme | null>(null);
   const [paper, setPaper] = useState<PaperRow | null>(null);
