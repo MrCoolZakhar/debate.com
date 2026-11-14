@@ -135,6 +135,12 @@ export function publishListing(id: string, topUp = false, confirmDeadline = fals
   return call<{ charged?: number; message?: string; role_opened?: boolean }>('job_listing_publish', { p_id: id, p_top_up: topUp, p_confirm_deadline: confirmDeadline }, 'We could not publish this listing. Try again.');
 }
 
+/** Copies everything but the title and the committee from one listing to others (prompt 44, job_listing_copy_to). */
+export function copyListingTo(fromId: string, toIds: string[]) {
+  return call<{ copied?: { listing_id: string; title: string }[]; failed?: { listing_id: string; title: string; message: string }[]; message?: string }>(
+    'job_listing_copy_to', { p_from: fromId, p_to: toIds }, 'We could not copy this listing. Try again.');
+}
+
 export function closeListing(id: string) {
   return call<{ deleted?: boolean; message?: string }>('job_listing_close', { p_id: id }, 'We could not close this listing. Try again.');
 }

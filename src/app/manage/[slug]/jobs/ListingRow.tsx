@@ -16,7 +16,7 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
 import {
-  CalendarClock, CircleDot, CircleSlash, EyeOff, FilePen, Hourglass, House, Lock, Megaphone, MoreHorizontal, Pencil, Sparkles, Trash2, ExternalLink, XCircle, Share2,
+  CalendarClock, CircleDot, CircleSlash, Copy, EyeOff, FilePen, Hourglass, House, Lock, Megaphone, MoreHorizontal, Pencil, Sparkles, Trash2, ExternalLink, XCircle, Share2,
 } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { JOB_ROLE_LABEL } from '@/lib/jobBoard';
@@ -50,7 +50,11 @@ function closingSoon(listing: OrgListing): boolean {
   return Number.isFinite(left) && left >= 0 && left <= SOON_DAYS * 86_400_000;
 }
 
-export default function ListingRow({ listing, canPromote, onEdit, onPromote, onChanged }: {
+export default function ListingRow({ listing, canPromote, onEdit, onPromote, onChanged, draftedForYou = false, onCopy }: {
+  /** A chair draft the database wrote when chair applications opened (prompt 44). */
+  draftedForYou?: boolean;
+  /** "Copy to other listings"; only when there is another listing that is not closed. */
+  onCopy?: () => void;
   listing: OrgListing;
   canPromote: boolean;
   onEdit: () => void;
@@ -96,7 +100,12 @@ export default function ListingRow({ listing, canPromote, onEdit, onPromote, onC
         <div className="gv-jr-id">
         <RoleThumb role={listing.role} size={60} />
         <div className="gv-jr-text">
-          <p className="gv-jr-title">{listing.title || 'Untitled listing'}</p>
+          <p className="gv-jr-title">
+            {listing.title || 'Untitled listing'}
+            {draftedForYou && (
+              <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 700, color: '#8A6614', whiteSpace: 'nowrap', verticalAlign: '1px' }}>Drafted for you</span>
+            )}
+          </p>
           <p className="gv-jr-sub">
             <span className="gv-jr-type" style={{ color: theme.text }}>
               <RoleIcon size={15} strokeWidth={1.8} aria-hidden className="gv-jr-sub-icon" style={{ color: theme.accent }} />
@@ -162,6 +171,7 @@ export default function ListingRow({ listing, canPromote, onEdit, onPromote, onC
         <RowMenu
           items={[
             { key: 'edit', label: 'Edit', icon: Pencil, onClick: onEdit },
+            ...(onCopy ? [{ key: 'copy', label: 'Copy to other listings', icon: Copy, onClick: onCopy }] : []),
             ...(listing.shown === 'live' && canPromote ? [{ key: 'promote', label: 'Promote', icon: Megaphone, onClick: onPromote }] : []),
             ...(listing.shown !== 'draft' ? [{ key: 'view', label: 'View on Job Board', icon: ExternalLink, href: `/jobs?listing=${encodeURIComponent(listing.id)}` }] : []),
             ...(listing.shown === 'live' ? [{ key: 'share', label: 'Share card', icon: Share2, onClick: () => setSharing(true) }] : []),

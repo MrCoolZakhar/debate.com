@@ -11,6 +11,7 @@
 // listing makes it go on the next panel read.
 
 import { useRef, useState } from 'react';
+import Link from 'next/link';
 import { Layers, Plus } from 'lucide-react';
 import { OUTFIT } from '@/components/neu';
 import { jobOnboardingLater } from './jobsApi';
@@ -22,10 +23,12 @@ const INK_SOFT = '#5C5140';
 const STEPS = [
   'Pick the role: chair, secretariat or staff',
   'Write the listing: title, what you offer and up to 5 screening questions',
-  'People apply on Gavelling, free for you, and land in Applications or Settings > Team',
+  'People apply on Gavelling, free for you, and land in Team',
 ];
 
-export default function JobBoardOnboarding({ confId, canPack, onPost, onPack, onLater }: {
+export default function JobBoardOnboarding({ confId, canPack, onPost, onPack, onLater, openChairHref = null }: {
+  /** Chair applications are not open (prompt 44): lead with opening them, since that drafts a chair listing per committee. */
+  openChairHref?: string | null;
   confId: string;
   /** The conference has committees and the chair role is on. */
   canPack: boolean;
@@ -60,6 +63,15 @@ export default function JobBoardOnboarding({ confId, canPack, onPost, onPack, on
   return (
     <EmptyArt image="/onboarding/podium-01.jpg">
     <div style={{ fontFamily: OUTFIT, padding: '4px 4px 6px' }}>
+      {openChairHref ? (
+        <>
+          <p style={{ margin: 0, fontSize: 22, fontWeight: 800, color: INK }}>Open Chair Applications</p>
+          <p style={{ margin: '8px 0 0', fontSize: 15, lineHeight: 1.5, color: INK_SOFT }}>
+            Gavelling drafts a chair listing for every committee as soon as chair applications open. You check them and publish.
+          </p>
+        </>
+      ) : (
+      <>
       <p style={{ margin: 0, fontSize: 22, fontWeight: 800, color: INK }}>Post your first listing</p>
       <ol style={{ listStyle: 'none', margin: '14px 0 0', padding: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
         {STEPS.map((t, i) => (
@@ -74,10 +86,15 @@ export default function JobBoardOnboarding({ confId, canPack, onPost, onPack, on
           </li>
         ))}
       </ol>
+      </>
+      )}
       <div className="flex flex-wrap items-center" style={{ gap: 10, marginTop: 18 }}>
+        {openChairHref && (
+          <Link href={openChairHref} className="gv-st-btn gv-st-forest">Open chair applications</Link>
+        )}
         {/* Light: the page header carries the view's one solid forest button. */}
         <button type="button" className="gv-st-btn gv-st-outline" onClick={onPost}>
-          <Plus size={16} strokeWidth={1.6} aria-hidden /> Post your first listing
+          <Plus size={16} strokeWidth={1.6} aria-hidden /> {openChairHref ? 'Post a listing' : 'Post your first listing'}
         </button>
         {canPack && (
           <button type="button" className="gv-st-btn gv-st-outline" onClick={onPack}>

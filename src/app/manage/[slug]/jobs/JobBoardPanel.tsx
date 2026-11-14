@@ -29,6 +29,7 @@ import PostingPopup, { type ShortRequest } from './PostingPopup';
 import PromotePopup from './PromotePopup';
 import CommitteePackPopup from './CommitteePackPopup';
 import JobBoardOnboarding from './JobBoardOnboarding';
+import CopyToPopup from './CopyToPopup';
 import FindPeoplePopup from './FindPeoplePopup';
 import SentInvitesCard from './SentInvitesCard';
 import { useJobTopUp } from './useJobTopUp';
@@ -41,7 +42,15 @@ const INK = '#1C1410';
 const INK_SOFT = '#5C5140';
 const FOREST = '#1B3828';
 
-type Popup = { kind: 'post'; listing: OrgListing | null } | { kind: 'promote'; listing: OrgListing } | { kind: 'pack' } | { kind: 'find' } | null;
+type Popup = { kind: 'post'; listing: OrgListing | null } | { kind: 'promote'; listing: OrgListing } | { kind: 'pack' } | { kind: 'find' } | { kind: 'copy'; listing: OrgListing } | null;
+
+/** A draft the database wrote by itself when chair applications opened (prompt 44):
+ *  a chair draft with no offers, no screening questions and no deadline. */
+function isAutoDraft(l: OrgListing): boolean {
+  const o = l.offers;
+  const noOffers = !o || !(o.paid || o.accommodation || o.travel || o.certificate || o.letter);
+  return l.shown === 'draft' && l.role === 'chair' && noOffers && (l.questions?.length ?? 0) === 0 && !l.deadline;
+}
 
 const ORDER: Record<string, number> = { draft: 0, live: 1, hidden: 2, closed: 3 };
 
@@ -134,6 +143,9 @@ export default function JobBoardPanel({ embedded = false }: { embedded?: boolean
 
   if (!conference) return null;
   const slug = conference.slug;
+  // Prompt 44: whether chair applications are open (the auto drafts follow them).
+  const chairOn = !!panel?.roles.some((r) => r.role === 'chair' && r.enabled);
+  const draftCount = listings.filter((l) => l.shown === 'draft').length;
 
   return (
     <div className={embedded ? 'gv-jb' : 'gv-jb px-6 md:px-10 py-8'}>
@@ -197,12 +209,27 @@ export default function JobBoardPanel({ embedded = false }: { embedded?: boolean
             {listings.length === 0 && panel.onboarding && !onboardingDone ? (
               // First time on the Job Board (prompt 14): the onboarding in place of the empty state.
               <JobBoardOnboarding
+                openChairHref={chairOn ? null : `/manage/${slug}/settings?tab=applications&role=chair`}
                 confId={conference.id}
                 canPack={panel.committees.length > 0 && panel.roles.some((r) => r.role === 'chair' && r.enabled)}
                 onPost={() => setPopup({ kind: 'post', listing: null })}
                 onPack={() => setPopup({ kind: 'pack' })}
                 onLater={() => { setOnboardingDone(true); void reload(); }}
               />
+            ) : listings.length === 0 && !chairOn ? (
+              // Prompt 44: chair applications are not open, so nothing was drafted yet.
+              <EmptyArt image="/onboarding/hall-01.jpg">
+                <div className="gv-jb-first">
+                  <p className="gv-jb-first-title">Open Chair Applications</p>
+                  <p className="gv-jb-first-line">Gavelling drafts a chair listing for every committee as soon as chair applications open. You check them and publish.</p>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Link href={`/manage/${slug}/settings?tab=applications&role=chair`} className="gv-st-btn gv-st-forest">Open chair applications</Link>
+                    <button type="button" className="gv-st-btn gv-st-outline" onClick={() => setPopup({ kind: 'post', listing: null })}>
+                      <Plus size={16} strokeWidth={ICON_STROKE} aria-hidden /> Post a listing
+                    </button>
+                  </div>
+                </div>
+              </EmptyArt>
             ) : listings.length === 0 ? (
               <EmptyArt image="/onboarding/hall-01.jpg">
                 <div className="gv-jb-first">
@@ -217,11 +244,18 @@ export default function JobBoardPanel({ embedded = false }: { embedded?: boolean
             ) : (
               <>
               <RoleBand live={liveByRole} />
+              {draftCount > 0 && (
+                <p style={{ fontFamily: OUTFIT, fontSize: 14, color: INK, margin: '0 0 10px', overflowWrap: 'anywhere' }}>
+                  {draftCount} {draftCount === 1 ? 'listing' : 'listings'} ready as drafts. Open each one, check it and publish.
+                </p>
+              )}
               <ul className="gv-jb-list">
                 {listings.map((l) => (
                   <ListingRow
                     key={l.id}
                     listing={l}
+                    draftedForYou={isAutoDraft(l)}
+                    onCopy={l.shown !== 'closed' && listings.some((x) => x.id !== l.id && x.shown !== 'closed') ? () => setPopup({ kind: 'copy', listing: l }) : undefined}
                     canPromote={panel.can_promote}
                     onEdit={() => setPopup({ kind: 'post', listing: l })}
                     onPromote={() => setPopup({ kind: 'promote', listing: l })}
@@ -246,6 +280,13 @@ export default function JobBoardPanel({ embedded = false }: { embedded?: boolean
         </div>
       )}
 
+      {popup?.kind === 'copy' && panel && (
+        <CopyToPopup
+          from={popup.listing}
+          others={listings.filter((x) => x.id !== popup.listing.id && x.shown !== 'closed')}
+          onClose={() => { setPopup(null); void reload(); }}
+        />
+      )}
       {popup?.kind === 'pack' && panel && (
         <CommitteePackPopup
           conference={{
