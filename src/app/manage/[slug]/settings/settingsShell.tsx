@@ -33,7 +33,7 @@
 
 import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
 import {
-  Building2, ClipboardList, School, Users2, CreditCard, Trophy, Handshake, type LucideIcon,
+  Building2, ClipboardList, School, CreditCard, Trophy, Handshake, type LucideIcon,
 } from 'lucide-react';
 import { STORE_CSS } from '../store/storeKit';
 import { DASH_CSS } from '../financials/dashboardKit';
@@ -41,7 +41,8 @@ import { GoldWord } from '@/components/BrandHeading';
 import { F, INK, INK_SOFT, FOREST, ROW_CSS, TINT_GOLD_BG, TINT_GREEN_BG, EmojiDisc, TYPE_PX, FixBadge, slatesWaitingLabel } from './panelKit';
 
 /** The sections, in tab order. The key is also the ?tab= value written. */
-export type ShellSection = 'general' | 'applications' | 'delegations' | 'partners' | 'team' | 'payments' | 'awards';
+// 'team' left Settings for its own page, Team (owner, 14 Nov 2026).
+export type ShellSection = 'general' | 'applications' | 'delegations' | 'partners' | 'payments' | 'awards';
 
 /** Each section's Fluent 3D emoji (`emoji`) with the Lucide glyph it falls
  *  back to (`icon`) if the image cannot load. */
@@ -50,7 +51,6 @@ export const SHELL_SECTIONS: { key: ShellSection; label: string; emoji: string; 
   { key: 'applications', label: 'Applications', emoji: 'Inbox tray',                  icon: ClipboardList, tint: TINT_GOLD_BG },
   { key: 'delegations',  label: 'Delegations',  emoji: 'School',                      icon: School,        tint: TINT_GREEN_BG },
   { key: 'partners',     label: 'Partners',     emoji: 'Handshake',                   icon: Handshake,     tint: TINT_GREEN_BG },
-  { key: 'team',         label: 'Team',         emoji: 'Busts in silhouette',         icon: Users2,        tint: TINT_GREEN_BG },
   { key: 'payments',     label: 'Payments',     emoji: 'Credit card',                 icon: CreditCard,    tint: TINT_GOLD_BG },
   { key: 'awards',       label: 'Awards',       emoji: 'Trophy',                      icon: Trophy,        tint: TINT_GOLD_BG },
 ];
@@ -98,7 +98,9 @@ const SHELL_CSS = `
 @media (prefers-reduced-motion: reduce) { .gvsh-tab { transition: none; } }
 `;
 
-export function SettingsShell({ active, onOpen, conferenceName, fixes, children }: {
+export function SettingsShell({ active, onOpen, conferenceName, fixes, children, bare = false }: {
+  /** Team > Team Members: the same styles around the Team section, no header and no tabs. */
+  bare?: boolean;
   active: ShellSection;
   /** Things to fix per tab: Applications (roleSetupProblems), Awards (slates waiting). */
   fixes?: Partial<Record<ShellSection, number>>;
@@ -144,6 +146,18 @@ export function SettingsShell({ active, onOpen, conferenceName, fixes, children 
     else if (right > el.scrollLeft + el.clientWidth - 8) el.scrollLeft = right - el.clientWidth + 24;
   }, [active]);
 
+  if (bare) {
+    return (
+      <div className="gvsh gv-st">
+        <style>{STORE_CSS}</style>
+        <style>{DASH_CSS}</style>
+        <style>{ROW_CSS}</style>
+        <style>{SHELL_CSS}</style>
+        <div className="min-w-0">{children}</div>
+      </div>
+    );
+  }
+
   return (
     <div className="gvsh gv-st">
       <style>{STORE_CSS}</style>
@@ -170,7 +184,7 @@ export function SettingsShell({ active, onOpen, conferenceName, fixes, children 
               >
                 <EmojiDisc emoji={s.emoji} icon={s.icon} tint={s.tint} size={32} />
                 {s.label}
-                <FixBadge n={fixes?.[s.key] ?? 0} size={20} label={s.key === 'awards' ? slatesWaitingLabel : s.key === 'team' ? (n: number) => `${n} team ${n === 1 ? 'applicant' : 'applicants'} waiting` : undefined} />
+                <FixBadge n={fixes?.[s.key] ?? 0} size={20} label={s.key === 'awards' ? slatesWaitingLabel : undefined} />
               </button>
             );
           })}

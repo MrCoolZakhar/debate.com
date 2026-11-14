@@ -1169,7 +1169,6 @@ const STATUS_OPTIONS = [
 
 const ROLE_OPTIONS = [
   { label: 'Delegates', value: 'delegate' },
-  { label: 'Chairs', value: 'chair' },
   { label: 'Head Delegates', value: 'head-delegate' },
   { label: 'Faculty Advisors', value: 'faculty-advisor' },
   { label: 'Observers', value: 'observer' },
@@ -2146,7 +2145,7 @@ export default function ApplicationsPage() {
         `)
         .eq('conference_id', conference.id)
         // Secretariat and staff applicants live only in Settings > Team.
-        .not('role', 'in', '(secretariat,staff)')
+        .not('role', 'in', '(chair,secretariat,staff)')
         .order('submitted_at', { ascending: false, nullsFirst: true })
         .order('id', { ascending: true })
         .range(from, to)),
@@ -2602,6 +2601,23 @@ export default function ApplicationsPage() {
     setActionError('That row is still saving. Give it a moment, then try again.');
   }
 
+  /** A SINGLE accept (the row button and the review drawer) asks first (owner,
+   *  14 Nov 2026: at WorldMUN the next chair slid under the button and each press
+   *  accepted the next one). Bulk accept keeps its one confirm and calls
+   *  handleAccept directly. */
+  async function confirmAccept(appId: string) {
+    const app = applications.find(a => a.id === appId);
+    if (!app) return;
+    const name = app.profiles?.display_name?.trim() || app.invited_name?.trim() || 'this applicant';
+    const { confirmed } = await confirm({
+      title: `Accept ${name}?`,
+      body: 'They get the acceptance email straight away.',
+      confirmLabel: 'Accept',
+    });
+    if (!confirmed) return;
+    await handleAccept(appId);
+  }
+
   // Returns the settled promise so runBulk can chunk instead of fanning out.
   function handleAccept(appId: string): Promise<void> {
     if (!session || !conference) return Promise.resolve();
@@ -2852,7 +2868,7 @@ export default function ApplicationsPage() {
 
     const acceptBtn = (
       <button
-        onClick={() => handleAccept(app.id)}
+        onClick={() => { void confirmAccept(app.id); }}
         disabled={rowBusy || blocked || locked}
         title={blocked ? ACCEPT_BLOCKED_MESSAGE : undefined}
         className="inline-flex items-center justify-center gap-2 w-full focus:outline-none"
@@ -3992,6 +4008,11 @@ export default function ApplicationsPage() {
               {conference.acronym} · Applications
             </p>
             <h1 style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 26, color: NEU.ink, letterSpacing: '-0.01em' }}>Applications</h1>
+            {/* Team roles live in Team (owner, 14 Nov 2026). */}
+            <p style={{ fontFamily: OUTFIT, fontSize: 13.5, color: NEU.inkSoft, margin: '4px 0 0', lineHeight: 1.5 }}>
+              Applications is for delegates, head delegates, faculty advisors and observers. Chairs, secretariat and staff are in{' '}
+              <Link href={`/manage/${conference.slug}/team`} style={{ fontWeight: 700, color: NEU.ink, textDecoration: 'underline', textUnderlineOffset: 3 }}>Team</Link>.
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-2.5 flex-wrap">

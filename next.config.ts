@@ -93,6 +93,12 @@ const nextConfig: NextConfig = {
       // Financial aid moved inside Financials (9 Oct 2026). The query is kept;
       // the old page file still redirects too, as a fallback.
       { source: '/manage/:slug/financial-aid', destination: '/manage/:slug/financials/aid', permanent: true },
+      // Team (owner, 14 Nov 2026): the Job Board and the organizing team moved
+      // into /manage/<slug>/team. The query string is carried over (?promote=,
+      // ?highlight=<organizer id>); the Team page reads its tab from any tab value.
+      { source: '/manage/:slug/jobs', destination: '/manage/:slug/team?tab=jobs', permanent: false },
+      { source: '/manage/:slug/settings', has: [{ type: 'query', key: 'tab', value: '(team|organizers)' }], destination: '/manage/:slug/team?tab=members', permanent: false },
+      { source: '/manage/:slug/settings', has: [{ type: 'query', key: 'highlight' }], destination: '/manage/:slug/team?tab=members', permanent: false },
       // The software comparison moved to its 2027 edition (14 Nov 2026); the
       // permanent redirect carries the old page's links and ranking over.
       { source: '/blog/best-mun-software-2026', destination: '/blog/best-mun-software-2027', permanent: true },

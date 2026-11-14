@@ -722,6 +722,10 @@ function AddChairModal({ conferenceId, committee, committees, onClose, onDone, o
   const visible = (applicants ?? [])
     .filter(a => !currentIds.has(a.user_id))
     .sort((a, b) => {
+      // Accepted chairs not seated anywhere first (status 'accepted', Team 14 Nov 2026), then unassigned.
+      const na = a.status === 'accepted' ? 0 : 1;
+      const nb = b.status === 'accepted' ? 0 : 1;
+      if (na !== nb) return na - nb;
       const ua = a.assigned_committee_id ? 1 : 0;
       const ub = b.assigned_committee_id ? 1 : 0;
       if (ua !== ub) return ua - ub; // unassigned first
@@ -830,6 +834,9 @@ function AddChairModal({ conferenceId, committee, committees, onClose, onDone, o
                     <div className="min-w-0 flex-1">
                       <p className="text-[13px] font-semibold [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", margin: 0 }}>{name}</p>
                       <p className="text-[11px] [overflow-wrap:anywhere]" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif", margin: 0 }}>{app.profiles?.email ?? ''}</p>
+                      {app.status === 'accepted' && (
+                        <p className="text-[11px] font-bold" style={{ color: '#9A6B2F', fontFamily: "var(--font-brand), sans-serif", margin: 0 }}>Needs a committee</p>
+                      )}
                     </div>
                   </ProfileLink>
                   {app.assigned_committee_id && (
@@ -919,6 +926,21 @@ export default function CommitteesPage() {
    *  `session` for anything that needs the rest of it. */
   const accessToken = session?.access_token;
   const [committees, setCommittees] = useState<Committee[]>([]);
+  // Accepted chairs not seated anywhere yet (status 'accepted'; Team, 14 Nov
+  // 2026): one line above the list. Re-read whenever the committees change.
+  const [unseatedChairs, setUnseatedChairs] = useState(0);
+  const unseatedConfId = conference?.id ?? null;
+  useEffect(() => {
+    if (!unseatedConfId || !accessToken) return;
+    let cancelled = false;
+    void (async () => {
+      const { count, error } = await getAuthedClient(accessToken)
+        .from('applications').select('id', { count: 'exact', head: true })
+        .eq('conference_id', unseatedConfId).eq('role', 'chair').eq('status', 'accepted');
+      if (!cancelled && !error) setUnseatedChairs(count ?? 0);
+    })();
+    return () => { cancelled = true; };
+  }, [unseatedConfId, accessToken, committees]);
   // Chairs who have been invited but have not accepted. Kept in its own piece
   // of state rather than folded into `committees`, because it comes from a
   // different table (conference_chair_invites) that the DB trigger behind
@@ -1447,6 +1469,12 @@ export default function CommitteesPage() {
             </div>
             <ViewToggle value={view} onChange={changeView} />
           </div>
+
+          {unseatedChairs > 0 && (
+            <p className="[overflow-wrap:anywhere]" style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 13.5, fontWeight: 600, color: '#9A6B2F', margin: '0 0 12px' }}>
+              {unseatedChairs} accepted {unseatedChairs === 1 ? 'chair needs' : 'chairs need'} a committee. Use the plus button on a committee to seat them.
+            </p>
+          )}
 
           {view === 'list' ? (
           /* ── Compact list view: one committee per row ─────────────────── */

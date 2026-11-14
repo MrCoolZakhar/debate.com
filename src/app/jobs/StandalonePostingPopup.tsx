@@ -455,7 +455,7 @@ export default function StandalonePostingPopup({
             <ul className="gv-jp-confs">
               {orgConfs.map((c) => (
                 <li key={c.id}>
-                  <Link href={`/manage/${c.slug}/jobs`} className="gv-jp-conf">
+                  <Link href={`/manage/${c.slug}/team?tab=jobs`} className="gv-jp-conf">
                     <span className="gv-jp-conf-short">{c.acronym || c.full_name}</span>
                     {c.acronym && c.full_name && c.full_name !== c.acronym && <span className="gv-jp-conf-full">{c.full_name}</span>}
                   </Link>

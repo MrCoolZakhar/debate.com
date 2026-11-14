@@ -2,13 +2,15 @@
 
 // ── Settings > Team: one applicant's review pop-up ─────────────────────────
 //
-// Job Board prompt 3. One pop-up, three contents, never a pop-up on a pop-up:
+// Job Board prompt 3. One pop-up, its contents replacing each other, never a pop-up on a pop-up:
 //   review   who they are, their MUN experience, their application answers
 //            and their Job Board picks with the screening answers
 //   access   (Accept) the sections they can open, all unticked, and the
 //            public title, then "Add to the team"
+//   seat     (Accept on a chair, Team, 14 Nov 2026) pick the committee to seat
+//            them in, "Accept and seat" or "Accept, seat later"
 //   reject   asked in place: "Reject this application?"
-// Every decision is the parent's (TeamApplicants.tsx), which runs the shared
+// Every decision is the parent's (team/TeamApplications.tsx), which runs the shared
 // code in applications/teamDecisions.ts. This file only draws and asks.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -24,10 +26,10 @@ import JobPicksBlock from '../applications/JobPicksBlock';
 import NotesPanel from '../applications/ApplicantDetail/NotesPanel';
 import { AnswersTab, type AnswerItem } from '../applications/ApplicantDetail/tabs';
 import { fmtDay } from '../applications/ApplicantDetail/kit';
-import { type TeamApplicant, teamRoleLabel, firstPickTitle } from './teamApplicantsApi';
+import { type TeamApplicant, type TeamCommittee, teamRoleLabel, firstPickTitle, preselectCommittee, committeeShort } from '../team/teamApi';
 import { applicationFileHref } from '@/lib/applicationUploads';
 
-export type PopupStep = 'review' | 'access';
+export type PopupStep = 'review' | 'access' | 'seat';
 
 const INK = '#1C1410';
 const FOREST = '#1B3828';
@@ -83,8 +85,12 @@ export const rejectBtn = (disabled: boolean): React.CSSProperties => ({
 });
 
 export default function TeamApplicantPopup({
-  applicant: a, initialStep, canAccept, busy, customQuestions, onAccept, onReject, onClose,
+  applicant: a, initialStep, canAccept, busy, customQuestions, onAccept, onReject, onClose, committees = [], onAcceptChair,
 }: {
+  /** The conference's committees, for seating a chair. */
+  committees?: TeamCommittee[];
+  /** A chair's accept (accept_chair_application): resolves to the sentence to show when it was refused, else null. */
+  onAcceptChair?: (committeeId: string | null) => Promise<string | null>;
   applicant: TeamApplicant;
   initialStep: PopupStep;
   canAccept: boolean;
@@ -96,10 +102,21 @@ export default function TeamApplicantPopup({
   onReject: () => Promise<boolean>;
   onClose: () => void;
 }) {
-  const [step, setStep] = useState<PopupStep>(canAccept ? initialStep : 'review');
+  const [step, setStep] = useState<PopupStep>(canAccept ? (initialStep === 'access' && a.role === 'chair' ? 'seat' : initialStep) : 'review');
   const [askReject, setAskReject] = useState(false);
   const [picked, setPicked] = useState<Set<string>>(() => new Set());
   const [title, setTitle] = useState(() => firstPickTitle(a) ?? '');
+  // Seating a chair: their first pick with a committee, else their first preference.
+  const isChair = a.role === 'chair';
+  const [seatPick, setSeatPick] = useState<string | null>(() => preselectCommittee(a));
+  const [seatErr, setSeatErr] = useState('');
+  const acceptStep: PopupStep = isChair ? 'seat' : 'access';
+  const runChair = async (committeeId: string | null) => {
+    if (!onAcceptChair) return;
+    setSeatErr('');
+    const msg = await onAcceptChair(committeeId);
+    if (msg) setSeatErr(msg);
+  };
   const bodyRef = useRef<HTMLDivElement>(null);
   useScrollLock(true);
 
@@ -150,7 +167,7 @@ export default function TeamApplicantPopup({
         <div
           role="dialog"
           aria-modal="true"
-          aria-label={step === 'access' ? 'Add to the team' : `Application from ${a.name ?? 'an applicant'}`}
+          aria-label={step === 'access' ? 'Add to the team' : step === 'seat' ? `Accept ${a.name ?? 'them'} as a chair` : `Application from ${a.name ?? 'an applicant'}`}
           className="w-full flex flex-col"
           style={{
             maxWidth: 640, maxHeight: '88vh', backgroundColor: '#FAF8F3', border: '1.5px solid #D8CDB6', borderRadius: 24,
@@ -159,7 +176,7 @@ export default function TeamApplicantPopup({
         >
           {/* Head */}
           <div className="flex items-start gap-3" style={{ padding: '20px 22px 14px' }}>
-            {step === 'access' ? (
+            {step === 'access' || step === 'seat' ? (
               <button type="button" onClick={() => setStep('review')} disabled={busy} aria-label="Back to the application"
                 className="flex items-center justify-center rounded-full flex-shrink-0 focus:outline-none"
                 style={{ width: 36, height: 36, border: '1.5px solid #DDD4C0', background: 'transparent', color: INK, cursor: busy ? 'default' : 'pointer' }}>
@@ -170,11 +187,13 @@ export default function TeamApplicantPopup({
             )}
             <div className="min-w-0 flex-1">
               <p className="flex flex-wrap items-center gap-x-2 gap-y-1" style={{ margin: 0, fontSize: 19, fontWeight: 800, color: INK, overflowWrap: 'anywhere', lineHeight: 1.25 }}>
-                <span style={{ overflowWrap: 'anywhere' }}>{step === 'access' ? `Add ${a.name ?? 'them'} to the team` : (a.name ?? 'No name')}</span>
+                <span style={{ overflowWrap: 'anywhere' }}>{step === 'access' ? `Add ${a.name ?? 'them'} to the team` : step === 'seat' ? `Accept ${a.name ?? 'them'} as a chair` : (a.name ?? 'No name')}</span>
               </p>
               <p style={{ margin: '3px 0 0', fontSize: 13.5, color: NEU.inkSoft, overflowWrap: 'anywhere' }}>
                 {step === 'access'
                   ? 'Pick the pages they can open. Nothing is ticked until you tick it'
+                  : step === 'seat'
+                  ? 'Pick the committee to seat them in, or seat them later from Committees'
                   : [teamRoleLabel(a.role) + (forTitle ? ` for ${forTitle}` : ''), a.submitted_at ? `Applied ${fmtDay(a.submitted_at)}` : null].filter(Boolean).join(' · ')}
               </p>
               {step === 'review' && a.email && (
@@ -241,6 +260,41 @@ export default function TeamApplicantPopup({
                   <SectionLabel>Notes</SectionLabel>
                   <NotesPanel applicationId={a.application_id} />
                 </section>
+              </div>
+            ) : step === 'seat' ? (
+              <div className="flex flex-col" style={{ gap: 10 }}>
+                {!a.user_id && (
+                  <p style={{ margin: 0, fontSize: 13.5, color: NEU.inkSoft }}>They can be seated once they join Gavelling.</p>
+                )}
+                {a.user_id && (committees.length === 0 ? (
+                  <p style={{ margin: 0, fontSize: 13.5, color: NEU.inkSoft }}>This conference has no committees yet.</p>
+                ) : (
+                  <ul role="radiogroup" aria-label="Committee" style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {committees.map(c => {
+                      const on = seatPick === c.id;
+                      return (
+                        <li key={c.id}>
+                          <button type="button" role="radio" aria-checked={on} disabled={busy} onClick={() => setSeatPick(c.id)}
+                            className="w-full flex items-center gap-3 text-left focus:outline-none"
+                            style={{
+                              padding: '10px 14px', borderRadius: 14, fontFamily: OUTFIT, cursor: busy ? 'default' : 'pointer',
+                              background: on ? 'rgba(27,56,40,0.08)' : '#FFFFFF', border: on ? '1.5px solid rgba(27,56,40,0.45)' : '1.5px solid #E4DAC4',
+                            }}>
+                            <span className="min-w-0 flex-1">
+                              <span className="block" style={{ fontSize: 14.5, fontWeight: 800, color: INK, overflowWrap: 'anywhere' }}>{committeeShort(c)}</span>
+                              {c.abbreviation && c.abbreviation.trim() && c.abbreviation.trim() !== c.name && (
+                                <span className="block" style={{ fontSize: 12.5, color: NEU.inkSoft, overflowWrap: 'anywhere' }}>{c.name}</span>
+                              )}
+                            </span>
+                            <span style={{ fontSize: 12.5, color: NEU.inkSoft, whiteSpace: 'nowrap' }}>{c.chairs} {c.chairs === 1 ? 'chair' : 'chairs'}</span>
+                            {on && <Check size={16} strokeWidth={3} style={{ color: FOREST, flexShrink: 0 }} />}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ))}
+                {seatErr && <p role="alert" style={{ margin: 0, fontSize: 13.5, fontWeight: 600, color: RED }}>{seatErr}</p>}
               </div>
             ) : (
               <div className="flex flex-col" style={{ gap: 18 }}>
@@ -331,10 +385,27 @@ export default function TeamApplicantPopup({
                     <button type="button" className="focus:outline-none" style={rejectBtn(busy)} disabled={busy} onClick={() => setAskReject(true)}>Reject</button>
                     <button type="button" className="focus:outline-none" style={primaryBtn(busy || !canAccept)} disabled={busy || !canAccept}
                       title={canAccept ? undefined : 'Adding someone to the team needs the Team permission'}
-                      onClick={() => setStep('access')}>
+                      onClick={() => setStep(acceptStep)}>
                       Accept
                     </button>
                   </>
+                )}
+              </div>
+            ) : step === 'seat' ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <button type="button" className="flex items-center gap-1.5 focus:outline-none" style={quietBtn(busy)} disabled={busy} onClick={() => setStep('review')}>
+                  <ArrowLeft size={14} /> Back
+                </button>
+                <div className="flex-1" />
+                <button type="button" className="focus:outline-none" style={quietBtn(busy || !canAccept)} disabled={busy || !canAccept}
+                  onClick={() => { void runChair(null); }}>
+                  Accept, seat later
+                </button>
+                {a.user_id && (
+                  <button type="button" className="focus:outline-none" style={primaryBtn(busy || !canAccept || !seatPick)} disabled={busy || !canAccept || !seatPick}
+                    onClick={() => { void runChair(seatPick); }}>
+                    {busy ? 'Accepting' : 'Accept and seat'}
+                  </button>
                 )}
               </div>
             ) : (

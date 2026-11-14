@@ -49,10 +49,14 @@ const CSS = `
 .gv-bst[data-compact="true"] .gv-bst-disc{top:-22px;left:14px;width:50px;height:50px;border-radius:16px}
 .gv-bst[data-compact="true"] .gv-bst-label{font-size:17px}
 .gv-bst[data-compact="true"] .gv-bst-sub{font-size:13px}
+/* scroll: on a phone the cards sit side by side and scroll sideways instead of stacking (Team). */
+@media (max-width:760px){.gv-bst[data-scroll="true"]{display:flex;overflow-x:auto;gap:12px;padding:30px 2px 8px;margin-top:4px;scroll-snap-type:x proximity}.gv-bst[data-scroll="true"] .gv-bst-tab{flex:0 0 auto;width:220px;scroll-snap-align:start}}
 @media (prefers-reduced-motion:reduce){.gv-bst-tab,.gv-bst-tab:hover,.gv-bst-tab[aria-selected="true"]{transition:none;transform:none}}
 `;
 
-export function BigSectionTabs<K extends string>({ tabs, value, onChange, label, compact = false }: {
+export function BigSectionTabs<K extends string>({ tabs, value, onChange, label, compact = false, scroll = false }: {
+  /** On a phone, scroll the cards sideways instead of stacking them. */
+  scroll?: boolean;
   tabs: BigSectionTab<K>[];
   value: K;
   onChange: (key: K) => void;
@@ -80,6 +84,7 @@ export function BigSectionTabs<K extends string>({ tabs, value, onChange, label,
       <div
         className="gv-bst"
         data-compact={compact}
+        data-scroll={scroll}
         role="tablist"
         aria-label={label}
         onKeyDown={onKey}

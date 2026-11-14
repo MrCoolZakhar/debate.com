@@ -6,7 +6,7 @@ import Link from 'next/link';
 import BrandLogo from '@/components/BrandLogo';
 import {
   LayoutDashboard, Building2, Users, MapPin, FileText,
-  Mail, CreditCard, Settings, Briefcase, Menu, X, Radio, Upload, Store, Clock,
+  Mail, CreditCard, Settings, Users2, Menu, X, Radio, Upload, Store, Clock,
   type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
@@ -27,6 +27,7 @@ import { formatConferenceDates } from '@/lib/conferenceDates';
 import { NEU } from '@/components/neu';
 import { waitingSince } from './communications/waitingOnReply';
 import PublishControls from './PublishControls';
+import { countTeamWaiting } from './team/teamApi';
 
 // ── Conference type ────────────────────────────────────────────────────────
 
@@ -215,9 +216,11 @@ export interface NavBadges {
   /** Role set-ups that need fixing (src/lib/roleSetupProblems.ts) plus award
    *  slates waiting for approval (src/lib/awardsWaiting.ts), 13 Oct 2026. */
   settings: number;
+  /** Chair, secretariat and staff applications waiting in Team (14 Nov 2026). */
+  team: number;
 }
 
-const NO_BADGES: NavBadges = { applications: 0, assignment: 0, communications: 0, financialAid: 0, financials: 0, settings: 0 };
+const NO_BADGES: NavBadges = { applications: 0, assignment: 0, communications: 0, financialAid: 0, financials: 0, settings: 0, team: 0 };
 
 interface NavItem {
   icon: LucideIcon;
@@ -249,6 +252,8 @@ const NAV_SECTIONS = (slug: string, badges: NavBadges = NO_BADGES): NavSection[]
     items: [
       { icon: Building2, label: 'Committees',   href: `/manage/${slug}/committees`,   external: false, badge: 0 },
       { icon: Users,     label: 'Applications', href: `/manage/${slug}/applications`, external: false, badge: badges.applications },
+      // Team (owner, 14 Nov 2026): chairs, secretariat and staff, the Job Board and the organizing team.
+      { icon: Users2,    label: 'Team',         href: `/manage/${slug}/team`,         external: false, badge: badges.team },
       { icon: MapPin,    label: 'Assignment',   href: `/manage/${slug}/assignment`,   external: false, badge: badges.assignment },
       { icon: FileText,  label: 'Documents',    href: `/manage/${slug}/documents`,    external: false, badge: 0 },
       // Scoreboard is deliberately NOT a nav item. Delegate performance is a
@@ -284,7 +289,6 @@ const NAV_SECTIONS = (slug: string, badges: NavBadges = NO_BADGES): NavSection[]
     header: 'SETTINGS',
     items: [
       { icon: Settings,  label: 'Settings',  href: `/manage/${slug}/settings`, external: false, badge: badges.settings, fixes: true },
-      { icon: Briefcase, label: 'Job Board', href: `/manage/${slug}/jobs`,     external: false, badge: 0 },
       { icon: Upload,    label: 'Import',    href: `/manage/${slug}/import`,   external: false, badge: 0 },
     ],
   },
@@ -784,7 +788,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
    *  delegates with no committee yet, pending financial aid requests. Their own
    *  state, refreshed on navigation, so a stale count never outlives the page
    *  the organiser just cleared. */
-  const [workBadges, setWorkBadges] = useState({ applications: 0, assignment: 0, financialAid: 0, financials: 0, settings: 0 });
+  const [workBadges, setWorkBadges] = useState({ applications: 0, assignment: 0, financialAid: 0, financials: 0, settings: 0, team: 0 });
 
   // Nav badge: threads WAITING ON A REPLY (waitingOnReply.ts, the same
   // definition the Communications inbox rows use). Open, not a swap notice,
@@ -834,9 +838,10 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
   const loadWorkBadges = useCallback(async () => {
     if (!conferenceId || !accessToken) return;
     const supabase = getAuthedClient(accessToken);
-    const [pendingApps, unallocated, pendingAid, moneyTodo, roleRows, awardsWaiting] = await Promise.all([
+    const [pendingApps, unallocated, pendingAid, moneyTodo, roleRows, awardsWaiting, teamWaiting] = await Promise.all([
+      // Applications: participants only; team roles are decided in Team (14 Nov 2026).
       supabase.from('applications').select('id', { count: 'exact', head: true })
-        .eq('conference_id', conferenceId).eq('status', 'submitted'),
+        .eq('conference_id', conferenceId).eq('status', 'submitted').not('role', 'in', '(chair,secretariat,staff)'),
       supabase.from('applications').select('id', { count: 'exact', head: true })
         .eq('conference_id', conferenceId).eq('status', 'accepted')
         .in('role', ['delegate', 'head-delegate']).eq('attending', true),
@@ -850,6 +855,8 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
         .eq('conference_id', conferenceId),
       // Settings: award slates the chairs sent for approval (13 Oct 2026).
       loadAwardsWaiting(supabase, conferenceId).catch(() => 0),
+      // Team: chair, secretariat and staff applications waiting for a decision.
+      countTeamWaiting(conferenceId).catch(() => 0),
     ]);
     // Roles taken off with "Remove this role" on this browser are not listed.
     let removedRoles: string[] = [];
@@ -865,6 +872,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
       financialAid: pendingAid.count ?? 0,
       financials: !moneyTodo.error && typeof moneyTodo.data === 'number' ? moneyTodo.data : 0,
       settings: (!roleRows.error && roleRows.data ? listedProblemCount(roleRows.data, removedRoles) : 0) + awardsWaiting,
+      team: teamWaiting,
     });
   }, [conferenceId, accessToken]);
 

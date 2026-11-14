@@ -1457,7 +1457,7 @@ export default function DashboardPage() {
       title: 'List Chair, Secretariat or Staff Positions',
       sub: 'Post your chair, secretariat and staff roles on the Job Board so people can apply.',
       done: (committeeCount > 0 && committeesNeedingChairs < committeeCount) || !!serverDone.chairs,
-      onClick: () => router.push(`/manage/${slug}/jobs`),
+      onClick: () => router.push(`/manage/${slug}/team?tab=jobs`),
     },
     {
       key: 'store',

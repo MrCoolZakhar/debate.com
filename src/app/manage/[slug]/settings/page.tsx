@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useContext } from 'react';
 import { findCurrency } from '@/lib/currencies';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -60,8 +60,7 @@ import { GENERAL_CSS, IdentityBanner, IdentityLogo, IdField, PlainField, NameFie
 import { PlatformLogo } from '@/components/conferences/ApplicationSourceMark';
 import { SettingsShell, type ShellSection } from './settingsShell';
 import { CountryPicker } from './countryPicker';
-import TeamApplicants from './TeamApplicants';
-import { useTeamWaitingCount } from './teamApplicantsApi';
+import { SettingsMembersOnlyContext } from './settingsMode';
 import {
   SectionHead, Group, Row, SwitchRow, SwitchGrid, BigCount, Switch as KitSwitch, TINT_GOLD_BG, TINT_GREEN_BG, EmojiDisc, TYPE,
   listedRoles, generalAnswer, inGeneralScope, GENERAL_FIELDS, type RoleSetupConfig, TYPE_PX,
@@ -77,11 +76,13 @@ type SettingsTab = 'applications' | 'delegations' | 'conference' | 'partners' | 
  *  (settingsShell.tsx), and so the ?tab= value written for it. */
 const SHELL_OF: Record<SettingsTab, ShellSection> = {
   conference: 'general', partners: 'partners', applications: 'applications', delegations: 'delegations',
-  organizers: 'team', payments: 'payments', awards: 'awards',
+  // The Team section lives in Team > Team Members now (owner, 14 Nov 2026); it
+  // is only drawn there, through SettingsMembersOnlyContext.
+  organizers: 'general', payments: 'payments', awards: 'awards',
 };
 const TAB_OF: Record<ShellSection, SettingsTab> = {
   general: 'conference', partners: 'partners', applications: 'applications', delegations: 'delegations',
-  team: 'organizers', payments: 'payments', awards: 'awards',
+  payments: 'payments', awards: 'awards',
 };
 
 interface RoleConfig {
@@ -346,7 +347,10 @@ export default function SettingsPage() {
   // The section shown is read from the URL every render, so the back button,
   // the bookmarks rail and every deep link agree (settingsShell.tsx).
   const tabParam = searchParams.get('tab') ?? searchParams.get('section');
+  // Team > Team Members draws only the Team section, without the shell.
+  const membersOnly = useContext(SettingsMembersOnlyContext);
   const activeTab: SettingsTab = (() => {
+    if (membersOnly) return 'organizers';
     // New names (general, visibility, team, payments) and every old one
     // (conference, privacy, organizers, applications, delegations, awards).
     if (tabParam === 'team' || tabParam === 'organizers') return 'organizers';
@@ -427,8 +431,6 @@ export default function SettingsPage() {
   // 2026). Re-read on the flags event Review and Publish fires after Approve,
   // Return and Publish.
   const [awardsWaiting, setAwardsWaiting] = useState(0);
-  // Secretariat and staff applicants waiting in Settings > Team (the Team badge).
-  const [teamWaiting, setTeamWaiting] = useTeamWaitingCount(conference?.id ?? null);
   const awardsConfId = conference?.id ?? null;
   useEffect(() => {
     if (!awardsConfId) return;
@@ -3239,8 +3241,8 @@ export default function SettingsPage() {
   // Payments, Delegations and Partners left an empty band on the right).
 
   return (
-    <div className="px-4 sm:px-6 md:px-10 pt-6 pb-10" style={{ maxWidth: activeTab === 'organizers' ? '1500px' : '1380px' }}>
-      <SettingsShell active={SHELL_OF[activeTab]} onOpen={(k) => openSection(TAB_OF[k])} conferenceName={shellName} fixes={{ applications: settingsFixCount, awards: awardsWaiting, team: teamWaiting }}>
+    <div className={membersOnly ? undefined : 'px-4 sm:px-6 md:px-10 pt-6 pb-10'} style={membersOnly ? undefined : { maxWidth: activeTab === 'organizers' ? '1500px' : '1380px' }}>
+      <SettingsShell bare={membersOnly} active={SHELL_OF[activeTab]} onOpen={(k) => openSection(TAB_OF[k])} conferenceName={shellName} fixes={{ applications: settingsFixCount, awards: awardsWaiting }}>
       <div>
 
       {activeTab === 'applications' && (
@@ -4180,15 +4182,6 @@ export default function SettingsPage() {
             focal={<BigCount n={organizers.length} word={organizers.length === 1 ? 'person' : 'people'} />}
           />
         </div>
-      )}
-      {activeTab === 'organizers' && conference && (
-        <TeamApplicants
-          conferenceId={conference.id}
-          conferenceSlug={conference.slug}
-          roleConfigs={roleConfigs}
-          onTeamChanged={loadOrganizers}
-          onWaitingChange={setTeamWaiting}
-        />
       )}
       {activeTab === 'organizers' && (() => {
         // ── The team, drawn as a hierarchy ──────────────────────────────────

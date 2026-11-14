@@ -8,7 +8,7 @@
 //                  who holds Unlimited, owner 20 Oct 2026).
 //   picksByApp     job_application_picks(p_conf): each chair applicant's
 //                  ranked listing picks with their screening answers.
-//   teamCount      how many secretariat and staff applications this
+//   teamCount      how many chair, secretariat and staff applications wait in Team for this
 //                  conference has. They are decided in Settings > Team only.
 // And once: job_mark_reviewed(p_conf), fire and forget.
 //
@@ -63,7 +63,8 @@ export function useJobBoardApplicantExtras(conferenceId: string | null | undefin
           supabase.from('applications')
             .select('id', { count: 'exact', head: true })
             .eq('conference_id', conferenceId)
-            .in('role', ['secretariat', 'staff']),
+            .eq('status', 'submitted')
+            .in('role', ['chair', 'secretariat', 'staff']),
         ]);
       } catch {
         return;

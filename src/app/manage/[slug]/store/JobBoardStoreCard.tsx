@@ -70,7 +70,7 @@ export default function JobBoardStoreCard({ conferenceId, slug, onChanged }: {
       {panel && live.length === 0 ? (
         <>
           <p className="gv-st-quiet" style={{ marginBottom: 14 }}>You have no live listings yet</p>
-          <Link href={`/manage/${slug}/jobs`} className="gv-st-btn gv-st-forest">Post a listing</Link>
+          <Link href={`/manage/${slug}/team?tab=jobs`} className="gv-st-btn gv-st-forest">Post a listing</Link>
         </>
       ) : null}
 
