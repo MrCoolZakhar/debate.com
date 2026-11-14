@@ -199,3 +199,16 @@ Round 24 (13 Nov 2026, Hult MUN set-up):
 - The live-room pop-up sends a delegate of a crisis committee to the crisis, not to a seat.
 - Old map underneath (setting historicalMap = 'etatmajor'): IGN's État-major map of France (1820 to 1866), open data, served through /api/crisis-tiles so visitors never call a third party; the map then zooms to street level (16). Zone and territory fills thin out over it.
 - Landmarks (settings.landmarks): named places with a description, shown from street zoom with a Landmarks toggle; read only for now. Hult's 30 landmarks, 6 districts and 47 sections came from their Google My Maps file (districts and sections are zones of the types District and Section).
+
+Part 40 (14 Nov 2026, SQL docs/crisis/sql/040_staff_invites.sql): backroomers join by email invite, on their account
+("backroomers need an account and they get invited just like chairs would", Peter):
+- On the Staff page a Director adds a NEW backroomer with a name and an email ("Send invite"). The database queues the
+  invite email itself (crisis_invite_staff), the person opens /invites/crisis/<token>, signs in or up, and accepts; they
+  become a crisis member on their Gavelling account. No personal code is made for them, and the Manage panel does not
+  offer "Make a personal code" to a backroomer who has none.
+- Pending invites are listed on the Staff page with Resend (same link again) and Cancel (asked in place). The list
+  follows the crisis ping for crisis_staff_invites and crisis_members. An invite to an email whose account exists can
+  only be accepted by that account. Assistant Director and press invites exist in the database but the Staff page still
+  adds those roles directly.
+- Members who already have codes (Hult MUN's backroomers) are unchanged, including "Make a new password".
+- The invite email is written and rendered in the database, not in emailEvents.ts or defaultEmails.ts.

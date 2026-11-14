@@ -7,6 +7,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { friendlyError, UserFacingError } from '@/lib/friendlyError';
 import { serverNowIso } from '@/lib/serverClock';
 import { getCrisisClient, saveCrisisToken, anonClient } from './client';
+import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import {
   MEMBER_COLUMNS,
   type Cabinet, type Character, type CharacterSecret, type Crisis, type Directive, type DirectiveNote,
@@ -260,6 +261,66 @@ export async function issueCode(ref: CrisisRef, memberId: string): Promise<{ cod
   const client = await c(ref);
   const res = await client.rpc('crisis_issue_code', { p_member: memberId });
   return must(res, 'Could not make a code for this person.') as { code: string; password: string };
+}
+
+// ─────────── Staff invites (part 40) ───────────
+
+export type StaffInviteRole = 'assistant_director' | 'backroomer' | 'press';
+
+export interface StaffInviteRow { id: string; role: StaffInviteRole; email: string; invited_name: string | null; created_at: string }
+
+export type InviteStaffResult =
+  | { ok: true; invite_id: string; account_exists: boolean }
+  | { ok: false; reason: 'bad_role' | 'bad_email' | 'already_member'; role?: string };
+
+/** Invite someone by email. The database queues the invite email itself; calling it again on a pending invite sends the same link again. */
+export async function inviteStaff(ref: CrisisRef, i: { role: StaffInviteRole; email: string; name?: string | null }): Promise<InviteStaffResult> {
+  const client = await c(ref);
+  const res = await client.rpc('crisis_invite_staff', { p_crisis: ref.id, p_role: i.role, p_email: i.email, p_name: i.name ?? null });
+  const r = must(res, 'Could not send the invite.') as { ok: boolean; invite_id?: string; account_exists?: boolean; reason?: 'bad_role' | 'bad_email' | 'already_member'; role?: string };
+  if (r.ok && r.invite_id) return { ok: true, invite_id: r.invite_id, account_exists: !!r.account_exists };
+  return { ok: false, reason: r.reason ?? 'bad_email', role: r.role };
+}
+
+/** True when a pending invite was cancelled. */
+export async function cancelStaffInvite(ref: CrisisRef, inviteId: string): Promise<boolean> {
+  const client = await c(ref);
+  const res = await client.rpc('crisis_cancel_staff_invite', { p_invite: inviteId });
+  return must(res, 'Could not cancel this invite.') as boolean;
+}
+
+/** Pending invites of this crisis, newest first (Directors only, by RLS). */
+export async function listStaffInvites(ref: CrisisRef): Promise<StaffInviteRow[]> {
+  const client = await c(ref);
+  const res = await client.from('crisis_staff_invites').select('id, role, email, invited_name, created_at')
+    .eq('crisis_id', ref.id).eq('status', 'pending').order('created_at', { ascending: false });
+  if (res.error) throw new UserFacingError(crisisError(res.error, 'Could not load the pending invites.'));
+  return (res.data ?? []) as StaffInviteRow[];
+}
+
+export type StaffInvite =
+  | { ok: true; status: 'pending' | 'accepted' | 'declined' | 'revoked'; role: StaffInviteRole; email: string; crisis_name: string; crisis_slug: string; conference_name: string; acronym: string | null; conference_slug: string; logo_url: string | null }
+  | { ok: false; reason: 'not_found' };
+
+/** What the invite page shows. Callable signed out. */
+export async function getStaffInvite(token: string): Promise<StaffInvite> {
+  const res = await anonClient.rpc('get_crisis_staff_invite', { p_token: token });
+  if (res.error || !res.data) throw new UserFacingError(crisisError(res.error, 'Could not load this invite.'));
+  return res.data as StaffInvite;
+}
+
+export type RespondStaffInviteResult =
+  | { ok: true; accepted: true; conference_slug: string; crisis_slug: string }
+  | { ok: true; accepted: false }
+  | { ok: false; reason: 'signin' | 'not_found' | 'accepted' | 'declined' | 'revoked' | 'wrong_account' | 'already_member'; invited_email?: string; role?: string };
+
+/** Accept or decline an invite on the signed-in Gavelling account. */
+export async function respondStaffInvite(token: string, accept: boolean): Promise<RespondStaffInviteResult> {
+  const client = await getFreshAuthedClient();
+  if (!client) return { ok: false, reason: 'signin' };
+  const res = await client.rpc('respond_crisis_staff_invite', { p_token: token, p_accept: accept });
+  if (res.error || !res.data) throw new UserFacingError(crisisError(res.error, 'Could not answer this invite. Try again.'));
+  return res.data as RespondStaffInviteResult;
 }
 
 // ─────────── Directives ───────────

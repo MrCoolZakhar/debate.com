@@ -4,11 +4,12 @@
 // people, change a role, hand out a code and password, and set the responsible backroomer for a
 // whole cabinet at once.
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Check, ChevronDown, Copy, Gavel, Hourglass, Inbox, KeyRound, Landmark, Newspaper, Pencil, Plus, UserRoundPlus, UsersRound, X } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Check, ChevronDown, Copy, Gavel, Hourglass, Inbox, KeyRound, Landmark, Mail, Newspaper, Pencil, Plus, UserRoundPlus, UsersRound, X } from 'lucide-react';
 import GSelect, { type GSelectOption } from '@/components/GSelect';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
-import { addMember, crisisError, issueCode, removeMember, saveCharacter, saveMember } from '@/lib/crisis/api';
+import { addMember, cancelStaffInvite, crisisError, inviteStaff, issueCode, listStaffInvites, removeMember, saveCharacter, saveMember, type StaffInviteRow } from '@/lib/crisis/api';
+import { useCrisisLive, useSingleFlight } from '@/lib/crisis/live';
 import { ROLE_LABEL, type Cabinet, type Character, type Member } from '@/lib/crisis/types';
 import SpareOffer, { AssignSpareDelegate, freeCharacters, isGoneStatus, isSpareDelegate } from '../character/SpareOffer';
 import { STATUS_WORD } from '../character/characterStatus';
@@ -61,8 +62,24 @@ export default function StaffPage() {
 interface Issued { code: string; password: string }
 
 function StaffBody() {
-  const { core, memberId, reloadCore } = useCrisis();
+  const { ref, core, memberId, reloadCore } = useCrisis();
   usePresencePoll(); // the online dots: a heartbeat no longer pings the live channel
+  const [invites, setInvites] = useState<StaffInviteRow[]>([]);
+  const readInvites = useCallback(async () => {
+    try {
+      setInvites(await listStaffInvites(ref));
+    } catch (e) {
+      // A failed read keeps the list on screen and says so once.
+      notifyErr(crisisError(e, 'Could not load the pending invites.'), 'crisis-staff-invites');
+    }
+  }, [ref]);
+  const loadInvites = useSingleFlight(readInvites);
+  useEffect(() => {
+    const t = window.setTimeout(() => { void loadInvites(); }, 0);
+    return () => window.clearTimeout(t);
+  }, [loadInvites]);
+  // The same live channel the page already uses: an invite sent, cancelled or accepted pings crisis_staff_invites (and crisis_members).
+  useCrisisLive(ref.id, ['crisis_staff_invites', 'crisis_members'], () => { void loadInvites(); });
   const [now, setNow] = useState(() => serverNow());
   const [showAdd, setShowAdd] = useState(false);
   const [showAddSpare, setShowAddSpare] = useState(false);
@@ -104,7 +121,9 @@ function StaffBody() {
         right={<Btn icon={<UserRoundPlus size={15} strokeWidth={1.5} />} onClick={() => setShowAdd((s) => !s)}>{showAdd ? 'Close' : 'Add person'}</Btn>}
       />
 
-      {showAdd && <AddPersonCard onDone={() => { setShowAdd(false); }} onAdded={reloadCore} />}
+      {showAdd && <AddPersonCard onDone={() => { setShowAdd(false); }} onAdded={reloadCore} onInvited={loadInvites} />}
+
+      {invites.length > 0 && <PendingInvites invites={invites} onChanged={loadInvites} />}
 
       <div className="flex flex-col" style={{ gap: 14 }}>
         {GROUPS.map((g) => {
@@ -225,7 +244,7 @@ function CabinetFromCharacter({ cabinet }: { cabinet: Cabinet | undefined }) {
 
 // ─────────── Add a person ───────────
 
-function AddPersonCard({ onDone, onAdded }: { onDone: () => void; onAdded: () => Promise<void> }) {
+function AddPersonCard({ onDone, onAdded, onInvited }: { onDone: () => void; onAdded: () => Promise<void>; onInvited: () => Promise<void> }) {
   const { ref, core } = useCrisis();
   const [name, setName] = useState('');
   const [role, setRole] = useState<MemberRole>('backroomer');
@@ -234,7 +253,9 @@ function AddPersonCard({ onDone, onAdded }: { onDone: () => void; onAdded: () =>
   const [character, setCharacter] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const needsCabinet = role !== 'director' && role !== 'assistant_director';
+  // A new backroomer is invited by email and joins on their Gavelling account: no cabinet here (Assign backroomers sets that), no personal code.
+  const invite = role === 'backroomer';
+  const needsCabinet = role !== 'director' && role !== 'assistant_director' && !invite;
   // A delegate's cabinet follows their character (the database keeps them equal): with a character picked it is read only.
   const pickedChar = role === 'delegate' && character ? core.characters.find((c) => c.id === character) : undefined;
   const effectiveCabinet = pickedChar ? pickedChar.cabinet_id ?? '' : cabinet;
@@ -248,9 +269,32 @@ function AddPersonCard({ onDone, onAdded }: { onDone: () => void; onAdded: () =>
       }),
   ];
 
+  const sendInvite = async (n: string) => {
+    const e = email.trim();
+    if (!e) { notifyErr('Add their email so we can send the invite.', 'crisis-staff'); return; }
+    setBusy(true);
+    try {
+      const r = await inviteStaff(ref, { role: 'backroomer', email: e, name: n });
+      if (!r.ok) {
+        notifyErr(
+          r.reason === 'already_member' ? `${e} is already in this crisis as ${ROLE_LABEL[(r.role as MemberRole) ?? 'backroomer'] ?? 'staff'}.`
+            : r.reason === 'bad_email' ? 'That does not look like an email address.'
+            : 'Pick a role for this person.',
+          'crisis-staff',
+        );
+        return;
+      }
+      notifyOk('Invite sent', 'crisis-staff');
+      await onInvited();
+      onDone();
+    } catch (err) { notifyErr(crisisError(err, 'Could not send the invite.'), 'crisis-staff'); }
+    finally { setBusy(false); }
+  };
+
   const submit = async () => {
     const n = name.trim();
     if (!n || busy) return;
+    if (invite) { await sendInvite(n); return; }
     if (role === 'delegate' && core.cabinets.length > 0 && !effectiveCabinet) { notifyErr('Pick a cabinet for the delegate.', 'crisis-staff'); return; }
     setBusy(true);
     try {
@@ -276,8 +320,11 @@ function AddPersonCard({ onDone, onAdded }: { onDone: () => void; onAdded: () =>
         <Labelled label="Role">
           <GSelect value={role} onChange={(r) => { setRole(r as MemberRole); if (r !== 'delegate') setCharacter(''); }} options={ROLE_OPTIONS} aria-label="Role" />
         </Labelled>
-        <Labelled label="Email (optional)" hint="An email that matches a Gavelling account links that account. Without one, make a personal code afterwards.">
-          <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" style={fieldStyle} aria-label="Email" />
+        <Labelled
+          label={invite ? 'Email' : 'Email (optional)'}
+          hint={invite ? 'They get an email invite and join on their Gavelling account.' : 'An email that matches a Gavelling account links that account. Without one, make a personal code afterwards.'}
+        >
+          <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" style={fieldStyle} aria-label="Email" required={invite} />
         </Labelled>
         {needsCabinet && core.cabinets.length > 0 && (pickedChar ? (
           <CabinetFromCharacter cabinet={core.cabinets.find((c) => c.id === effectiveCabinet)} />
@@ -298,11 +345,87 @@ function AddPersonCard({ onDone, onAdded }: { onDone: () => void; onAdded: () =>
           </Labelled>
         )}
         <div className="flex items-end gap-2" style={{ gridColumn: '1 / -1' }}>
-          <Btn type="submit" disabled={!name.trim() || busy || (role === 'delegate' && core.cabinets.length > 0 && !effectiveCabinet)} icon={<Plus size={15} strokeWidth={1.5} />}>Add person</Btn>
+          <Btn
+            type="submit"
+            disabled={!name.trim() || busy || (invite && !email.trim()) || (role === 'delegate' && core.cabinets.length > 0 && !effectiveCabinet)}
+            icon={invite ? <Mail size={15} strokeWidth={1.5} /> : <Plus size={15} strokeWidth={1.5} />}
+          >
+            {invite ? 'Send invite' : 'Add person'}
+          </Btn>
           <Btn type="button" tone="ghost" onClick={onDone} disabled={busy}>Cancel</Btn>
         </div>
       </form>
     </Card>
+  );
+}
+
+// ─────────── Pending invites ───────────
+
+function PendingInvites({ invites, onChanged }: { invites: StaffInviteRow[]; onChanged: () => Promise<void> }) {
+  return (
+    <Card style={{ marginBottom: 14 }}>
+      <CardTitle icon={<Mail size={16} strokeWidth={1.5} />} right={<b style={{ fontSize: 13, color: CK.inkSoft }}>{invites.length}</b>}>Pending Invites</CardTitle>
+      <div>
+        {invites.map((i) => <InviteRow key={i.id} invite={i} onChanged={onChanged} />)}
+      </div>
+    </Card>
+  );
+}
+
+function InviteRow({ invite, onChanged }: { invite: StaffInviteRow; onChanged: () => Promise<void> }) {
+  const { ref } = useCrisis();
+  const [busy, setBusy] = useState<'resend' | 'cancel' | null>(null);
+  const [ask, setAsk] = useState(false);
+
+  const resend = async () => {
+    if (busy) return;
+    setBusy('resend');
+    try {
+      const r = await inviteStaff(ref, { role: invite.role, email: invite.email, name: invite.invited_name });
+      if (!r.ok) {
+        notifyErr(r.reason === 'already_member' ? `${invite.email} is already in this crisis.` : 'That does not look like an email address.', 'crisis-staff');
+      } else notifyOk('Invite sent again', 'crisis-staff');
+      await onChanged();
+    } catch (e) { notifyErr(crisisError(e, 'Could not send the invite again.'), 'crisis-staff'); }
+    finally { setBusy(null); }
+  };
+
+  const cancel = async () => {
+    if (busy) return;
+    setBusy('cancel');
+    try {
+      await cancelStaffInvite(ref, invite.id);
+      notifyOk('Invite cancelled', 'crisis-staff');
+      await onChanged();
+    } catch (e) { notifyErr(crisisError(e, 'Could not cancel this invite.'), 'crisis-staff'); }
+    finally { setBusy(null); setAsk(false); }
+  };
+
+  return (
+    <div style={{ borderTop: `1px solid ${CK.hair}`, padding: '10px 0' }}>
+      <div className="flex items-center flex-wrap" style={{ gap: 12 }}>
+        <span style={{ minWidth: 0, flex: '1 1 220px' }}>
+          <b style={{ display: 'block', fontSize: 14.5, fontWeight: 800, overflowWrap: 'anywhere' }}>{invite.invited_name || invite.email}</b>
+          {invite.invited_name && <span style={{ display: 'block', fontSize: 12.5, color: CK.inkSoft, overflowWrap: 'anywhere' }}>{invite.email}</span>}
+        </span>
+        <span style={{ fontSize: 13.5, color: CK.ink }}>{ROLE_LABEL[invite.role]}</span>
+        <span className="flex flex-wrap gap-2">
+          <Btn tone="ghost" size="sm" onClick={() => void resend()} disabled={busy !== null}>{busy === 'resend' ? 'Sending' : 'Resend'}</Btn>
+          <Btn tone="ghost" size="sm" onClick={() => setAsk(true)} disabled={busy !== null || ask}>Cancel</Btn>
+        </span>
+      </div>
+      {ask && (
+        <ConfirmInline
+          style={{ marginTop: 10 }}
+          text="Cancel this invite?"
+          confirmLabel="Yes"
+          keepLabel="No"
+          busy={busy === 'cancel'}
+          onConfirm={() => void cancel()}
+          onCancel={() => setAsk(false)}
+        />
+      )}
+    </div>
   );
 }
 
@@ -609,15 +732,18 @@ function PersonPanel({ m, isMe, issued, onIssued, onClearIssued, onClose }: {
 
       <div className="flex items-center flex-wrap gap-2">
         <Btn size="sm" onClick={save} disabled={!dirty || !name.trim() || busy !== null}>Save</Btn>
-        <Btn
-          tone="ghost"
-          size="sm"
-          icon={<KeyRound size={14} strokeWidth={1.5} />}
-          onClick={() => (m.access_code && !issued ? setAsk('reissue') : void makeCode())}
-          disabled={busy !== null}
-        >
-          {m.access_code ? 'Make a new password' : 'Make a personal code'}
-        </Btn>
+        {/* A backroomer who joined by invite is account-only: no personal code is made for them. Backroomers with a code keep "Make a new password". */}
+        {!(m.role === 'backroomer' && !m.access_code && !issued) && (
+          <Btn
+            tone="ghost"
+            size="sm"
+            icon={<KeyRound size={14} strokeWidth={1.5} />}
+            onClick={() => (m.access_code && !issued ? setAsk('reissue') : void makeCode())}
+            disabled={busy !== null}
+          >
+            {m.access_code ? 'Make a new password' : 'Make a personal code'}
+          </Btn>
+        )}
         {!isMe && <Btn tone="danger" size="sm" icon={<X size={14} strokeWidth={1.5} />} onClick={() => setAsk('remove')} disabled={busy !== null}>Remove</Btn>}
         <span className="flex-1" />
         <Btn tone="ghost" size="sm" onClick={() => { onClearIssued(); onClose(); }}>Done</Btn>
