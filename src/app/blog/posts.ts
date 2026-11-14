@@ -183,6 +183,14 @@ export const articles: BlogPost[] = [
     readingMinutes: 8,
   },
   {
+    slug: 'moderated-vs-unmoderated-caucus',
+    title: 'Moderated vs Unmoderated Caucus in MUN: What Each One Is and When to Use It',
+    description: 'A moderated caucus is structured debate with a speaker queue; an unmoderated caucus is free time to talk and draft. How to motion for each, typical times and when to use them.',
+    category: 'procedure',
+    date: '2026-11-14',
+    readingMinutes: 7,
+  },
+  {
     slug: 'mun-voting-procedures',
     photo: 'mun-bratislava-vote',
     title: 'MUN Voting Procedures Explained: In Favour, Against, Abstain',
@@ -339,6 +347,16 @@ export const articles: BlogPost[] = [
     category: 'chairing',
     date: '2026-06-07',
     readingMinutes: 11,
+    related: ['mun-delegate-script'],
+  },
+  {
+    slug: 'mun-delegate-script',
+    title: 'MUN Delegate Script: What to Say at Every Stage of Committee',
+    description: 'Word-for-word lines for roll call, the GSL, yields, motions, points, lobbying, amendments and voting, with the rules differences that matter.',
+    category: 'delegates',
+    date: '2026-11-14',
+    readingMinutes: 12,
+    related: ['mun-chair-script'],
   },
   {
     slug: 'mun-bloc-building',
@@ -693,6 +711,16 @@ export const articles: BlogPost[] = [
     category: 'delegates',
     date: '2026-09-20',
     readingMinutes: 11,
+    related: ['mun-position-paper-template'],
+  },
+  {
+    slug: 'mun-position-paper-template',
+    title: 'MUN Position Paper Template: Format, Structure and a Copy-Ready Outline',
+    description: 'A copy-ready MUN position paper template with the header block, four sections, sentence starters, a filled mini example and a checklist to run before you submit.',
+    category: 'delegates',
+    date: '2026-11-14',
+    readingMinutes: 7,
+    related: ['mun-position-paper-examples'],
   },
   {
     slug: 'mun-clause-phrases',

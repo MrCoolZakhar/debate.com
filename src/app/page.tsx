@@ -54,6 +54,7 @@ const organizationSchema = {
   sameAs: [
     'https://www.instagram.com/wearegavelling/',
     'https://twitter.com/wearegavelling',
+    'https://www.linkedin.com/company/gavelling/',
   ],
   contactPoint: {
     '@type': 'ContactPoint',
