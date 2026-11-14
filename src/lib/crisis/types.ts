@@ -45,7 +45,7 @@ export interface CrisisSettings {
   zoneTypes: ZoneType[];
   /** Custom troop types (a name, a picture, a sight range, details) a unit on the map can be made from (docs/crisis/sql/029, part 32). */
   customUnitTypes: CustomUnitType[];
-  /** Chairs also see the other cabinets' characters, cabinet directives and meetings, read only (docs/crisis/sql/037). Default on (13 Nov 2026). */
+  /** Chairs also see the other cabinets' characters, nothing else: never their directives or meetings (docs/crisis/sql/037, 039). Default on (13 Nov 2026). */
   chairsSeeAllCabinets: boolean;
   /** Delegates may ask characters of another cabinet to a meeting (docs/crisis/sql/037). Default on. */
   crossCabinetMeetings: boolean;

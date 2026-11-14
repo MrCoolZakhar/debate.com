@@ -83,15 +83,13 @@ export default function ChairDirectivesPage() {
   useCrisisLive(ref.id, ['crisis_directives'], () => { void read(); });
 
   const readOnly = useMemo(() => readOnlyFor(cabinetId), [cabinetId]);
-  // With "Chairs see both cabinets" on, a chair reads every cabinet's directives (read only for the other one); a cabinet picker narrows it.
-  const seesAll = settings.chairsSeeAllCabinets && core.cabinets.length > 1;
-  const [cabPick, setCabPick] = useState('');
-  // A chair reads their cabinet's directives; personal and joint ones only when the crisis allows it.
+  // A chair reads only their own cabinet's directives, never another cabinet's: the screen may be projected (docs/crisis/sql/039).
+  // Personal and joint ones only when the crisis allows it.
   const readable = useMemo(() => (rows ?? []).filter((d) => {
-    if (seesAll ? !!cabPick && d.cabinet_id !== cabPick : !!cabinetId && d.cabinet_id !== cabinetId) return false;
+    if (!!cabinetId && d.cabinet_id !== cabinetId) return false;
     if (d.kind === 'committee') return true;
     return settings.chairReadsPersonal && (d.kind === 'personal' || d.kind === 'joint');
-  }).sort(newestFirst), [rows, cabinetId, seesAll, cabPick, settings.chairReadsPersonal]);
+  }).sort(newestFirst), [rows, cabinetId, settings.chairReadsPersonal]);
 
   // What is waiting for THIS chair's own decision: only their own cabinet's cabinet directives.
   const counts = useMemo(() => {
@@ -187,31 +185,8 @@ export default function ChairDirectivesPage() {
         })}
       </div>
 
-      {seesAll && (
-        <div role="group" aria-label="Show a cabinet" className="flex flex-wrap items-center" style={{ gap: 8, marginBottom: 14 }}>
-          {[{ id: '', name: 'Both cabinets', color: CK.forest }, ...core.cabinets.map((c) => ({ id: c.id, name: c.id === cabinetId ? `${c.name} (yours)` : c.name, color: c.color || CK.forest }))].map((c) => {
-            const on = cabPick === c.id;
-            return (
-              <button
-                key={c.id || 'all'}
-                type="button"
-                aria-pressed={on}
-                onClick={() => setCabPick(c.id)}
-                className="inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
-                style={{
-                  gap: 7, border: 0, cursor: 'pointer', fontFamily: CK.font, fontSize: 13, fontWeight: 700, borderRadius: 11, padding: '7px 12px',
-                  background: on ? c.color : 'transparent', color: on ? '#FFF' : CK.inkSoft, boxShadow: on ? CK.shadowSm : `inset 0 0 0 1px ${CK.hair}`, overflowWrap: 'anywhere',
-                }}
-              >
-                {c.name}
-              </button>
-            );
-          })}
-        </div>
-      )}
-
       {rows !== null && !settings.chairReadsPersonal && (
-        <p style={{ margin: '0 0 12px', fontSize: 14, color: CK.inkSoft }}>{seesAll ? 'You see the cabinet directives of both cabinets and can decide only the ones of your own cabinet. The Crisis Director can let chairs see every directive.' : 'You see the cabinet directives of your cabinet. The Crisis Director can let chairs see every directive of their cabinet.'}</p>
+        <p style={{ margin: '0 0 12px', fontSize: 14, color: CK.inkSoft }}>You see the cabinet directives of your cabinet. The Crisis Director can let chairs see every directive of their cabinet.</p>
       )}
 
       {rows === null ? (

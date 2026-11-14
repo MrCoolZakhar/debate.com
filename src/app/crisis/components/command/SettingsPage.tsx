@@ -180,8 +180,8 @@ function SettingsBody() {
               hint="On: a delegate can invite characters from any cabinet to a meeting, by name and picture, even when they see nothing else of the other cabinets. Off: only their own cabinet."
             />
             <ToggleRow
-              title="Chairs see both cabinets" checked={s.chairsSeeAllCabinets} onChange={(on) => save('chairsSeeAllCabinets', on)}
-              hint="On (the default): each chair also sees the other cabinet's characters, cabinet directives and meetings, read only. Chairs still approve only their own cabinet's directives. Off: chairs see only their own cabinet."
+              title="Chairs see the other cabinet's delegates" checked={s.chairsSeeAllCabinets} onChange={(on) => save('chairsSeeAllCabinets', on)}
+              hint="On (the default): each chair also sees the other cabinet's characters. Never its directives or meetings, so a projected chair screen shows only its own cabinet. Off: chairs see only their own cabinet's characters."
             />
             {full && (
               <ToggleRow
