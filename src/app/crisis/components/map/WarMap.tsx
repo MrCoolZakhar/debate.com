@@ -599,10 +599,12 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
     },
     remove: async (id) => {
       const name = cabByIdRef.current.get(id)?.name ?? 'That owner';
-      // The unsent changes may still hand things to it, and the database would refuse them when they are sent.
+      // The unsent changes may still hand things to it; once it is gone those would arrive as nobody's (docs/crisis/sql/038).
       if (ownersInSet(draftRef.current).has(id)) { notifyErr(`Send or take back the unsent changes that use ${name} first.`, 'crisis-map'); return false; }
       try {
-        await removeThirdParty(ref, id);
+        const res = await removeThirdParty(ref, id);
+        // The team's unsent changes (saved from another screen) still use it.
+        if (!res.ok) { notifyErr(`Send or take back the unsent changes that use ${name} first.`, 'crisis-map'); return false; }
         setMadeHere((prev) => { if (!prev.has(id)) return prev; const n = new Map(prev); n.delete(id); return n; });
         setChipOwner((cur) => (cur === id ? undefined : cur));
         setDraft((d) => (d && d.owner === id ? { ...d, owner: null } : d));

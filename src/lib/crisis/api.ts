@@ -770,10 +770,11 @@ export async function editThirdParty(ref: CrisisRef, id: string, name: string, c
   const res = await client.rpc('crisis_edit_party', { p_crisis: ref.id, p_id: id, p_name: name, p_color: color });
   return must(res, 'Could not save that owner. Try again.') as { ok: boolean; reason?: 'name' };
 }
-export async function removeThirdParty(ref: CrisisRef, id: string): Promise<void> {
+/** Refused with 'in_draft' while the team's unsent map changes give anything to it (docs/crisis/sql/038). */
+export async function removeThirdParty(ref: CrisisRef, id: string): Promise<{ ok: boolean; reason?: 'in_draft' }> {
   const client = await c(ref);
   const res = await client.rpc('crisis_remove_party', { p_crisis: ref.id, p_id: id });
-  must(res, 'Could not remove that owner. Try again.');
+  return (must(res, 'Could not remove that owner. Try again.') as { ok: boolean; reason?: 'in_draft' } | null) ?? { ok: true };
 }
 export async function requestMeeting(ref: CrisisRef, m: { character_ids: string[]; intention: string; duration_minutes: number; wanted_time?: string | null }): Promise<RequestMeetingResult> {
   const client = await c(ref);
