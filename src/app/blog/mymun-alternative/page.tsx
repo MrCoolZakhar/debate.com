@@ -5,7 +5,7 @@ import ArticleLayout from '@/components/blog/ArticleLayout';
 import { H2, H3, TableWrap } from '@/components/blog/prose';
 
 export const metadata: Metadata = pageMetadata({
-  title: 'mymun Alternative: What mymun and MUN Command Cost in 2026',
+  title: 'mymun Alternative: What mymun and MUN Command Cost in 2027',
   description:
     'What is MUN Command? It is mymun’s live-session software, and the two brands are converging. What mymun costs (€1 per user per day), what its free tier does not save, where it genuinely beats Gavelling, and where Gavelling, free to the conference, wins.',
   path: '/blog/mymun-alternative',
@@ -30,12 +30,12 @@ export const metadata: Metadata = pageMetadata({
 const articleSchema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
-  headline: 'mymun Alternative: What mymun and MUN Command Cost in 2026',
+  headline: 'mymun Alternative: What mymun and MUN Command Cost in 2027',
   description:
     'An honest side-by-side of mymun and its MUN Command session software against Gavelling, covering pricing, conference administration and live committee tools.',
   url: 'https://gavelling.com/blog/mymun-alternative',
   datePublished: '2026-08-13',
-  dateModified: '2026-08-13',
+  dateModified: '2026-11-14',
   author: { '@type': 'Organization', name: 'Gavelling', url: 'https://gavelling.com' },
   publisher: JSONLD_PUBLISHER,
   image: 'https://gavelling.com/og-image.png',
@@ -327,7 +327,7 @@ export default function MymunAlternative() {
 
         <H2>Keep reading</H2>
         <p>
-          For a deeper look at the session software specifically, see <Link href="/blog/muncommand-alternative">MUN Command vs Gavelling: Honest Comparison</Link>. For the whole field including Muncoordinated, wxMUN and the spreadsheet-plus-timer setup most committees still run on, see <Link href="/blog/best-mun-software-2026">Best MUN Software in 2026</Link>, or the shorter <Link href="/blog/free-mun-tools">Free MUN Tools in 2026</Link>. If you are deciding what to run your own conference on, <Link href="/blog/mun-conference-planning">How to Plan a MUN Conference</Link> covers where software actually sits in the timeline.
+          For a deeper look at the session software specifically, see <Link href="/blog/muncommand-alternative">MUN Command vs Gavelling: Honest Comparison</Link>. For the whole field including Muncoordinated, wxMUN and the spreadsheet-plus-timer setup most committees still run on, see <Link href="/blog/best-mun-software-2027">Best MUN Software in 2027</Link>, or the shorter <Link href="/blog/free-mun-tools">Free MUN Tools in 2027</Link>. If you are deciding what to run your own conference on, <Link href="/blog/mun-conference-planning">How to Plan a MUN Conference</Link> covers where software actually sits in the timeline.
         </p>
       </ArticleLayout>
     </>

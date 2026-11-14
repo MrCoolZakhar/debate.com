@@ -236,7 +236,7 @@ export default function MuncoordinatedAlternative() {
           <li>You are running a conference and want registration, allocation and payments in the same place as the committees.</li>
         </ul>
         <p>
-          Both are free, so the honest advice is to run one practice committee on each with your own club and keep the one your chairs reach for. For the rest of the field, see <Link href="/blog/best-mun-software-2026">best MUN software in 2026</Link> and <Link href="/blog/free-mun-tools">free MUN tools</Link>; for the paid platforms, <Link href="/blog/mymun-alternative">mymun and MUN Command compared</Link>.
+          Both are free, so the honest advice is to run one practice committee on each with your own club and keep the one your chairs reach for. For the rest of the field, see <Link href="/blog/best-mun-software-2027">best MUN software in 2027</Link> and <Link href="/blog/free-mun-tools">free MUN tools</Link>; for the paid platforms, <Link href="/blog/mymun-alternative">mymun and MUN Command compared</Link>.
         </p>
 
         <H2>Frequently Asked Questions</H2>

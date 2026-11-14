@@ -182,7 +182,7 @@ export default function Article() {
             </tbody>
           </table>
         </TableWrap>
-        <p>Our comparison of <Link href="/blog/best-mun-software-2026">MUN software in 2026</Link> covers the choice itself. The logistics point is narrower: whatever you choose should run on a device a chair already owns, because hired hardware is the line most likely to be cut and the thing most likely to fail.</p>
+        <p>Our comparison of <Link href="/blog/best-mun-software-2027">MUN software in 2027</Link> covers the choice itself. The logistics point is narrower: whatever you choose should run on a device a chair already owns, because hired hardware is the line most likely to be cut and the thing most likely to fail.</p>
 
         <H2>The room nobody books</H2>
         <p>Staff space. Your chairs and the rest of your <Link href="/blog/mun-secretariat-roles">secretariat</Link> need one. Your chairs will be in a room with forty delegates for eight hours across two days, making rulings in public. They need somewhere with a door, coffee, a table and no delegates, and if you do not provide it they will decompress in a corridor where delegates can hear them, which is a different problem.</p>

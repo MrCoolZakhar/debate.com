@@ -49,7 +49,7 @@ const STATIC_PAGES: { path: string; lastModified: string; changeFrequency: 'dail
 // different one in the sitemap, and a new post silently inherited a default
 // date it never had. One field, one truth, and a new post cannot be forgotten.
 const BLOG_PRIORITY: Record<string, number> = {
-  'best-mun-software-2026': 0.9,
+  'best-mun-software-2027': 0.9,
   'muncommand-alternative': 0.9,
   'mymun-alternative': 0.9,
   'muncoordinated-alternative': 0.9,

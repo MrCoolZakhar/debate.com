@@ -5,9 +5,9 @@ import ArticleLayout from '@/components/blog/ArticleLayout';
 import { H2, Callout } from '@/components/blog/prose';
 
 export const metadata: Metadata = pageMetadata({
-  title: 'Free MUN Tools in 2026: Best Software for Chairs and Delegates',
+  title: 'Free MUN Tools in 2027: Best Software for Chairs and Delegates',
   description:
-    'A detailed comparison of free MUN tools and software in 2026: Gavelling, spreadsheets, timer apps, and what actually works for running a real committee session.',
+    'A detailed comparison of free MUN tools and software in 2027: Gavelling, spreadsheets, timer apps, and what actually works for running a real committee session.',
   path: '/blog/free-mun-tools',
   ogDescription:
     'Find the best free MUN tools for running your committee.',
@@ -17,11 +17,11 @@ export const metadata: Metadata = pageMetadata({
 const articleSchema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
-  headline: 'Free MUN Tools in 2026: Best Software for Chairs and Delegates',
-  description: 'Comparison of free MUN tools in 2026.',
+  headline: 'Free MUN Tools in 2027: Best Software for Chairs and Delegates',
+  description: 'Comparison of free MUN tools in 2027.',
   url: 'https://gavelling.com/blog/free-mun-tools',
   datePublished: '2026-06-07',
-  dateModified: '2026-06-07',
+  dateModified: '2026-11-14',
   author: { '@type': 'Organization', name: 'Gavelling', url: 'https://gavelling.com' },
   publisher: JSONLD_PUBLISHER,
   image: 'https://gavelling.com/og-image.png',
@@ -48,7 +48,7 @@ export default function Article() {
         pitch="Free, browser-based, no setup. Start your MUN committee in minutes."
       >
 
-        <p>Running a Model UN committee used to mean paper lists, a phone timer, and hoping your co-chair was tracking the same numbers. In 2026, there are several software options designed specifically for MUN, and several general-purpose tools that chairs have jury-rigged into committee management systems. Here is an honest breakdown of what works and what does not.</p>
+        <p>Running a Model UN committee used to mean paper lists, a phone timer, and hoping your co-chair was tracking the same numbers. Going into 2027, there are several software options designed specifically for MUN, and several general-purpose tools that chairs have jury-rigged into committee management systems. Here is an honest breakdown of what works and what does not.</p>
 
         <H2>What a Good MUN Tool Needs to Do</H2>
         <p>Before comparing tools, it helps to list what a chair actually needs during committee:</p>
@@ -63,7 +63,7 @@ export default function Article() {
         </ul>
 
         <H2>Gavelling (Free)</H2>
-        <p>Gavelling is the most complete free MUN committee platform available in 2026. It was built specifically for Model UN chairs and handles the full committee lifecycle: roll call, GSL, moderated and unmoderated caucuses, motions, documents, voting, and delegate-facing views, all in real time via any web browser with no installation required.</p>
+        <p>Gavelling is the most complete free MUN committee platform available going into 2027. It was built specifically for Model UN chairs and handles the full committee lifecycle: roll call, GSL, moderated and unmoderated caucuses, motions, documents, voting, and delegate-facing views, all in real time via any web browser with no installation required.</p>
         <p>Delegates join via a six-character code and can see their queue position, request to speak, and receive documents from the chair. Multiple co-chairs can manage the same session simultaneously. The chair view runs on any device: tablet, laptop, or phone.</p>
         <Callout>Gavelling is completely free to use. Start a session in under a minute at gavelling.com. No account required.</Callout>
 

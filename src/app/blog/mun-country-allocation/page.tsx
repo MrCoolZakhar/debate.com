@@ -133,7 +133,7 @@ export default function Article() {
             </tbody>
           </table>
         </TableWrap>
-        <p>The judgement is always yours. What <Link href="/blog/best-mun-software-2026">software</Link> should remove is the retyping, the version confusion and the possibility of two people editing the same sheet at once. Gavelling does applications, fit-scored assignment, seat allocation and the emails from one record, and charges the organiser nothing for it: the participant side is where it is monetised, so a conference is never billed per delegate per day.</p>
+        <p>The judgement is always yours. What <Link href="/blog/best-mun-software-2027">software</Link> should remove is the retyping, the version confusion and the possibility of two people editing the same sheet at once. Gavelling does applications, fit-scored assignment, seat allocation and the emails from one record, and charges the organiser nothing for it: the participant side is where it is monetised, so a conference is never billed per delegate per day.</p>
 
         <H3>The sequence, in order</H3>
         <ul className="gv-check">

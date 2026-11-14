@@ -194,7 +194,15 @@ export function BottomBanner({ variant }: { variant: BannerVariant }) {
           {c.eyebrow}
         </p>
         <p id={`gv-banner-bottom-${variant}`} className={s.title}>{c.fullTitle}</p>
-        <p className={s.line}>{c.fullLine}</p>
+        {/* Names Gavelling as free MUN software on every post, with a crawlable
+            link to the product page (owner, 14 Nov 2026: rank for "MUN software"). */}
+        <p className={s.line}>
+          Gavelling is free{' '}
+          <BannerLink href="/sessions" count={`banner/bottom/${variant}-mun-software`} className={s.textLink}>
+            MUN software
+          </BannerLink>{' '}
+          for chairs, delegates and organisers. {c.fullLine}
+        </p>
         <div className={s.fullActions}>
           <BannerLink href={c.href} count={`banner/bottom/${variant}`} className={s.btn}>
             {c.button}

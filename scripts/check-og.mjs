@@ -55,7 +55,7 @@ const ROUTES = [
   { path: '/blog' },
   { path: '/blog/mun-motions-explained' },
   { path: '/blog/how-to-run-mun-committee' },
-  { path: '/blog/best-mun-software-2026' },
+  { path: '/blog/best-mun-software-2027' },
   { path: '/blog/muncommand-alternative' },
   { path: '/blog/mymun-alternative' },
   { path: '/privacy' },

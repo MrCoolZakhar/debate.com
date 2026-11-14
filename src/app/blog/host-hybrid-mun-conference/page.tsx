@@ -96,7 +96,7 @@ export default function Article() {
         <p>Two or three of those days beat one long one. A break every 45 to 60 minutes is not generosity; it is what keeps the last hour usable. And finish when you said you would, because a delegate at home has a family expecting them, not a hotel.</p>
 
         <H2>The stack: what each piece has to do</H2>
-        <p>Four jobs, and the mistake is to make one tool do all four badly. Our roundup of the <Link href="/blog/best-mun-software-2026">best MUN software in 2026</Link> compares the options.</p>
+        <p>Four jobs, and the mistake is to make one tool do all four badly. Our roundup of the <Link href="/blog/best-mun-software-2027">best MUN software in 2027</Link> compares the options.</p>
         <TableWrap>
           <table>
             <thead><tr><th>Job</th><th>What it must do</th><th>What goes wrong</th></tr></thead>

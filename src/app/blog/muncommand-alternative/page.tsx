@@ -5,7 +5,7 @@ import ArticleLayout from '@/components/blog/ArticleLayout';
 import { H2, TableWrap } from '@/components/blog/prose';
 
 export const metadata: Metadata = pageMetadata({
-  title: 'MUN Command vs Gavelling: Honest Comparison & Free Alternative (2026)',
+  title: 'MUN Command vs Gavelling: Honest Comparison & Free Alternative (2027)',
   description:
     'MUN Command (MUNCommand, by mymun) charges €1 per user per day for its Conference App. Gavelling covers committee sessions and full conference management free. Side-by-side comparison.',
   path: '/blog/muncommand-alternative',
@@ -27,12 +27,12 @@ export const metadata: Metadata = pageMetadata({
 const articleSchema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
-  headline: 'MUN Command vs Gavelling: Honest Comparison & Free Alternative (2026)',
+  headline: 'MUN Command vs Gavelling: Honest Comparison & Free Alternative (2027)',
   description:
     'Side-by-side comparison of MUN Command (mymun) and Gavelling for Model UN committee sessions and conference management.',
   url: 'https://gavelling.com/blog/muncommand-alternative',
   datePublished: '2026-07-21',
-  dateModified: '2026-07-21',
+  dateModified: '2026-11-14',
   author: { '@type': 'Organization', name: 'Gavelling', url: 'https://gavelling.com' },
   publisher: JSONLD_PUBLISHER,
   image: 'https://gavelling.com/og-image.png',
@@ -174,7 +174,7 @@ export default function MunCommandAlternative() {
         </p>
 
         <p>
-          See also: <Link href="/blog/mymun-alternative" style={{ color: '#1B3828', fontWeight: 600 }}>mymun and MUN Command vs Gavelling</Link> for the wider platform comparison and worked pricing at conference scale, and <Link href="/blog/best-mun-software-2026" style={{ color: '#1B3828', fontWeight: 600 }}>Best MUN Software in 2026</Link> for the full field, including Muncoordinated and open-source options.
+          See also: <Link href="/blog/mymun-alternative" style={{ color: '#1B3828', fontWeight: 600 }}>mymun and MUN Command vs Gavelling</Link> for the wider platform comparison and worked pricing at conference scale, and <Link href="/blog/best-mun-software-2027" style={{ color: '#1B3828', fontWeight: 600 }}>Best MUN Software in 2027</Link> for the full field, including Muncoordinated and open-source options.
         </p>
       </ArticleLayout>
     </>
