@@ -218,3 +218,9 @@ Part 40 (14 Nov 2026, SQL docs/crisis/sql/040_staff_invites.sql): backroomers jo
 - Peter: "the manage feature should show pending people, so who don't have an account yet. also add person should be a pop up".
 - Staff and Access no longer has a separate Pending Invites card. Each pending invite is a row in its role's list (Backroomers, Directors, Press), after the people already in, counted in the group's number: "Invite sent" and "Not joined yet, invited N min ago". Its Manage opens Resend invite and Cancel invite (asked in place). Accepting moves them into the list live.
 - Add person opens as a pop-up (CrisisDialog), never a card in the page. CrisisDialog now lets an open GSelect take Escape first.
+
+## Part 42 (15 Nov 2026): chairs are invited like conference chairs and join the crisis on accept
+
+- Peter: "apply these two emails to noelia's chairs and invite them".
+- Chairs use the ordinary conference chair invite (conference_chair_invites, /invites/chair/<token>). The trigger zz_crisis_chair_invite_accepted (_crisis_link_accepted_chair) links the cabinet's chair seat with that email to the accepting account, or adds a chair seat when there is none; it never blocks the accept.
+- Carrera Espacial: Eunate Ágreda (NASA, eunateagreda@gmail.com) and Ricky Agudelo (OKB, ricardoagudelob4@gmail.com) invited 15 Nov 2026; their seats keep their codes until they accept.
