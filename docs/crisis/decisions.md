@@ -239,3 +239,14 @@ Part 40 (14 Nov 2026, SQL docs/crisis/sql/040_staff_invites.sql): backroomers jo
 - On an answered directive the backroom composer now has a message box and "Send message": a visible note (crisis_add_directive_note, p_internal false). The answer, its outcome and its effects stay as they were. "Answer again" is renamed "Edit the answer" (it still edits the sent answer).
 - crisis_notify_directive_note (migration crisis_part44_backroom_follow_up_messages): a visible staff note notifies the directive's side (author, joint co-authors, a cabinet directive's chair) as "Backroom message on No. N". Internal notes still notify nobody.
 - Not in this part: a follow-up that also runs map or resource changes. Those are made on the map or resources directly.
+
+## Part 45 (15 Nov 2026): "Could not load notifications", again
+
+- HULTMUN, many people at once. The bell read failed with database timeouts (500 / 504), at 11:11 and 14:51 UTC together with every other read: the database had run out of time and connections.
+- Cause: access was checked row by row and every check ran crisis_me() (parse the headers, hash the code, scan the members: about 0.1 ms). The bell read checked all 3,900 HULTMUN notifications for each reader, 1.3 s a read, and each new notification makes every open bell re-read: 32,556 bell reads on 15 Nov, 11.7 hours of database time. Directives, co-authors (which checked every directive of every crisis) and notes paid the same price.
+- Database (crisis_part45_access_checks_once_per_request):
+  - crisis_me() remembers the member it found for the rest of the request (a transaction-local setting keyed on the exact headers, claims and crisis; the member row is re-read by id, so role, cabinet and character stay current; a miss is not remembered).
+  - The notifications read rule asks crisis_my_member_ids() once per read (same precedence as crisis_me: code, "Try it as" code, account).
+  - Co-authors and notes check only their own directive through crisis_directive_visible(id), which applies the directives read rule unchanged.
+- Checked in rolled-back transactions before applying: every account member (31) and test codes see exactly the same notifications, co-authors and notes as before. Bell read 307 ms to 3 ms; the seven heaviest readers 4.9 s to 42 ms; co-author and note reads about 6 times faster.
+- No app change needed; nothing to deploy.
