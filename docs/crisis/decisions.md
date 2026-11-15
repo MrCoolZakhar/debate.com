@@ -212,3 +212,9 @@ Part 40 (14 Nov 2026, SQL docs/crisis/sql/040_staff_invites.sql): backroomers jo
   adds those roles directly.
 - Members who already have codes (Hult MUN's backroomers) are unchanged, including "Make a new password".
 - The invite email is written and rendered in the database, not in emailEvents.ts or defaultEmails.ts.
+
+## Part 41 (15 Nov 2026): pending people in their role list, Add person as a pop-up
+
+- Peter: "the manage feature should show pending people, so who don't have an account yet. also add person should be a pop up".
+- Staff and Access no longer has a separate Pending Invites card. Each pending invite is a row in its role's list (Backroomers, Directors, Press), after the people already in, counted in the group's number: "Invite sent" and "Not joined yet, invited N min ago". Its Manage opens Resend invite and Cancel invite (asked in place). Accepting moves them into the list live.
+- Add person opens as a pop-up (CrisisDialog), never a card in the page. CrisisDialog now lets an open GSelect take Escape first.

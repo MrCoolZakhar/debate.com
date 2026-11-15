@@ -16,6 +16,7 @@ import { STATUS_WORD } from '../character/characterStatus';
 import { Avatar, Btn, Card, CardTitle, CK, fieldStyle, agoLabel } from '../../crisisKit';
 import { useCrisis, usePresencePoll } from '../../[conference]/[crisis]/CrisisContext';
 import { ConfirmInline, copyText, DirectorOnlyCard, Labelled, PageHeading, responsibleMembers } from './setupKit';
+import CrisisDialog from '../delegate/CrisisDialog';
 import { serverNow } from '@/lib/serverClock';
 
 type MemberRole = Member['role'];
@@ -118,23 +119,23 @@ function StaffBody() {
       <PageHeading
         eyebrow="SET UP"
         title="Staff and Access"
-        right={<Btn icon={<UserRoundPlus size={15} strokeWidth={1.5} />} onClick={() => setShowAdd((s) => !s)}>{showAdd ? 'Close' : 'Add person'}</Btn>}
+        right={<Btn icon={<UserRoundPlus size={15} strokeWidth={1.5} />} onClick={() => setShowAdd(true)}>Add person</Btn>}
       />
 
-      {showAdd && <AddPersonCard onDone={() => { setShowAdd(false); }} onAdded={reloadCore} onInvited={loadInvites} />}
-
-      {invites.length > 0 && <PendingInvites invites={invites} onChanged={loadInvites} />}
+      {showAdd && <AddPersonDialog onDone={() => { setShowAdd(false); }} onAdded={reloadCore} onInvited={loadInvites} />}
 
       <div className="flex flex-col" style={{ gap: 14 }}>
         {GROUPS.map((g) => {
           const delegates = g.roles[0] === 'delegate';
           // A delegate with no character is a spare delegate: they have their own group below.
           const people = core.members.filter((m) => g.roles.includes(m.role) && !(delegates && isSpareDelegate(m)));
+          // Invited and not joined yet: listed with their role, after the people already in.
+          const pending = invites.filter((i) => g.roles.includes(i.role));
           return (
             <Card key={g.title}>
-              <CardTitle icon={GROUP_ICON[g.title] ?? <UsersRound size={16} strokeWidth={1.5} />} right={<b style={{ fontSize: 13, color: CK.inkSoft }}>{people.length}</b>}>{g.title}</CardTitle>
+              <CardTitle icon={GROUP_ICON[g.title] ?? <UsersRound size={16} strokeWidth={1.5} />} right={<b style={{ fontSize: 13, color: CK.inkSoft }}>{people.length + pending.length}</b>}>{g.title}</CardTitle>
               {delegates && people.length > 0 && <AssignBackroomers cabinets={core.cabinets} characters={core.characters} members={core.members} />}
-              {people.length === 0 ? (
+              {people.length === 0 && pending.length === 0 ? (
                 <p style={{ margin: 0, fontSize: 13.5, color: CK.inkSoft }}>{g.empty}</p>
               ) : (
                 <div>
@@ -142,6 +143,7 @@ function StaffBody() {
                     <span>NAME</span><span>CABINET</span>{delegates && <span>CHARACTER</span>}<span>GETS IN WITH</span><span>LAST SEEN</span><span />
                   </div>
                   {people.map((m) => renderRow(m, delegates))}
+                  {pending.map((i) => <PendingRow key={i.id} invite={i} now={now} onChanged={loadInvites} />)}
                 </div>
               )}
             </Card>
@@ -244,7 +246,7 @@ function CabinetFromCharacter({ cabinet }: { cabinet: Cabinet | undefined }) {
 
 // ─────────── Add a person ───────────
 
-function AddPersonCard({ onDone, onAdded, onInvited }: { onDone: () => void; onAdded: () => Promise<void>; onInvited: () => Promise<void> }) {
+function AddPersonDialog({ onDone, onAdded, onInvited }: { onDone: () => void; onAdded: () => Promise<void>; onInvited: () => Promise<void> }) {
   const { ref, core } = useCrisis();
   const [name, setName] = useState('');
   const [role, setRole] = useState<MemberRole>('backroomer');
@@ -311,8 +313,7 @@ function AddPersonCard({ onDone, onAdded, onInvited }: { onDone: () => void; onA
   };
 
   return (
-    <Card warm style={{ marginBottom: 14 }}>
-      <CardTitle icon={<UserRoundPlus size={16} strokeWidth={1.5} />}>Add Person</CardTitle>
+    <CrisisDialog title="Add Person" onClose={() => { if (!busy) onDone(); }} width={560}>
       <form onSubmit={(e) => { e.preventDefault(); void submit(); }} style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))' }}>
         <Labelled label="Name">
           <input value={name} onChange={(e) => setName(e.target.value)} style={fieldStyle} maxLength={120} aria-label="Name" autoFocus />
@@ -355,27 +356,20 @@ function AddPersonCard({ onDone, onAdded, onInvited }: { onDone: () => void; onA
           <Btn type="button" tone="ghost" onClick={onDone} disabled={busy}>Cancel</Btn>
         </div>
       </form>
-    </Card>
+    </CrisisDialog>
   );
 }
 
 // ─────────── Pending invites ───────────
 
-function PendingInvites({ invites, onChanged }: { invites: StaffInviteRow[]; onChanged: () => Promise<void> }) {
-  return (
-    <Card style={{ marginBottom: 14 }}>
-      <CardTitle icon={<Mail size={16} strokeWidth={1.5} />} right={<b style={{ fontSize: 13, color: CK.inkSoft }}>{invites.length}</b>}>Pending Invites</CardTitle>
-      <div>
-        {invites.map((i) => <InviteRow key={i.id} invite={i} onChanged={onChanged} />)}
-      </div>
-    </Card>
-  );
-}
-
-function InviteRow({ invite, onChanged }: { invite: StaffInviteRow; onChanged: () => Promise<void> }) {
+/** Someone invited by email who has not accepted yet: a row in their role's list, with Manage for Resend and Cancel. */
+function PendingRow({ invite, now, onChanged }: { invite: StaffInviteRow; now: number; onChanged: () => Promise<void> }) {
   const { ref } = useCrisis();
+  const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState<'resend' | 'cancel' | null>(null);
   const [ask, setAsk] = useState(false);
+  const name = invite.invited_name || invite.email;
+  const sent = agoLabel(invite.created_at, now);
 
   const resend = async () => {
     if (busy) return;
@@ -397,33 +391,58 @@ function InviteRow({ invite, onChanged }: { invite: StaffInviteRow; onChanged: (
       await cancelStaffInvite(ref, invite.id);
       notifyOk('Invite cancelled', 'crisis-staff');
       await onChanged();
-    } catch (e) { notifyErr(crisisError(e, 'Could not cancel this invite.'), 'crisis-staff'); }
-    finally { setBusy(null); setAsk(false); }
+    } catch (e) { notifyErr(crisisError(e, 'Could not cancel this invite.'), 'crisis-staff'); setBusy(null); setAsk(false); }
   };
 
   return (
     <div style={{ borderTop: `1px solid ${CK.hair}`, padding: '10px 0' }}>
-      <div className="flex items-center flex-wrap" style={{ gap: 12 }}>
-        <span style={{ minWidth: 0, flex: '1 1 220px' }}>
-          <b style={{ display: 'block', fontSize: 14.5, fontWeight: 800, overflowWrap: 'anywhere' }}>{invite.invited_name || invite.email}</b>
-          {invite.invited_name && <span style={{ display: 'block', fontSize: 12.5, color: CK.inkSoft, overflowWrap: 'anywhere' }}>{invite.email}</span>}
-        </span>
-        <span style={{ fontSize: 13.5, color: CK.ink }}>{ROLE_LABEL[invite.role]}</span>
-        <span className="flex flex-wrap gap-2">
-          <Btn tone="ghost" size="sm" onClick={() => void resend()} disabled={busy !== null}>{busy === 'resend' ? 'Sending' : 'Resend'}</Btn>
-          <Btn tone="ghost" size="sm" onClick={() => setAsk(true)} disabled={busy !== null || ask}>Cancel</Btn>
-        </span>
+      <div className="stf-row">
+        <div className="stf-cell stf-name flex items-center" data-label="" style={{ gap: 12 }}>
+          <Avatar name={name} size={38} color={CK.muted} />
+          <span style={{ minWidth: 0 }}>
+            <b style={{ fontSize: 14.5, fontWeight: 800 }}>{name}</b>
+            {invite.role === 'assistant_director' && <span style={{ color: CK.inkSoft, fontSize: 12.5 }}> · Assistant</span>}
+            {invite.invited_name && <span style={{ display: 'block', fontSize: 12.5, color: CK.inkSoft }}>{invite.email}</span>}
+          </span>
+        </div>
+        <div className="stf-cell" data-label="Cabinet"><span style={{ color: CK.muted }}>None</span></div>
+        <div className="stf-cell" data-label="Gets in with">
+          <span className="inline-flex items-center gap-1.5" style={{ fontWeight: 700, color: CK.inkSoft }}>
+            <Mail size={14} strokeWidth={1.5} aria-hidden />
+            Invite sent
+          </span>
+          <span style={{ display: 'block', fontSize: 12, color: CK.inkSoft }}>Joins on their Gavelling account</span>
+        </div>
+        <div className="stf-cell" data-label="Last seen">
+          <span style={{ color: CK.inkSoft }}>Not joined yet</span>
+          {sent && <span style={{ display: 'block', fontSize: 12, color: CK.muted }}>Invited {sent}</span>}
+        </div>
+        <div className="stf-act flex flex-wrap gap-2">
+          <Btn tone="ghost" size="sm" icon={<Pencil size={13} strokeWidth={1.5} />} onClick={() => { setOpen((x) => !x); setAsk(false); }} aria-expanded={open}>{open ? 'Close' : 'Manage'}</Btn>
+        </div>
       </div>
-      {ask && (
-        <ConfirmInline
-          style={{ marginTop: 10 }}
-          text="Cancel this invite?"
-          confirmLabel="Yes"
-          keepLabel="No"
-          busy={busy === 'cancel'}
-          onConfirm={() => void cancel()}
-          onCancel={() => setAsk(false)}
-        />
+      {open && (
+        <div className="flex flex-col" style={{ gap: 12, marginTop: 10, padding: 12, background: CK.well, borderRadius: 16 }}>
+          <p style={{ margin: 0, fontSize: 13.5, color: CK.ink, lineHeight: 1.45 }}>
+            {name} has not accepted yet. The invite went to <b style={{ overflowWrap: 'anywhere' }}>{invite.email}</b>. Once they accept on their Gavelling account they move up into the list.
+          </p>
+          {ask && (
+            <ConfirmInline
+              text={`Cancel the invite for ${name}? The link in their email stops working.`}
+              confirmLabel="Yes"
+              keepLabel="No"
+              busy={busy === 'cancel'}
+              onConfirm={() => void cancel()}
+              onCancel={() => setAsk(false)}
+            />
+          )}
+          <div className="flex items-center flex-wrap gap-2">
+            <Btn size="sm" icon={<Mail size={14} strokeWidth={1.5} />} onClick={() => void resend()} disabled={busy !== null}>{busy === 'resend' ? 'Sending' : 'Resend invite'}</Btn>
+            <Btn tone="danger" size="sm" icon={<X size={14} strokeWidth={1.5} />} onClick={() => setAsk(true)} disabled={busy !== null || ask}>Cancel invite</Btn>
+            <span className="flex-1" />
+            <Btn tone="ghost" size="sm" onClick={() => { setOpen(false); setAsk(false); }}>Done</Btn>
+          </div>
+        </div>
       )}
     </div>
   );
