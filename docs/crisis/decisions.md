@@ -250,3 +250,13 @@ Part 40 (14 Nov 2026, SQL docs/crisis/sql/040_staff_invites.sql): backroomers jo
   - Co-authors and notes check only their own directive through crisis_directive_visible(id), which applies the directives read rule unchanged.
 - Checked in rolled-back transactions before applying: every account member (31) and test codes see exactly the same notifications, co-authors and notes as before. Bell read 307 ms to 3 ms; the seven heaviest readers 4.9 s to 42 ms; co-author and note reads about 6 times faster.
 - No app change needed; nothing to deploy.
+
+## Part 46 (15 Nov 2026): add or change a person's email after they were added, and invite them
+
+- Asked: can the Crisis Director add delegate emails after the characters are made? No: the email could only be typed when a person was added, it only linked an account that already existed, and nothing told the person.
+- Staff and Access, Manage on anyone not yet on a Gavelling account (delegates, chairs, and anyone else but a Director) now has an Email field with "Send invite". It saves the email and emails an invite to that seat; accepting it on a Gavelling account links the account to the seat, keeping the character, cabinet and role. The same email again sends it again ("Resend invite"); a new email cancels the old link; "Remove email" (asked first) clears it and cancels the invite. The row's "Gets in with" says "Invite sent". Someone already on an account keeps the account's email (nothing to change).
+- The invite email and the invite page name the seat: the character a delegate plays, or "the chair of <cabinet>".
+- Refused in place: an address that is not an email; an address someone else in this crisis already uses (their name is given).
+- Database (crisis_part46_member_email_invites): crisis_set_member_email (Directors only); crisis_staff_invites takes chair and delegate invites, tied to the seat through member_id; respond_crisis_staff_invite links a seat's invite to that seat (a removed seat, or one another account took, revokes the invite); the invite email and get_crisis_staff_invite carry the character and cabinet. Staff invites (backroomer, Assistant Crisis Director, press) work as before. A pending staff invite to the same address gives way to the seat's invite.
+- Checked in a rolled-back transaction: bad email refused, set and change (old invite revoked, two emails queued, nothing sent), the page names the character, accepting links the account to the seat with the character kept, a seat on an account refuses a change, the staff invite path still refuses delegate.
+- Not changed: Add person still only links an existing account when an email is typed; it sends no invite.

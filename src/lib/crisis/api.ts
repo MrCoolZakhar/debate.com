@@ -266,8 +266,10 @@ export async function issueCode(ref: CrisisRef, memberId: string): Promise<{ cod
 // ─────────── Staff invites (part 40) ───────────
 
 export type StaffInviteRole = 'assistant_director' | 'backroomer' | 'press';
+/** A seat's invite (part 46) carries the member it links: a chair or delegate already on the list. */
+export type InviteRole = StaffInviteRole | 'chair' | 'delegate';
 
-export interface StaffInviteRow { id: string; role: StaffInviteRole; email: string; invited_name: string | null; created_at: string }
+export interface StaffInviteRow { id: string; role: InviteRole; email: string; invited_name: string | null; created_at: string; member_id: string | null }
 
 export type InviteStaffResult =
   | { ok: true; invite_id: string; account_exists: boolean }
@@ -282,6 +284,17 @@ export async function inviteStaff(ref: CrisisRef, i: { role: StaffInviteRole; em
   return { ok: false, reason: r.reason ?? 'bad_email', role: r.role };
 }
 
+export type SetMemberEmailResult =
+  | { ok: true; invited: boolean; account_exists?: boolean }
+  | { ok: false; reason: 'bad_email' | 'already_member' | 'has_account' | 'bad_role'; name?: string };
+
+/** Set, change or clear the email of someone not yet on a Gavelling account. A set email gets an invite (part 46); the old invite stops working. */
+export async function setMemberEmail(ref: CrisisRef, memberId: string, email: string | null): Promise<SetMemberEmailResult> {
+  const client = await c(ref);
+  const res = await client.rpc('crisis_set_member_email', { p_member: memberId, p_email: email });
+  return must(res, 'Could not save the email.') as SetMemberEmailResult;
+}
+
 /** True when a pending invite was cancelled. */
 export async function cancelStaffInvite(ref: CrisisRef, inviteId: string): Promise<boolean> {
   const client = await c(ref);
@@ -292,14 +305,14 @@ export async function cancelStaffInvite(ref: CrisisRef, inviteId: string): Promi
 /** Pending invites of this crisis, newest first (Directors only, by RLS). */
 export async function listStaffInvites(ref: CrisisRef): Promise<StaffInviteRow[]> {
   const client = await c(ref);
-  const res = await client.from('crisis_staff_invites').select('id, role, email, invited_name, created_at')
+  const res = await client.from('crisis_staff_invites').select('id, role, email, invited_name, created_at, member_id')
     .eq('crisis_id', ref.id).eq('status', 'pending').order('created_at', { ascending: false });
   if (res.error) throw new UserFacingError(crisisError(res.error, 'Could not load the pending invites.'));
   return (res.data ?? []) as StaffInviteRow[];
 }
 
 export type StaffInvite =
-  | { ok: true; status: 'pending' | 'accepted' | 'declined' | 'revoked'; role: StaffInviteRole; email: string; crisis_name: string; crisis_slug: string; conference_name: string; acronym: string | null; conference_slug: string; logo_url: string | null }
+  | { ok: true; status: 'pending' | 'accepted' | 'declined' | 'revoked'; role: InviteRole; email: string; crisis_name: string; crisis_slug: string; conference_name: string; acronym: string | null; conference_slug: string; logo_url: string | null; character_name?: string | null; cabinet_name?: string | null }
   | { ok: false; reason: 'not_found' };
 
 /** What the invite page shows. Callable signed out. */

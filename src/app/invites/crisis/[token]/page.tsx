@@ -1,6 +1,7 @@
 'use client';
 
-// Gavelling Crisis: the page behind the emailed staff invite (backroomer, Assistant Crisis Director, press).
+// Gavelling Crisis: the page behind the emailed invite: staff (backroomer, Assistant Crisis Director, press), or a seat the
+// Crisis Director already set up (a delegate's character or a chair's cabinet, part 46).
 // Modelled on /invites/chair/[token]. The invite is read signed out through get_crisis_staff_invite (the token is the
 // credential and the answer holds no names), so a visitor sees what they are joining before signing in. Signing in is the
 // shared pop-up (openAuth) and brings them back here. Accepting adds them to the crisis on their Gavelling account.
@@ -26,7 +27,16 @@ const AS_WORDS: Record<Ok['role'], string> = {
   backroomer: 'a backroomer',
   assistant_director: 'an Assistant Crisis Director',
   press: 'press',
+  chair: 'a chair',
+  delegate: 'a delegate',
 };
+
+/** A seat names itself: the character a delegate plays, the cabinet a chair runs. */
+function asWords(ok: Ok): string {
+  if (ok.role === 'delegate' && ok.character_name) return ok.character_name;
+  if (ok.role === 'chair' && ok.cabinet_name) return `the chair of ${ok.cabinet_name}`;
+  return AS_WORDS[ok.role] ?? 'a member';
+}
 
 const STATUS_COPY: Record<'accepted' | 'declined' | 'revoked', string> = {
   accepted: 'You already accepted this invite. Nothing else to do.',
@@ -169,7 +179,7 @@ export default function CrisisInvitePage() {
                 ) : (
                   <>
                     <p className="text-sm mb-6" style={{ color: '#6B5F52', fontFamily: OUTFIT, lineHeight: 1.55 }}>
-                      You&apos;re invited to join as {AS_WORDS[ok.role]}. Accepting adds this crisis to your Gavelling account.
+                      You&apos;re invited to join as {asWords(ok)}. Accepting adds this crisis to your Gavelling account.
                     </p>
 
                     {error && (
