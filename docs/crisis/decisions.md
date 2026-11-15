@@ -224,3 +224,11 @@ Part 40 (14 Nov 2026, SQL docs/crisis/sql/040_staff_invites.sql): backroomers jo
 - Peter: "apply these two emails to noelia's chairs and invite them".
 - Chairs use the ordinary conference chair invite (conference_chair_invites, /invites/chair/<token>). The trigger zz_crisis_chair_invite_accepted (_crisis_link_accepted_chair) links the cabinet's chair seat with that email to the accepting account, or adds a chair seat when there is none; it never blocks the accept.
 - Carrera Espacial: Eunate Ágreda (NASA, eunateagreda@gmail.com) and Ricky Agudelo (OKB, ricardoagudelob4@gmail.com) invited 15 Nov 2026; their seats keep their codes until they accept.
+
+## Part 43 (15 Nov 2026): a moved character leaves the old room; room points follow the person, for the time they played
+
+- Peter: "moving someone to another cabinet should automatically mark them absent and move them to a different cabinet. points are counting with the PERSON, not the CABINET - not even just the character but the person who is playing him."
+- Database (crisis_part43_move_cabinet_absent_points_follow_person): when a character's cabinet changes, the old room's seat goes absent, leaves the GSL and caucus queue, and its holder is signed out (a kick tombstone); a floor holder is left to the Moderator's device, which removes an absent speaker and logs the speech. The character's slot and allocations move to the new committee. `_room_remove_seat` keeps any seat that was ever present or scored.
+- crisis_character_players records who played which character and when (trigger on crisis_members; backfilled: current players from the crisis's start, earlier characters from their first to last directive).
+- Points: Statistics and the Performance tab count every seat of every character a person played, in every room, only for the time they played it (performance.ts personRoomSlices, playedBy); co-signed joint directives and meetings use the same time check. A character nobody plays shows all its seats' points.
+- Hult: Louis XVI was set absent in the Assembly and James's old seat freed by hand (he moved before the trigger existed). Oliver Westlake has a personal code for Juigné; Rowan Pope's Commune allocation for Juigné is untouched.

@@ -9,6 +9,10 @@
 //                       +2 for a cabinet directive, +1 for each co-author of a joint directive, +2 for each meeting held.
 //
 // The total is the two added together. Statistics ranks delegates on it and shows the split.
+//
+// Points follow the PERSON, not the cabinet or the character (owner, 15 Nov 2026): a person's room points are every seat
+// of every character they played, in EVERY committee room (a character moved to another cabinet keeps the points it earned
+// in the old room), counted only for the time they played that character (crisis_character_players, loadPlayWindows).
 
 import { getCommitteeByCode } from '@/lib/committeeService';
 import { everPresentFromHistory } from '@/lib/scoring';
@@ -19,7 +23,7 @@ import type { ScoreboardDelegateRow } from '@/lib/conferenceScoreboard';
 import type { Committee } from '@/lib/types';
 import type { CrisisRef } from './api';
 import { getCrisisClient } from './client';
-import type { PointsConfig, PointsLine, PointsResult } from './points';
+import type { PlayedCheck, PointsConfig, PointsLine, PointsResult } from './points';
 import type { Cabinet, Character } from './types';
 
 // ─────────── The committee-room seat of a character ───────────
@@ -73,6 +77,86 @@ export function seatOf(boards: RoomBoard[], char: Pick<Character, 'name' | 'cabi
     if (row) return { board, row };
   }
   return null;
+}
+
+/** Every seat named like the character, in every committee room (a moved character has one in the old room and the new). */
+export function seatsOf(boards: RoomBoard[], char: Pick<Character, 'name' | 'cabinet_id'>): Array<{ board: RoomBoard; row: ScoreboardDelegateRow }> {
+  const ordered = [...boards.filter((b) => b.cabinetId === char.cabinet_id), ...boards.filter((b) => b.cabinetId !== char.cabinet_id)];
+  const out: Array<{ board: RoomBoard; row: ScoreboardDelegateRow }> = [];
+  for (const board of ordered) {
+    const seat = findSeat(board.committee, char.name);
+    const row = seat ? board.rows.find((x) => x.country === seat) : undefined;
+    if (row) out.push({ board, row });
+  }
+  return out;
+}
+
+// ─────────── Who played which character, when ───────────
+
+/** One stretch of a person playing a character: from `from` to `to` (null while they still play it), epoch ms. */
+export interface PlayWindow { characterId: string; memberId: string; from: number; to: number | null }
+
+/** The crisis's play history (crisis_character_players). Null when it cannot be read: points then count as before. */
+export async function loadPlayWindows(ref: CrisisRef): Promise<PlayWindow[] | null> {
+  try {
+    const client = await getCrisisClient(ref.conf, ref.crisis);
+    const r = await client.from('crisis_character_players').select('character_id, member_id, started_at, ended_at').eq('crisis_id', ref.id);
+    if (r.error) return null;
+    return ((r.data ?? []) as Array<{ character_id: string; member_id: string; started_at: string; ended_at: string | null }>).map((w) => ({
+      characterId: w.character_id, memberId: w.member_id, from: Date.parse(w.started_at), to: w.ended_at ? Date.parse(w.ended_at) : null,
+    }));
+  } catch { return null; }
+}
+
+/**
+ * Whether this person played this character at this moment. No history known (or none for this person): yes, as before.
+ * A moment-less row (the attendance credit) counts when they played the character at all.
+ */
+export function playedBy(windows: PlayWindow[] | null, memberId: string, characterId: string, at: string | null | undefined): boolean {
+  if (!windows) return true;
+  const mine = windows.filter((w) => w.memberId === memberId);
+  if (!mine.length) return true;
+  const own = mine.filter((w) => w.characterId === characterId);
+  if (!own.length) return false;
+  if (!at) return true;
+  const t = Date.parse(at);
+  if (Number.isNaN(t)) return true;
+  return own.some((w) => t >= w.from && (w.to === null || t <= w.to));
+}
+
+/** The check personPoints takes for one person. */
+export function playedCheck(windows: PlayWindow[] | null, memberId: string): PlayedCheck {
+  return (characterId, at) => playedBy(windows, memberId, characterId, at);
+}
+
+/** Slices from several seats as one list: the same source adds up. */
+export function mergeSlices(list: PointSlice[]): PointSlice[] {
+  const by = new Map<string, PointSlice>();
+  for (const s of list) {
+    const cur = by.get(s.sourceId);
+    by.set(s.sourceId, cur ? { ...cur, pts: cur.pts + s.pts } : { ...s });
+  }
+  return [...by.values()].sort((a, b) => b.pts - a.pts);
+}
+
+/**
+ * The committee-room points of a person (memberId) over the characters they played, or of the characters themselves
+ * (memberId null: a character nobody plays shows everything its seats earned). Every seat in every room, each once; a
+ * person's seats count only the ledger rows from while they played that character.
+ */
+export function personRoomSlices(boards: RoomBoard[], chars: Array<Pick<Character, 'id' | 'name' | 'cabinet_id'>>, memberId: string | null, windows: PlayWindow[] | null): { slices: PointSlice[]; seats: number } {
+  const slices: PointSlice[] = [];
+  const seen = new Set<string>();
+  for (const c of chars) {
+    for (const seat of seatsOf(boards, c)) {
+      const k = `${seat.board.committee.id}:${seat.row.country}`;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      const ledger = memberId ? seat.row.ledger.filter((r) => playedBy(windows, memberId, c.id, r.timestamp || null)) : seat.row.ledger;
+      slices.push(...sessionPointSlices(seat.board.committee, ledger, 'en', 'Manual points'));
+    }
+  }
+  return { slices: mergeSlices(slices), seats: seen.size };
 }
 
 // ─────────── The blend ───────────
