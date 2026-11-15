@@ -232,3 +232,10 @@ Part 40 (14 Nov 2026, SQL docs/crisis/sql/040_staff_invites.sql): backroomers jo
 - crisis_character_players records who played which character and when (trigger on crisis_members; backfilled: current players from the crisis's start, earlier characters from their first to last directive).
 - Points: Statistics and the Performance tab count every seat of every character a person played, in every room, only for the time they played it (performance.ts personRoomSlices, playedBy); co-signed joint directives and meetings use the same time check. A character nobody plays shows all its seats' points.
 - Hult: Louis XVI was set absent in the Assembly and James's old seat freed by hand (he moved before the trigger existed). Oliver Westlake has a personal code for Juigné; Rowan Pope's Commune allocation for Juigné is untouched.
+
+## Part 44 (15 Nov 2026): the backroom can write again after answering
+
+- HULTMUN backroomers (Prina Patel, Felix): "I cant send more than one message when responding to a directive ... it edits my initial approval." "Delegates can send multiple messages but not us."
+- On an answered directive the backroom composer now has a message box and "Send message": a visible note (crisis_add_directive_note, p_internal false). The answer, its outcome and its effects stay as they were. "Answer again" is renamed "Edit the answer" (it still edits the sent answer).
+- crisis_notify_directive_note (migration crisis_part44_backroom_follow_up_messages): a visible staff note notifies the directive's side (author, joint co-authors, a cabinet directive's chair) as "Backroom message on No. N". Internal notes still notify nobody.
+- Not in this part: a follow-up that also runs map or resource changes. Those are made on the map or resources directly.

@@ -4,9 +4,14 @@
 // text; sends it with the staged changes). "Add internal note" lives in the side panel now
 // (InternalNote); choosing who is responsible lives at the top (DirectiveFacts). Nothing is written
 // before Send reply except the "being written" mark (useDirectiveReply).
+// On an answered directive the box writes AGAIN instead (owner, 15 Nov 2026, HULTMUN backroomers): "Send message" adds a
+// message the delegate sees and is told about (a visible note, docs/crisis/sql/044), and the answer stays as it was.
+// "Edit the answer" is the old "Answer again": it changes the sent answer's words and outcome.
 
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Check, Map as MapIcon, Pencil, Send } from 'lucide-react';
+import { notifyErr, notifyOk } from '@/lib/appNotify';
+import { addNote, crisisError } from '@/lib/crisis/api';
 import { OUTCOME_LABEL, type Directive, type DirectiveOutcome } from '@/lib/crisis/types';
 import { Btn, CK, cabinetTint, fieldStyle } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
@@ -18,17 +23,38 @@ import type { DirectiveReply } from './useDirectiveReply';
 
 const OUTCOMES: DirectiveOutcome[] = ['approved', 'partial', 'denied', 'clarify', 'later'];
 
-export default function DirectiveComposer({ d, reply, who, effectsButton }: {
+export default function DirectiveComposer({ d, reply, who, effectsButton, onNoteAdded }: {
   d: Directive;
   reply: DirectiveReply;
   who: string;
   /** On a narrow screen: the button to the second step. */
   effectsButton?: ReactNode;
+  /** A message landed on the directive: re-read its thread. */
+  onNoteAdded?: () => void;
 }) {
-  const { core, memberId } = useCrisis();
+  const { ref, core, memberId } = useCrisis();
+  // A message after the answer: its own text, never the answer's.
+  const [message, setMessage] = useState('');
+  const [messageBusy, setMessageBusy] = useState(false);
   const now = useNow();
   const { outcome, toggleOutcome, reply: text, setReply, saved, editing, startEditing, busy, canSend, send } = reply;
   const answeredView = d.status === 'answered' && !editing;
+
+  const sendMessage = async () => {
+    const body = message.trim();
+    if (!body || messageBusy) return;
+    setMessageBusy(true);
+    try {
+      await addNote(ref, d.id, body, false);
+      setMessage('');
+      notifyOk(`Message sent to ${who}`, 'crisis-directive');
+      onNoteAdded?.();
+    } catch (e) {
+      notifyErr(crisisError(e, 'Could not send the message. Your text is kept, try again.'), 'crisis-directive');
+    } finally {
+      setMessageBusy(false);
+    }
+  };
 
   // Someone else is writing the reply to this directive right now.
   const names = buildNames(core.cabinets, core.characters, core.members);
@@ -88,12 +114,23 @@ export default function DirectiveComposer({ d, reply, who, effectsButton }: {
         </p>
       )}
 
+      {answeredView && (
+        <textarea
+          value={message} onChange={(e) => setMessage(e.target.value)} rows={2} maxLength={8000}
+          aria-label={`Message ${who}`} placeholder={`Message ${who}. The answer stays as it is`}
+          style={{ ...fieldStyle, resize: 'none', background: CK.page }}
+        />
+      )}
+
       <div className="flex items-center flex-wrap" style={{ gap: 8 }}>
         <span className="flex-1" />
         {effectsButton}
-        {answeredView
-          ? <Btn tone="green" onClick={startEditing}>Answer again</Btn>
-          : <Btn tone="green" icon={<Send size={15} strokeWidth={1.5} />} onClick={send} disabled={!canSend}>{busy ? 'Sending' : 'Send reply'}</Btn>}
+        {answeredView ? (
+          <>
+            <Btn tone="ghost" icon={<Pencil size={14} strokeWidth={1.5} />} onClick={startEditing} disabled={messageBusy}>Edit the answer</Btn>
+            <Btn tone="green" icon={<Send size={15} strokeWidth={1.5} />} onClick={() => void sendMessage()} disabled={!message.trim() || messageBusy}>{messageBusy ? 'Sending' : 'Send message'}</Btn>
+          </>
+        ) : <Btn tone="green" icon={<Send size={15} strokeWidth={1.5} />} onClick={send} disabled={!canSend}>{busy ? 'Sending' : 'Send reply'}</Btn>}
       </div>
     </div>
   );
