@@ -1,10 +1,10 @@
 # Listings pipeline: Central, Eastern and South-Eastern Europe
 
-Owner, 15 Nov 2026: fill the gaps in Poland, the Nordics and Baltics, the Balkans, Romania, Hungary, Slovakia, Turkey, Greece and Cyprus. Researched 15 Nov 2026 from web search (mymun used only to learn a conference exists); 170 candidates not on Gavelling that day, checked against every conference on Gavelling.
+Owner, 15 Nov 2026: fill the gaps in Poland, the Nordics and Baltics, the Balkans, Romania, Hungary, Slovakia, Türkiye, Greece and Cyprus. Researched 15 Nov 2026 from web search (mymun used only to learn a conference exists); 170 candidates not on Gavelling that day, checked against every conference on Gavelling.
 
 **These are candidates, not facts.** The daily job (`docs/conferences/listings-job.md`) takes every date, city, committee and contact from the conference's own website, a page its bio links to, or Google's results for its Instagram, never from this file. A candidate whose coming edition has no dates yet is skipped and tried again on a later run; one that turns out not to be real, past, a mymun event or already on Gavelling is dropped.
 
-How the job uses it: European picks come from this file first, country by country in the order below, top rows first (dated and well-sourced ones lead each country). Rotate countries so one run does not take ten from Poland or Turkey. Turkey and Cyprus count as European for the 7-in-10 split.
+How the job uses it: European picks come from this file first, country by country in the order below, top rows first (dated and well-sourced ones lead each country). Rotate countries so one run does not take ten from Poland or Türkiye. Türkiye and Cyprus count as European for the 7-in-10 split.
 
 Name clashes: BIMUN Belgrade, PSMUN Belgrade and SCMUN Rzeszów share an acronym with listings already on Gavelling (BIMUN Budapest, PS-MUN Greece, SCMUN Athens). Send them with the city in the acronym exactly as written here, so the upsert does not treat them as the same conference.
 
@@ -218,7 +218,7 @@ Columns: Usually = when the edition normally runs; Dates out = whether 2026-27 d
 | 7 | **ZaMUN**, Zilina Model United Nations | Zilina | school | usually Apr | no | medium | search (own site not found) |
 | 8 | **EUBA Model UN**, Slovak University MUN at EUBA | Bratislava | university | usually spring | no | medium | https://euba.sk/en/activities/news/3156-model-conference-2026-at-euba-students-simulate-un-negotiations-on-the-global-water-crisis |
 
-### Turkey (45)
+### Türkiye (45)
 
 | # | Conference | City | Level | Usually | Dates out | Confidence | Where to look |
 |---|---|---|---|---|---|---|---|
