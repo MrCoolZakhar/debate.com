@@ -21,6 +21,7 @@ const CONSTRAINT_MESSAGES: Record<string, string> = {
   conference_chair_invites_title_check: "Pick one of the listed chair titles, or no title.",
   conference_committees_chair_titles_check: "Pick one of the listed chair titles, or no title.",
   conferences_tbd_not_public: "Add your conference dates before publishing. A conference with dates to be decided stays private.",
+  conferences_no_test_public: "A conference with \"test\", \"demo\" or a similar word in its name can't be published. Give it its real name in Settings, then publish.",
   conferences_external_payment_url_https: "Payment links must start with https://",
   conferences_external_payment_note_len: "The payment note can be at most 500 characters.",
   conferences_age_range_check: "Ages must be between 5 and 120, and the minimum can't be above the maximum.",
