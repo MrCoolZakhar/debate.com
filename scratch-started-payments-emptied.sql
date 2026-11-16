@@ -1,0 +1,59 @@
+-- FOR CHRISTIAN'S CHAT (money functions). Not applied. Drafted 16 Nov 2026 from a Claude Code run.
+--
+-- What broke: /pay "Completed" crashed ("Spread syntax requires ...iterable not be null")
+-- for every payer holding a started manual payment the organiser had since marked paid.
+--
+-- Why: mark_invoices_paid expires the payer's pending manual payment
+--   update payments set status = 'expired', reason = 'Marked paid by the organizer'
+--    where invoice_id = r.id and status = 'pending' and method = 'manual';
+-- but never touches its payment_batches row, which stays 'awaiting_proof' (or 'pending')
+-- with no pending payment in it. my_started_payments then still lists the batch, and its
+-- 'items' is a bare jsonb_agg over zero rows, so it comes back NULL.
+--
+-- On 16 Nov 2026: 4 batches 'awaiting_proof' (2 conferences, 4 payers, all "Marked paid
+-- by the organizer", invoices settled) and 1 batch 'pending' from 2 Sep 2026 with no
+-- payments at all. The client now skips a started payment with no items
+-- (manualApi.ts readStarted), so the page no longer crashes; these are the server fixes.
+--
+-- Three parts, in order. Please check the status word for B and C: 'cancelled' is my
+-- guess (the payer did not cancel it, but 'expired' would read as "no proof sent").
+
+-- A. my_started_payments: never NULL items, and never list a batch with nothing in it.
+--    Only change from the live body: coalesce(..., '[]') on items and the AND EXISTS
+--    in the WHERE. Everything else is the live definition as read on 16 Nov 2026.
+--    (Read the live body again before applying: replace those two spots only.)
+--
+--   'items', coalesce((select jsonb_agg(jsonb_build_object(
+--               'invoice_id', i.id, 'label', public._invoice_label(i.label, i.kind), 'kind', i.kind,
+--               'amount_cents', p.amount_cents, 'invoice_status', i.status) order by i.created_at)
+--             from payments p join invoices i on i.id = p.invoice_id
+--            where p.batch_id = b.id and p.status = case when b.status = 'rejected' then 'rejected' else 'pending' end),
+--           '[]'::jsonb)
+--   ...
+--   where b.conference_id = p_conference_id and b.payer_user_id = auth.uid() and b.method = 'manual'
+--     and exists (select 1 from payments p where p.batch_id = b.id
+--                  and p.status = case when b.status = 'rejected' then 'rejected' else 'pending' end)
+--     and ( ...the existing status conditions, unchanged... )
+
+-- B. mark_invoices_paid: right after the update that expires the pending manual payments,
+--    close every started payment that has no pending payment left.
+--
+--   update payment_batches b set status = 'cancelled'
+--    where b.method = 'manual' and b.status in ('awaiting_proof', 'pending')
+--      and exists (select 1 from payments p where p.batch_id = b.id and p.invoice_id = r.id)
+--      and not exists (select 1 from payments p where p.batch_id = b.id and p.status = 'pending');
+--
+--   A batch that still holds other unpaid items stays open, and only those items show.
+--   Worth checking whether anything else expires or settles a manual payment the same way
+--   (stripe-webhook settling an item that is also in a started manual payment).
+
+-- C. One-off clean-up of the rows stuck today (preview first).
+--
+-- select b.id, b.conference_id, b.payer_user_id, b.status, b.created_at
+--   from payment_batches b
+--  where b.method = 'manual' and b.status in ('awaiting_proof', 'pending')
+--    and not exists (select 1 from payments p where p.batch_id = b.id and p.status = 'pending');
+--
+-- update payment_batches b set status = 'cancelled'
+--  where b.method = 'manual' and b.status in ('awaiting_proof', 'pending')
+--    and not exists (select 1 from payments p where p.batch_id = b.id and p.status = 'pending');

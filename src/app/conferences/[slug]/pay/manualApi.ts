@@ -53,7 +53,11 @@ export async function readStarted(conferenceId: string): Promise<StartedInfo> {
   if (a.ok !== true) return { manual: false, payments: [], locked: {} };
   return {
     manual: a.manual === true,
-    payments: Array.isArray(a.payments) ? (a.payments as StartedPayment[]) : [],
+    // A started payment whose items were all paid another way comes back with
+    // items null (16 Nov 2026: /pay Completed crashed on it); it has nothing to show.
+    payments: Array.isArray(a.payments)
+      ? (a.payments as StartedPayment[]).filter(p => Array.isArray(p.items) && p.items.length > 0)
+      : [],
     locked: (a.locked && typeof a.locked === 'object' ? a.locked : {}) as StartedInfo['locked'],
   };
 }
