@@ -3690,7 +3690,17 @@ export default function ApplicationsPage() {
   // Full information sheet with every answer in its own column. Built from what the page already loaded; SheetJS
   // loads inside the click.
   async function handleExportExcel() {
-    if (exportBusy) return;
+    if (exportBusy || loading) return;
+    // Never hand over a file built from a list that did not load in full: an export
+    // clicked before the list arrived came out with headers only (CISEMUN, 16 Nov 2026).
+    if (loadIncomplete) {
+      setActionError('Some applications could not be loaded, so the file would be missing people. Reload the page and try again.');
+      return;
+    }
+    if (applications.length === 0) {
+      setActionError('There are no applications to export yet.');
+      return;
+    }
     setExportBusy(true);
     try {
       const { downloadApplicationsWorkbook } = await import('./exportWorkbook');
@@ -4028,18 +4038,18 @@ export default function ApplicationsPage() {
           <FilterPanel filters={filters} setFilters={setFilters} activeCount={activeFilterCount} />
           <button
             onClick={() => { void handleExportExcel(); }}
-            disabled={exportBusy}
-            aria-busy={exportBusy || undefined}
+            disabled={exportBusy || loading}
+            aria-busy={exportBusy || loading || undefined}
             className="inline-flex items-center gap-2 focus:outline-none"
             style={{
               padding: '9px 16px', borderRadius: 999,
               fontFamily: OUTFIT, fontSize: 12, fontWeight: 800,
-              color: NEU.ink, backgroundColor: NEU.surface, boxShadow: NEU.outSm, border: 'none', cursor: exportBusy ? 'default' : 'pointer',
-              opacity: exportBusy ? 0.7 : 1,
+              color: NEU.ink, backgroundColor: NEU.surface, boxShadow: NEU.outSm, border: 'none', cursor: exportBusy || loading ? 'default' : 'pointer',
+              opacity: exportBusy || loading ? 0.7 : 1,
             }}
           >
             <Download size={14} strokeWidth={2.5} />
-            {exportBusy ? 'Exporting...' : 'Export Excel'}
+            {exportBusy ? 'Exporting...' : loading ? 'Loading...' : 'Export Excel'}
           </button>
         </div>
       </div>
