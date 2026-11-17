@@ -1,6 +1,10 @@
 // ── Deciding an application: the shared code (Job Board prompt 3) ─────────
 //
 // Two callers, one path each:
+//   acceptFollowUps        every step an accept runs after its status write
+//                          (email, auto-cover), shared by the Applications
+//                          page, the team accept and the role swap
+//   swapTeamApplication    the team accept through accept_role_swap
 //   acceptTeamApplication  Settings > Team accepts a secretariat or staff
 //                          applicant through accept_team_application, then
 //                          runs the post-accept effects moved here unchanged
@@ -21,6 +25,7 @@ import { queueEventEmail, notifyIfNeeded, heldUnresolvedMessage, fallbackDefault
 import { notifyErr } from '@/lib/appNotify';
 import { UserFacingError } from '@/lib/friendlyError';
 import { poolForRole, fillFreeSpots } from '@/app/manage/[slug]/assignment/delegationShared';
+import { runRoleSwap } from './roleSwap';
 
 type Client = ReturnType<typeof getAuthedClient>;
 export type PushDraftNotice = (eventKey: string, outcome: 'unconfigured' | 'sent-default') => void;
@@ -54,7 +59,30 @@ export async function acceptTeamApplication(input: TeamAcceptInput): Promise<{ o
 
   // Secondary effects, exactly what a plain accept does: a failure here must
   // NOT roll back the accept.
-  let followUpFailed = false;
+  const followUpFailed = await acceptFollowUps(supabase, {
+    conferenceId: input.conferenceId, appId: input.appId, role: input.role,
+    societyId: input.societyId, pushDraftNotice: input.pushDraftNotice,
+  });
+  return { organizerId, followUpFailed };
+}
+
+export interface AcceptFollowUpInput {
+  conferenceId: string;
+  /** The application that now holds the role (after a swap: result.application_id). */
+  appId: string;
+  role: string;
+  societyId: string | null;
+  pushDraftNotice: PushDraftNotice;
+}
+
+/**
+ * Every step an accept runs AFTER its status write: the application_accepted
+ * email (notifyIfNeeded, fallbackDefaultMessage, heldUnresolvedMessage), then
+ * the delegation pool auto-cover. Shared by the Applications page's accept,
+ * the team accept and the role swap (roleSwap.ts), never a second copy.
+ * Resolves true when a step failed; a failure never rolls the accept back.
+ */
+export async function acceptFollowUps(supabase: Client, input: AcceptFollowUpInput): Promise<boolean> {
   try {
     const result = await queueEventEmail(supabase, input.conferenceId, 'application_accepted', [input.appId]);
     notifyIfNeeded(result, input.pushDraftNotice);
@@ -65,14 +93,37 @@ export async function acceptTeamApplication(input: TeamAcceptInput): Promise<{ o
     const acceptedIds = new Set(result.queuedApplicationIds ?? []);
     // The payment email is queued by the database for a day after acceptance (trigger zzz_queue_accept_followups).
 
+    // F13: acceptance is when auto-cover runs, newly accepted pool members
+    // absorb any free delegation-purchased spots, oldest-first. It only
+    // marks them paid: the database sends Fee Covered (spot_received).
     const pool = poolForRole(input.role);
     if (input.societyId && pool) {
       await fillFreeSpots(supabase, input.conferenceId, input.societyId, pool, { suppressIds: acceptedIds });
     }
+    return false;
   } catch {
-    followUpFailed = true;
+    return true;
   }
-  return { organizerId, followUpFailed };
+}
+
+/**
+ * The team accept for someone who holds a role that does not combine:
+ * accept_role_swap with the same permissions and public title the access
+ * step collected, then the same follow-ups for the application that now
+ * holds the role. A refusal resolves { ok:false } with the server's sentence.
+ */
+export async function swapTeamApplication(
+  input: TeamAcceptInput,
+): Promise<{ ok: true; applicationId: string; message: string; followUpFailed: boolean } | { ok: false; message: string }> {
+  const supabase = await getFreshAuthedClient();
+  if (!supabase) throw new UserFacingError('Your session has expired, please refresh and sign in again.');
+  const res = await runRoleSwap(supabase, input.appId, { permissions: input.permissions, publicTitle: input.publicTitle });
+  if (!res.ok) return { ok: false, message: res.message };
+  const followUpFailed = await acceptFollowUps(supabase, {
+    conferenceId: input.conferenceId, appId: res.application_id, role: input.role,
+    societyId: input.societyId, pushDraftNotice: input.pushDraftNotice,
+  });
+  return { ok: true, applicationId: res.application_id, message: res.message, followUpFailed };
 }
 
 export interface RejectRow {
