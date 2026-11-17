@@ -302,6 +302,10 @@ export function sheetsToWorkbook(XLSX: typeof import('xlsx'), sheets: SheetData[
   for (const sheet of sheets) {
     const ws = XLSX.utils.aoa_to_sheet(sheet.rows);
     ws['!cols'] = widths(sheet.rows);
+    // A filter row on the header, so sorting in Excel or Google Sheets moves whole
+    // rows (CISEMUN, 17 Nov 2026: a one-column sort put names next to other people's seats).
+    // SheetJS 0.18.5 cannot write a frozen header, so there is none.
+    if (ws['!ref']) ws['!autofilter'] = { ref: ws['!ref'] };
     for (const c of sheet.dateCols) {
       for (let r = 1; r < sheet.rows.length; r++) {
         const cell = ws[XLSX.utils.encode_cell({ r, c })];
