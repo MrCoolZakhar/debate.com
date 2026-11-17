@@ -277,6 +277,12 @@ export function friendlyError(error: unknown, fallback: string = DEFAULT_FALLBAC
     return say(message, 'trigger_check', true, message, code);
   }
 
+  // e1. One accepted role per person (16 Nov 2026): the accept refusal's own
+  // message names the person and the role they hold, already a sentence.
+  if (isErrorLike(error) && error.hint === 'holds_role' && message && !looksTechnical(message)) {
+    return say(message, 'trigger_hint', true, message, code);
+  }
+
   // e. By SQLSTATE.
   if (code && CODE_MESSAGES[code]) return say(CODE_MESSAGES[code], 'sqlstate', false, message, code);
 

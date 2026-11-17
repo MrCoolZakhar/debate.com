@@ -65,6 +65,8 @@ export default function DirectiveMain({ directive: d, reply, notesVersion = 0, o
   const character = d.author_character_id ? names.characters.get(d.author_character_id) : undefined;
 
   const [notes, setNotes] = useState<DirectiveNote[] | null>(null);
+  // Bumped when this pop-up sends a message, so the thread shows it at once.
+  const [sentTick, setSentTick] = useState(0);
   const [coIds, setCoIds] = useState<string[]>([]);
   const goals = useSecretGoals(d);
 
@@ -72,7 +74,7 @@ export default function DirectiveMain({ directive: d, reply, notesVersion = 0, o
     let cancelled = false;
     listNotes(ref, d.id).then((rows) => { if (!cancelled) setNotes(rows); }).catch(() => { if (!cancelled) setNotes((prev) => prev ?? []); });
     return () => { cancelled = true; };
-  }, [ref, d.id, notesVersion, d.updated_at]);
+  }, [ref, d.id, notesVersion, d.updated_at, sentTick]);
 
   useEffect(() => {
     let cancelled = false;
@@ -175,7 +177,7 @@ export default function DirectiveMain({ directive: d, reply, notesVersion = 0, o
       </div>
 
       {/* Bottom, fixed: the composer */}
-      <DirectiveComposer d={d} reply={reply} who={d.kind === 'committee' && cabinet ? (cabinet.short_name || cabinet.name) : who} effectsButton={effectsButton} />
+      <DirectiveComposer d={d} reply={reply} who={d.kind === 'committee' && cabinet ? (cabinet.short_name || cabinet.name) : who} effectsButton={effectsButton} onNoteAdded={() => setSentTick((v) => v + 1)} />
     </>
   );
 }

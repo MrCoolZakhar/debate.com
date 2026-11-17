@@ -42,8 +42,7 @@ async function loadRooms(ref: CrisisRef, cabinets: Array<{ id: string; name: str
  *  its clock) and, collapsed, what was held. Requests waiting for a yes or no are listed first. A chair sees these and may run
  *  the clock; only the backroom decides (owner, 1 Nov 2026). */
 function ChairMeetings() {
-  const { ref, core, cabinetId, settings } = useCrisis();
-  const seesAll = settings.chairsSeeAllCabinets;
+  const { ref, core, cabinetId } = useCrisis();
   const people = useMeetingPeople(ref, true);
   const [fetched, setFetched] = useState<Meeting[] | null>(null);
   const meetings = useClockOverlay(fetched);
@@ -62,13 +61,13 @@ function ChairMeetings() {
   }, [load]);
   useCrisisLive(ref.id, ['crisis_meetings'], () => { void load(); });
 
-  // Only meetings that involve a character of this cabinet (both cabinets when the Crisis Director lets chairs see both).
+  // Only meetings that involve a character of this cabinet, never another cabinet's (docs/crisis/sql/039).
   const involvesMine = useCallback((m: Meeting): boolean => {
     if (!cabinetId) return true;
     const ids = [...m.character_ids, ...(m.requested_by_character ? [m.requested_by_character] : [])];
     return ids.some((id) => (people.get(id)?.cabinet_id ?? core.characters.find((c) => c.id === id)?.cabinet_id) === cabinetId);
   }, [cabinetId, people, core.characters]);
-  const mine = useMemo(() => (meetings ?? []).filter((m) => seesAll || involvesMine(m)), [meetings, seesAll, involvesMine]);
+  const mine = useMemo(() => (meetings ?? []).filter((m) => involvesMine(m)), [meetings, involvesMine]);
   const approved = useMemo(
     () => mine.filter((m) => m.status === 'approved').sort((x, y) => Number(meetingInProgress(y)) - Number(meetingInProgress(x)) || new Date(y.decided_at ?? y.created_at).getTime() - new Date(x.decided_at ?? x.created_at).getTime()),
     [mine],
@@ -141,7 +140,7 @@ const DASH_CSS = `
 
 export default function ChairHome() {
   const v = useCrisis();
-  const { ref, cabinetId, core, settings } = v;
+  const { ref, cabinetId, core } = v;
   const { items: news } = useCrisisNews(ref);
 
   const [rooms, setRooms] = useState<Room[] | null>(null);
@@ -196,8 +195,8 @@ export default function ChairHome() {
   const crisis = core.crisis;
   const typeById = useMemo(() => new Map((res?.types ?? []).map((t) => [t.id, t])), [res]);
   const cabinetRes = (res?.resources ?? []).filter((r) => r.cabinet_id && (cabinetId ? r.cabinet_id === cabinetId : true));
-  // Both cabinets' cabinet directives when chairs see both (the other one's rows open read only).
-  const cabinetList = useMemo(() => cabinetDirectivesOf(directives, settings.chairsSeeAllCabinets ? null : cabinetId), [directives, cabinetId, settings.chairsSeeAllCabinets]);
+  // Only this chair's cabinet: the Front Room is projected to the room (docs/crisis/sql/039).
+  const cabinetList = useMemo(() => cabinetDirectivesOf(directives, cabinetId), [directives, cabinetId]);
 
   return (
     <div className="fr-wrap">

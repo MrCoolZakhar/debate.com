@@ -40,7 +40,12 @@ export interface PointsResult { total: number; lines: PointsLine[] }
 export type PointsDirective = Pick<Directive, 'id' | 'kind' | 'status' | 'outcome' | 'author_character_id'> & {
   /** The delegate who wrote it. Needed for a person's total; a row without it counts for its character only. */
   author_member_id?: string | null;
+  /** When it was written: a joint directive's co-signature counts for whoever played the co-author character then. */
+  created_at?: string;
 };
+
+/** Whether a person played a character at a moment (playedBy in performance.ts): undefined = no history, count it. */
+export type PlayedCheck = (characterId: string, at: string | null | undefined) => boolean;
 
 /** Points of one character from the directives they wrote (or co-wrote) and the meetings they held. */
 export function characterPoints(
@@ -99,7 +104,7 @@ const counts = (d: PointsDirective) => d.status !== 'withdrawn' && !isChairSendB
 
 /**
  * Every character this person has played: the ones they wrote a directive as, plus the one they play now.
- * (Characters they held without writing anything are not known to the database's history, so they add nothing.)
+ * The full history (crisis_character_players, loadPlayWindows) adds the ones they held without writing anything.
  */
 export function personCharacterIds(memberId: string, directives: PointsDirective[], currentCharacterId: string | null): Set<string> {
   const ids = new Set<string>();
@@ -119,17 +124,26 @@ export function personPoints(
   config: PointsConfig,
   coauthored: Map<string, Set<string>>,
   characterIds: Set<string>,
+  /** Only the time this person played each character counts for co-signatures and meetings. */
+  played?: PlayedCheck,
 ): PointsResult {
   const mine = directives.filter((d) => d.author_member_id === memberId && counts(d));
+  const byId = played ? new Map(directives.map((d) => [d.id, d])) : null;
   const sent = mine.length;
   const approved = mine.filter((d) => d.outcome === 'approved').length;
   const partial = mine.filter((d) => d.outcome === 'partial').length;
   const denied = mine.filter((d) => d.outcome === 'denied').length;
   const cabinet = mine.filter((d) => d.kind === 'committee').length;
   const signed = new Set<string>();
-  for (const id of characterIds) for (const dId of coauthored.get(id) ?? []) signed.add(dId);
+  for (const id of characterIds) {
+    for (const dId of coauthored.get(id) ?? []) {
+      if (played && !played(id, byId?.get(dId)?.created_at)) continue;
+      signed.add(dId);
+    }
+  }
   const joint = directives.filter((d) => signed.has(d.id) && d.author_member_id !== memberId && counts(d)).length;
-  const held = meetings.filter((m) => m.status === 'held' && (m.requested_by_member === memberId || m.character_ids.some((c) => characterIds.has(c)))).length;
+  const held = meetings.filter((m) => m.status === 'held' && (m.requested_by_member === memberId
+    || m.character_ids.some((c) => characterIds.has(c) && (!played || played(c, m.started_at ?? m.created_at))))).length;
   return linesOf({ sent, approved, partial, denied, cabinet, joint, held }, config);
 }
 

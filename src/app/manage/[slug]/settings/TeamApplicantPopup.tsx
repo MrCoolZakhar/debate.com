@@ -85,7 +85,7 @@ export const rejectBtn = (disabled: boolean): React.CSSProperties => ({
 });
 
 export default function TeamApplicantPopup({
-  applicant: a, initialStep, canAccept, busy, customQuestions, onAccept, onReject, onClose, committees = [], onAcceptChair,
+  applicant: a, initialStep, canAccept, busy, customQuestions, onAccept, onReject, onClose, committees = [], onAcceptChair, swap = null,
 }: {
   /** The conference's committees, for seating a chair. */
   committees?: TeamCommittee[];
@@ -101,6 +101,8 @@ export default function TeamApplicantPopup({
   onAccept: (picked: Set<string>, publicTitle: string) => Promise<boolean>;
   onReject: () => Promise<boolean>;
   onClose: () => void;
+  /** The role swap asked in place (RoleSwapPanel): replaces the body and the footer while set. */
+  swap?: React.ReactNode;
 }) {
   const [step, setStep] = useState<PopupStep>(canAccept ? (initialStep === 'access' && a.role === 'chair' ? 'seat' : initialStep) : 'review');
   const [askReject, setAskReject] = useState(false);
@@ -177,7 +179,7 @@ export default function TeamApplicantPopup({
           {/* Head */}
           <div className="flex items-start gap-3" style={{ padding: '20px 22px 14px' }}>
             {step === 'access' || step === 'seat' ? (
-              <button type="button" onClick={() => setStep('review')} disabled={busy} aria-label="Back to the application"
+              <button type="button" onClick={() => setStep('review')} disabled={busy || !!swap} aria-label="Back to the application"
                 className="flex items-center justify-center rounded-full flex-shrink-0 focus:outline-none"
                 style={{ width: 36, height: 36, border: '1.5px solid #DDD4C0', background: 'transparent', color: INK, cursor: busy ? 'default' : 'pointer' }}>
                 <ArrowLeft size={16} />
@@ -214,7 +216,9 @@ export default function TeamApplicantPopup({
 
           {/* Body */}
           <div ref={bodyRef} className="flex-1 min-h-0" style={{ overflowY: 'auto', padding: '6px 22px 18px' }}>
-            {step === 'review' ? (
+            {swap ? (
+              <div style={{ paddingTop: 6 }}>{swap}</div>
+            ) : step === 'review' ? (
               <div className="flex flex-col" style={{ gap: 24 }}>
                 <section aria-label="MUN experience">
                   <SectionLabel>MUN Experience</SectionLabel>
@@ -358,8 +362,8 @@ export default function TeamApplicantPopup({
             )}
           </div>
 
-          {/* Footer */}
-          <div style={{ padding: '14px 22px 18px', borderTop: '1px solid #E4DAC4' }}>
+          {/* Footer (the role swap carries its own buttons) */}
+          {!swap && <div style={{ padding: '14px 22px 18px', borderTop: '1px solid #E4DAC4' }}>
             {step === 'review' && waiting && askReject ? (
               <div className="flex flex-wrap items-center gap-2">
                 <p className="flex-1 min-w-0" style={{ margin: 0, fontSize: 14, fontWeight: 700, color: INK }}>
@@ -420,7 +424,7 @@ export default function TeamApplicantPopup({
                 </button>
               </div>
             )}
-          </div>
+          </div>}
         </div>
       </div>
     </Portal>

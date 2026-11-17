@@ -32,7 +32,7 @@ function Panel({ title, eyebrow, onClose, onBack, children, width, flush, step, 
       if (quietRef.current) return;
       if (e.key === 'Escape') {
         // A dropdown inside the page closes first.
-        if (document.querySelector('[data-crisis-popover]') || e.defaultPrevented) return;
+        if (document.querySelector('[data-crisis-popover], [data-gsel-popover]') || e.defaultPrevented) return;
         closeRef.current();
         return;
       }

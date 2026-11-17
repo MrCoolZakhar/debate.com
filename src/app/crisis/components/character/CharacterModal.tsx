@@ -21,6 +21,7 @@ import { useCrisisLive } from '@/lib/crisis/live';
 import {
   characterPoints, coauthorsByCharacter, loadDirectiveStatRowsWithAuthors, personCharacterIds, personPoints, readPoints, type PointsRow,
 } from '@/lib/crisis/points';
+import { loadPlayWindows, playedCheck, type PlayWindow } from '@/lib/crisis/performance';
 import {
   KIND_LABEL, ROLE_LABEL, type Character, type CharacterSecret, type CharacterStatus, type Directive, type Meeting,
 } from '@/lib/crisis/types';
@@ -112,6 +113,8 @@ function ModalBody({ char, onClose, initialTab }: { char: Character; onClose: ()
   // Points read EVERY directive of the crisis (complete, uncapped) with who wrote it, and every joint directive's co-authors.
   const [statRows, setStatRows] = useState<PointsRow[] | null>(null);
   const [coAll, setCoAll] = useState<Map<string, Set<string>>>(new Map());
+  // Who played which character, when: only that time counts for a person (null = history unreadable, count as before).
+  const [windows, setWindows] = useState<PlayWindow[] | null>(null);
   const seq = useRef(0);
 
   const readAll = useCallback(async () => {
@@ -119,14 +122,16 @@ function ModalBody({ char, onClose, initialTab }: { char: Character; onClose: ()
     const mine = ++seq.current;
     let client;
     try { client = await getCrisisClient(ref.conf, ref.crisis); } catch (e) { notifyErr(crisisError(e, 'Could not load the directives.'), `${KEY}-dirs`); return; }
-    const [dr, mr, cr, sr, pr] = await Promise.allSettled([
+    const [dr, mr, cr, sr, pr, wr] = await Promise.allSettled([
       listDirectives(ref),
       listMeetings(ref),
       client.from('crisis_directive_coauthors').select('directive_id, character_id'),
       v.staff ? client.from('crisis_character_secrets').select('*').eq('character_id', char.id).maybeSingle() : Promise.resolve(null),
       loadDirectiveStatRowsWithAuthors(ref),
+      loadPlayWindows(ref),
     ]);
     if (mine !== seq.current) return;
+    if (wr.status === 'fulfilled' && wr.value) setWindows(wr.value);
     if (dr.status === 'fulfilled') setDirs(dr.value);
     else { setDirs((p) => p ?? []); notifyErr(crisisError(dr.reason, 'Could not load the directives.'), `${KEY}-dirs`); }
     if (mr.status === 'fulfilled') setMeetings(mr.value);
@@ -178,16 +183,21 @@ function ModalBody({ char, onClose, initialTab }: { char: Character; onClose: ()
     () => characterPoints(char.id, rowsForPoints, meetings, readPoints(core.crisis.settings), co),
     [char.id, rowsForPoints, meetings, core.crisis.settings, co],
   );
-  const personIds = useMemo(() => (player ? personCharacterIds(player.id, rowsForPoints, char.id) : null), [player, rowsForPoints, char.id]);
+  const personIds = useMemo(() => {
+    if (!player) return null;
+    const ids = personCharacterIds(player.id, rowsForPoints, char.id);
+    for (const w of windows ?? []) if (w.memberId === player.id) ids.add(w.characterId);
+    return ids;
+  }, [player, rowsForPoints, char.id, windows]);
   const points = useMemo(
-    () => (player && personIds ? personPoints(player.id, rowsForPoints, meetings, readPoints(core.crisis.settings), coAll, personIds) : ownPoints),
-    [player, personIds, rowsForPoints, meetings, core.crisis.settings, coAll, ownPoints],
+    () => (player && personIds ? personPoints(player.id, rowsForPoints, meetings, readPoints(core.crisis.settings), coAll, personIds, playedCheck(windows, player.id)) : ownPoints),
+    [player, personIds, rowsForPoints, meetings, core.crisis.settings, coAll, ownPoints, windows],
   );
   const person = useMemo(() => {
     if (!player || !personIds) return null;
     const others = [...personIds].filter((id) => id !== char.id).map((id) => core.characters.find((c) => c.id === id)).filter((c): c is Character => !!c);
-    return { memberId: player.id, name: player.display_name, others, ownPoints: ownPoints.total, rows: rowsForPoints.filter((d) => d.author_member_id === player.id) };
-  }, [player, personIds, core.characters, char.id, ownPoints, rowsForPoints]);
+    return { memberId: player.id, name: player.display_name, others, ownPoints: ownPoints.total, rows: rowsForPoints.filter((d) => d.author_member_id === player.id), windows };
+  }, [player, personIds, core.characters, char.id, ownPoints, rowsForPoints, windows]);
 
   // ───────── Saves ─────────
 

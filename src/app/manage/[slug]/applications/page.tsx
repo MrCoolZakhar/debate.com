@@ -13,7 +13,7 @@ import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
 import { fetchAllRows, chunk } from '@/lib/fetchAllRows';
 import { useAuth } from '@/components/AuthProvider';
-import { queueEventEmail, notifyIfNeeded, turnOnDefaultEmail, heldUnresolvedMessage, fallbackDefaultMessage } from '@/lib/emailEvents';
+import { queueEventEmail, notifyIfNeeded, turnOnDefaultEmail } from '@/lib/emailEvents';
 import { applicationFileHref } from '@/lib/applicationUploads';
 import { queueAdHocEmail } from '@/lib/adHocEmail';
 import { readEmailAllowance, emailsShort, emailsShortSentence, isEmailAllowanceMessage } from '@/lib/emailAllowance';
@@ -40,7 +40,7 @@ import {
 } from '@/components/neu';
 import { matchPresetEmblem } from '@/lib/presetNames';
 import {
-  poolForRole, fillFreeSpots, releasePoolSpot, MemberAvatar, markNotAttending, undoNotAttending,
+  poolForRole, releasePoolSpot, MemberAvatar, markNotAttending, undoNotAttending,
 } from '@/app/manage/[slug]/assignment/delegationShared';
 import { LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
 import { type CustomQuestion, type CustomAnswers, normalizeBlocks, questionsOf, displayAnswer } from '@/lib/customQuestions';
@@ -52,7 +52,9 @@ import { useDelegationSummaries } from './DelegationAvatar';
 import { RowDelegation, ROW_DELEGATION_PILL, rowDelegationTitle, type RowDelegationProps } from './RowDelegation';
 import { countryShortName } from '../assignment/displayNames';
 import OpenDelegateApplications from './OpenDelegateApplications';
-import { rejectUpdates, writeReject, rejectFollowUps } from './teamDecisions';
+import { rejectUpdates, writeReject, rejectFollowUps, acceptFollowUps } from './teamDecisions';
+import { checkRoleSwap, askFor, runRoleSwap, goneAfterSwap, type SwapAsk } from './roleSwap';
+import RoleSwapPanel from './RoleSwapPanel';
 import { useJobBoardApplicantExtras } from './useJobBoardApplicantExtras';
 import { useNoteCounts } from './useNoteCounts';
 import TeamApplicantsLine from './TeamApplicantsLine';
@@ -2618,8 +2620,125 @@ export default function ApplicationsPage() {
     await handleAccept(appId);
   }
 
+  // ── One accepted role per person (16 Nov 2026): the role swap ──────────
+  // Every single accept asks accept_role_swap_check first (roleSwap.ts). No
+  // conflicting role: confirmAccept, then handleAccept exactly as before.
+  // Otherwise the decision pane turns into RoleSwapPanel in place: the server's sentence with Close,
+  // or the confirm whose "Accept and remove" runs accept_role_swap and then
+  // the same post-accept steps for the application that now holds the role.
+  const [swapAsk, setSwapAsk] = useState<{ appId: string; ask: SwapAsk; busy: boolean; error: string } | null>(null);
+  const swapBusyRef = useRef(false);
+
+  async function openRoleSwap(appId: string, race = false): Promise<void> {
+    if (!session) return;
+    if (busyIds.has(appId) || swapBusyRef.current) { noteBusyClick(); return; }
+    swapBusyRef.current = true;
+    setActionError('');
+    setSwapAsk({ appId, ask: { phase: 'checking' }, busy: false, error: '' });
+    try {
+      const check = await checkRoleSwap(getAuthedClient(session.access_token), appId);
+      const ask = askFor(check);
+      if (ask) { setSwapAsk({ appId, ask, busy: false, error: '' }); return; }
+      if (race) {
+        // The accept was refused for a role the check no longer sees: say so, never loop.
+        setSwapAsk({ appId, ask: { phase: 'blocked', message: 'Could not accept the application. Please try again.' }, busy: false, error: '' });
+        return;
+      }
+      setSwapAsk(null);
+      swapBusyRef.current = false;
+      // Nothing held: the plain "Accept {name}?" confirm (prompt 43), then the normal accept.
+      void confirmAccept(appId);
+    } catch (e) {
+      setSwapAsk({ appId, ask: { phase: 'blocked', message: friendlyError(e, 'Could not check this application. Please try again.') }, busy: false, error: '' });
+    } finally {
+      swapBusyRef.current = false;
+    }
+  }
+
+  async function confirmRoleSwap(appId: string): Promise<void> {
+    if (!session || !conference || !swapAsk || swapAsk.appId !== appId || swapAsk.ask.phase !== 'confirm') return;
+    if (swapBusyRef.current || busyIds.has(appId)) return;
+    const prevRow = applications.find(a => a.id === appId);
+    if (!prevRow) return;
+    const check = swapAsk.ask.check;
+    swapBusyRef.current = true;
+    markBusy(appId, true);
+    setSwapAsk(prev => prev && prev.appId === appId ? { ...prev, busy: true, error: '' } : prev);
+    const supabase = getAuthedClient(session.access_token);
+    try {
+      const res = await runRoleSwap(supabase, appId);
+      if (!res.ok) {
+        setSwapAsk(prev => prev && prev.appId === appId ? { ...prev, busy: false, error: res.message } : prev);
+        return;
+      }
+      setSwapAsk(null);
+      notifyOk(res.message);
+      // The old application (and, when the paid one was kept, this one) no longer exists.
+      const gone = new Set(goneAfterSwap(appId, check, res.application_id));
+      setApplications(prev => prev
+        .filter(a => !gone.has(a.id))
+        .map(a => (a.id === res.application_id ? { ...a, status: 'accepted' } : a)));
+      const followUpFailed = await acceptFollowUps(supabase, {
+        conferenceId: conference.id, appId: res.application_id, role: prevRow.role,
+        societyId: prevRow.society_id ?? null, pushDraftNotice,
+      });
+      if (followUpFailed) setActionError('Accepted, but a follow-up step (email / auto-cover) failed. Refresh to verify.');
+      scheduleReconcile();
+      void loadApplications({ silent: true });
+    } catch (e) {
+      setSwapAsk(prev => prev && prev.appId === appId ? { ...prev, busy: false, error: friendlyError(e, 'Could not accept the application. Please try again.') } : prev);
+    } finally {
+      swapBusyRef.current = false;
+      markBusy(appId, false);
+    }
+  }
+
+  function renderRoleSwap(app: Application) {
+    if (!swapAsk || swapAsk.appId !== app.id) return null;
+    return (
+      <RoleSwapPanel
+        ask={swapAsk.ask}
+        busy={swapAsk.busy}
+        error={swapAsk.error}
+        onConfirm={() => { void confirmRoleSwap(app.id); }}
+        onCancel={() => { if (!swapAsk.busy) setSwapAsk(null); }}
+      />
+    );
+  }
+
+  // Bulk accept (16 Nov 2026): anyone who holds a role that does not combine,
+  // or whose check refuses, is left out and accepted one by one instead.
+  const bulkCheckRef = useRef(false);
+  async function bulkAccept(apps: Application[]): Promise<void> {
+    if (!session || apps.length === 0 || bulkCheckRef.current) return;
+    bulkCheckRef.current = true;
+    try {
+      const supabase = getAuthedClient(session.access_token);
+      const held = new Set<string>();
+      for (let i = 0; i < apps.length; i += BULK_CHUNK_SIZE) {
+        const part = apps.slice(i, i + BULK_CHUNK_SIZE);
+        await Promise.all(part.map(async a => {
+          try {
+            const check = await checkRoleSwap(supabase, a.id);
+            if (askFor(check)) held.add(a.id);
+          } catch {
+            // No answer: left in. The database still refuses a conflicting accept.
+          }
+        }));
+      }
+      const clear = apps.filter(a => !held.has(a.id));
+      if (held.size > 0) {
+        setActionError(`${held.size} not accepted because they hold another role here. Accept them one by one.`);
+      }
+      if (clear.length === 0) return;
+      await runBulk(clear, { title: `Accept ${clear.length} application${clear.length === 1 ? '' : 's'}?`, body: 'Each one is accepted on its own. Acceptance emails and delegation spot cover run per person.', confirmLabel: 'Accept all' }, a => handleAccept(a.id, { bulk: true }));
+    } finally {
+      bulkCheckRef.current = false;
+    }
+  }
+
   // Returns the settled promise so runBulk can chunk instead of fanning out.
-  function handleAccept(appId: string): Promise<void> {
+  function handleAccept(appId: string, opts?: { bulk?: boolean }): Promise<void> {
     if (!session || !conference) return Promise.resolve();
     if (busyIds.has(appId)) { noteBusyClick(); return Promise.resolve(); }
     const prevRow = applications.find(a => a.id === appId);
@@ -2645,26 +2764,12 @@ export default function ApplicationsPage() {
     return primary
       .then(async () => {
         // Secondary effects, a failure here must NOT roll back the accept.
-        try {
-          const result = await queueEventEmail(supabase, conference.id, 'application_accepted', [appId]);
-          notifyIfNeeded(result, pushDraftNotice);
-          const fellBack = fallbackDefaultMessage(result);
-          if (fellBack) notifyErr(fellBack, 'email-held');
-          const held = heldUnresolvedMessage(result);
-          if (held) notifyErr(held, 'email-held');
-          const acceptedIds = new Set(result.queuedApplicationIds ?? []);
-          // The payment email is queued by the database for a day after acceptance (trigger zzz_queue_accept_followups).
-
-          // F13: acceptance is when auto-cover runs, newly accepted pool members
-          // absorb any free delegation-purchased spots, oldest-first. It only
-          // marks them paid: the database sends Fee Covered (spot_received).
-          const pool = poolForRole(prevRow.role);
-          if (prevRow.society_id && pool) {
-            await fillFreeSpots(supabase, conference.id, prevRow.society_id, pool, { suppressIds: acceptedIds });
-          }
-        } catch {
-          setActionError('Accepted, but a follow-up step (email / auto-cover) failed. Refresh to verify.');
-        }
+        // The same steps the team accept and the role swap run (teamDecisions.ts).
+        const followUpFailed = await acceptFollowUps(supabase, {
+          conferenceId: conference.id, appId, role: prevRow.role,
+          societyId: prevRow.society_id ?? null, pushDraftNotice,
+        });
+        if (followUpFailed) setActionError('Accepted, but a follow-up step (email / auto-cover) failed. Refresh to verify.');
 
         // Auto-cover may have promoted OTHER members to paid, reconcile.
         scheduleReconcile();
@@ -2677,7 +2782,10 @@ export default function ApplicationsPage() {
         // The database refuses a role this person cannot combine with one they hold.
         const hint = (err as { hint?: unknown } | null)?.hint;
         if (hint === 'holds_role') {
-          notifyErr(friendlyError(err, 'Could not accept the application. The change was reverted. Please try again.'));
+          // A race: they took a role since the check. Single accept: the same
+          // in-place swap. Bulk: the server's sentence, accepted one by one.
+          if (opts?.bulk) notifyErr(friendlyError(err, 'Could not accept the application. The change was reverted. Please try again.'));
+          else void openRoleSwap(appId, true);
           return;
         }
         setActionError('Could not accept the application. The change was reverted. Please try again.');
@@ -2868,7 +2976,7 @@ export default function ApplicationsPage() {
 
     const acceptBtn = (
       <button
-        onClick={() => { void confirmAccept(app.id); }}
+        onClick={() => { void openRoleSwap(app.id); }}
         disabled={rowBusy || blocked || locked}
         title={blocked ? ACCEPT_BLOCKED_MESSAGE : undefined}
         className="inline-flex items-center justify-center gap-2 w-full focus:outline-none"
@@ -2890,6 +2998,15 @@ export default function ApplicationsPage() {
         Accept
       </button>
     );
+
+    const swapPanel = renderRoleSwap(app);
+    if (swapPanel) {
+      return (
+        <div className="flex w-full" style={{ minWidth: 0, minHeight: row ? MID_BLOCK_H : undefined, ...lockStyle }}>
+          {swapPanel}
+        </div>
+      );
+    }
 
     if (!row) {
       return (
@@ -3117,8 +3234,14 @@ export default function ApplicationsPage() {
       if (error) throw error;
     })()
       .then(scheduleReconcile)
-      .catch(() => {
+      .catch((err: unknown) => {
         restoreRow(prevRow);
+        // One accepted role per person (16 Nov 2026): they hold another role
+        // now. The server's sentence says which; nothing else is offered here.
+        if ((err as { hint?: unknown } | null)?.hint === 'holds_role') {
+          setActionError(friendlyError(err, 'Could not reinstate the application. The change was reverted. Please try again.'));
+          return;
+        }
         setActionError('Could not reinstate the application. The change was reverted. Please try again.');
       })
       .finally(() => markBusy(appId, false));
@@ -5048,7 +5171,7 @@ export default function ApplicationsPage() {
                 <>
                   {bulkAcceptable.length > 0 ? (
                     <button
-                      onClick={() => runBulk(bulkAcceptable, { title: `Accept ${bulkAcceptable.length} application${bulkAcceptable.length === 1 ? '' : 's'}?`, body: 'Each one is accepted on its own. Acceptance emails and delegation spot cover run per person.', confirmLabel: 'Accept all' }, a => handleAccept(a.id))}
+                      onClick={() => { void bulkAccept(bulkAcceptable); }}
                       title={blockedCount > 0 ? `${blockedCount} selected application${blockedCount === 1 ? '' : 's'} excluded. ${ACCEPT_BLOCKED_MESSAGE}` : undefined}
                       className="inline-flex items-center gap-1.5 focus:outline-none"
                       style={{

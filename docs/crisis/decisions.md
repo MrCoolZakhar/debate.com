@@ -199,3 +199,64 @@ Round 24 (13 Nov 2026, Hult MUN set-up):
 - The live-room pop-up sends a delegate of a crisis committee to the crisis, not to a seat.
 - Old map underneath (setting historicalMap = 'etatmajor'): IGN's État-major map of France (1820 to 1866), open data, served through /api/crisis-tiles so visitors never call a third party; the map then zooms to street level (16). Zone and territory fills thin out over it.
 - Landmarks (settings.landmarks): named places with a description, shown from street zoom with a Landmarks toggle; read only for now. Hult's 30 landmarks, 6 districts and 47 sections came from their Google My Maps file (districts and sections are zones of the types District and Section).
+
+Part 40 (14 Nov 2026, SQL docs/crisis/sql/040_staff_invites.sql): backroomers join by email invite, on their account
+("backroomers need an account and they get invited just like chairs would", Peter):
+- On the Staff page a Director adds a NEW backroomer with a name and an email ("Send invite"). The database queues the
+  invite email itself (crisis_invite_staff), the person opens /invites/crisis/<token>, signs in or up, and accepts; they
+  become a crisis member on their Gavelling account. No personal code is made for them, and the Manage panel does not
+  offer "Make a personal code" to a backroomer who has none.
+- Pending invites are listed on the Staff page with Resend (same link again) and Cancel (asked in place). The list
+  follows the crisis ping for crisis_staff_invites and crisis_members. An invite to an email whose account exists can
+  only be accepted by that account. Assistant Director and press invites exist in the database but the Staff page still
+  adds those roles directly.
+- Members who already have codes (Hult MUN's backroomers) are unchanged, including "Make a new password".
+- The invite email is written and rendered in the database, not in emailEvents.ts or defaultEmails.ts.
+
+## Part 41 (15 Nov 2026): pending people in their role list, Add person as a pop-up
+
+- Peter: "the manage feature should show pending people, so who don't have an account yet. also add person should be a pop up".
+- Staff and Access no longer has a separate Pending Invites card. Each pending invite is a row in its role's list (Backroomers, Directors, Press), after the people already in, counted in the group's number: "Invite sent" and "Not joined yet, invited N min ago". Its Manage opens Resend invite and Cancel invite (asked in place). Accepting moves them into the list live.
+- Add person opens as a pop-up (CrisisDialog), never a card in the page. CrisisDialog now lets an open GSelect take Escape first.
+
+## Part 42 (15 Nov 2026): chairs are invited like conference chairs and join the crisis on accept
+
+- Peter: "apply these two emails to noelia's chairs and invite them".
+- Chairs use the ordinary conference chair invite (conference_chair_invites, /invites/chair/<token>). The trigger zz_crisis_chair_invite_accepted (_crisis_link_accepted_chair) links the cabinet's chair seat with that email to the accepting account, or adds a chair seat when there is none; it never blocks the accept.
+- Carrera Espacial: Eunate Ágreda (NASA, eunateagreda@gmail.com) and Ricky Agudelo (OKB, ricardoagudelob4@gmail.com) invited 15 Nov 2026; their seats keep their codes until they accept.
+
+## Part 43 (15 Nov 2026): a moved character leaves the old room; room points follow the person, for the time they played
+
+- Peter: "moving someone to another cabinet should automatically mark them absent and move them to a different cabinet. points are counting with the PERSON, not the CABINET - not even just the character but the person who is playing him."
+- Database (crisis_part43_move_cabinet_absent_points_follow_person): when a character's cabinet changes, the old room's seat goes absent, leaves the GSL and caucus queue, and its holder is signed out (a kick tombstone); a floor holder is left to the Moderator's device, which removes an absent speaker and logs the speech. The character's slot and allocations move to the new committee. `_room_remove_seat` keeps any seat that was ever present or scored.
+- crisis_character_players records who played which character and when (trigger on crisis_members; backfilled: current players from the crisis's start, earlier characters from their first to last directive).
+- Points: Statistics and the Performance tab count every seat of every character a person played, in every room, only for the time they played it (performance.ts personRoomSlices, playedBy); co-signed joint directives and meetings use the same time check. A character nobody plays shows all its seats' points.
+- Hult: Louis XVI was set absent in the Assembly and James's old seat freed by hand (he moved before the trigger existed). Oliver Westlake has a personal code for Juigné; Rowan Pope's Commune allocation for Juigné is untouched.
+
+## Part 44 (15 Nov 2026): the backroom can write again after answering
+
+- HULTMUN backroomers (Prina Patel, Felix): "I cant send more than one message when responding to a directive ... it edits my initial approval." "Delegates can send multiple messages but not us."
+- On an answered directive the backroom composer now has a message box and "Send message": a visible note (crisis_add_directive_note, p_internal false). The answer, its outcome and its effects stay as they were. "Answer again" is renamed "Edit the answer" (it still edits the sent answer).
+- crisis_notify_directive_note (migration crisis_part44_backroom_follow_up_messages): a visible staff note notifies the directive's side (author, joint co-authors, a cabinet directive's chair) as "Backroom message on No. N". Internal notes still notify nobody.
+- Not in this part: a follow-up that also runs map or resource changes. Those are made on the map or resources directly.
+
+## Part 45 (15 Nov 2026): "Could not load notifications", again
+
+- HULTMUN, many people at once. The bell read failed with database timeouts (500 / 504), at 11:11 and 14:51 UTC together with every other read: the database had run out of time and connections.
+- Cause: access was checked row by row and every check ran crisis_me() (parse the headers, hash the code, scan the members: about 0.1 ms). The bell read checked all 3,900 HULTMUN notifications for each reader, 1.3 s a read, and each new notification makes every open bell re-read: 32,556 bell reads on 15 Nov, 11.7 hours of database time. Directives, co-authors (which checked every directive of every crisis) and notes paid the same price.
+- Database (crisis_part45_access_checks_once_per_request):
+  - crisis_me() remembers the member it found for the rest of the request (a transaction-local setting keyed on the exact headers, claims and crisis; the member row is re-read by id, so role, cabinet and character stay current; a miss is not remembered).
+  - The notifications read rule asks crisis_my_member_ids() once per read (same precedence as crisis_me: code, "Try it as" code, account).
+  - Co-authors and notes check only their own directive through crisis_directive_visible(id), which applies the directives read rule unchanged.
+- Checked in rolled-back transactions before applying: every account member (31) and test codes see exactly the same notifications, co-authors and notes as before. Bell read 307 ms to 3 ms; the seven heaviest readers 4.9 s to 42 ms; co-author and note reads about 6 times faster.
+- No app change needed; nothing to deploy.
+
+## Part 46 (15 Nov 2026): add or change a person's email after they were added, and invite them
+
+- Asked: can the Crisis Director add delegate emails after the characters are made? No: the email could only be typed when a person was added, it only linked an account that already existed, and nothing told the person.
+- Staff and Access, Manage on anyone not yet on a Gavelling account (delegates, chairs, and anyone else but a Director) now has an Email field with "Send invite". It saves the email and emails an invite to that seat; accepting it on a Gavelling account links the account to the seat, keeping the character, cabinet and role. The same email again sends it again ("Resend invite"); a new email cancels the old link; "Remove email" (asked first) clears it and cancels the invite. The row's "Gets in with" says "Invite sent". Someone already on an account keeps the account's email (nothing to change).
+- The invite email and the invite page name the seat: the character a delegate plays, or "the chair of <cabinet>".
+- Refused in place: an address that is not an email; an address someone else in this crisis already uses (their name is given).
+- Database (crisis_part46_member_email_invites): crisis_set_member_email (Directors only); crisis_staff_invites takes chair and delegate invites, tied to the seat through member_id; respond_crisis_staff_invite links a seat's invite to that seat (a removed seat, or one another account took, revokes the invite); the invite email and get_crisis_staff_invite carry the character and cabinet. Staff invites (backroomer, Assistant Crisis Director, press) work as before. A pending staff invite to the same address gives way to the seat's invite.
+- Checked in a rolled-back transaction: bad email refused, set and change (old invite revoked, two emails queued, nothing sent), the page names the character, accepting links the account to the seat with the character kept, a seat on an account refuses a change, the staff invite path still refuses delegate.
+- Not changed: Add person still only links an existing account when an email is typed; it sends no invite.

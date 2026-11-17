@@ -14,6 +14,9 @@
 // The seat is the committee-room seat NAMED like the character, looked for in the character's cabinet room first
 // and then in the crisis's other rooms (a character can sit in another cabinet's room). Read only; the room is
 // re-read every 30 seconds while the tab is visible. Nothing here writes.
+// The total's room part counts EVERY seat of every character the person played, in every room, for the time they played
+// it (owner, 15 Nov 2026): a character moved to another cabinet keeps what it earned in the old room, and a character that
+// changed hands gives each person only their own part (performance.ts personRoomSlices).
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ListChecks, Presentation } from 'lucide-react';
@@ -31,15 +34,13 @@ import { rankByHeadline, speechesByCountryOf } from '@/app/manage/[slug]/live/Se
 import type { CrisisRef } from '@/lib/crisis/api';
 import { isChairSendBack, isRealDenial } from '@/lib/crisis/format';
 import { getCrisisClient } from '@/lib/crisis/client';
-import { blendPerformance, findSeat, fmtPts, loadRoomBoards, pointsRules, roomSlices, seatOf, type Blend } from '@/lib/crisis/performance';
+import { blendPerformance, findSeat, fmtPts, loadRoomBoards, personRoomSlices, pointsRules, type Blend, type PlayWindow, type RoomBoard } from '@/lib/crisis/performance';
 import { readPoints, type PointsResult, type PointsRow } from '@/lib/crisis/points';
-import type { PointSlice } from '@/lib/sessionScoreboard';
 import type { Cabinet, Character, Directive, Meeting } from '@/lib/crisis/types';
 import type { Committee } from '@/lib/types';
 import { BigCount, CK, Skeleton } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { OUT_COLOR, ROOM_COLOR, SplitBar, SplitLegend } from '../command/blendKit';
-import { mergeSlices } from '../command/commandBlend';
 
 type Room =
   | { kind: 'loading' }
@@ -108,18 +109,13 @@ function useCharacterRoom(ref: CrisisRef, char: Character, cabinets: Cabinet[], 
   return state;
 }
 
-/**
- * The committee-room points of the OTHER characters a person played. Reads every cabinet's room only when there is such a
- * character (most people played one), and keeps it fresh like the main room. Each seat once, keyed by room and seat.
- */
-function useOtherSeats(ref: CrisisRef, others: Character[], cabinets: Cabinet[]): Array<{ key: string; slices: PointSlice[] }> | null {
-  const [state, setState] = useState<Array<{ key: string; slices: PointSlice[] }> | null>(null);
-  const othersRef = useRef(others);
+/** Every cabinet's committee room with its scoreboard rows, kept fresh like the main room. Null until the first read. */
+function useRoomBoards(ref: CrisisRef, cabinets: Cabinet[]): RoomBoard[] | null {
+  const [state, setState] = useState<RoomBoard[] | null>(null);
   const cabinetsRef = useRef(cabinets);
-  useEffect(() => { othersRef.current = others; cabinetsRef.current = cabinets; });
-  const key = others.map((c) => `${c.id}:${c.name}:${c.cabinet_id ?? ''}`).join('|');
+  useEffect(() => { cabinetsRef.current = cabinets; });
+  const key = cabinets.map((c) => `${c.id}:${c.conference_committee_id ?? ''}`).join('|');
   useEffect(() => {
-    if (!key) return;
     let alive = true;
     let inFlight = false;
     const load = async () => {
@@ -127,12 +123,7 @@ function useOtherSeats(ref: CrisisRef, others: Character[], cabinets: Cabinet[])
       inFlight = true;
       try {
         const boards = await loadRoomBoards(ref, cabinetsRef.current);
-        const out: Array<{ key: string; slices: PointSlice[] }> = [];
-        for (const c of othersRef.current) {
-          const seat = seatOf(boards, c);
-          if (seat) out.push({ key: `${seat.board.committee.id}:${seat.row.country}`, slices: roomSlices(seat.board, seat.row) });
-        }
-        if (alive) setState(out);
+        if (alive) setState(boards);
       } catch { /* a failed re-read keeps what is on screen */ }
       finally { inFlight = false; }
     };
@@ -140,7 +131,7 @@ function useOtherSeats(ref: CrisisRef, others: Character[], cabinets: Cabinet[])
     const poll = window.setInterval(() => { void load(); }, REFRESH_MS);
     return () => { alive = false; window.clearTimeout(first); window.clearInterval(poll); };
   }, [ref, key]);
-  return key ? state : null;
+  return state;
 }
 
 function span(ms: number): string {
@@ -299,6 +290,8 @@ export interface PerformancePerson {
   ownPoints: number;
   /** Every directive this person wrote, as any character (complete, not capped). */
   rows: PointsRow[];
+  /** Who played which character, when (null: unknown, every seat's points count). */
+  windows?: PlayWindow[] | null;
 }
 
 export default function CharacterPerformance({ crisisRef, char, cabinet, cabinets, points, person, directives, meetings, loading, staff, canSeeNotes }: {
@@ -364,14 +357,18 @@ export default function CharacterPerformance({ crisisRef, char, cabinet, cabinet
     const row = buildSessionScoreboardRows(room.committee, [], 'en', { everPresent: room.everPresent }).find((r) => r.country === room.seat) ?? null;
     return row ? { row, slices: sessionPointSlices(room.committee, row.ledger, 'en', 'Manual points') } : null;
   }, [room]);
-  // The other characters this person played: their seats' room points join this character's.
-  const otherSeats = useOtherSeats(crisisRef, person?.others ?? [], cabinets ?? (cabinet ? [cabinet] : []));
+  // The room part of the total: every seat of every character this person played, in every room, for the time they played
+  // it; a character nobody plays shows everything its own seats earned. Until the rooms are read, this seat's points.
+  const boards = useRoomBoards(crisisRef, cabinets ?? (cabinet ? [cabinet] : []));
+  const personRoom = useMemo(() => {
+    if (!boards) return null;
+    const chars = person ? [char, ...person.others] : [char];
+    return personRoomSlices(boards, chars, person?.memberId ?? null, person?.windows ?? null);
+  }, [boards, char, person]);
   const blend = useMemo(() => {
-    const thisKey = room.kind === 'ok' ? `${room.committee.id}:${room.seat}` : null;
-    const extra = (otherSeats ?? []).filter((x) => x.key !== thisKey).flatMap((x) => x.slices);
-    const slices = live ? (extra.length ? mergeSlices([...live.slices, ...extra]) : live.slices) : (extra.length ? mergeSlices(extra) : null);
+    const slices = personRoom ? (personRoom.seats ? personRoom.slices : null) : (live ? live.slices : null);
     return blendPerformance(slices, points);
-  }, [live, points, otherSeats, room]);
+  }, [live, points, personRoom]);
   const rules = useMemo(() => pointsRules(readPoints(core.crisis.settings)), [core.crisis.settings]);
 
   if (loading) return <div className="flex flex-col" style={{ gap: 8 }}><Skeleton h={90} /><Skeleton h={30} /><Skeleton h={30} /></div>;
@@ -386,7 +383,7 @@ export default function CharacterPerformance({ crisisRef, char, cabinet, cabinet
 
   const spread = !!person && person.others.length > 0;
   // This character may have no seat while another one the person played does: the room lines then still show.
-  const roomPartKnown = !roomNote || (spread && blend.roomLines.length > 0);
+  const roomPartKnown = !roomNote || (!!personRoom && personRoom.seats > 0);
   return (
     <div className="flex flex-col" style={{ gap: 16 }}>
       <Hover
