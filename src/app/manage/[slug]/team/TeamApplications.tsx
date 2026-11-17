@@ -12,7 +12,9 @@
 //   - a chair accepted but not seated reads "Needs a committee"
 // Accepting a chair opens the seat step inside the same pop-up
 // (accept_chair_application: seated now, or later from Committees). Secretariat
-// and staff keep accept_team_application through acceptTeamApplication.
+// and staff keep accept_team_application through acceptTeamApplication. Both
+// accepts run the role swap first (16 Nov 2026, roleSwap.ts): someone holding
+// a role that does not combine is asked in place, and the swap removes it.
 // Optimistic status while busy, rolled back on a failure; a ref guards every
 // button; errors are shown as written.
 
@@ -26,7 +28,9 @@ import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { friendlyError, UserFacingError } from '@/lib/friendlyError';
 import { NEU, OUTFIT } from '@/components/neu';
 import { bundlePermissions } from '@/lib/organizerPermissions';
-import { acceptTeamApplication, rejectUpdates, writeReject, rejectFollowUps } from '../applications/teamDecisions';
+import { acceptTeamApplication, swapTeamApplication, acceptFollowUps, rejectUpdates, writeReject, rejectFollowUps } from '../applications/teamDecisions';
+import { checkRoleSwap, askFor, runRoleSwap, type SwapAsk } from '../applications/roleSwap';
+import RoleSwapPanel from '../applications/RoleSwapPanel';
 import { fmtDay } from '../applications/ApplicantDetail/kit';
 import { Group, TINT_GOLD_BG } from '../settings/panelKit';
 import TeamApplicantPopup, { Face, primaryBtn, quietBtn, rejectBtn, type PopupStep } from '../settings/TeamApplicantPopup';
@@ -139,44 +143,90 @@ export default function TeamApplications({
     return { text: seated.map(c => c.name).join(', '), needs: false };
   };
 
+  // ── One accepted role per person (16 Nov 2026): the role swap ──────────
+  // Both accepts ask accept_role_swap_check first (roleSwap.ts). Nothing held:
+  // the accept exactly as before. Otherwise the pop-up's body and footer turn
+  // into RoleSwapPanel in place: the server's sentence with Close, or the
+  // confirm whose "Accept and remove" runs the swap. A chair is then seated
+  // with accept_chair_application; secretariat and staff go through
+  // swapTeamApplication with the permissions and public title already picked.
+  type SwapFor =
+    | { kind: 'chair'; committeeId: string | null }
+    | { kind: 'team'; permissions: Record<string, unknown>; publicTitle: string | null };
+  const [swap, setSwap] = useState<{ appId: string; ask: SwapAsk; busy: boolean; error: string; for: SwapFor } | null>(null);
+
+  /** Checks for a role that does not combine. True when the swap panel took over (nothing else runs). */
+  const askSwap = useCallback(async (a: TeamApplicant, forWhat: SwapFor, race: boolean): Promise<boolean> => {
+    const base = { appId: a.application_id, busy: false, error: '', for: forWhat };
+    setSwap({ ...base, ask: { phase: 'checking' } });
+    try {
+      const supabase = await getFreshAuthedClient();
+      if (!supabase) throw new UserFacingError('Your session has expired, please refresh and sign in again.');
+      const ask = askFor(await checkRoleSwap(supabase, a.application_id));
+      if (ask) { setSwap({ ...base, ask }); return true; }
+      if (race) {
+        // Refused for a role the check no longer sees: say so, never loop.
+        setSwap({ ...base, ask: { phase: 'blocked', message: 'Could not accept the application. Please try again.' } });
+        return true;
+      }
+      setSwap(null);
+      return false;
+    } catch (e) {
+      setSwap({ ...base, ask: { phase: 'blocked', message: friendlyError(e, 'Could not check this application. Please try again.') } });
+      return true;
+    }
+  }, []);
+
+  const isHoldsRole = (e: unknown) => (e as { hint?: unknown } | null)?.hint === 'holds_role';
+
   const accept = useCallback(async (a: TeamApplicant, picked: Set<string>, publicTitle: string): Promise<boolean> => {
     if (busyRef.current) return false;
     busyRef.current = true;
     setBusyId(a.application_id);
-    const before = { status: a.status, decided_at: a.decided_at, on_team: a.on_team };
-    patch(a.application_id, { status: 'accepted' });
+    const permissions = bundlePermissions('custom', Object.fromEntries([...picked].map(k => [k, true])));
+    const title = publicTitle.trim() || null;
+    const forWhat: SwapFor = { kind: 'team', permissions, publicTitle: title };
     try {
-      const res = await acceptTeamApplication({
-        conferenceId,
-        appId: a.application_id,
-        role: a.role,
-        societyId: null,
-        paymentTiming: roleConfigs.find(rc => rc.role === a.role)?.payment_timing ?? null,
-        permissions: bundlePermissions('custom', Object.fromEntries([...picked].map(k => [k, true]))),
-        publicTitle: publicTitle.trim() || null,
-        pushDraftNotice,
-      });
-      patch(a.application_id, { status: 'accepted', decided_at: new Date().toISOString(), on_team: true });
-      notifyOk(`${a.name ?? 'They'} joined the team`);
-      if (res.followUpFailed) notifyErr('Accepted, but a follow-up step (email / auto-cover) failed. Refresh to verify.');
-      setOpen(null);
-      return true;
-    } catch (e) {
-      patch(a.application_id, before);
-      notifyErr(friendlyError(e, 'Could not accept the application. Please try again.'));
-      return false;
+      if (await askSwap(a, forWhat, false)) return false;
+      const before = { status: a.status, decided_at: a.decided_at, on_team: a.on_team };
+      patch(a.application_id, { status: 'accepted' });
+      try {
+        const res = await acceptTeamApplication({
+          conferenceId,
+          appId: a.application_id,
+          role: a.role,
+          societyId: null,
+          paymentTiming: roleConfigs.find(rc => rc.role === a.role)?.payment_timing ?? null,
+          permissions,
+          publicTitle: title,
+          pushDraftNotice,
+        });
+        patch(a.application_id, { status: 'accepted', decided_at: new Date().toISOString(), on_team: true });
+        notifyOk(`${a.name ?? 'They'} joined the team`);
+        if (res.followUpFailed) notifyErr('Accepted, but a follow-up step (email / auto-cover) failed. Refresh to verify.');
+        setOpen(null);
+        return true;
+      } catch (e) {
+        patch(a.application_id, before);
+        // A race: they took a role that does not combine since the check.
+        if (isHoldsRole(e)) { await askSwap(a, forWhat, true); return false; }
+        notifyErr(friendlyError(e, 'Could not accept the application. Please try again.'));
+        return false;
+      }
     } finally {
       busyRef.current = false;
       setBusyId(null);
     }
-  }, [conferenceId, patch, pushDraftNotice, roleConfigs]);
+  }, [conferenceId, patch, pushDraftNotice, roleConfigs, askSwap]);
 
   /** A chair: accept_chair_application, seated now (a committee) or later (null). */
   const acceptChairNow = useCallback(async (a: TeamApplicant, committeeId: string | null): Promise<string | null> => {
     if (busyRef.current) return null;
     busyRef.current = true;
     setBusyId(a.application_id);
+    const forWhat: SwapFor = { kind: 'chair', committeeId };
     try {
+      if (await askSwap(a, forWhat, false)) return null;
       const res = await acceptChair({ conferenceId, appId: a.application_id, committeeId, pushDraftNotice });
       if (!res.ok) return res.message;
       const c = res.committeeId ? committeeById.get(res.committeeId) : undefined;
@@ -186,12 +236,70 @@ export default function TeamApplications({
       await load();
       return null;
     } catch (e) {
+      if (isHoldsRole(e)) { await askSwap(a, forWhat, true); return null; }
       return friendlyError(e, 'Could not accept the application. Please try again.');
     } finally {
       busyRef.current = false;
       setBusyId(null);
     }
-  }, [conferenceId, pushDraftNotice, committeeById, load]);
+  }, [conferenceId, pushDraftNotice, committeeById, load, askSwap]);
+
+  /** "Accept and remove {role}": the swap, then what the plain accept runs after its write. */
+  const confirmSwap = useCallback(async (a: TeamApplicant) => {
+    if (busyRef.current || !swap || swap.appId !== a.application_id || swap.ask.phase !== 'confirm') return;
+    busyRef.current = true;
+    setBusyId(a.application_id);
+    setSwap(prev => prev ? { ...prev, busy: true, error: '' } : prev);
+    const forWhat = swap.for;
+    try {
+      if (forWhat.kind === 'team') {
+        const res = await swapTeamApplication({
+          conferenceId,
+          appId: a.application_id,
+          role: a.role,
+          societyId: null,
+          paymentTiming: roleConfigs.find(rc => rc.role === a.role)?.payment_timing ?? null,
+          permissions: forWhat.permissions,
+          publicTitle: forWhat.publicTitle,
+          pushDraftNotice,
+        });
+        if (!res.ok) { setSwap(prev => prev ? { ...prev, busy: false, error: res.message } : prev); return; }
+        setSwap(null);
+        notifyOk(res.message);
+        if (res.followUpFailed) notifyErr('Accepted, but a follow-up step (email / auto-cover) failed. Refresh to verify.');
+      } else {
+        const supabase = await getFreshAuthedClient();
+        if (!supabase) throw new UserFacingError('Your session has expired, please refresh and sign in again.');
+        const res = await runRoleSwap(supabase, a.application_id);
+        if (!res.ok) { setSwap(prev => prev ? { ...prev, busy: false, error: res.message } : prev); return; }
+        setSwap(null);
+        notifyOk(res.message);
+        // Seat them when a committee was picked. A failure here leaves them accepted, never undone.
+        if (forWhat.committeeId) {
+          let seated = false;
+          try {
+            const seat = await acceptChair({ conferenceId, appId: res.application_id, committeeId: forWhat.committeeId, pushDraftNotice });
+            seated = seat.ok;
+          } catch {
+            seated = false;
+          }
+          if (!seated) notifyErr('Accepted. Seat them from Committees.');
+        }
+        // The acceptance email and its follow-ups, once, for the application that now holds the role.
+        const followUpFailed = await acceptFollowUps(supabase, {
+          conferenceId, appId: res.application_id, role: a.role, societyId: null, pushDraftNotice,
+        });
+        if (followUpFailed) notifyErr('Accepted, but the acceptance email could not be queued. Refresh to verify.');
+      }
+      setOpen(null);
+      await load();
+    } catch (e) {
+      setSwap(prev => prev ? { ...prev, busy: false, error: friendlyError(e, 'Could not accept the application. Please try again.') } : prev);
+    } finally {
+      busyRef.current = false;
+      setBusyId(null);
+    }
+  }, [swap, conferenceId, roleConfigs, pushDraftNotice, load]);
 
   const reject = useCallback(async (a: TeamApplicant): Promise<boolean> => {
     if (busyRef.current) return false;
@@ -377,7 +485,16 @@ export default function TeamApplications({
           onAcceptChair={(committeeId) => acceptChairNow(openApplicant, committeeId)}
           onAccept={(picked, title) => accept(openApplicant, picked, title)}
           onReject={() => reject(openApplicant)}
-          onClose={() => setOpen(null)}
+          onClose={() => { setSwap(null); setOpen(null); }}
+          swap={swap && swap.appId === openApplicant.application_id ? (
+            <RoleSwapPanel
+              ask={swap.ask}
+              busy={swap.busy}
+              error={swap.error}
+              onConfirm={() => { void confirmSwap(openApplicant); }}
+              onCancel={() => { if (!swap.busy) setSwap(null); }}
+            />
+          ) : null}
         />
       )}
       {notices}

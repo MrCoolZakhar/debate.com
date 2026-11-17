@@ -44,5 +44,7 @@ export function roleTitle(role: string): string {
 /** "You are a {Role} here. If you are accepted as {New role}, your {Role} place is removed." */
 export function heldRoleSwapLine(held: string, applying: string): string {
   const h = roleTitle(held);
-  return `You are ${/^[aeiou]/i.test(h) ? 'an' : 'a'} ${h} here. If you are accepted as ${roleTitle(applying)}, your ${h} place is removed.`;
+  const line = `You are ${/^[aeiou]/i.test(h) ? 'an' : 'a'} ${h} here. If you are accepted as ${roleTitle(applying)}, your ${h} place is removed.`;
+  // A secretariat or staff member also leaves the organising team.
+  return held === 'secretariat' || held === 'staff' ? `${line} You also lose your access to the organising team.` : line;
 }
