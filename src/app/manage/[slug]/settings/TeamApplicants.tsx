@@ -8,7 +8,9 @@
 // public title. Every decision runs the shared code in
 // applications/teamDecisions.ts:
 //   accept  acceptTeamApplication (accept_team_application, then the same
-//           acceptance email, payment_available and auto-cover as before)
+//           acceptance email, payment_available and auto-cover as before);
+//           someone holding a role that does not combine goes through the
+//           role swap in place (accept_role_swap_check, swapTeamApplication)
 //   reject  rejectUpdates + writeReject + rejectFollowUps: the SAME update,
 //           the SAME rejection email and the SAME credit refund as the
 //           Applications page.
@@ -25,7 +27,9 @@ import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { friendlyError, UserFacingError } from '@/lib/friendlyError';
 import { NEU, OUTFIT } from '@/components/neu';
 import { bundlePermissions } from '@/lib/organizerPermissions';
-import { acceptTeamApplication, rejectUpdates, writeReject, rejectFollowUps } from '../applications/teamDecisions';
+import { acceptTeamApplication, swapTeamApplication, rejectUpdates, writeReject, rejectFollowUps } from '../applications/teamDecisions';
+import { checkRoleSwap, askFor, type SwapAsk } from '../applications/roleSwap';
+import RoleSwapPanel from '../applications/RoleSwapPanel';
 import { fmtDay } from '../applications/ApplicantDetail/kit';
 import { Group, TINT_GOLD_BG } from './panelKit';
 import TeamApplicantPopup, { Face, primaryBtn, quietBtn, rejectBtn, type PopupStep } from './TeamApplicantPopup';
@@ -94,10 +98,38 @@ export default function TeamApplicants({
   const openApplicant = open ? (applicants ?? []).find(a => a.application_id === open.id) ?? null : null;
   const configOf = (role: string) => roleConfigs.find(rc => rc.role === role);
 
+  // One accepted role per person (16 Nov 2026): the access step's "Add to the
+  // team" asks accept_role_swap_check first. Nothing held: the team accept as
+  // before. Otherwise the pop-up's content turns into RoleSwapPanel in place
+  // (the server's sentence, or the confirm) and "Accept and remove" runs
+  // accept_role_swap with the same permissions and public title.
+  const [swap, setSwap] = useState<{ appId: string; ask: SwapAsk; busy: boolean; error: string; permissions: Record<string, unknown>; publicTitle: string | null } | null>(null);
+
   const accept = useCallback(async (a: TeamApplicant, picked: Set<string>, publicTitle: string): Promise<boolean> => {
     if (busyRef.current) return false;
     busyRef.current = true;
     setBusyId(a.application_id);
+    const permissions = bundlePermissions('custom', Object.fromEntries([...picked].map(k => [k, true])));
+    const title = publicTitle.trim() || null;
+    const askSwap = async (race: boolean): Promise<boolean> => {
+      setSwap({ appId: a.application_id, ask: { phase: 'checking' }, busy: false, error: '', permissions, publicTitle: title });
+      try {
+        const supabase = await getFreshAuthedClient();
+        if (!supabase) throw new UserFacingError('Your session has expired, please refresh and sign in again.');
+        const ask = askFor(await checkRoleSwap(supabase, a.application_id));
+        if (ask) { setSwap({ appId: a.application_id, ask, busy: false, error: '', permissions, publicTitle: title }); return true; }
+        if (race) {
+          setSwap({ appId: a.application_id, ask: { phase: 'blocked', message: 'Could not accept the application. Please try again.' }, busy: false, error: '', permissions, publicTitle: title });
+          return true;
+        }
+        setSwap(null);
+        return false;
+      } catch (e) {
+        setSwap({ appId: a.application_id, ask: { phase: 'blocked', message: friendlyError(e, 'Could not check this application. Please try again.') }, busy: false, error: '', permissions, publicTitle: title });
+        return true;
+      }
+    };
+    if (await askSwap(false)) return false;
     const before = { status: a.status, decided_at: a.decided_at, on_team: a.on_team };
     patch(a.application_id, { status: 'accepted' });
     try {
@@ -107,8 +139,8 @@ export default function TeamApplicants({
         role: a.role,
         societyId: null,
         paymentTiming: roleConfigs.find(rc => rc.role === a.role)?.payment_timing ?? null,
-        permissions: bundlePermissions('custom', Object.fromEntries([...picked].map(k => [k, true]))),
-        publicTitle: publicTitle.trim() || null,
+        permissions,
+        publicTitle: title,
         pushDraftNotice,
       });
       patch(a.application_id, { status: 'accepted', decided_at: new Date().toISOString(), on_team: true });
@@ -119,6 +151,8 @@ export default function TeamApplicants({
       return true;
     } catch (e) {
       patch(a.application_id, before);
+      // A race: they took a role that does not combine since the check.
+      if ((e as { hint?: unknown } | null)?.hint === 'holds_role') { await askSwap(true); return false; }
       notifyErr(friendlyError(e, 'Could not accept the application. Please try again.'));
       return false;
     } finally {
@@ -126,6 +160,37 @@ export default function TeamApplicants({
       setBusyId(null);
     }
   }, [conferenceId, patch, pushDraftNotice, onTeamChanged, roleConfigs]);
+
+  const confirmSwap = useCallback(async (a: TeamApplicant) => {
+    if (busyRef.current || !swap || swap.appId !== a.application_id || swap.ask.phase !== 'confirm') return;
+    busyRef.current = true;
+    setBusyId(a.application_id);
+    setSwap(prev => prev ? { ...prev, busy: true, error: '' } : prev);
+    try {
+      const res = await swapTeamApplication({
+        conferenceId,
+        appId: a.application_id,
+        role: a.role,
+        societyId: null,
+        paymentTiming: roleConfigs.find(rc => rc.role === a.role)?.payment_timing ?? null,
+        permissions: swap.permissions,
+        publicTitle: swap.publicTitle,
+        pushDraftNotice,
+      });
+      if (!res.ok) { setSwap(prev => prev ? { ...prev, busy: false, error: res.message } : prev); return; }
+      setSwap(null);
+      notifyOk(res.message);
+      if (res.followUpFailed) notifyErr('Accepted, but a follow-up step (email / auto-cover) failed. Refresh to verify.');
+      setOpen(null);
+      onTeamChanged();
+      void load();
+    } catch (e) {
+      setSwap(prev => prev ? { ...prev, busy: false, error: friendlyError(e, 'Could not accept the application. Please try again.') } : prev);
+    } finally {
+      busyRef.current = false;
+      setBusyId(null);
+    }
+  }, [swap, conferenceId, roleConfigs, pushDraftNotice, onTeamChanged, load]);
 
   const reject = useCallback(async (a: TeamApplicant): Promise<boolean> => {
     if (busyRef.current) return false;
@@ -296,7 +361,16 @@ export default function TeamApplicants({
           customQuestions={configOf(openApplicant.role)?.custom_questions ?? []}
           onAccept={(picked, title) => accept(openApplicant, picked, title)}
           onReject={() => reject(openApplicant)}
-          onClose={() => setOpen(null)}
+          onClose={() => { setSwap(null); setOpen(null); }}
+          swap={swap && swap.appId === openApplicant.application_id ? (
+            <RoleSwapPanel
+              ask={swap.ask}
+              busy={swap.busy}
+              error={swap.error}
+              onConfirm={() => { void confirmSwap(openApplicant); }}
+              onCancel={() => { if (!swap.busy) setSwap(null); }}
+            />
+          ) : null}
         />
       )}
       {notices}

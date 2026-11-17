@@ -75,7 +75,7 @@ import {
   Info, Coins, Pencil, Ban, Cake, CircleAlert,
 } from 'lucide-react';
 import { replaceUrlInPlace } from '@/lib/replaceUrlInPlace';
-import { CHARGED_ROLES, HOLDING_STATUSES, rolesCombine, roleWithArticle } from '@/lib/roleCombos';
+import { CHARGED_ROLES, HOLDING_STATUSES, heldRoleSwapLine, rolesCombine, roleWithArticle } from '@/lib/roleCombos';
 import { specialFeeSentence, ticketNameFor, toSpecialFeeInfo, type SpecialFeeInfo } from '@/lib/specialFeeReason';
 import SpecialFeeInfoButton from '@/components/SpecialFeeInfoButton';
 import { ListingApplyLine, ListingClaimNote, useListingClaim, useListingForApply, useListingCommitteePrefill } from './ListingApplyLine';
@@ -1306,7 +1306,8 @@ function ConferenceApplyInner() {
   // Several roles per person (9 Nov 2026): one credit per person per conference,
   // so a live application in another charged role means this one takes none.
   const creditTakenElsewhere = !isExemptRole && otherRoleApps.some(o => CHARGED_ROLES.has(o.role));
-  // A role they already HOLD that cannot combine with this one: the wall below.
+  // A role they already HOLD that cannot combine with this one (16 Nov 2026): no wall,
+  // one line above the form saying accepting this role removes that place.
   const heldBlocking = otherRoleApps.find(o => HOLDING_STATUSES.has(o.status) && !rolesCombine(o.role, role)) ?? null;
   // Another application under review: no wall, one notice at the top of the form.
   const otherUnderReview = otherRoleApps.find(o => o.status === 'submitted') ?? null;
@@ -5791,36 +5792,6 @@ function ConferenceApplyInner() {
   // nothing to gain by pretending it is stable. Never read in preview.
   const guestDraftRow = !previewing ? loadGuestDraft(slug, role) : null;
 
-  // Several roles per person (9 Nov 2026): only a role they already HOLD that
-  // cannot combine with this one blocks a fresh apply here. Checked BEFORE the
-  // same-role wall (and skipped entirely by canEdit) so editing/resubmitting
-  // one's own application is never blocked by another role.
-  if (!canEdit && !previewing && heldBlocking) {
-    return (
-      <div className="min-h-screen flex flex-col" style={{ ...themeCssVars(activeTheme), backgroundColor: 'var(--gv-bg)' }}>
-        <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
-        <SiteNav />
-        <div className="relative z-10 flex-1 flex items-center justify-center px-6 py-20">
-          <div className="rounded-2xl p-10 text-center max-w-sm w-full" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)' }}>
-            <h2 className="font-semibold text-lg mb-2" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif" }}>
-              You Already Hold a Role Here
-            </h2>
-            <p className="text-sm mb-6" style={{ color: 'var(--gv-muted)', fontFamily: "var(--font-brand), sans-serif" }}>
-              You are {roleWithArticle(heldBlocking.role)} at {conference?.acronym || conference?.full_name || 'this conference'}. Each person holds one role at a conference, so contact the organisers if you want to switch.
-            </p>
-            <Link
-              href={`/conferences/${slug}/role/${encodeURIComponent(heldBlocking.role)}`}
-              className="inline-block rounded-xl py-2.5 px-6 font-bold text-sm focus:outline-none"
-              style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', textDecoration: 'none', fontFamily: "var(--font-brand), sans-serif" }}
-            >
-              Go to my role page
-            </Link>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   // Offered ONLY when there is a guest draft to apply and the application is
   // one canEdit would actually accept (submitted or rejected) — accepted /
   // assigned / checked-in have no legal edit to route them into, so those
@@ -6348,6 +6319,12 @@ function ConferenceApplyInner() {
         <ListingApplyLine listing={applyListing} />
         <ListingClaimNote note={listingClaim.note} />
         {/* Several roles per person (9 Nov 2026): another application under review never blocks this one. */}
+        {!isEditMode && !previewing && heldBlocking && (
+          <ListingClaimNote note={{
+            good: true,
+            text: heldRoleSwapLine(heldBlocking.role, role),
+          }} />
+        )}
         {!isEditMode && !heldBlocking && otherUnderReview && (
           <ListingClaimNote note={{
             good: true,
