@@ -11,7 +11,9 @@
 // shared markNotAttending handler's existing behavior, not duplicated here.
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { CheckCircle2, CircleDashed, Clock, Lock, UserX } from 'lucide-react';
+import { CircleDashed, UserX } from 'lucide-react';
+import MoneyMark from '@/app/manage/[slug]/assignment/MoneyMark';
+import { useConferenceMoney, moneyState, type MoneyRow } from '@/lib/applicationMoney';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
 import type { Conference } from '@/app/manage/[slug]/layout';
@@ -118,9 +120,11 @@ function ActionButton({ label, onClick, danger, busy }: { label: string; onClick
 }
 
 function IndependentCard({
-  app, onTransfer, onNotAttending, onUndo, busy,
+  app, onTransfer, onNotAttending, onUndo, busy, money,
 }: {
   app: PoolMember;
+  /** This application's row of money_for_conference. */
+  money: MoneyRow | undefined;
   onTransfer: () => void;
   onNotAttending: () => void;
   onUndo: () => void;
@@ -149,17 +153,8 @@ function IndependentCard({
             </span>
           )}
         </div>
-        <span
-          className="flex-shrink-0 inline-flex items-center gap-1"
-          style={{ fontSize: 12, fontWeight: 700, fontFamily: OUTFIT, whiteSpace: 'nowrap', color: waived ? '#9A6B2F' : paid ? NEU.forest : '#8A6614' }}
-        >
-          {waived
-            ? <Lock size={14} strokeWidth={2.4} aria-hidden="true" />
-            : paid
-              ? <CheckCircle2 size={14} strokeWidth={2.4} aria-hidden="true" />
-              : <Clock size={14} strokeWidth={2.4} aria-hidden="true" />}
-          {waived ? 'Waived' : paid ? 'Paid' : 'Unpaid'}
-        </span>
+        {/* The word reads the invoices (moneyState), never payment_status (owner, 15 Nov 2026). */}
+        <MoneyMark state={moneyState(money)} size={12} />
       </div>
 
       {allocationLine && (
@@ -203,6 +198,8 @@ export default function IndependentsView({ conference, showFlash }: Independents
    *  and they run on a click, not off a dependency array. */
   const accessToken = session?.access_token;
   const [independents, setIndependents] = useState<PoolMember[]>([]);
+  // The payment word on each card reads the invoices (src/lib/applicationMoney.ts).
+  const { money } = useConferenceMoney(conference.id);
   const [searchPool, setSearchPool] = useState<SearchApp[]>([]);
   const [loading, setLoading] = useState(true);
   const [transferTarget, setTransferTarget] = useState<PoolMember | null>(null);
@@ -430,6 +427,7 @@ export default function IndependentsView({ conference, showFlash }: Independents
               onTransfer={() => setTransferTarget(app)}
               onNotAttending={() => handleNotAttending(app)}
               onUndo={() => handleUndoNotAttending(app)}
+              money={money.get(app.id)}
             />
           ))}
         </div>

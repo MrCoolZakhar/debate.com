@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { ChevronLeft, Check, CheckCircle2, CircleDashed, Clock, Trash2 } from 'lucide-react';
+import MoneyMark from '@/app/manage/[slug]/assignment/MoneyMark';
+import { useConferenceMoney, moneyState } from '@/lib/applicationMoney';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
 import { isPaymentsLive } from '@/lib/payments';
@@ -198,6 +200,8 @@ export default function DelegationsView({ conference, showFlash, initialSocietyI
   const paymentsLive = isPaymentsLive(conference.id, conference.connect_onboarding_status, conference.payment_method, conference.platform_collects);
   const [societies, setSocieties] = useState<Society[]>([]);
   const [members, setMembers] = useState<PoolMember[]>([]);
+  // The advisors' payment word reads the invoices (src/lib/applicationMoney.ts).
+  const { money } = useConferenceMoney(conference.id);
   const [searchPool, setSearchPool] = useState<SearchApp[]>([]);
   const [advisorPool, setAdvisorPool] = useState<SearchApp[]>([]);
   const [loading, setLoading] = useState(true);
@@ -991,10 +995,8 @@ export default function DelegationsView({ conference, showFlash, initialSocietyI
                   <span className="flex-1 min-w-0" style={{ fontFamily: OUTFIT }}>
                     <StackedName name={name} size={14} weight={700} color={paid ? '#EED98A' : '#1C1410'} restColor={paid ? 'rgba(238,217,138,0.78)' : '#5A4E42'} />
                   </span>
-                  <span className="inline-flex items-center gap-1" style={{ fontSize: 12, fontWeight: 700, color: paid ? '#EED98A' : '#9A6B2F', fontFamily: OUTFIT, flexShrink: 0 }}>
-                    {paid ? <CheckCircle2 size={14} strokeWidth={2.4} aria-hidden="true" /> : <Clock size={14} strokeWidth={2.4} aria-hidden="true" />}
-                    {paid ? 'Paid' : 'Unpaid'}
-                  </span>
+                  {/* The word reads the invoices (moneyState), never payment_status (owner, 15 Nov 2026). */}
+                  <MoneyMark state={moneyState(money.get(a.id))} color={paid ? '#EED98A' : undefined} size={12} />
                   <div className="flex items-center gap-2.5 flex-shrink-0">
                     {paid && (
                       <button

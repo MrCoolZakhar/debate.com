@@ -25,6 +25,9 @@ import { queueEventEmail, notifyIfNeeded, turnOnDefaultEmail } from '@/lib/email
 import { AssignConfirmDialog, assignIntroSeen, markAssignIntroSeen } from '@/app/manage/[slug]/assignment/AssignConfirmDialog';
 import { useBoardDrag, DragGrip, dropAttr, type BoardDragPayload, type BoardDropTarget } from '@/app/manage/[slug]/assignment/boardDrag';
 import { RailPreferenceFilter, matchesRailFilter, type RailFilter } from '@/app/manage/[slug]/assignment/RailPreferenceFilter';
+import { RailPaymentFilter, matchesRailPay, railPayFromUrl, type RailPay } from '@/app/manage/[slug]/assignment/RailPaymentFilter';
+import MoneyMark from '@/app/manage/[slug]/assignment/MoneyMark';
+import { useConferenceMoney, moneyState } from '@/lib/applicationMoney';
 import { allocationBufferSendAfter, cancelBufferedAllocationEmails } from '@/lib/allocationEmail';
 import { serverNow, ensureServerClock } from '@/lib/serverClock';
 import {
@@ -2166,14 +2169,27 @@ export default function AssignmentPage() {
     if (m === 'delegates' || m === 'chairs' || m === 'delegations' || m === 'independents' || m === 'delegation-seats') setMode(m);
     const d = q.get('delegation') ?? (m === 'delegation-seats' ? q.get('society') : null);
     if (d) setDeepDelegationId(d);
+    const pay = railPayFromUrl(q.get('pay'));
+    if (pay !== 'all') setRailPayState(pay);
   }, []);
   const [loading, setLoading] = useState(true);
+  // What each person owes and paid, from the invoices (src/lib/applicationMoney.ts).
+  const { money, reload: reloadMoney } = useConferenceMoney(conference?.id);
   const [search, setSearch] = useState('');
   const [expandedAppId, setExpandedAppId] = useState<string | null>(null);
   // Delegates board interactions
   const [selectedAppId, setSelectedAppId] = useState<string | null>(null);
   // The rail's committee-preference filter (RailPreferenceFilter).
   const [railFilter, setRailFilter] = useState<RailFilter>('all');
+  // The rail's payment filter (RailPaymentFilter, owner 15 Nov 2026), from the
+  // invoices (src/lib/applicationMoney.ts), kept in the URL as ?pay=.
+  const [railPay, setRailPayState] = useState<RailPay>('all');
+  const setRailPay = useCallback((v: RailPay) => {
+    setRailPayState(v);
+    const url = new URL(window.location.href);
+    if (v === 'all') url.searchParams.delete('pay'); else url.searchParams.set('pay', v);
+    replaceUrlInPlace(url.pathname + url.search + url.hash);
+  }, []);
   const [dropModal, setDropModal] = useState<{ committeeId: string; appId: string } | null>(null);
   // Left-rail source in delegates mode: individual DELEGATES or whole DELEGATIONS
   // (societies) dragged onto a committee to own a block seat.
@@ -2263,6 +2279,8 @@ export default function AssignmentPage() {
   const loadData = useCallback(async (opts?: { silent?: boolean }) => {
     if (!conference) return;
     if (!accessToken) return;
+    // The money map re-reads with every load of the board.
+    void reloadMoney();
     const seq = ++loadSeq.current;
     const startStamp = mutSeq.current;
     // silent: background refresh, never flips the page-level loading flag,
@@ -2415,7 +2433,7 @@ export default function AssignmentPage() {
     // early with nothing left to re-trigger the effect. The session object is
     // the wrong dep — its identity changes on every auth event, which would
     // reload the whole board on each token refresh.
-  }, [conference, accessToken]);
+  }, [conference, accessToken, reloadMoney]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -3327,6 +3345,7 @@ export default function AssignmentPage() {
   const filteredApps = [...accepted]
     .filter(app => (app.profiles?.display_name ?? app.invited_name ?? '').toLowerCase().includes(search.toLowerCase()))
     .filter(app => matchesRailFilter(app.application_preferences, railFilter))
+    .filter(app => matchesRailPay(moneyState(money.get(app.id)), railPay))
     .sort(byAppliedAt);
   const railFilterCommittees = sortedCommittees.map(c => ({ id: c.id, label: committeeLabels(c).big, full: c.name }));
 
@@ -3569,6 +3588,12 @@ export default function AssignmentPage() {
                   placeholder={railSource === 'delegates' ? 'Search applicants...' : 'Search delegations...'}
                 />
 
+                {railSource === 'delegates' && (
+                  <div className="mb-3">
+                    <RailPaymentFilter value={railPay} onChange={setRailPay} />
+                  </div>
+                )}
+
                 {railSource === 'delegates' && committees.length > 1 && (
                   <div className="mb-3">
                     <RailPreferenceFilter value={railFilter} onChange={setRailFilter} committees={railFilterCommittees} />
@@ -3710,6 +3735,7 @@ export default function AssignmentPage() {
                               <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                                 <span style={{ fontSize: 11, fontWeight: 600, color: NEU.muted, fontFamily: OUTFIT }}>{roleLabel}</span>
                                 <LevelTag level={level} />
+                                <MoneyMark state={moneyState(money.get(app.id))} hideNone size={11} />
                               </div>
                             </div>
                             <button

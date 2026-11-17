@@ -72,7 +72,8 @@ export interface ExportRoleConfig { role: string; custom_questions: unknown }
 export interface ExportLabels {
   role: (role: string) => string;
   status: (status: string) => string;
-  payment: (payment: string | null) => string;
+  /** The Payment column: moneyLabel from the invoices (src/lib/applicationMoney.ts), never payment_status. */
+  payment: (app: ExportApplication) => string;
   date: (iso: string) => string;
   age: (dob: string | null | undefined) => number | null;
 }
@@ -192,7 +193,7 @@ export function buildApplicationsSheets(opts: {
     a.profiles?.nationality ?? '',
     labels.role(a.role),
     labels.status(a.status),
-    labels.payment(a.payment_status),
+    labels.payment(a),
     a.societies?.name ?? '',
     submitted(a),
     a.assigned_committee?.name ?? '',

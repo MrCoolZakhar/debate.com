@@ -6,7 +6,7 @@ import {
   ArrowRight, BadgeCheck, Ban, CheckCircle2, MinusCircle, XCircle, Building2, CalendarDays, Check, ChevronDown, ChevronLeft, CircleCheck, Clock,
   Download, Eye, Filter, Gavel, GraduationCap, HandCoins, Inbox, Info, Landmark, LogOut,
   Loader2, Mail, MoreHorizontal, PencilLine, Plus, RotateCcw, Search, Send, SlidersHorizontal, Trash2, Undo2, User, UserRoundCheck,
-  UserX, Users, Wallet, X, UsersRound, FileSearch, StickyNote,
+  UserX, Users, Wallet, X, UsersRound, FileSearch, StickyNote, ExternalLink,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useManage } from '@/app/manage/[slug]/layout';
@@ -31,10 +31,6 @@ import ProfileLink from '@/components/ProfileLink';
 import { getCountryByName, UN_COUNTRIES } from '@/lib/countries';
 import { ageAt } from '@/lib/age';
 import { checkInApplication, undoCheckIn } from '@/lib/checkIn';
-import { isPaymentsLive } from '@/lib/payments';
-import MarkPaidDialog from '../financials/MarkPaidDialog';
-import MarkUnpaidDialog from '../financials/MarkUnpaidDialog';
-import { cents as centsLabel } from '../financials/financialsApi';
 import {
   NEU, NEU_GRADIENTS, OUTFIT, NeuCard, NeuStatTile, NeuIconDisc, Emoji3D,
 } from '@/components/neu';
@@ -53,6 +49,8 @@ import { RowDelegation, ROW_DELEGATION_PILL, rowDelegationTitle, type RowDelegat
 import { countryShortName } from '../assignment/displayNames';
 import OpenDelegateApplications from './OpenDelegateApplications';
 import { rejectUpdates, writeReject, rejectFollowUps, acceptFollowUps } from './teamDecisions';
+import { useConferenceMoney, moneyState, moneyLabel, moneyOwing, type MoneyRow, type MoneyState, type LivePay } from '@/lib/applicationMoney';
+import { formatCents } from '../financials/shared';
 import { checkRoleSwap, askFor, runRoleSwap, goneAfterSwap, type SwapAsk } from './roleSwap';
 import RoleSwapPanel from './RoleSwapPanel';
 import { useJobBoardApplicantExtras } from './useJobBoardApplicantExtras';
@@ -65,7 +63,7 @@ import ApplicationSourceMark, { ApplicationSourceChip } from '@/components/confe
 // Advisor/Secretariat/Other), so a chair/secretariat application's listed
 // conferences read consistently with how the applicant's own CV describes them.
 import { ENTRY_TYPE_MAP, type EntryType } from '@/components/CVEntryModal';
-import { friendlyError, plainOrFallback, UserFacingError } from '@/lib/friendlyError';
+import { friendlyError, UserFacingError } from '@/lib/friendlyError';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -284,14 +282,12 @@ function InvitedChip({ onDark = false }: { onDark?: boolean }) {
   return <StateMark icon={Mail} label="Invited" tone="pending" onDark={onDark} size="sm" />;
 }
 
-/** Static stand-in for the payment menu, an invited chair whose role has no
- *  configured fee at all gets no PaymentMenu (there's nothing to mark paid),
- *  so this is the only visible confirmation they owe nothing. Once a
- *  conference configures a chair fee, the real PaymentMenu takes over and
- *  already renders its own "Waived" label for a waived chair, same as any
- *  other role; this mark only appears where that menu doesn't. */
-function WaivedChip() {
-  return <StateMark icon={MinusCircle} label="Waived" tone="done" />;
+/** Static stand-in for the payment menu: an invited chair whose role has no
+ *  configured fee at all gets no PaymentMenu, so this is the only visible
+ *  confirmation of their money. It reads the invoices like the menu does
+ *  ("Nothing owed" when moneyState is 'none'). */
+function WaivedChip({ label }: { label: string }) {
+  return <StateMark icon={MinusCircle} label={label} tone="done" />;
 }
 
 type LucideGlyph = React.ComponentType<{ size?: number; strokeWidth?: number; style?: React.CSSProperties }>;
@@ -414,11 +410,11 @@ function LevelBadge({ level, count }: { level: string; count?: number }) {
   );
 }
 
-/** Payment control. One button opens a small menu: "Mark paid manually", a
- *  "Remind to pay" that re-sends the pay-now email (#8), and the matching undo.
- *  The button itself turns GREEN once paid (#9) so no separate PAID badge is
- *  needed. "Remove waiver" stays reachable for any legacy waived rows. Portaled +
- *  edge-flipped so the clipping row card never cuts the menu off. */
+/** Payment control. The button shows the invoices' state (moneyState, src/lib/
+ *  applicationMoney.ts) and turns GREEN once paid (#9). Its menu changes no
+ *  money (owner, 15 Nov 2026): what they owe, "Review proof", "Remind to pay"
+ *  (re-sends the pay-now email, #8) and "Open in Financials", where money is
+ *  marked. Portaled so the clipping row card never cuts the menu off. */
 // Status inks for the review dialog's actions. These two carry meaning that no
 // `neu.tsx` token expresses (rejection, a blocking warning), so
 // they stay literal — but each one is contrast-checked against the surface it
@@ -535,23 +531,21 @@ function ReviewMoreMenu({ items, disabled }: {
 }
 
 function PaymentMenu({
-  app, disabled, paymentsLive, onMarkPaid, onRemind, onMarkUnpaid, onUndoWaive, align = 'left', live = null, onReviewProof,
+  disabled, onRemind, align = 'left', live = null, onReviewProof, money, financialsHref,
 }: {
-  app: Application;
   /** A proof waiting or a payment started with no proof (prompt 138). */
   live?: LivePay | null;
   /** Opens Things to Do in Financials. */
   onReviewProof?: () => void;
   disabled?: boolean;
-  /** When true, Stripe is live for this conference — manual mark-paid/unpaid
-   *  is disabled (checkout + webhook own that state). Undo-waive stays free. */
-  paymentsLive?: boolean;
-  onMarkPaid: () => void;
   onRemind: () => void;
-  onMarkUnpaid: () => void;
-  onUndoWaive: () => void;
   align?: 'left' | 'right';
+  /** This application's row of money_for_conference (src/lib/applicationMoney.ts). */
+  money: MoneyRow | undefined;
+  /** This person on the Financials Invoices page. */
+  financialsHref: string;
 }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const btnRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -564,9 +558,9 @@ function PaymentMenu({
     const b = btnRef.current;
     if (!b) return;
     const r = b.getBoundingClientRect();
-    const menuW = 184;
+    const menuW = 240;
     const left = align === 'right' ? r.right - menuW : r.left;
-    setPos({ top: r.bottom + 6, left: Math.max(8, left) });
+    setPos({ top: r.bottom + 6, left: Math.max(8, Math.min(left, window.innerWidth - menuW - 8)) });
   }, [align]);
 
   useEffect(() => {
@@ -588,11 +582,13 @@ function PaymentMenu({
     };
   }, [open, place]);
 
-  const paid = app.payment_status === 'paid';
-  const waived = app.payment_status === 'waived';
-  const proofWaiting = !paid && !waived && live?.kind === 'proof';
-  const started = !paid && !waived && live?.kind === 'started';
-  const label = paid ? 'Paid' : waived ? 'Waived' : proofWaiting ? 'Proof to review' : started ? 'Payment started' : 'Payment';
+  // The invoices decide (owner, 15 Nov 2026): never applications.payment_status.
+  const state = moneyState(money, live);
+  const paid = state === 'paid';
+  const proofWaiting = state === 'review';
+  const started = state === 'started';
+  const owing = moneyOwing(state);
+  const label = moneyLabel(state);
 
   const item = (
     icon: LucideGlyph, text: string, onClick: () => void, tone: 'ink' | 'danger' = 'ink',
@@ -614,7 +610,7 @@ function PaymentMenu({
         onMouseEnter={e => { if (!itemDisabled) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
         onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
       >
-        <Icon size={14} strokeWidth={2.4} style={{ color: itemDisabled ? NEU.muted : (tone === 'danger' ? '#8B2020' : NEU.deepGold) }} />
+        <Icon size={14} strokeWidth={2.4} style={{ flexShrink: 0, color: itemDisabled ? NEU.muted : (tone === 'danger' ? '#8B2020' : NEU.deepGold) }} />
         {text}
       </button>
     );
@@ -653,22 +649,23 @@ function PaymentMenu({
         <Portal>
           <div
             ref={menuRef}
-            style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999, minWidth: 196, backgroundColor: NEU.surface, borderRadius: 14, boxShadow: NEU.out, padding: 6, animation: `neuFadeIn 160ms ${EASE_LOCAL}` }}
+            style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999, width: 240, maxWidth: 'calc(100vw - 16px)', backgroundColor: NEU.surface, borderRadius: 14, boxShadow: NEU.out, padding: 6, animation: `neuFadeIn 160ms ${EASE_LOCAL}` }}
           >
             <style>{`@keyframes neuFadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }`}</style>
+            {(state === 'part' || state === 'owes') && money && (
+              <p className="[overflow-wrap:anywhere]" style={{ margin: 0, padding: '8px 12px 6px', fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, lineHeight: 1.45, color: NEU.ink }}>
+                Owes {formatCents(money.owedCents, money.currency)}
+              </p>
+            )}
             {proofWaiting && onReviewProof && item(FileSearch, 'Review proof', onReviewProof)}
             {started && live && (
-              <p style={{ margin: 0, padding: '8px 12px 6px', maxWidth: 240, fontFamily: OUTFIT, fontSize: 11.5, lineHeight: 1.45, color: NEU.inkSoft }}>
+              <p style={{ margin: 0, padding: '8px 12px 6px', fontFamily: OUTFIT, fontSize: 11.5, lineHeight: 1.45, color: NEU.inkSoft }}>
                 {live.createdAt ? `Started ${formatDate(live.createdAt)}, no proof yet.` : 'Started, no proof yet.'}
                 {live.expiresAt ? ` Held until ${formatDate(live.expiresAt)}` : ''}
               </p>
             )}
-            {!paid && !waived && item(CircleCheck, 'Mark paid manually', onMarkPaid, 'ink',
-              paymentsLive ? { disabled: true, title: 'Payments are handled automatically via checkout' } : undefined)}
-            {!paid && !waived && item(Send, 'Remind to pay', onRemind)}
-            {paid && item(RotateCcw, 'Mark as unpaid', onMarkUnpaid, 'danger',
-              paymentsLive ? { disabled: true, title: 'Payments are handled automatically via checkout' } : undefined)}
-            {waived && item(RotateCcw, 'Remove waiver', onUndoWaive, 'danger')}
+            {owing && item(Send, 'Remind to pay', onRemind)}
+            {item(ExternalLink, 'Open in Financials', () => router.push(financialsHref))}
           </div>
         </Portal>
       )}
@@ -1187,18 +1184,33 @@ function sameSet(a: Set<string>, b: string[]): boolean {
   return a.size === b.length && b.every(v => a.has(v));
 }
 
+// The payment filter reads moneyState (src/lib/applicationMoney.ts), never
+// payment_status. Unpaid matches 'owes', 'part' and 'started'; every other
+// option its own state. The values are the URL's (?payment=); an old
+// ?payment=waived link reads as Nothing owed.
 const PAYMENT_OPTIONS = [
   { label: 'Paid', value: 'paid' },
   { label: 'Unpaid', value: 'unpaid' },
-  { label: 'Waived', value: 'waived' },
+  { label: 'Part paid', value: 'part' },
   { label: 'Proof to review', value: 'proof' },
   { label: 'Payment started', value: 'started' },
+  { label: 'Nothing owed', value: 'none' },
 ];
+const PAYMENT_URL_ALIASES: Record<string, string> = { waived: 'none' };
 
-/** A live manual payment on an application (prompt 138): a proof waiting for
- *  the organizers ('pending' batch) or a payment started on /pay with no proof
- *  yet ('awaiting_proof'). A proof wins over a started payment. */
-interface LivePay { kind: 'proof' | 'started'; createdAt: string | null; expiresAt: string | null }
+/** Does a money state match one payment filter value? */
+function paymentFilterMatches(value: string, state: MoneyState): boolean {
+  switch (value) {
+    case 'paid': return state === 'paid';
+    case 'unpaid': return moneyOwing(state);
+    case 'part': return state === 'part';
+    case 'proof': return state === 'review';
+    case 'started': return state === 'started';
+    case 'none': return state === 'none';
+    default: return false;
+  }
+}
+
 
 // Status GROUPS, module scope so the stat tiles and the ?status= deep link can
 // never drift apart. "Accepted" means accepted-or-beyond and "Allocated" means
@@ -1255,7 +1267,8 @@ function filtersFromUrl(status: string | null, payment: string | null): FilterSt
   };
   const group = status ? URL_STATUS_GROUPS[status] : undefined;
   if (group) seeded.status = new Set(group);
-  if (payment && PAYMENT_OPTIONS.some(o => o.value === payment)) seeded.payment = new Set([payment]);
+  const pay = payment ? (PAYMENT_URL_ALIASES[payment] ?? payment) : null;
+  if (pay && PAYMENT_OPTIONS.some(o => o.value === pay)) seeded.payment = new Set([pay]);
   return seeded;
 }
 
@@ -1886,7 +1899,6 @@ export default function ApplicationsPage() {
   const searchParams = useSearchParams();
   const urlStatus = searchParams.get('status');
   const urlPayment = searchParams.get('payment');
-  const paymentsLive = isPaymentsLive(conference?.id, conference?.connect_onboarding_status, conference?.payment_method, conference?.platform_collects);
   const [applications, setApplications] = useState<Application[]>([]);
   // application_id → the delegation whose leader imported it
   // (conference_leader_imports). Keyed on the id, never on invited_email,
@@ -1894,6 +1906,10 @@ export default function ApplicationsPage() {
   const [leaderImports, setLeaderImports] = useState<Map<string, string>>(() => new Map());
   // Live manual payments per application (prompt 138), read beside the list.
   const [livePays, setLivePays] = useState<Map<string, LivePay>>(() => new Map());
+  // What each person owes and paid, from the invoices (owner, 15 Nov 2026):
+  // every payment label, filter, tile and the export read this, never
+  // payment_status. Re-read with every load of the list below.
+  const { money, reload: reloadMoney } = useConferenceMoney(conference?.id);
   // Unpaid gating invoices (gates_acceptance=true, status not settled/waived/
   // void). Only app_fee rows ever carry the flag, since it comes from
   // application_surcharges.gates_acceptance. Fetched with the applications list.
@@ -1952,11 +1968,9 @@ export default function ApplicationsPage() {
   const [bulkRunning, setBulkRunning] = useState<{ done: number; total: number } | null>(null);
   const { draftNotices, pushDraftNotice, dismissDraftNotice } = useDraftNotices();
   const { confirm, modal: confirmModal } = useConfirmModal();
-  // Mark paid / unpaid go through the Financials dialogs and their RPCs only
-  // (mark_invoices_paid / mark_invoices_unpaid, prompt 93): this page never
-  // writes payment_status, the pool or the receipt email itself any more.
-  const [markPaidFor, setMarkPaidFor] = useState<{ ids: string[]; totalLabel: string; extraLine?: string; clear: boolean } | null>(null);
-  const [markUnpaidFor, setMarkUnpaidFor] = useState<{ ids: string[] } | null>(null);
+  // This page never changes money (owner, 15 Nov 2026): Mark paid, Mark
+  // unpaid and Remove waiver live only in Financials (mark_invoices_paid /
+  // mark_invoices_unpaid / remove_fee_waiver).
   // Stale-response guard for background refetches.
   const loadSeq = useRef(0);
   /* ── The optimistic-patch ledger ────────────────────────────────────────
@@ -2099,6 +2113,9 @@ export default function ApplicationsPage() {
       }
       setLeaderImports(next);
     })();
+    // The money map re-reads with every load (every action that refreshes
+    // rows, and the same cadence as livePays below).
+    void reloadMoney();
     // Live manual payments: a proof waiting ('pending') or a payment started
     // with no proof ('awaiting_proof'), per application. A failed read only
     // leaves the chips as "Payment"; it never blocks the list.
@@ -2223,7 +2240,7 @@ export default function ApplicationsPage() {
     // early with nothing left to re-trigger the effect. `session` itself is
     // the wrong dep — its identity changes on every auth event — so the string
     // token is what belongs here.
-  }, [conference, accessToken]);
+  }, [conference, accessToken, reloadMoney]);
 
   useEffect(() => { loadApplications(); }, [loadApplications]);
 
@@ -3387,104 +3404,6 @@ export default function ApplicationsPage() {
       .finally(() => markBusy(appId, false));
   }
 
-  // Mark paid, single or bulk (prompt 93). Reads the open invoices of the
-  // chosen applications, leaves out any with a proof in review (those are
-  // decided in Financials, Things to do), and opens ONE MarkPaidDialog for all
-  // of them. The dialog calls mark_invoices_paid, which records the payment
-  // lines, settles the items (the delegation pool and coverage follow on the
-  // server), sends each payer one itemised receipt, and the server sends
-  // Payment received itself. Then the rows are read again; no optimistic badge.
-  async function openMarkPaid(apps: Application[], clear: boolean): Promise<void> {
-    if (!session || !conference || paymentsLive || apps.length === 0) return;
-    setActionError('');
-    try {
-      const supabase = getAuthedClient(session.access_token);
-      const { data: invs, error: invErr } = await supabase
-        .from('invoices')
-        .select('id, amount_cents, amount_paid_cents, currency')
-        .in('application_id', apps.map(a => a.id))
-        .not('status', 'in', '(settled,waived,void)');
-      if (invErr) throw invErr;
-      const open = ((invs ?? []) as { id: string; amount_cents: number; amount_paid_cents: number; currency: string }[])
-        .filter(i => i.amount_cents - (i.amount_paid_cents ?? 0) > 0);
-      let inReview = new Set<string>();
-      if (open.length > 0) {
-        const { data: pend, error: pendErr } = await supabase
-          .from('payments')
-          .select('invoice_id, batch_id')
-          .in('invoice_id', open.map(i => i.id))
-          .eq('status', 'pending')
-          .eq('method', 'manual');
-        if (pendErr) throw pendErr;
-        const rows = (pend ?? []) as { invoice_id: string; batch_id: string | null }[];
-        const batchIds = Array.from(new Set(rows.map(r => r.batch_id).filter((b): b is string => !!b)));
-        if (batchIds.length > 0) {
-          const { data: batches, error: bErr } = await supabase
-            .from('payment_batches').select('id').in('id', batchIds).eq('status', 'pending');
-          if (bErr) throw bErr;
-          const pendingBatches = new Set(((batches ?? []) as { id: string }[]).map(b => b.id));
-          inReview = new Set(rows.filter(r => r.batch_id && pendingBatches.has(r.batch_id)).map(r => r.invoice_id));
-        }
-      }
-      const markable = open.filter(i => !inReview.has(i.id));
-      if (markable.length === 0) {
-        setActionError(inReview.size > 0
-          ? 'Their payment proof is waiting for review. Accept or deny it in Financials, under Things to do.'
-          : 'There is nothing left to mark paid for this selection.');
-        return;
-      }
-      const total = markable.reduce((s, i) => s + (i.amount_cents - (i.amount_paid_cents ?? 0)), 0);
-      const left = inReview.size;
-      setMarkPaidFor({
-        ids: markable.map(i => i.id),
-        totalLabel: centsLabel(total, markable[0].currency),
-        extraLine: left > 0 ? `${left} item${left === 1 ? ' has' : 's have'} a proof in review, so ${left === 1 ? 'it is' : 'they are'} left out. Review ${left === 1 ? 'it' : 'them'} in Financials, under Things to do.` : undefined,
-        clear,
-      });
-    } catch (e) {
-      setActionError(friendlyError(e, 'Their invoices could not be read. Try again in a moment.'));
-    }
-  }
-
-  function handleMarkPaid(app: Application): Promise<void> {
-    if (busyIds.has(app.id)) { noteBusyClick(); return Promise.resolve(); }
-    return openMarkPaid([app], false);
-  }
-
-  // Mark unpaid (prompt 93): the application's manually paid items go back to
-  // owed through mark_invoices_unpaid, after the same confirm as before plus
-  // an optional note. Card-paid items are left out (they are refunded, never
-  // marked unpaid); the pool and coverage undo themselves on the server.
-  async function handleMarkUnpaid(app: Application) {
-    if (!session || paymentsLive) return;
-    if (busyIds.has(app.id)) { noteBusyClick(); return; }
-    setActionError('');
-    try {
-      const supabase = getAuthedClient(session.access_token);
-      const { data: invs, error: invErr } = await supabase
-        .from('invoices').select('id').eq('application_id', app.id).in('status', ['settled', 'partial']);
-      if (invErr) throw invErr;
-      const ids = ((invs ?? []) as { id: string }[]).map(i => i.id);
-      if (ids.length === 0) { setActionError('Nothing was marked paid for this application.'); return; }
-      const { data: pays, error: payErr } = await supabase
-        .from('payments').select('invoice_id, method, amount_cents')
-        .in('invoice_id', ids).eq('status', 'succeeded').gt('amount_cents', 0);
-      if (payErr) throw payErr;
-      const rows = (pays ?? []) as { invoice_id: string; method: string | null; amount_cents: number }[];
-      const card = new Set(rows.filter(r => r.method === 'stripe').map(r => r.invoice_id));
-      const manual = ids.filter(id => !card.has(id) && rows.some(r => r.invoice_id === id && r.method === 'manual'));
-      if (manual.length === 0) {
-        setActionError(card.size > 0
-          ? 'Card payments can only be refunded. Refund them in Financials, under Invoices.'
-          : 'Nothing was marked paid for this application.');
-        return;
-      }
-      setMarkUnpaidFor({ ids: manual });
-    } catch (e) {
-      setActionError(friendlyError(e, 'Their invoices could not be read. Try again in a moment.'));
-    }
-  }
-
   // Re-send the pay-now email as a reminder (#8). payment_available IS the
   // "you can pay now" email, so re-queuing it reads to the applicant as a
   // reminder. Optimistic feedback via the green flash; no row state changes.
@@ -3504,40 +3423,6 @@ export default function ApplicationsPage() {
       .catch(() => {
         setFlashMsg('');
         setActionError('Could not send the payment reminder. Please try again.');
-      })
-      .finally(() => markBusy(app.id, false));
-  }
-
-  async function handleUndoWaive(app: Application) {
-    if (!session) return;
-    if (busyIds.has(app.id)) { noteBusyClick(); return; }
-    const { confirmed } = await confirm({
-      title: 'Remove This Fee Waiver?',
-      body: 'They will owe payment again.',
-      confirmLabel: 'Remove waiver',
-      danger: true,
-    });
-    if (!confirmed) return;
-    const prevRow = applications.find(a => a.id === app.id) ?? app;
-
-    setActionError('');
-    markBusy(app.id, true);
-    applyRow(app.id, { payment_status: 'unpaid' });
-
-    // remove_fee_waiver is the only way to take a waiver off (prompt 99): it
-    // reopens their Registration invoice at today's price on the server.
-    (async () => {
-      const supabase = await getFreshAuthedClient();
-      if (!supabase) throw new UserFacingError('Your session has expired. Please sign in again.');
-      const { data, error } = await supabase.rpc('remove_fee_waiver', { p_application_id: app.id });
-      if (error) throw error;
-      const r = (data ?? null) as { ok?: boolean; error?: string } | null;
-      if (!r || r.ok !== true) throw new UserFacingError(plainOrFallback(r?.error, 'Could not remove the waiver. The change was reverted. Please try again.'));
-    })()
-      .then(scheduleReconcile)
-      .catch((e) => {
-        restoreRow(prevRow);
-        setActionError(friendlyError(e, 'Could not remove the waiver. The change was reverted. Please try again.'));
       })
       .finally(() => markBusy(app.id, false));
   }
@@ -3835,7 +3720,7 @@ export default function ApplicationsPage() {
         labels: {
           role: roleLabel,
           status: (st) => STATUS_PILL[st]?.label ?? st,
-          payment: (pay) => (pay ? PAYMENT_OPTIONS.find(o => o.value === pay)?.label ?? pay : ''),
+          payment: (row) => moneyLabel(moneyState(row.id ? money.get(row.id) : undefined, row.id ? livePays.get(row.id) : null)),
           date: formatDate,
           age: (dob) => ageAt(dob) ?? null,
         },
@@ -3910,13 +3795,9 @@ export default function ApplicationsPage() {
     }
     if (filters.role.size > 0 && !filters.role.has(a.role)) return false;
     if (filters.payment.size > 0) {
-      const ps = a.payment_status;
-      const match =
-        (filters.payment.has('paid') && ps === 'paid') ||
-        (filters.payment.has('waived') && ps === 'waived') ||
-        (filters.payment.has('unpaid') && (ps === 'unpaid' || ps == null)) ||
-        (filters.payment.has('proof') && ps !== 'paid' && ps !== 'waived' && livePays.get(a.id)?.kind === 'proof') ||
-        (filters.payment.has('started') && ps !== 'paid' && ps !== 'waived' && livePays.get(a.id)?.kind === 'started');
+      // The invoices decide (src/lib/applicationMoney.ts), never payment_status.
+      const st = moneyState(money.get(a.id), livePays.get(a.id));
+      const match = [...filters.payment].some(v => paymentFilterMatches(v, st));
       if (!match) return false;
     }
     if (filters.dateFrom && a.submitted_at && a.submitted_at.slice(0, 10) < filters.dateFrom) return false;
@@ -4008,11 +3889,13 @@ export default function ApplicationsPage() {
   // tile for money it does not charge. Still "ever charges", not "charges
   // today", so the controls do not blink out between fee phases.
   const roleChargesFee = (role: string) => roleHasFee(roleConfigs.find(rc => rc.role === role));
-  const payEligible = (a: Application) =>
-    !paymentsLive
-    && roleChargesFee(a.role)
-    && (a.status === 'accepted' || a.status === 'assigned' || a.status === 'submitted' || a.status === 'checked-in')
-    && a.payment_status !== 'paid' && a.payment_status !== 'waived';
+  /** The ONE money state of a row (src/lib/applicationMoney.ts). */
+  const stateOf = (a: Application) => moneyState(money.get(a.id), livePays.get(a.id));
+  /** This person on the Financials Invoices page: its search filter (?q=), by email, else name. */
+  const financialsHrefFor = (a: Application) => {
+    const q = (a.profiles?.email || a.invited_email || a.profiles?.display_name || a.invited_name || '').trim();
+    return `/manage/${conference?.slug ?? ''}/financials/invoices${q ? `?q=${encodeURIComponent(q)}` : ''}`;
+  };
   // Accept is blocked while a gating app_fee invoice is unpaid, matched by
   // this application's own id, or its society's (per-delegation surcharges
   // are tied to whichever application first triggered them, not necessarily
@@ -4026,24 +3909,20 @@ export default function ApplicationsPage() {
   const bulkAcceptable = bulkEligibleApps.filter(a => a.status === 'submitted' && !isAcceptBlockedByFee(a));
   const bulkRejectable = bulkEligibleApps.filter(a => a.status === 'submitted' || a.status === 'accepted');
   const bulkCheckInable = bulkEligibleApps.filter(a => a.status === 'accepted' || a.status === 'assigned');
-  const bulkPayable = bulkEligibleApps.filter(payEligible);
   // Mirrors exactly when the single-row PaymentMenu offers "Remind to pay":
   // the menu is shown at all (fee-bearing role, a status that can owe money)
-  // and the item itself is rendered (neither paid nor waived). Deliberately
-  // NOT `payEligible`, which additionally excludes conferences with Stripe
-  // live — a reminder is MORE useful there, not less: it is the nudge to go
-  // and pay through checkout.
+  // and the person still owes (moneyOwing, from the invoices). Stripe being
+  // live does not matter: a reminder is the nudge to go and pay.
   const bulkRemindable = bulkEligibleApps.filter(a =>
     roleChargesFee(a.role)
     && (a.status === 'accepted' || a.status === 'assigned' || a.status === 'submitted' || a.status === 'checked-in')
-    && a.payment_status !== 'paid' && a.payment_status !== 'waived'
+    && moneyOwing(stateOf(a))
   );
   // Suggested action from the selection composition. Starts pulsing the moment a
   // selection is made, nudging the organiser toward the obvious next step.
-  const suggestion: 'accept' | 'pay' | 'checkin' | null =
+  const suggestion: 'accept' | 'checkin' | null =
     bulkEligibleApps.length === 0 ? null
     : bulkEligibleApps.every(a => a.status === 'submitted') ? 'accept'
-    : bulkEligibleApps.every(a => (a.status === 'accepted' || a.status === 'assigned') && payEligible(a)) ? 'pay'
     : bulkEligibleApps.every(a => a.status === 'accepted' || a.status === 'assigned') ? 'checkin'
     : null;
 
@@ -4086,10 +3965,10 @@ export default function ApplicationsPage() {
       && !(NON_DELEGATE_ROLES.has(a.role) && !filters.role.has(a.role))
     ).length,
     checkedIn: statScope.filter(a => a.status === 'checked-in').length,
-    paid: statScope.filter(a => a.payment_status === 'paid').length,
+    paid: statScope.filter(a => roleChargesFee(a.role) && stateOf(a) === 'paid').length,
     // Unpaid only counts roles this conference actually charges for — a free
     // role can never be in arrears.
-    unpaid: statScope.filter(a => roleChargesFee(a.role) && (a.payment_status == null || a.payment_status === 'unpaid')).length,
+    unpaid: statScope.filter(a => { const st = stateOf(a); return roleChargesFee(a.role) && (moneyOwing(st) || st === 'review'); }).length,
   };
 
   // Clickable stat-tile filters (#10). Status tiles clear payment and vice
@@ -4797,20 +4676,17 @@ export default function ApplicationsPage() {
                         {showPayControl ? (
                           <span style={notAttendingLock}>
                             <PaymentMenu
-                              app={app}
                               disabled={rowBusy || !app.attending}
-                              paymentsLive={paymentsLive}
                               align="right"
-                              onMarkPaid={() => handleMarkPaid(app)}
                               onRemind={() => handleRemindPay(app)}
-                              onMarkUnpaid={() => handleMarkUnpaid(app)}
-                              onUndoWaive={() => handleUndoWaive(app)}
                               live={livePays.get(app.id) ?? null}
+                              money={money.get(app.id)}
+                              financialsHref={financialsHrefFor(app)}
                               onReviewProof={() => router.push(`/manage/${conference.slug}/financials?open=todo`)}
                             />
                           </span>
                         ) : isInvitedChair ? (
-                          <WaivedChip />
+                          <WaivedChip label={moneyLabel(moneyState(money.get(app.id), livePays.get(app.id)))} />
                         ) : null}
                         {!app.user_id && (
                           <span style={notAttendingLock}>
@@ -5219,21 +5095,6 @@ export default function ApplicationsPage() {
                 Check in {bulkCheckInable.length}
               </button>
             )}
-            {bulkPayable.length > 0 && (
-              <button
-                onClick={() => { void openMarkPaid(bulkPayable, true); }}
-                className="inline-flex items-center gap-1.5 focus:outline-none"
-                style={{
-                  padding: '8px 15px', borderRadius: 999, border: 'none', cursor: 'pointer',
-                  fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.03em', color: NEU.ink,
-                  backgroundColor: NEU.surface, boxShadow: NEU.outSm,
-                  animation: suggestion === 'pay' ? 'bulkPulse 1.5s ease-in-out infinite' : undefined,
-                }}
-              >
-                <CircleCheck size={14} strokeWidth={2.6} style={{ color: NEU.green }} />
-                Mark paid
-              </button>
-            )}
             {bulkRejectable.length > 0 && (
               <button
                 onClick={() => runBulk(bulkRejectable, { title: `Reject ${bulkRejectable.length} application${bulkRejectable.length === 1 ? '' : 's'}?`, body: 'This rejects the selected applications. You can reinstate them later if needed.', confirmLabel: 'Reject all', danger: true }, a => handleReject(a.id))}
@@ -5398,19 +5259,16 @@ export default function ApplicationsPage() {
         const paymentControls = showPaymentControls ? (
           <span style={notAttendingLock}>
             <PaymentMenu
-              app={app}
               disabled={rowBusy || !app.attending}
-              paymentsLive={paymentsLive}
-              onMarkPaid={() => handleMarkPaid(app)}
               onRemind={() => handleRemindPay(app)}
-              onMarkUnpaid={() => handleMarkUnpaid(app)}
-              onUndoWaive={() => handleUndoWaive(app)}
               live={livePays.get(app.id) ?? null}
+              money={money.get(app.id)}
+              financialsHref={financialsHrefFor(app)}
               onReviewProof={() => router.push(`/manage/${conference.slug}/financials?open=todo`)}
             />
           </span>
         ) : (app.role === 'chair' && app.fee_waiver_source === 'chair_invite') ? (
-          <WaivedChip />
+          <WaivedChip label={moneyLabel(moneyState(money.get(app.id), livePays.get(app.id)))} />
         ) : null;
 
         const rejectControls = renderRejectControls(app, !app.attending);
@@ -5843,25 +5701,6 @@ export default function ApplicationsPage() {
       })()}
 
       {confirmModal}
-      {markPaidFor && conference && (
-        <MarkPaidDialog
-          conferenceId={conference.id}
-          invoiceIds={markPaidFor.ids}
-          totalLabel={markPaidFor.totalLabel}
-          extraLine={markPaidFor.extraLine}
-          onClose={() => setMarkPaidFor(null)}
-          onDone={() => { if (markPaidFor.clear) clearSelection(); setMarkPaidFor(null); scheduleReconcile(); }}
-        />
-      )}
-      {markUnpaidFor && (
-        <MarkUnpaidDialog
-          invoiceIds={markUnpaidFor.ids}
-          title="Mark This Application Unpaid?"
-          body="If their payment opened a delegation spot, one spot will be removed."
-          onClose={() => setMarkUnpaidFor(null)}
-          onDone={() => { setMarkUnpaidFor(null); scheduleReconcile(); }}
-        />
-      )}
     </div>
   );
 }
