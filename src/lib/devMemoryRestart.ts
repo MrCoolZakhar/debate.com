@@ -9,18 +9,21 @@
 // the same port, and the Turbopack disk cache brings it back at about 0.5 GB
 // with pages served in 1 to 4 s.
 //
-// So every 30 s this checks the worker's memory and, after two readings in a
+// So every 15 s this checks the worker's memory and, after two readings in a
 // row over the limit, exits with 77. The limit is 3/8 of the machine's RAM
 // (3 GB on 8 GB, 6 GB on 16 GB), just under where Peter's memory guard
 // starts warning. NEXT_DEV_RESTART_MB overrides it in MB; 0 turns it off.
+// A worker over 1.5 times the limit is restarted even inside the first 5
+// minutes, after the 18 Nov 2026 reading of 5.7 GB in 6 minutes.
 // Never runs in production or `next build`: only inside the dev worker.
 
 import { execFile } from 'node:child_process';
 import os from 'node:os';
 
 const RESTART_EXIT_CODE = 77; // next/dist/server/lib/utils.js
-const CHECK_EVERY_MS = 30_000;
+const CHECK_EVERY_MS = 15_000;
 const MIN_UPTIME_S = 300;
+const HARD_FACTOR = 1.5;
 
 function limitBytes(): number {
   const raw = process.env.NEXT_DEV_RESTART_MB;
@@ -55,7 +58,9 @@ function readMemory(): Promise<number> {
 export function startDevMemoryRestart(): void {
   const limit = limitBytes();
   if (!limit) return;
+  const hardLimit = Math.floor(limit * HARD_FACTOR);
   let over = 0;
+  let overHard = 0;
   let busy = false;
   const timer = setInterval(async () => {
     if (busy) return;
@@ -63,10 +68,12 @@ export function startDevMemoryRestart(): void {
     try {
       const used = await readMemory();
       over = used > limit ? over + 1 : 0;
+      overHard = used > hardLimit ? overHard + 1 : 0;
       // A fresh worker re-reads its cache and one heavy page brings it to
-      // about 2.2 GB, so never restart within 5 minutes of starting: a limit
-      // set too low can then never turn into a restart every minute.
-      if (over >= 2 && process.uptime() > MIN_UPTIME_S) {
+      // about 2.2 GB, so the ordinary limit never restarts within 5 minutes of
+      // starting: a limit set too low can then never turn into a restart every
+      // minute. The hard ceiling (1.5 times the limit) applies at any uptime.
+      if ((over >= 2 && process.uptime() > MIN_UPTIME_S) || overHard >= 2) {
         const gb = (n: number) => (n / 1024 ** 3).toFixed(1);
         console.warn(
           `\n⚠ Dev server is using ${gb(used)} GB (limit ${gb(limit)} GB), restarting it to free memory...\n`,
