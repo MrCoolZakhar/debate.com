@@ -113,6 +113,20 @@ export async function enableCrisis(conferenceCommitteeId: string, pkg: 'basic' |
   return must(res as { data: { crisis_id: string; slug: string; created: boolean } | null; error: unknown }, 'Could not switch on Gavelling Crisis.');
 }
 
+/** Whether this account may switch Gavelling Crisis on (part 47: Peter only for now). Asked once per page load; a failed read is "no". */
+let canCreateAsk: Promise<boolean> | null = null;
+export function crisisCanCreate(): Promise<boolean> {
+  if (!canCreateAsk) {
+    canCreateAsk = (async () => {
+      const client = await getCrisisClient('', '');
+      const res = await client.rpc('crisis_can_create');
+      if (res.error) { canCreateAsk = null; return false; }
+      return res.data === true;
+    })().catch(() => { canCreateAsk = null; return false; });
+  }
+  return canCreateAsk;
+}
+
 /** Find the crisis already linked to a conference committee (organiser view in Manage). */
 export async function crisisForCommittee(conferenceCommitteeId: string): Promise<{ crisis_id: string; slug: string } | null> {
   const client = await getCrisisClient('', '');
