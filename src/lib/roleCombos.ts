@@ -1,9 +1,11 @@
-// Several roles per person (owner, 9 Nov 2026; YCMUN). A person may apply to
-// several roles at one conference; accepting one drops their other
-// applications under review (the database: guard_application_write, triggers
-// aa_one_role_guard and zz_one_role_drop_others). Team roles combine with each
-// other; participant roles combine with nothing. The database is the truth;
-// this mirrors it for what the pages show.
+// One accepted role per person (owner, 16 Nov 2026; WorldMUN). Anyone may
+// APPLY for another role while holding one. A person is ACCEPTED in only one
+// role that does not combine: accepting the new role goes through
+// accept_role_swap_check and accept_role_swap, which remove the old role
+// completely (allocation, delegation, dais, team access, the old application)
+// in one transaction. Team roles combine with each other; participant roles
+// combine with nothing. The database is the truth; this mirrors it for what
+// the pages show.
 
 export const TEAM_ROLES_COMBINE = new Set(['chair', 'secretariat', 'staff']);
 /** Roles that take a Gavelling credit (one per person per conference). */
@@ -27,4 +29,20 @@ const WORD: Record<string, string> = {
 export function roleWithArticle(role: string): string {
   const w = WORD[role] ?? role.replace(/-/g, ' ');
   return `${/^[aeiou]/i.test(w) ? 'an' : 'a'} ${w}`;
+}
+
+const TITLE: Record<string, string> = {
+  delegate: 'Delegate', 'head-delegate': 'Head Delegate', 'faculty-advisor': 'Faculty Advisor',
+  observer: 'Observer', chair: 'Chair', secretariat: 'Secretariat', staff: 'Staff',
+};
+
+/** "Delegate", "Head Delegate": a role's name as a title word. */
+export function roleTitle(role: string): string {
+  return TITLE[role] ?? role.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+/** "You are a {Role} here. If you are accepted as {New role}, your {Role} place is removed." */
+export function heldRoleSwapLine(held: string, applying: string): string {
+  const h = roleTitle(held);
+  return `You are ${/^[aeiou]/i.test(h) ? 'an' : 'a'} ${h} here. If you are accepted as ${roleTitle(applying)}, your ${h} place is removed.`;
 }

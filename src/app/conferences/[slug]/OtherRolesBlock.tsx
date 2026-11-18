@@ -2,14 +2,14 @@
 
 // Several roles per person (owner, 9 Nov 2026): under "Your application" on the
 // conference page, the other roles this person can still apply for. A role
-// they already applied to reads "Applied" and opens their role page; a role
-// they cannot combine with one they HOLD is not offered, with one line saying
-// what they are. Team roles (chair, secretariat, staff) combine; participant
-// roles combine with nothing (src/lib/roleCombos.ts; the database decides).
+// they already applied to reads "Applied" and opens their role page. Since
+// 16 Nov 2026 every other role is offered, also to someone who HOLDS a role:
+// accepting a role that does not combine removes the old one
+// (src/lib/roleCombos.ts; the database decides).
 
 import Link from 'next/link';
 import { RoleApplyCards, type RoleTile } from './RoleApplyCards';
-import { HOLDING_STATUSES, LIVE_STATUSES, rolesCombine, roleWithArticle } from '@/lib/roleCombos';
+import { HOLDING_STATUSES, LIVE_STATUSES, roleWithArticle } from '@/lib/roleCombos';
 
 const FONT = 'var(--font-brand), sans-serif';
 
@@ -28,11 +28,12 @@ export default function OtherRolesBlock({ slug, apps, tiles, primaryRole, onPick
   const appliedRoles = new Set(live.map(a => a.role));
   const held = live.find(a => HOLDING_STATUSES.has(a.status)) ?? null;
   const underReview = live.find(a => a.status === 'submitted') ?? null;
-  const offered = tiles.filter(t => !appliedRoles.has(t.role)
-    && !live.some(a => HOLDING_STATUSES.has(a.status) && !rolesCombine(a.role, t.role)));
+  const offered = tiles.filter(t => !appliedRoles.has(t.role));
   const appliedOthers = [...appliedRoles].filter(r => r !== primaryRole);
   const line = held
-    ? `You are ${roleWithArticle(held.role)} at this conference.`
+    ? offered.length > 0
+      ? `You are ${roleWithArticle(held.role)} at this conference. You can apply for another role too.`
+      : `You are ${roleWithArticle(held.role)} at this conference.`
     : underReview && offered.length > 0
       ? `You applied as ${roleWithArticle(underReview.role)}. You can apply for another role too.`
       : null;
