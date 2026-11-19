@@ -42,12 +42,14 @@ export interface VerifiedCheckProps {
   showUnverified?: boolean;
   /** Tooltip. Defaults explain the state; pass your own to add the minutes-left hint. */
   title?: string;
+  /** No native browser tooltip (the label stays as aria-label); /jobs uses the site's own hints (18 Nov 2026). */
+  noTooltip?: boolean;
   className?: string;
   style?: React.CSSProperties;
 }
 
 export default function VerifiedCheck({
-  verified, size = 16, showUnverified = false, title, className = '', style,
+  verified, size = 16, showUnverified = false, title, noTooltip = false, className = '', style,
 }: VerifiedCheckProps) {
   const id = useId();
   if (!verified && !showUnverified) return null;
@@ -57,7 +59,7 @@ export default function VerifiedCheck({
     <span
       role="img"
       aria-label={label}
-      title={label}
+      title={noTooltip ? undefined : label}
       className={`inline-flex items-center flex-shrink-0 align-middle ${className}`}
       style={{ width: size, height: size, lineHeight: 0, ...style }}
     >

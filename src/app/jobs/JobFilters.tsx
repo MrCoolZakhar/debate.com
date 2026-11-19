@@ -4,21 +4,24 @@
 //
 // The search field, then one row of white pill chips (each a popover on
 // desktop, a bottom sheet on phones, from Explore's ExploreChrome): Role,
-// Where, When, Level, Format, Offers, Deadline and the "Under 10 applicants"
-// toggle, with "Clear all" while anything is on. Where works like Explore's:
+// Where, When, Level, Format, Offers and Deadline, with "Clear all" while
+// anything is on. The search and the chips share ONE row from 1024px and
+// wrap below the search when they do not fit (owner, 18 Nov 2026; the
+// "Under 10 applicants" toggle is gone). Where works like Explore's:
 // countries (at most five) or one region, which replaces the countries; the
 // chosen places show as white pills under the row, each with its round X.
 // Every change goes up through `onChange`, and the page writes the URL.
 
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Search, Gavel, Globe, MapPin, CalendarDays, GraduationCap, Monitor, Gift, Clock, Users, X, Building2,
+  Search, Gavel, Globe, MapPin, CalendarDays, GraduationCap, Monitor, Gift, Clock, X, Building2,
 } from 'lucide-react';
 import { CircleFlag } from '@/components/CircleFlag';
 import { DatePicker } from '@/components/DatePicker';
 import { UN_COUNTRIES, countryMatchRank, getCountryByName } from '@/lib/countries';
 import { JOB_OFFER_LABEL, JOB_OFFER_ORDER, JOB_ROLE_LABEL, type JobRegion, type JobRole } from '@/lib/jobBoard';
-import { ChoiceRow, FilterChip, ToggleChip } from '../conferences/explore/ExploreChrome';
+import { HoverHint } from '@/components/HoverHint';
+import { ChoiceRow, FilterChip } from '../conferences/explore/ExploreChrome';
 import { JOB_REGIONS, JOB_REGION_LABEL, MAX_JOB_COUNTRIES, hasJobFilters, type JobQuery } from './jobQuery';
 
 const FONT = "var(--font-brand), sans-serif";
@@ -93,6 +96,7 @@ export default function JobFilters({ query, onChange, onClearAll, conferenceLabe
   return (
     <div style={{ fontFamily: FONT }}>
       <style>{FILTER_CSS}</style>
+      <div className="gv-job-filterrow">
       <label className="gv-job-search">
         <Search size={18} strokeWidth={2.4} aria-hidden style={{ color: FOREST, flexShrink: 0 }} />
         <span className="sr-only">Search roles</span>
@@ -182,13 +186,12 @@ export default function JobFilters({ query, onChange, onClearAll, conferenceLabe
           <ChoiceRow label="This month" active={query.deadline === 'month'} onClick={() => onChange({ deadline: 'month' })} />
         </FilterChip>
 
-        <ToggleChip label="Under 10 applicants" icon={Users} active={query.under10} onClick={() => onChange({ under10: !query.under10 })} />
-
         {hasJobFilters(query) && (
           <button type="button" onClick={() => { setText(''); onClearAll(); }} className="gv-job-clear focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] rounded">
             Clear all
           </button>
         )}
+      </div>
       </div>
 
       {(query.regions.length > 0 || query.countries.length > 0 || !!query.conference) && (
@@ -295,15 +298,18 @@ function PlacePill({ label, icon, onRemove }: { label: string; icon: React.React
     <span className="gv-job-place">
       <span aria-hidden style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, color: FOREST }}>{icon}</span>
       <span style={{ overflowWrap: 'anywhere', textAlign: 'left' }}>{label}</span>
-      <button
-        type="button"
-        onClick={onRemove}
-        aria-label={`Remove ${label}`}
-        title={`Remove ${label}`}
-        className="gv-job-place-x focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
-      >
-        <X size={12} strokeWidth={3} aria-hidden />
-      </button>
+      <span className="gv-job-place-xwrap">
+        <HoverHint text={`Remove ${label}`}>
+          <button
+            type="button"
+            onClick={onRemove}
+            aria-label={`Remove ${label}`}
+            className="gv-job-place-x focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+          >
+            <X size={12} strokeWidth={3} aria-hidden />
+          </button>
+        </HoverHint>
+      </span>
     </span>
   );
 }
@@ -316,6 +322,8 @@ const FILTER_CSS = `
 .gv-job-search input::placeholder{color:#857866}
 .gv-job-search input::-webkit-search-cancel-button{display:none}
 .gv-job-search-x{width:30px;height:30px;border-radius:9999px;border:none;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;background:rgba(28,20,16,0.07);color:${INK}}
+.gv-job-filterrow{display:flex;flex-direction:column}
+@media (min-width:1024px){.gv-job-filterrow{flex-direction:row;flex-wrap:wrap;align-items:center;gap:10px 12px}.gv-job-filterrow .gv-job-search{flex:1 1 300px;max-width:460px}.gv-job-filterrow .gv-job-band{flex:0 1 auto;margin-top:0}}
 .gv-job-band{display:flex;align-items:center;gap:8px;margin-top:12px;overflow-x:auto;scrollbar-width:none;padding:4px 2px;margin-left:-2px;margin-right:-2px}
 .gv-job-band::-webkit-scrollbar{display:none}
 .gv-job-band > *{flex-shrink:0}
@@ -327,7 +335,8 @@ const FILTER_CSS = `
 .gv-job-places{list-style:none;margin:12px 0 0;padding:0 0 0 4px;display:flex;flex-wrap:wrap;align-items:center;gap:10px}
 .gv-job-place{position:relative;display:inline-flex;align-items:center;gap:8px;padding:6px 14px 6px 8px;border-radius:9999px;background:#FFFFFF;
   box-shadow:0 1px 2px rgba(27,56,40,0.08),0 4px 12px rgba(27,56,40,0.08);border:1px solid rgba(27,56,40,0.08);font-size:13.5px;font-weight:700;color:${INK}}
-.gv-job-place-x{position:absolute;top:-7px;right:-7px;width:22px;height:22px;border-radius:9999px;border:1.5px solid #FFFFFF;cursor:pointer;
+.gv-job-place-xwrap{position:absolute;top:-7px;right:-7px;display:inline-flex}
+.gv-job-place-x{position:relative;width:22px;height:22px;border-radius:9999px;border:1.5px solid #FFFFFF;cursor:pointer;
   display:inline-flex;align-items:center;justify-content:center;background:${INK};color:#FFFFFF;box-shadow:0 2px 6px rgba(28,20,16,0.25);
   opacity:0;transform:scale(0.85);transition:opacity 140ms ease,transform 140ms ease}
 .gv-job-place:hover .gv-job-place-x,.gv-job-place:focus-within .gv-job-place-x{opacity:1;transform:scale(1)}

@@ -4,10 +4,13 @@
 //
 // Top to bottom: the header card (logo, title, the conference, place, dates,
 // offer chips, urgency) with the action row inside it; a reserved spot for
-// prompt 5's Unlimited insights strip (renders nothing yet); then About the
-// Role, and beside it on wide screens Posted by, the question count and About
-// the Conference. A slim bar keeps the title and Apply one click away once the
-// header card scrolls out of view.
+// prompt 5's Unlimited insights strip (renders nothing yet); then the body.
+// From 1100px (prompt 50, owner 18 Nov 2026) the left column holds About the
+// Role with About the Conference directly under it, the right column Posted
+// by and the question count, a little larger, so the two end at about the
+// same height; narrower, the order is Role, Posted by, questions, Conference.
+// A slim bar (a forest edge so it never blends into the cards) keeps the
+// title and Apply one click away once the header card scrolls out of view.
 //
 // Signed out everything reads. Apply on a Gavelling listing opens the apply
 // pop-up straight away (it reads job_screening_public; when that asks for a
@@ -25,7 +28,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Bookmark, BookmarkCheck, Check, ExternalLink, ListChecks, Loader2, Mail, Share2, X } from 'lucide-react';
+import { ChevronLeft, Bookmark, BookmarkCheck, Check, ExternalLink, ListChecks, Loader2, Mail, Share2, X } from 'lucide-react';
 import ShareCardPopup from './ShareCardPopup';
 import MoreFromConference from './MoreFromConference';
 import { useAuth } from '@/components/AuthProvider';
@@ -384,9 +387,9 @@ export default function JobListing({
       ) : (
         <div className="gv-jl-body">
           {premiumLocked ? (
-            <PremiumLock className="gv-jl-main-col" />
+            <PremiumLock className="gv-jl-main-col gv-jl-a-role" />
           ) : (
-            <section className="gv-jl-card gv-jl-main-col" aria-labelledby={`gv-jl-role-${id}`}>
+            <section className="gv-jl-card gv-jl-main-col gv-jl-a-role" aria-labelledby={`gv-jl-role-${id}`}>
               <h3 id={`gv-jl-role-${id}`} className="gv-jl-h">About the Role</h3>
               {listing?.description?.trim() ? (
                 <p className="gv-jl-text">{listing.description}</p>
@@ -397,51 +400,53 @@ export default function JobListing({
             </section>
           )}
 
-          <aside className="gv-jl-side">
-            {poster?.name && (
-              <section className="gv-jl-card">
-                <h3 className="gv-jl-h gv-jl-h-sm">Posted by</h3>
-                <div className="flex items-center" style={{ gap: 12 }}>
-                  <Avatar name={poster.name} src={poster.avatar_url} />
-                  <div className="min-w-0">
-                    <p style={{ margin: 0, fontSize: 15.5, fontWeight: 700, color: INK, overflowWrap: 'anywhere' }}>{poster.name}</p>
-                    {poster.title && <p style={{ margin: '2px 0 0', fontSize: 13.5, color: INK_SOFT, overflowWrap: 'anywhere' }}>{poster.title}</p>}
+          {(poster?.name || (qCount > 0 && open && !outside && !premiumLocked)) && (
+            <aside className="gv-jl-side gv-jl-a-side">
+              {poster?.name && (
+                <section className="gv-jl-card gv-jl-side-card">
+                  <h3 className="gv-jl-h gv-jl-h-sm">Posted by</h3>
+                  <div className="flex items-center" style={{ gap: 14 }}>
+                    <Avatar name={poster.name} src={poster.avatar_url} />
+                    <div className="min-w-0">
+                      <p style={{ margin: 0, fontSize: 16.5, fontWeight: 700, color: INK, overflowWrap: 'anywhere' }}>{poster.name}</p>
+                      {poster.title && <p style={{ margin: '3px 0 0', fontSize: 14, color: INK_SOFT, overflowWrap: 'anywhere' }}>{poster.title}</p>}
+                    </div>
                   </div>
-                </div>
-              </section>
-            )}
-
-            {qCount > 0 && open && !outside && !premiumLocked && (
-              <section className="gv-jl-card gv-jl-qcount">
-                <span className="gv-jl-qicon" aria-hidden><ListChecks size={18} strokeWidth={2.3} /></span>
-                <p style={{ margin: 0, fontSize: 15, fontWeight: 600, color: INK }}>
-                  <span style={{ fontSize: 20, fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{qCount}</span>{' '}
-                  {qCount === 1 ? 'question' : 'questions'} before you apply
-                </p>
-              </section>
-            )}
-
-            {card.standalone ? (
-              conf.website && (
-                <section className="gv-jl-card">
-                  <h3 className="gv-jl-h gv-jl-h-sm">About the Conference</h3>
-                  <a href={conf.website} target="_blank" rel="noopener noreferrer nofollow" className="gv-jl-link">
-                    Visit their website <ExternalLink size={14} strokeWidth={2.4} aria-hidden style={{ display: 'inline', verticalAlign: '-2px' }} />
-                  </a>
                 </section>
-              )
-            ) : about && (about.about?.trim() || about.slug) ? (
-              <section className="gv-jl-card">
+              )}
+
+              {qCount > 0 && open && !outside && !premiumLocked && (
+                <section className="gv-jl-card gv-jl-qcount gv-jl-side-card">
+                  <span className="gv-jl-qicon" aria-hidden><ListChecks size={20} strokeWidth={2.3} /></span>
+                  <p style={{ margin: 0, fontSize: 15.5, fontWeight: 600, color: INK }}>
+                    <span style={{ fontSize: 26, fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{qCount}</span>{' '}
+                    {qCount === 1 ? 'question' : 'questions'} before you apply
+                  </p>
+                </section>
+              )}
+            </aside>
+          )}
+
+          {card.standalone ? (
+            conf.website && (
+              <section className="gv-jl-card gv-jl-a-conf">
                 <h3 className="gv-jl-h gv-jl-h-sm">About the Conference</h3>
-                {about.about?.trim() && <p className="gv-jl-text gv-jl-text-sm">{about.about}</p>}
-                {about.slug && (
-                  <Link href={`/conferences/${encodeURIComponent(about.slug)}`} className="gv-jl-link" style={{ marginTop: about.about?.trim() ? 12 : 0 }}>
-                    See the conference page
-                  </Link>
-                )}
+                <a href={conf.website} target="_blank" rel="noopener noreferrer nofollow" className="gv-jl-link">
+                  Visit their website <ExternalLink size={14} strokeWidth={2.4} aria-hidden style={{ display: 'inline', verticalAlign: '-2px' }} />
+                </a>
               </section>
-            ) : null}
-          </aside>
+            )
+          ) : about && (about.about?.trim() || about.slug) ? (
+            <section className="gv-jl-card gv-jl-a-conf">
+              <h3 className="gv-jl-h gv-jl-h-sm">About the Conference</h3>
+              {about.about?.trim() && <p className="gv-jl-text gv-jl-text-sm">{about.about}</p>}
+              {about.slug && (
+                <Link href={`/conferences/${encodeURIComponent(about.slug)}`} className="gv-jl-link" style={{ marginTop: about.about?.trim() ? 12 : 0 }}>
+                  See the conference page
+                </Link>
+              )}
+            </section>
+          ) : null}
         </div>
       )}
 
@@ -467,8 +472,8 @@ export default function JobListing({
 function BackLink({ onBack }: { onBack: () => void }) {
   return (
     <button type="button" onClick={onBack} className="gv-jl-back">
-      <ArrowLeft size={18} strokeWidth={2.4} aria-hidden />
-      All roles
+      <ChevronLeft size={18} strokeWidth={2.4} aria-hidden />
+      Back to all
     </button>
   );
 }
@@ -478,9 +483,9 @@ function Avatar({ name, src }: { name: string; src: string | null }) {
   const initials = name.trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
   return src && !broken ? (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={src} alt="" width={46} height={46} onError={() => setBroken(true)} style={{ width: 46, height: 46, borderRadius: 9999, objectFit: 'cover', flexShrink: 0, border: '2px solid #FFFFFF', boxShadow: '0 3px 10px rgba(27,56,40,0.14)' }} />
+    <img src={src} alt="" width={56} height={56} onError={() => setBroken(true)} style={{ width: 56, height: 56, borderRadius: 9999, objectFit: 'cover', flexShrink: 0, border: '2px solid #FFFFFF', boxShadow: '0 3px 10px rgba(27,56,40,0.14)' }} />
   ) : (
-    <span aria-hidden style={{ width: 46, height: 46, borderRadius: 9999, flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(238,217,138,0.55)', color: '#4A3410', fontSize: 15, fontWeight: 800 }}>
+    <span aria-hidden style={{ width: 56, height: 56, borderRadius: 9999, flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(238,217,138,0.55)', color: '#4A3410', fontSize: 17, fontWeight: 800 }}>
       {initials}
     </span>
   );
@@ -513,11 +518,11 @@ function ListingSkeleton({ onBack }: { onBack?: () => void }) {
 function BodySkeleton() {
   return (
     <div className="gv-jl-body" aria-hidden>
-      <div className="gv-jl-card gv-jl-main-col" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div className="gv-jl-card gv-jl-main-col gv-jl-a-role" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <span className="gv-jl-bone" style={{ width: 160, height: 18 }} />
         {[96, 92, 88, 70].map((w, i) => <span key={i} className="gv-jl-bone" style={{ width: `${w}%`, height: 13 }} />)}
       </div>
-      <div className="gv-jl-side">
+      <div className="gv-jl-side gv-jl-a-side">
         <div className="gv-jl-card" style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
           <span className="gv-jl-bone" style={{ width: 46, height: 46, borderRadius: 9999 }} />
           <span className="gv-jl-bone" style={{ width: '50%', height: 14 }} />
@@ -553,20 +558,24 @@ const LISTING_CSS = `
 .gv-jl-save:disabled{cursor:default;opacity:0.7}
 .gv-jl-state{display:inline-flex;align-items:center;gap:8px;min-height:48px;font-size:15.5px;font-weight:700;color:${FOREST}}
 .gv-jl-closed{margin:0;display:inline-flex;align-items:center;min-height:48px;padding:0 16px;border-radius:11px;background:rgba(28,20,16,0.06);font-size:15px;font-weight:700;color:${INK_SOFT}}
-.gv-jl-body{display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
-@media (min-width:1280px){.gv-jl-body{grid-template-columns:minmax(0,1fr) minmax(260px,320px);align-items:start}}
+.gv-jl-body{display:grid;grid-template-columns:minmax(0,1fr);grid-template-areas:"role" "side" "conf";gap:16px}
+.gv-jl-a-role{grid-area:role}
+.gv-jl-a-side{grid-area:side}
+.gv-jl-a-conf{grid-area:conf}
+@media (min-width:1100px){.gv-jl-body{grid-template-columns:minmax(0,1fr) minmax(260px,340px);grid-template-areas:"role side" "conf side";grid-template-rows:auto 1fr;align-items:start}}
 .gv-jl-side{display:flex;flex-direction:column;gap:16px;min-width:0}
+.gv-jl-side-card{padding:26px 26px}
 .gv-jl-h{margin:0 0 12px;font-size:19px;font-weight:800;letter-spacing:-0.01em;color:${INK}}
 .gv-jl-h-sm{font-size:16px;margin-bottom:10px}
 .gv-jl-text{margin:0;font-size:15.5px;line-height:1.65;color:#2E271F;white-space:pre-line;overflow-wrap:anywhere;max-width:75ch}
 .gv-jl-text-sm{font-size:14.5px;line-height:1.6}
 .gv-jl-link{display:inline-flex;align-items:center;gap:5px;background:none;border:none;padding:0;cursor:pointer;font-family:${FONT};font-size:14.5px;font-weight:700;color:${INK};text-decoration:underline;text-underline-offset:3px}
 .gv-jl-link:hover{color:${FOREST}}
-.gv-jl-qcount{display:flex;align-items:center;gap:12px;padding:16px 20px}
-.gv-jl-qicon{width:38px;height:38px;border-radius:9999px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;color:${FOREST};background:linear-gradient(180deg,#FFFFFF 0%,#F2EDE2 100%);border:1px solid rgba(27,56,40,0.16);box-shadow:inset 0 1px 0 #FFFFFF,0 2px 6px rgba(27,56,40,0.14)}
+.gv-jl-qcount{display:flex;align-items:center;gap:14px}
+.gv-jl-qicon{width:46px;height:46px;border-radius:9999px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;color:${FOREST};background:linear-gradient(180deg,#FFFFFF 0%,#F2EDE2 100%);border:1px solid rgba(27,56,40,0.16);box-shadow:inset 0 1px 0 #FFFFFF,0 2px 6px rgba(27,56,40,0.14)}
 .gv-jl-back{align-self:flex-start;display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 4px;background:none;border:none;cursor:pointer;font-family:${FONT};font-size:15px;font-weight:700;color:${INK}}
 .gv-jl-bar{position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:-80px;min-height:64px;padding:8px 10px 8px 20px;border-radius:16px;
-  background:rgba(255,255,255,0.94);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 6px 20px rgba(27,56,40,0.14);
+  background:rgba(255,255,255,0.96);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1.5px solid rgba(27,56,40,0.35);box-shadow:0 2px 4px rgba(27,56,40,0.1),0 10px 26px rgba(27,56,40,0.22);
   opacity:0;transform:translateY(-8px);pointer-events:none;transition:opacity 180ms ease,transform 220ms cubic-bezier(0.22,1,0.36,1)}
 .gv-jl-bar-page{top:calc(8px + env(safe-area-inset-top,0px))}
 .gv-jl-bar-on{opacity:1;transform:none;pointer-events:auto}

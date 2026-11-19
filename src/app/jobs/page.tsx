@@ -24,7 +24,7 @@ const IVORY = '#EDE7D8';
 // The paper grain every public page lays over the ivory (as Explore does).
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
 
-const FIRST_PAGE = 30;
+const FIRST_PAGE = 32; // the client's PAGE_SIZE
 
 async function readFirstPage(filters: ReturnType<typeof jobFiltersOf>): Promise<JobBoardPage | null> {
   try {
@@ -64,8 +64,8 @@ export default async function JobsPage({ searchParams }: {
       <div className="relative z-10 flex flex-col flex-1">
         {/* A failed server read leaves the client to read the board itself;
             it then shows its own skeletons and, if that fails too, the error. */}
-        <JobBoardClient initialQuery={query} initialPage={page} initialError={null} initialDetail={detail} />
-        <SiteFooter />
+        {/* The footer is drawn by the client: on the landing, never in the split view. */}
+        <JobBoardClient initialQuery={query} initialPage={page} initialError={null} initialDetail={detail} footer={<SiteFooter />} />
       </div>
     </div>
   );

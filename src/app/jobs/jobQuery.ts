@@ -1,8 +1,8 @@
 // ── /jobs: the filters, the tab and the chosen listing, to and from the URL ─
 //
 // One query shape so any view can be shared: role, country and offer repeat;
-// region repeats; from / to are ISO dates; deadline is week or month; under10
-// is 1; q is the search; conference is one conference's id (the Hiring mark
+// region repeats; from / to are ISO dates; deadline is week or month; q is the search
+// (an old under10=1 is ignored since 18 Nov 2026); conference is one conference's id (the Hiring mark
 // on Explore); tab is saved or applications; listing is the chosen listing's id. Pure functions, used by the server page and the client alike.
 
 import type { JobFilters, JobOffer, JobRegion, JobRole } from '@/lib/jobBoard';
@@ -20,7 +20,6 @@ export interface JobQuery {
   format: '' | 'in-person' | 'online' | 'hybrid';
   offers: JobOffer[];
   deadline: JobDeadline;
-  under10: boolean;
   q: string;
   /** One conference's id, or null. */
   conference: string | null;
@@ -30,7 +29,7 @@ export interface JobQuery {
 
 export const EMPTY_JOB_QUERY: JobQuery = {
   roles: [], countries: [], regions: [], from: '', to: '', level: '', format: '',
-  offers: [], deadline: '', under10: false, q: '', conference: null, tab: 'all', listing: null,
+  offers: [], deadline: '', q: '', conference: null, tab: 'all', listing: null,
 };
 
 const ROLES: JobRole[] = ['chair', 'secretariat', 'staff'];
@@ -81,7 +80,6 @@ export function readJobQuery(p: ParamSource): JobQuery {
     format: format === 'in-person' || format === 'online' || format === 'hybrid' ? format : '',
     offers: uniq(p.getAll('offer').filter((o): o is JobOffer => (OFFERS as string[]).includes(o))),
     deadline: deadline === 'week' || deadline === 'month' ? deadline : '',
-    under10: p.get('under10') === '1',
     q: (p.get('q') ?? '').slice(0, 120),
     conference: conference && UUID.test(conference) ? conference : null,
     tab: tab === 'saved' || tab === 'applications' ? tab : 'all',
@@ -100,7 +98,6 @@ export function writeJobQuery(q: JobQuery): string {
   if (q.format) s.set('format', q.format);
   q.offers.forEach((o) => s.append('offer', o));
   if (q.deadline) s.set('deadline', q.deadline);
-  if (q.under10) s.set('under10', '1');
   if (q.q.trim()) s.set('q', q.q.trim());
   if (q.conference) s.set('conference', q.conference);
   if (q.tab !== 'all') s.set('tab', q.tab);
@@ -126,7 +123,6 @@ export function jobFiltersOf(q: JobQuery): JobFilters {
     format: q.format || undefined,
     offers: q.offers,
     deadline_days: q.deadline === 'week' ? 7 : q.deadline === 'month' ? 30 : undefined,
-    under10: q.under10 || undefined,
     q: q.q || undefined,
     conference_id: q.conference || undefined,
   };
@@ -139,7 +135,7 @@ export function jobFilterKey(q: JobQuery): string {
 
 export function hasJobFilters(q: JobQuery): boolean {
   return q.roles.length > 0 || q.countries.length > 0 || q.regions.length > 0 || !!q.from || !!q.to
-    || !!q.level || !!q.format || q.offers.length > 0 || !!q.deadline || q.under10 || !!q.q.trim() || !!q.conference;
+    || !!q.level || !!q.format || q.offers.length > 0 || !!q.deadline || !!q.q.trim() || !!q.conference;
 }
 
 export const JOB_REGION_LABEL: Record<JobRegion, string> = {

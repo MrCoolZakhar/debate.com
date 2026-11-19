@@ -2,12 +2,22 @@
 
 // ── /jobs: the Job Board for seekers (docs/conferences/job-board.md) ────────
 //
-// Two panes from 1024px: the list with its filters on the left, the chosen
-// listing on the right, sticky while the list scrolls. The URL carries the
-// filters, the tab and the listing (/jobs?listing=<id>), so any view can be
-// shared; opening such a URL selects that listing. On a phone, tapping a card
-// opens the listing in place of the list with a back arrow (a history entry,
-// so the phone's own back works too).
+// Grid first (prompt 50, owner 18 Nov 2026, Explore's model): /jobs without
+// ?listing= is the landing, the heading with Post a listing and Promote
+// listing, the tabs, ONE row of search and filter chips, the count with Save
+// as alert and the grid / list toggle (remembered per browser), then the
+// roles: 4 a row at 1440 and up, 3 from 1100, 2 on tablets, 1 on a phone,
+// promoted first as the server orders them. Every tab uses the same view.
+//
+// A click (or /jobs?listing=<id>) opens the split view from 1024px: Back to
+// all, the filters and the list on the left, the listing on the right. The
+// page itself does not scroll there; both columns fill the viewport under
+// the nav (its height measured) and scroll on their own, and the footer is
+// not drawn. Back to all (or the browser's back) returns to the landing in
+// the same view and at the same scroll position. On a phone the listing
+// opens full width with Back to all at the top (a history entry, so the
+// phone's own back works too). The URL carries the filters, the tab and the
+// listing, so any view can be shared.
 //
 // Signed in, three quiet tabs sit over the list: All roles, Saved and My
 // Applications (job_my()). The tabs are data; prompt 5 adds Your Listings
@@ -19,8 +29,9 @@
 // which stays mounted here and holds the short-on-credits retry). The first page of the board is rendered on the server
 // (page.tsx) so the list is in the HTML; every later read is job_board().
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Clock, Send, X } from 'lucide-react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Check, ChevronLeft, Clock, LayoutGrid, Rows3, Send, X } from 'lucide-react';
+import { HoverHint, InfoHint } from '@/components/HoverHint';
 import SiteNav from '@/components/SiteNav';
 import NotificationStack from '@/components/notifications/NotificationStack';
 import { GoldWord } from '@/components/BrandHeading';
@@ -32,7 +43,7 @@ import {
   type JobBoardPage, type JobCard as JobCardData, type JobListingResult, type JobMyApplication, type JobMyListing, type JobMyResult, type JobMyStatus, type JobInvite,
 } from '@/lib/jobBoard';
 import { notifyOk } from '@/lib/appNotify';
-import PostListingButton, { useStandalonePosting } from './PostListingButton';
+import PostListingButton, { PromoteListingButton, useStandalonePosting } from './PostListingButton';
 import YourListings from './YourListings';
 import SaveAlertAction from './SaveAlertAction';
 import AlertsPanel from './AlertsPanel';
@@ -51,7 +62,8 @@ const FONT = "var(--font-brand), sans-serif";
 const INK = '#1C1410';
 const INK_SOFT = '#5C5140';
 const FOREST = '#1B3828';
-const PAGE_SIZE = 30;
+const PAGE_SIZE = 32; // 8 rows of 4
+const VIEW_STORAGE_KEY = 'gavelling-jobs-view';
 
 /** The URL's tabs plus Your Listings, which is local state (see the header). */
 type BoardTab = JobTab | 'listings';
@@ -87,11 +99,13 @@ type BoardState =
   | { k: 'loading'; key: string; page: JobBoardPage | null }
   | { k: 'error'; key: string; message: string };
 
-export default function JobBoardClient({ initialQuery, initialPage, initialError, initialDetail }: {
+export default function JobBoardClient({ initialQuery, initialPage, initialError, initialDetail, footer = null }: {
   initialQuery: JobQuery;
   initialPage: JobBoardPage | null;
   initialError: string | null;
   initialDetail: JobListingResult | null;
+  /** The site footer: drawn on the landing, never in the split view. */
+  footer?: React.ReactNode;
 }) {
   const { user, loading: authLoading } = useAuth();
   const userId = user?.id ?? null;
@@ -106,7 +120,6 @@ export default function JobBoardClient({ initialQuery, initialPage, initialError
   const [moreBusy, setMoreBusy] = useState(false);
   const [my, setMy] = useState<JobMyResult | null>(null);
   const [myErr, setMyErr] = useState<string | null>(null);
-  const [showRanking, setShowRanking] = useState(false);
   const [listingsTab, setListingsTab] = useState(false);
   // Invites to apply (prompt 11), and the invite this visit arrived with.
   const [invites, setInvites] = useState<JobInvite[]>([]);
@@ -118,6 +131,7 @@ export default function JobBoardClient({ initialQuery, initialPage, initialError
   const seq = useRef(0);
   const pushedRef = useRef(false);
   const listScroll = useRef(0);
+  const restoreY = useRef<number | null>(null);
   const boardUser = useRef<string | null | undefined>(undefined);
 
   // ── The URL: written in place for filters, a history entry for a phone's listing ──
@@ -134,7 +148,10 @@ export default function JobBoardClient({ initialQuery, initialPage, initialError
   useEffect(() => {
     const onPop = () => {
       pushedRef.current = false;
-      setQuery(readJobQuery(new URLSearchParams(window.location.search)));
+      const next = readJobQuery(new URLSearchParams(window.location.search));
+      // Leaving a listing for the landing: back to where the list was.
+      if (queryRef.current.listing && !next.listing && restoreY.current == null) restoreY.current = listScroll.current;
+      setQuery(next);
     };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
@@ -243,6 +260,7 @@ export default function JobBoardClient({ initialQuery, initialPage, initialError
       void loadBoard(queryRef.current, true);
     },
     onPosted: () => setListingsTab(true),
+    myListings: userId && my ? myListings : null,
   });
 
   // /jobs?tab=listings&promote=<id> (the "Promote for 3 credits" button in the
@@ -295,33 +313,69 @@ export default function JobBoardClient({ initialQuery, initialPage, initialError
       ?? null;
   }, [items, my, board, myListings]);
 
-  // On a laptop the right pane is never empty: with nothing chosen it shows
-  // the first listing of the list in view (the URL stays as it is).
-  const selectedId = query.listing ?? (wide ? items[0]?.id ?? null : null);
+  // The split view opens only when a listing is chosen (a click, or a
+  // /jobs?listing= link); without one the page is the landing grid.
+  const selectedId = query.listing;
+  const splitWide = wide && !!selectedId;
+
+  // ── The landing's grid or list, remembered per browser (as Explore). ──
+  const [view, setView] = useState<'grid' | 'list'>('grid');
+  useEffect(() => {
+    try {
+      if (window.localStorage.getItem(VIEW_STORAGE_KEY) === 'list') void Promise.resolve().then(() => setView('list'));
+    } catch { /* storage off: the grid */ }
+  }, []);
+  const changeView = (v: 'grid' | 'list') => {
+    setView(v);
+    try { window.localStorage.setItem(VIEW_STORAGE_KEY, v); } catch { /* ignore */ }
+  };
+
+  // ── The split view fills the viewport under the nav, measured, not guessed. ──
+  const navEndRef = useRef<HTMLDivElement | null>(null);
+  const [navTop, setNavTop] = useState(72);
+  useLayoutEffect(() => {
+    if (!splitWide) return;
+    const measure = () => {
+      const el = navEndRef.current;
+      if (!el) return;
+      const top = Math.max(0, Math.round(el.getBoundingClientRect().top + window.scrollY));
+      setNavTop((t) => (t === top ? t : top));
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [splitWide]);
+
+  // Back on the landing: the scroll position the person left it at.
+  useEffect(() => {
+    if (query.listing || restoreY.current == null) return;
+    const y = restoreY.current;
+    restoreY.current = null;
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => window.scrollTo({ top: y })));
+  }, [query.listing]);
 
   const select = useCallback((id: string) => {
-    if (!wide) {
-      listScroll.current = window.scrollY;
-      commit({ ...queryRef.current, listing: id }, true);
-      window.scrollTo({ top: 0 });
-    } else {
-      commit({ ...queryRef.current, listing: id });
-    }
+    // From the landing: remember where it was and add a history entry, so
+    // Back to all (and the browser's back) returns there. Inside the split
+    // view another listing replaces the open one.
+    const fromLanding = !queryRef.current.listing;
+    if (fromLanding) listScroll.current = window.scrollY;
+    commit({ ...queryRef.current, listing: id }, fromLanding);
+    if (fromLanding || !wide) window.scrollTo({ top: 0 });
   }, [wide, commit]);
 
   const back = useCallback(() => {
+    restoreY.current = listScroll.current;
     if (pushedRef.current) {
       window.history.back();
     } else {
       commit({ ...queryRef.current, listing: null });
     }
-    const y = listScroll.current;
-    window.requestAnimationFrame(() => window.scrollTo({ top: y }));
   }, [commit]);
 
   const changeTab = (t: BoardTab) => {
     setListingsTab(t === 'listings');
-    commit({ ...queryRef.current, tab: t === 'listings' ? 'all' : t, listing: wide ? null : queryRef.current.listing });
+    commit({ ...queryRef.current, tab: t === 'listings' ? 'all' : t });
   };
 
   const phoneListing = !wide && !!query.listing;
@@ -339,7 +393,7 @@ export default function JobBoardClient({ initialQuery, initialPage, initialError
       appliedAt={appliedAt.get(selectedId) ?? null}
       onChanged={() => { if (userId) void loadMy(); }}
       onSelectListing={select}
-      onSeeAll={() => commit({ ...queryRef.current, listing: null })}
+      onSeeAll={back}
       inviteNote={(() => {
         const inv = inviteParam ? invites.find((i) => i.invite_id === inviteParam && i.id === selectedId) : null;
         return inv ? { short: inv.conference.short || inv.conference.name || 'A conference', message: inv.message } : null;
@@ -347,10 +401,133 @@ export default function JobBoardClient({ initialQuery, initialPage, initialError
     />
   ) : null;
 
+  const tabRow = tabs.length > 1 && (
+    <div role="tablist" aria-label="Show" className="gv-jobs-tabs">
+      {tabs.map((t) => (
+        <button
+          key={t.key}
+          type="button"
+          role="tab"
+          aria-selected={tab === t.key}
+          onClick={() => changeTab(t.key)}
+          className={`gv-jobs-tab${tab === t.key ? ' gv-jobs-tab-on' : ''}`}
+        >
+          {t.label}
+          {t.key === 'applications' && unansweredInvites(invites) > 0 && (
+            <span style={{ marginLeft: 6, fontSize: 12.5, fontWeight: 800, color: FOREST, fontVariantNumeric: 'tabular-nums' }}>{unansweredInvites(invites)}</span>
+          )}
+        </button>
+      ))}
+    </div>
+  );
+
+  const countLine = !listLoading && (tab === 'all' ? board.k !== 'error' : !myErr) ? (
+    <p style={{ margin: 0 }}>
+      <span className="gv-jobs-count-n">{total.toLocaleString()}</span>{' '}
+      {tab === 'listings' ? (total === 1 ? 'listing' : 'listings')
+        : tab === 'saved' ? (total === 1 ? 'saved role' : 'saved roles')
+        : tab === 'applications' ? (total === 1 ? 'application' : 'applications')
+          : total === 1 ? 'open role' : 'open roles'}
+    </p>
+  ) : <span />;
+
+  // The roles: a grid or a list on the landing, one column beside the listing.
+  const asGrid = !splitWide && view === 'grid';
+  const cards = listLoading ? (
+    <div className={`gv-jobs-cards ${asGrid ? 'gv-jobs-cards-grid' : ''}`}>{[0, 1, 2, 3, 4, 5, 6, 7].slice(0, asGrid ? 8 : 4).map((i) => <JobCardSkeleton key={i} />)}</div>
+  ) : tab === 'all' && board.k === 'error' ? (
+    <p className="gv-jobs-empty">
+      {board.message}{' '}
+      <button type="button" className="gv-jobs-link" onClick={() => { void loadBoard(query, false); }}>Try again</button>
+    </p>
+  ) : tab !== 'all' && myErr ? (
+    <p className="gv-jobs-empty">
+      {myErr}{' '}
+      <button type="button" className="gv-jobs-link" onClick={() => { void loadMy(); }}>Try again</button>
+    </p>
+  ) : tab === 'listings' ? (
+    <YourListings
+      listings={myListings}
+      selectedId={splitWide ? selectedId : null}
+      onSelect={select}
+      onEdit={posting.edit}
+      onPromote={posting.promote}
+      onChanged={(message) => {
+        notifyOk(message, 'jobs');
+        void loadMy();
+        void loadBoard(queryRef.current, true);
+      }}
+    />
+  ) : items.length === 0 ? (
+    <>
+      <p className="gv-jobs-empty">
+        {tab === 'saved' ? (
+          <>Nothing saved yet. <button type="button" className="gv-jobs-link" onClick={() => changeTab('all')}>Browse all roles</button></>
+        ) : tab === 'applications' ? (
+          <>You have not applied through the Job Board yet. <button type="button" className="gv-jobs-link" onClick={() => changeTab('all')}>Browse all roles</button></>
+        ) : !hasActiveFilters(query) ? (
+          <>There are no open roles yet.</>
+        ) : (
+          <>No roles match these filters. <button type="button" className="gv-jobs-link" onClick={clearAll}>Clear filters</button></>
+        )}
+      </p>
+      {/* Under the sentence, the offer to save the search as an alert (prompt 12). */}
+      {tab === 'all' && !splitWide && (
+        <div style={{ marginTop: 16 }}><NoMatches query={query} onClear={clearAll} compact={!wide} empty={!hasActiveFilters(query)} /></div>
+      )}
+    </>
+  ) : (
+    <ul className={`gv-jobs-cards ${asGrid ? 'gv-jobs-cards-grid' : ''}`} style={{ opacity: board.k === 'loading' && tab === 'all' ? 0.55 : 1 }}>
+      {items.map((c) => {
+        const app = tab === 'applications' ? (c as JobMyApplication) : null;
+        const unfinished = app?.status === 'not_finished' && !!c.conference.slug;
+        return (
+          <li key={c.id}>
+            <JobCard
+              card={c}
+              selected={splitWide && c.id === selectedId}
+              onSelect={unfinished ? undefined : select}
+              href={unfinished ? jobContinuePath(c.conference.slug as string, c.role, c.id) : undefined}
+              closed={tab === 'saved' && 'open' in c && !(c as { open: boolean }).open}
+              status={app ? <StatusLine status={app.status} /> : undefined}
+            />
+          </li>
+        );
+      })}
+    </ul>
+  );
+
+  const showMore = tab === 'all' && board.k === 'ready' && board.page.items.length < board.page.total && (
+    <div style={{ display: 'flex', justifyContent: 'center', marginTop: 18 }}>
+      <button type="button" className="gv-jobs-more" onClick={() => { void loadMore(); }} disabled={moreBusy} aria-busy={moreBusy || undefined}>
+        {moreBusy ? 'Loading' : 'Show more roles'}
+      </button>
+    </div>
+  );
+
+  const filters = tab === 'all' && (
+    <JobFilters
+      query={query}
+      onChange={patch}
+      onClearAll={clearAll}
+      conferenceLabel={query.conference ? (items.find((c) => c.conference.id === query.conference)?.conference.short ?? null) : null}
+    />
+  );
+
+  const tabExtras = (
+    <>
+      {/* Members manage their alerts in the Saved tab. */}
+      {tab === 'saved' && <div style={{ marginTop: 4 }}><AlertsPanel /></div>}
+      {/* Invites to apply, above My Applications (prompt 11). */}
+      {tab === 'applications' && <InvitesBlock invites={invites} onChange={setInvites} onSelect={select} />}
+    </>
+  );
+
   return (
     <div className="flex flex-col flex-1" style={{ fontFamily: FONT, color: INK }}>
       <style>{PAGE_CSS}</style>
       <SiteNav hideLanguage />
+      <div ref={navEndRef} aria-hidden />
       <NotificationStack topPx={84} />
 
       {phoneListing ? (
@@ -358,175 +535,92 @@ export default function JobBoardClient({ initialQuery, initialPage, initialError
           <h1 className="sr-only">Job Board</h1>
           {listing}
         </main>
+      ) : splitWide ? (
+        // LinkedIn's model: the page itself does not scroll; each column does.
+        <main className="gv-jobs-wrap gv-jobs-split" style={{ height: `calc(100dvh - ${navTop}px)` }}>
+          <h1 className="sr-only">Job Board</h1>
+          <section className="gv-jobs-col gv-jobs-col-left" aria-label="Roles">
+            <button type="button" className="gv-jobs-backall" onClick={back}>
+              <ChevronLeft size={18} strokeWidth={2.2} aria-hidden />
+              Back to all
+            </button>
+            {tabRow}
+            {filters}
+            {tabExtras}
+            <div className="gv-jobs-count" aria-live="polite">{countLine}</div>
+            {cards}
+            {showMore}
+          </section>
+          <div ref={setPane} className="gv-jobs-col gv-jobs-pane">
+            {listing}
+          </div>
+        </main>
       ) : (
         <main className="gv-jobs-wrap" style={{ paddingBottom: 'clamp(40px, 4vw, 64px)' }}>
           <header className="gv-jobs-head" style={{ paddingTop: 'clamp(12px, 1.4vw, 22px)' }}>
-            <div style={{ minWidth: 0 }}>
-              <h1 className="gv-jobs-h1">Job <GoldWord>Board</GoldWord></h1>
-              <p className="gv-jobs-cap">Chair, secretariat and staff roles at conferences worldwide</p>
+            <h1 className="gv-jobs-h1">Job <GoldWord>Board</GoldWord></h1>
+            <div className="gv-jobs-head-acts">
+              <span className="gv-jobs-act">
+                <PostListingButton onClick={posting.post} />
+                <InfoHint label="About posting a listing" text="Post a chair, secretariat or staff role so people across Gavelling can find it and apply." side="bottom" />
+              </span>
+              <span className="gv-jobs-act">
+                <PromoteListingButton onClick={posting.promoteAny} />
+                <InfoHint label="About promoted listings" text="Promoted listings are paid for by the conference. They show first wherever they match the filters, with a Promoted tag, and on the homepage if you choose." side="bottom" />
+              </span>
             </div>
-            <PostListingButton onClick={posting.post} />
           </header>
 
           {/* The one-time "Open to team roles" nudge (prompt 11), signed in only. */}
-          <TalentPrompt style={{ marginTop: 16 }} />
+          <TalentPrompt style={{ marginTop: 14 }} />
 
-          <div className="gv-jobs-grid">
-            <section className="gv-jobs-left" aria-label="Roles">
-              {tabs.length > 1 && (
-                <div role="tablist" aria-label="Show" className="gv-jobs-tabs">
-                  {tabs.map((t) => (
-                    <button
-                      key={t.key}
-                      type="button"
-                      role="tab"
-                      aria-selected={tab === t.key}
-                      onClick={() => changeTab(t.key)}
-                      className={`gv-jobs-tab${tab === t.key ? ' gv-jobs-tab-on' : ''}`}
-                    >
-                      {t.label}
-                      {t.key === 'applications' && unansweredInvites(invites) > 0 && (
-                        <span style={{ marginLeft: 6, fontSize: 12.5, fontWeight: 800, color: FOREST, fontVariantNumeric: 'tabular-nums' }}>{unansweredInvites(invites)}</span>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {tab === 'all' && (
-                <JobFilters
-                  query={query}
-                  onChange={patch}
-                  onClearAll={clearAll}
-                  conferenceLabel={query.conference ? (items.find((c) => c.conference.id === query.conference)?.conference.short ?? null) : null}
-                />
-              )}
-
-              {/* Save the current filters as a job alert (Unlimited), under the filters. */}
-              {tab === 'all' && <div style={{ marginTop: 10 }}><SaveAlertAction query={query} /></div>}
-
-              {/* Members manage their alerts in the Saved tab. */}
-              {tab === 'saved' && <div style={{ marginBottom: 14 }}><AlertsPanel /></div>}
-
-              {/* Invites to apply, above My Applications (prompt 11). */}
-              {tab === 'applications' && <InvitesBlock invites={invites} onChange={setInvites} onSelect={select} />}
-
-              <div className="gv-jobs-count" aria-live="polite">
-                {!listLoading && (tab === 'all' ? board.k !== 'error' : !myErr) && (
-                  <p style={{ margin: 0 }}>
-                    <span className="gv-jobs-count-n">{total.toLocaleString()}</span>{' '}
-                    {tab === 'listings' ? (total === 1 ? 'listing' : 'listings')
-                      : tab === 'saved' ? (total === 1 ? 'saved role' : 'saved roles')
-                      : tab === 'applications' ? (total === 1 ? 'application' : 'applications')
-                        : total === 1 ? 'open role' : 'open roles'}
-                  </p>
-                )}
+          <section aria-label="Roles" style={{ marginTop: 14 }}>
+            {tabRow}
+            {filters}
+            {tabExtras}
+            <div className="gv-jobs-countrow">
+              <div className="gv-jobs-count" aria-live="polite">{countLine}</div>
+              <div className="gv-jobs-countacts">
+                {/* Save the current filters as a job alert (Unlimited). */}
+                {tab === 'all' && <SaveAlertAction query={query} />}
+                {tab !== 'listings' && <JobsViewToggle view={view} onChange={changeView} />}
               </div>
-
-              {listLoading ? (
-                <div className="gv-jobs-list">{[0, 1, 2, 3, 4].map((i) => <JobCardSkeleton key={i} />)}</div>
-              ) : tab === 'all' && board.k === 'error' ? (
-                <p className="gv-jobs-empty">
-                  {board.message}{' '}
-                  <button type="button" className="gv-jobs-link" onClick={() => { void loadBoard(query, false); }}>Try again</button>
-                </p>
-              ) : tab !== 'all' && myErr ? (
-                <p className="gv-jobs-empty">
-                  {myErr}{' '}
-                  <button type="button" className="gv-jobs-link" onClick={() => { void loadMy(); }}>Try again</button>
-                </p>
-              ) : tab === 'listings' ? (
-                <YourListings
-                  listings={myListings}
-                  selectedId={wide ? selectedId : null}
-                  onSelect={select}
-                  onEdit={posting.edit}
-                  onPromote={posting.promote}
-                  onChanged={(message) => {
-                    notifyOk(message, 'jobs');
-                    void loadMy();
-                    void loadBoard(queryRef.current, true);
-                  }}
-                />
-              ) : items.length === 0 ? (
-                <>
-                <p className="gv-jobs-empty">
-                  {tab === 'saved' ? (
-                    <>Nothing saved yet. <button type="button" className="gv-jobs-link" onClick={() => changeTab('all')}>Browse all roles</button></>
-                  ) : tab === 'applications' ? (
-                    <>You have not applied through the Job Board yet. <button type="button" className="gv-jobs-link" onClick={() => changeTab('all')}>Browse all roles</button></>
-                  ) : !hasActiveFilters(query) ? (
-                    <>There are no open roles yet.</>
-                  ) : (
-                    <>No roles match these filters. <button type="button" className="gv-jobs-link" onClick={clearAll}>Clear filters</button></>
-                  )}
-                </p>
-                {/* Phones: under the sentence, the offer to save the search as an alert (prompt 12). */}
-                {tab === 'all' && !wide && <NoMatches query={query} onClear={clearAll} compact empty={!hasActiveFilters(query)} />}
-                </>
-              ) : (
-                <ul className="gv-jobs-list" style={{ opacity: board.k === 'loading' && tab === 'all' ? 0.55 : 1 }}>
-                  {items.map((c) => {
-                    const app = tab === 'applications' ? (c as JobMyApplication) : null;
-                    const unfinished = app?.status === 'not_finished' && !!c.conference.slug;
-                    return (
-                      <li key={c.id}>
-                        <JobCard
-                          card={c}
-                          selected={wide && c.id === selectedId}
-                          onSelect={unfinished ? undefined : select}
-                          href={unfinished ? jobContinuePath(c.conference.slug as string, c.role, c.id) : undefined}
-                          closed={tab === 'saved' && 'open' in c && !(c as { open: boolean }).open}
-                          status={app ? <StatusLine status={app.status} /> : undefined}
-                        />
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-
-              {tab === 'all' && board.k === 'ready' && board.page.items.length < board.page.total && (
-                <div style={{ display: 'flex', justifyContent: 'center', marginTop: 16 }}>
-                  <button type="button" className="gv-jobs-more" onClick={() => { void loadMore(); }} disabled={moreBusy} aria-busy={moreBusy || undefined}>
-                    {moreBusy ? 'Loading' : 'Show more roles'}
-                  </button>
-                </div>
-              )}
-
-              {tab === 'all' && (
-                <div style={{ marginTop: 18 }}>
-                  <button type="button" className="gv-jobs-link gv-jobs-link-quiet" aria-expanded={showRanking} onClick={() => setShowRanking((v) => !v)}>
-                    How promoted listings are ranked
-                  </button>
-                  {showRanking && (
-                    <p className="gv-jobs-explain">
-                      Promoted listings are paid for by the conference. They show first where they match your filters, with a Promoted tag. Everything else is newest first
-                    </p>
-                  )}
-                </div>
-              )}
-            </section>
-
-            {wide && (
-              <div className="gv-jobs-right">
-                <div ref={setPane} className="gv-jobs-pane">
-                  {listing ?? (!listLoading && (
-                    tab === 'all' && items.length === 0 && board.k !== 'error'
-                      // No results: offer to save the search as an alert (prompt 12).
-                      ? <NoMatches query={query} onClear={clearAll} empty={!hasActiveFilters(query)} />
-                      : (
-                        <div className="gv-jobs-pane-empty">
-                          <p style={{ margin: 0 }}>Choose a role on the left to read it here</p>
-                        </div>
-                      )
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+            </div>
+            {cards}
+            {showMore}
+          </section>
         </main>
       )}
+      {!splitWide && footer}
       {posting.node}
+    </div>
+  );
+}
+
+/** Grid or list, Explore's two icons (with the site's hints, no browser tooltip). */
+function JobsViewToggle({ view, onChange }: { view: 'grid' | 'list'; onChange: (v: 'grid' | 'list') => void }) {
+  const options: { key: 'grid' | 'list'; icon: typeof LayoutGrid; label: string }[] = [
+    { key: 'grid', icon: LayoutGrid, label: 'Grid view' },
+    { key: 'list', icon: Rows3, label: 'List view' },
+  ];
+  return (
+    <div className="gv-jobs-view" role="group" aria-label="View">
+      {options.map(({ key, icon: Icon, label }) => {
+        const active = view === key;
+        return (
+          <HoverHint key={key} text={label} side="bottom">
+            <button
+              type="button"
+              aria-label={label}
+              aria-pressed={active}
+              onClick={() => onChange(key)}
+              className={`gv-jobs-view-btn${active ? ' gv-jobs-view-on' : ''}`}
+            >
+              <Icon size={16} strokeWidth={2.25} aria-hidden />
+            </button>
+          </HoverHint>
+        );
+      })}
     </div>
   );
 }
@@ -549,14 +643,10 @@ const PAGE_CSS = `
 .gv-jobs-wrap{width:100%;max-width:1720px;margin:0 auto;padding-left:16px;padding-right:16px}
 @media (min-width:640px){.gv-jobs-wrap{padding-left:24px;padding-right:24px}}
 @media (min-width:1024px){.gv-jobs-wrap{padding-left:40px;padding-right:40px}}
-.gv-jobs-head{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:14px 24px}
-.gv-jobs-head .gv-jobs-post{margin-top:4px}
+.gv-jobs-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px 24px}
+.gv-jobs-head-acts{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px}
+.gv-jobs-act{display:inline-flex;align-items:center;gap:2px}
 .gv-jobs-h1{margin:0;font-weight:800;font-size:clamp(30px,3.4vw,48px);line-height:1.06;letter-spacing:-0.02em;color:${INK};text-wrap:balance}
-.gv-jobs-cap{margin:8px 0 0;font-size:clamp(15px,1.1vw,17px);line-height:1.45;color:${INK_SOFT}}
-.gv-jobs-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:24px;margin-top:clamp(16px,1.8vw,26px)}
-@media (min-width:1024px){.gv-jobs-grid{grid-template-columns:minmax(360px,0.82fr) minmax(0,1.38fr);gap:28px;align-items:start}}
-@media (min-width:1600px){.gv-jobs-grid{grid-template-columns:minmax(420px,0.75fr) minmax(0,1.45fr);gap:36px}}
-.gv-jobs-left{min-width:0}
 .gv-jobs-tabs{display:flex;gap:4px;margin-bottom:14px;border-bottom:1px solid rgba(28,20,16,0.1);overflow-x:auto;scrollbar-width:none}
 .gv-jobs-tabs::-webkit-scrollbar{display:none}
 .gv-jobs-tab{position:relative;flex-shrink:0;min-height:44px;padding:0 12px;background:none;border:none;cursor:pointer;font-family:${FONT};font-size:15px;font-weight:600;color:${INK_SOFT};transition:color 140ms ease}
@@ -565,24 +655,37 @@ const PAGE_CSS = `
 .gv-jobs-tab-on::after{content:'';position:absolute;left:12px;right:12px;bottom:-1px;height:2px;border-radius:2px;background:${FOREST}}
 .gv-jobs-tab:focus{outline:none}
 .gv-jobs-tab:focus-visible{outline:2px solid ${FOREST};outline-offset:-2px;border-radius:8px}
-.gv-jobs-count{min-height:34px;display:flex;align-items:flex-end;margin:16px 0 12px;font-size:15px;font-weight:600;color:${INK_SOFT}}
+.gv-jobs-countrow{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:10px 16px;margin:16px 0 14px}
+.gv-jobs-countrow .gv-jobs-count{margin:0}
+.gv-jobs-countacts{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:10px 14px}
+.gv-jobs-count{min-height:34px;display:flex;align-items:flex-end;margin:14px 0 12px;font-size:15px;font-weight:600;color:${INK_SOFT}}
 .gv-jobs-count-n{font-size:24px;font-weight:800;letter-spacing:-0.02em;color:${INK};font-variant-numeric:tabular-nums}
-.gv-jobs-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px;transition:opacity 160ms ease}
+.gv-jobs-cards{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:minmax(0,1fr);gap:12px;transition:opacity 160ms ease}
+.gv-jobs-cards > li{display:flex;min-width:0}
+.gv-jobs-cards > li > *{flex:1;min-width:0}
+@media (min-width:640px){.gv-jobs-cards-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}}
+@media (min-width:1100px){.gv-jobs-cards-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (min-width:1400px){.gv-jobs-cards-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}}
 .gv-jobs-empty{margin:8px 0 0;font-size:15.5px;line-height:1.55;color:${INK}}
 .gv-jobs-link{background:none;border:none;padding:0;cursor:pointer;font-family:${FONT};font-size:inherit;font-weight:700;color:${INK};text-decoration:underline;text-underline-offset:3px}
 .gv-jobs-link:hover{color:${FOREST}}
-.gv-jobs-link-quiet{font-size:13.5px;color:${INK_SOFT}}
 .gv-jobs-link:focus{outline:none}
 .gv-jobs-link:focus-visible{outline:2px solid ${FOREST};outline-offset:2px;border-radius:4px}
-.gv-jobs-explain{margin:8px 0 0;max-width:62ch;font-size:13.5px;line-height:1.55;color:${INK_SOFT}}
 .gv-jobs-more{min-height:46px;padding:0 22px;border-radius:11px;border:1.5px solid ${INK};background:#FFFFFF;cursor:pointer;font-family:${FONT};font-size:15px;font-weight:700;color:${INK}}
 .gv-jobs-more:disabled{opacity:0.6;cursor:default}
 .gv-jobs-more:focus{outline:none}
 .gv-jobs-more:focus-visible{outline:2px solid ${FOREST};outline-offset:2px}
-.gv-jobs-right{min-width:0;position:sticky;top:16px}
-@media (min-width:1200px){.gv-jobs-right{top:84px}}
-.gv-jobs-pane{max-height:calc(100dvh - 32px);overflow-y:auto;overscroll-behavior:contain;padding:4px 6px 24px;margin:-4px -6px 0;scrollbar-width:thin}
-@media (min-width:1200px){.gv-jobs-pane{max-height:calc(100dvh - 100px)}}
-.gv-jobs-pane-empty{display:flex;align-items:center;justify-content:center;min-height:320px;border-radius:20px;background:#FFFFFF;box-shadow:0 1px 2px rgba(27,56,40,0.05),0 8px 24px rgba(27,56,40,0.08);font-size:15.5px;color:${INK_SOFT};padding:24px;text-align:center}
-@media (prefers-reduced-motion:reduce){.gv-jobs-list{transition:none}}
+.gv-jobs-view{display:flex;align-items:center;flex-shrink:0;gap:2px;padding:3px;border-radius:12px;background:#FFFFFF;box-shadow:0 1px 2px rgba(27,56,40,0.08),0 4px 12px rgba(27,56,40,0.06)}
+.gv-jobs-view-btn{display:flex;align-items:center;justify-content:center;width:40px;height:34px;border-radius:9px;border:none;cursor:pointer;background:transparent;color:#6B5F52}
+.gv-jobs-view-on{background:#EEF3EC;color:${FOREST}}
+.gv-jobs-view-btn:focus{outline:none}
+.gv-jobs-view-btn:focus-visible{outline:2px solid ${FOREST};outline-offset:1px}
+.gv-jobs-split{display:grid;grid-template-columns:minmax(340px,0.62fr) minmax(0,1.38fr);gap:28px;overflow:hidden}
+@media (min-width:1600px){.gv-jobs-split{grid-template-columns:minmax(400px,0.6fr) minmax(0,1.4fr);gap:36px}}
+.gv-jobs-col{min-width:0;min-height:0;height:100%;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;padding:12px 8px 32px;margin:0 -8px}
+.gv-jobs-backall{display:inline-flex;align-items:center;gap:6px;min-height:40px;margin-bottom:6px;padding:0 4px;background:none;border:none;cursor:pointer;font-family:${FONT};font-size:15px;font-weight:700;color:${INK};text-decoration:underline;text-underline-offset:3px}
+.gv-jobs-backall:hover{color:${FOREST}}
+.gv-jobs-backall:focus{outline:none}
+.gv-jobs-backall:focus-visible{outline:2px solid ${FOREST};outline-offset:2px;border-radius:6px}
+@media (prefers-reduced-motion:reduce){.gv-jobs-cards{transition:none}}
 `;

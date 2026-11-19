@@ -10,6 +10,13 @@
 // hide with 3 or fewer. The slide is a transform only and respects
 // prefers-reduced-motion. On phones it is a swipe row, no arrows.
 //
+// Moves on its own (owner, 18 Nov 2026): with more than 3 other listings it
+// advances by one card every 10 seconds, the same motion as Next, wrapping at
+// the end. It pauses while the pointer is over it or anything in it has
+// keyboard focus and while the tab is hidden, never runs with
+// prefers-reduced-motion, and Previous or Next restart the 10 seconds. Phones
+// keep the swipe row with no auto motion.
+//
 // Wrap-around: the track holds the list plus its first 3 again; sliding past
 // the end lands on the copy and then jumps back to the start with no
 // transition, so the motion is always one card.
@@ -24,6 +31,7 @@ const INK = '#1C1410';
 const FOREST = '#1B3828';
 const VISIBLE = 3;
 const GAP = 12;
+const AUTO_MS = 10_000;
 
 function useIsPhone(): boolean {
   const [phone, setPhone] = useState(false);
@@ -49,6 +57,25 @@ export default function MoreFromConference({ conferenceId, excludeId, short, onS
   const [animate, setAnimate] = useState(true);
   const phone = useIsPhone();
   const trackRef = useRef<HTMLDivElement | null>(null);
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const [hidden, setHidden] = useState(false);
+  const [reduced, setReduced] = useState(false);
+  const [restart, setRestart] = useState(0);
+
+  useEffect(() => {
+    const onVis = () => setHidden(document.visibilityState === 'hidden');
+    onVis();
+    document.addEventListener('visibilitychange', onVis);
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const onMq = () => setReduced(mq.matches);
+    onMq();
+    mq.addEventListener('change', onMq);
+    return () => {
+      document.removeEventListener('visibilitychange', onVis);
+      mq.removeEventListener('change', onMq);
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -67,6 +94,13 @@ export default function MoreFromConference({ conferenceId, excludeId, short, onS
   const onEnd = () => {
     if (idx >= n) { setAnimate(false); setIdx(idx - n); }
   };
+  // One card every 10 s, restarted by every move (and by Previous / Next).
+  useEffect(() => {
+    if (!sliding || hovered || focused || hidden || reduced) return;
+    const t = window.setTimeout(() => setIdx((i) => i + 1), AUTO_MS);
+    return () => window.clearTimeout(t);
+  }, [sliding, hovered, focused, hidden, reduced, idx, restart]);
+
   useEffect(() => {
     if (animate) return;
     const t = window.requestAnimationFrame(() => window.requestAnimationFrame(() => setAnimate(true)));
@@ -78,10 +112,12 @@ export default function MoreFromConference({ conferenceId, excludeId, short, onS
   // With reduced motion there is no transition to end, so wrap directly.
   const still = () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const next = () => {
+    setRestart((r) => r + 1);
     if (still()) { setIdx((i) => (i + 1) % n); return; }
     setIdx((i) => i + 1);
   };
   const prev = () => {
+    setRestart((r) => r + 1);
     if (still()) { setIdx((i) => (i - 1 + n) % n); return; }
     if (idx === 0) {
       // Jump to the copy without motion, then slide one back.
@@ -96,7 +132,14 @@ export default function MoreFromConference({ conferenceId, excludeId, short, onS
   const cardWidth = `calc((100% - ${GAP * (VISIBLE - 1)}px) / ${VISIBLE})`;
 
   return (
-    <section aria-label={`More from ${short}`} style={{ fontFamily: FONT }}>
+    <section
+      aria-label={`More from ${short}`}
+      style={{ fontFamily: FONT }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onFocus={() => setFocused(true)}
+      onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setFocused(false); }}
+    >
       <style>{CSS}</style>
       <div className="gv-mfc-head">
         <h3 className="gv-mfc-title">More from {short}</h3>

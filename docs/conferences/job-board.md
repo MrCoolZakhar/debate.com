@@ -13,7 +13,7 @@ Prompt 1 built the seeker side. Prompts 2 to 5 build the organizer panel, the Te
 The server is live, built through the chat's Supabase work. Reads with no sign-in use the anon client; writes use `getFreshAuthedClient()`. Every refusal is `{ ok: false, message }` with a sentence for people.
 
 - `job_board(p_filters jsonb, p_limit int, p_offset int)`, anon and authenticated, returns `{ total, items: Card[], live }`.
-  - Filters, all optional: `roles` (chair, secretariat, staff), `countries` (as stored in `conferences.country`), `regions` (north-america, south-america, europe, africa, asia, oceania), `from` / `to` (ISO dates, overlap), `level` (school or university; `both` always matches), `format` (in-person, online, hybrid), `offers` (paid, accommodation, travel, certificate, letter; all must be offered), `deadline_days`, `under10`, `q`.
+  - Filters, all optional: `roles` (chair, secretariat, staff), `countries` (as stored in `conferences.country`), `regions` (north-america, south-america, europe, africa, asia, oceania), `from` / `to` (ISO dates, overlap), `level` (school or university; `both` always matches), `format` (in-person, online, hybrid), `offers` (paid, accommodation, travel, certificate, letter; all must be offered), `deadline_days`, `under10` (the client no longer sends it since prompt 50), `q`.
   - Order: promoted first, then newest.
 - Card: `{ id, kind ('gavelling' | 'outside' | 'premium'), title, role, committee, committee_id, offers { paid, paid_amount, accommodation, travel, certificate, letter }, promoted, premium, standalone, closes_at, urgency, published_at, conference { id, slug (null when standalone), short, name, logo_url, verified, city, country, format, level, start_date, end_date, theme, website (standalone only) } }`.
 - `job_listing_get(p_id)`, anon and authenticated: `{ ok, listing: Card + { description, questions_count, outside_url, premium_apply, status, open, hidden }, poster { name, avatar_url, title }, conference_about { slug, name, about }, saved, mine (null or { status: started | stopped | submitted | accepted | rejected, application_id, pick_rank }), can_edit, premium_locked, unlimited, insights, insights_locked }`.
@@ -38,7 +38,7 @@ Linking is automatic: a database trigger links the normal application to the lis
 
 - `src/lib/jobBoard.ts`: typed RPC wrappers and shared words.
 - `src/app/jobs/page.tsx`: server; metadata and the first page server-rendered.
-- `src/app/jobs/JobBoardClient.tsx`: the two-pane page, tabs, the URL.
+- `src/app/jobs/JobBoardClient.tsx`: the landing grid and the split view (prompt 50), tabs, the URL.
 - `src/app/jobs/JobFilters.tsx`: the filter pills.
 - `src/app/jobs/jobQuery.ts`: filters to and from the URL.
 - `src/app/jobs/JobCard.tsx`: the card, with a compact variant for prompt 4.
@@ -273,3 +273,14 @@ Organizer side (/manage/<slug>/jobs):
 ## Drafts for Secretariat and Staff (31 Oct 2026)
 
 `save_application_draft` accepted only delegate, chair, head-delegate, faculty-advisor and observer, so every Secretariat and Staff application (most Job Board roles) silently failed to save a draft (`invalid_role`; zero such rows in `application_drafts` until then). Migration `application_drafts_secretariat_and_staff` adds both, matching the table's own role check. Any new application role must be added to that function's list and the table check together.
+
+## Prompt 50: grid first, split view on click (owner, 18 Nov 2026)
+
+- `/jobs` without `?listing=` is the landing: the heading with Post a listing and the gold Promote listing (each with an InfoHint), the tabs, one row of search and filter chips, the count with Save as alert and the grid / list toggle (`localStorage gavelling-jobs-view`), then the roles 4 a row at 1440 and up, 3 from 1100, 2 on tablets, 1 on a phone. 32 a page. Every tab uses the same view.
+- A click or `?listing=` opens the split view from 1024px: Back to all, the filters and the list on the left, the listing on the right; the page does not scroll, both columns fill the viewport under the measured nav and scroll on their own, and the footer is not drawn. Back to all returns to the landing at the same scroll position. Phones open the listing full width with Back to all.
+- The "Under 10 applicants" chip is gone; `?under10=1` is ignored. The ranking explainer lives in the Promote listing hint and on the Promoted tag.
+- Cards: 40 px logo, 16 px title, at most 2 offer chips then "+n", the date range never breaks inside itself, the urgency line only when the server sends one (null under 5 applicants).
+- The open listing: from 1100px About the Role with About the Conference under it on the left, Posted by and the questions card on the right; the sticky title bar has a forest edge.
+- More from {short} advances one card every 10 seconds with more than 3 listings, pausing on hover, focus, a hidden tab and reduced motion.
+- Promote listing: signed out, sign-in first; one live listing opens PromotePopup at once; several open "Promote a Listing" to pick one (replaced by PromotePopup); none says to post first.
+- No native `title` tooltips on /jobs: `src/components/HoverHint.tsx` (`HoverHint`, `InfoHint`) is the site's hint.
