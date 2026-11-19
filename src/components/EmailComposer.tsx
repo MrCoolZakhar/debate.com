@@ -58,6 +58,7 @@ import {
 } from '@/lib/emailCard';
 import { companyLegalLines } from '@/lib/companyDetails';
 import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
+import { MAX_SIDE, ONE_YEAR_CACHE, shrinkImage } from '@/lib/shrinkImage';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { triggerEmailDelivery } from '@/lib/emailDelivery';
 import { Emoji3D, NEU, NEU_GRADIENTS, OUTFIT, EASE } from '@/components/neu';
@@ -648,11 +649,12 @@ function useImageUpload(conferenceId: string, accessToken: string | null) {
     setUploading(true);
     setError(null);
     const supabase = getAuthedClient(accessToken);
-    const ext = (file.name.split('.').pop() || 'png').toLowerCase().replace(/[^a-z0-9]/g, '') || 'png';
-    const path = `email-images/${conferenceId}-${Date.now()}.${ext}`;
+    // PNG or JPEG, never WebP: Outlook on Windows cannot show WebP in an email.
+    const shrunk = await shrinkImage(file, { maxSide: MAX_SIDE.email, format: 'legacy' });
+    const path = `email-images/${conferenceId}-${Date.now()}.${shrunk.ext}`;
     const { error: upErr } = await supabase.storage
       .from('conference-assets')
-      .upload(path, file, { contentType: file.type, upsert: false });
+      .upload(path, shrunk.blob, { contentType: shrunk.contentType, upsert: false, cacheControl: ONE_YEAR_CACHE });
     setUploading(false);
     if (upErr) { setError(friendlyError(upErr, "Couldn't upload the image. Please try a different one.")); return null; }
     const { data } = supabase.storage.from('conference-assets').getPublicUrl(path);

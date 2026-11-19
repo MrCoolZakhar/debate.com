@@ -1836,7 +1836,7 @@ export default function NewConferencePage() {
           onCancel={() => setLogoCropFile(null)}
           onSave={(blob) => {
             setLogoCropFile(null);
-            handleLogoUpload(new File([blob], 'logo.png', { type: 'image/png' }));
+            handleLogoUpload(new File([blob], 'logo.png', { type: blob.type || 'image/png' }));
           }}
         />
       )}

@@ -91,7 +91,8 @@ export async function setUpLater(conferenceId: string): Promise<SetupResult> {
   }
 }
 
-/** Uploads a payment QR image to conference-assets/<conference>/payment-qr/. */
+/** Uploads a payment QR image to conference-assets/<conference>/payment-qr/.
+ *  Byte for byte (a QR must scan), cached a year: the name is unique per upload. */
 export async function uploadPaymentQr(conferenceId: string, file: File): Promise<{ path: string } | { error: string }> {
   const fallback = 'The QR code could not be uploaded. Try again in a moment.';
   try {
@@ -100,7 +101,7 @@ export async function uploadPaymentQr(conferenceId: string, file: File): Promise
     const safe = file.name.replace(/[^A-Za-z0-9._-]+/g, '-').slice(-60) || 'qr';
     const rand = Math.random().toString(36).slice(2, 10);
     const path = `${conferenceId}/payment-qr/${rand}-${safe}`;
-    const { error } = await c.storage.from('conference-assets').upload(path, file, { upsert: false, contentType: file.type || undefined });
+    const { error } = await c.storage.from('conference-assets').upload(path, file, { upsert: false, contentType: file.type || undefined, cacheControl: '31536000' });
     if (error) return { error: friendlyError(error, fallback) };
     return { path };
   } catch (e) {

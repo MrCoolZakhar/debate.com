@@ -3987,7 +3987,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
             onCancel={() => setLogoCropFile(null)}
             onSave={(blob) => {
               setLogoCropFile(null);
-              handleAssetSelect('logos', new File([blob], 'logo.png', { type: 'image/png' }));
+              handleAssetSelect('logos', new File([blob], 'logo.png', { type: blob.type || 'image/png' }));
             }}
           />
         )}

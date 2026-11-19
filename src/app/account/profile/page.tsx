@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { Star, Check, Megaphone, MessageSquare, ClipboardCheck, FileText, CreditCard, Camera, Globe2, Sparkles, Cake, Mail, User, Bell, ShieldAlert, MapPin, GraduationCap, School, Layers, Landmark, Trophy, Coins, Infinity as InfinityIcon } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
+import { MAX_SIDE, ONE_YEAR_CACHE, shrinkImage } from '@/lib/shrinkImage';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { UN_COUNTRIES, getCountryByName, countryMatchRank } from '@/lib/countries';
 import { CircleFlag } from '@/components/CircleFlag';
@@ -335,11 +336,11 @@ export default function ProfilePage() {
     setAvatarUploading(true);
     try {
       const supabase = getAuthedClient(session.access_token);
-      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
-      const path = `avatars/${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${ext}`;
+      const shrunk = await shrinkImage(file, { maxSide: MAX_SIDE.avatar });
+      const path = `avatars/${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${shrunk.ext}`;
       const { error: upErr } = await supabase.storage
         .from('conference-assets')
-        .upload(path, file, { contentType: file.type, upsert: true });
+        .upload(path, shrunk.blob, { contentType: shrunk.contentType, upsert: true, cacheControl: ONE_YEAR_CACHE });
       if (upErr) { setAvatarError('Upload failed. Please try again.'); setAvatarUploading(false); return; }
       const { data: urlData } = supabase.storage.from('conference-assets').getPublicUrl(path);
       const publicUrl = urlData.publicUrl;

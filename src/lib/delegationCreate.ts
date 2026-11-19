@@ -13,6 +13,7 @@
 // delegation at submit, in the same place it always did, with
 // `societyInsertRow`.
 
+import { MAX_SIDE, ONE_YEAR_CACHE, shrinkImage } from '@/lib/shrinkImage';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getCountryByName } from '@/lib/countries';
 import { friendlyError } from '@/lib/friendlyError';
@@ -74,9 +75,9 @@ export function societyInsertRow(conferenceId: string, name: string, d: NewDeleg
 /** Same list as the conference-assets bucket's allowed_mime_types. */
 export const DELEGATION_LOGO_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 
-/** Upload a delegation picture (already cropped to a square PNG by
- *  LogoCropModal) to the public conference-assets bucket. The path carries a
- *  timestamp, so no upsert is needed. */
+/** Upload a delegation picture (already cropped to a square by LogoCropModal)
+ *  to the public conference-assets bucket, shrunk first (src/lib/shrinkImage.ts).
+ *  The path carries a timestamp, so no upsert is needed and it is cached a year. */
 export async function uploadDelegationLogo(
   client: SupabaseClient,
   conferenceId: string,
@@ -86,11 +87,11 @@ export async function uploadDelegationLogo(
   const type = file.type || 'image/png';
   if (!DELEGATION_LOGO_TYPES.includes(type)) return { error: 'Use a JPEG, PNG, WebP or GIF picture.' };
   if (file.size > 5 * 1024 * 1024) return { error: 'The picture must be under 5MB.' };
-  const ext = type === 'image/jpeg' ? 'jpg' : type.split('/')[1];
-  const path = `delegations/${conferenceId}/${userId}-${Date.now()}.${ext}`;
+  const shrunk = await shrinkImage(file, { maxSide: MAX_SIDE.logo });
+  const path = `delegations/${conferenceId}/${userId}-${Date.now()}.${shrunk.ext}`;
   const { error } = await client.storage
     .from('conference-assets')
-    .upload(path, file, { contentType: type, upsert: false });
+    .upload(path, shrunk.blob, { contentType: shrunk.contentType, upsert: false, cacheControl: ONE_YEAR_CACHE });
   if (error) return { error: friendlyError(error, 'We could not upload that picture. Please try another one.') };
   const { data } = client.storage.from('conference-assets').getPublicUrl(path);
   if (!data?.publicUrl?.startsWith('https://')) return { error: 'We could not upload that picture. Please try another one.' };

@@ -36,7 +36,7 @@ import { useModalEscape } from '@/components/ModalOverlay';
 
 const STAGE_MAX = 340;         // square preview stage (px), shrinks on phones
 const CIRCLE_RATIO = 0.84;     // circle diameter as a share of the stage
-const OUT = 768;               // exported square canvas (px)
+const OUT = 512;               // exported square canvas (px); 512 since 19 Nov 2026 (egress)
 const MIN_ZOOM = 0.5;          // of "whole logo"
 const MAX_ZOOM_FLOOR = 4;
 const MAX_ZOOM_CEIL = 12;
@@ -341,10 +341,15 @@ export function LogoCropModal({
       drawnW * k,
       drawnH * k,
     );
-    canvas.toBlob((blob) => {
-      setSaving(false);
-      if (blob) onSave(blob);
-    }, 'image/png');
+    // WebP at 0.86 (owner, 19 Nov 2026). A browser that cannot encode WebP
+    // answers a PNG or null; the crop is a circle, so PNG keeps the transparency.
+    canvas.toBlob((webp) => {
+      if (webp && webp.type === 'image/webp') { setSaving(false); onSave(webp); return; }
+      canvas.toBlob((png) => {
+        setSaving(false);
+        if (png) onSave(png);
+      }, 'image/png');
+    }, 'image/webp', 0.86);
   }
 
   const zoom = fits ? view.s / fits.sFit : 1;

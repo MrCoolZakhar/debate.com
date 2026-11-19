@@ -1629,7 +1629,7 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
           onCancel={() => setEmblemCropFile(null)}
           onSave={(blob) => {
             setEmblemCropFile(null);
-            handleEmblemUpload(new File([blob], 'emblem.png', { type: 'image/png' }));
+            handleEmblemUpload(new File([blob], 'emblem.png', { type: blob.type || 'image/png' }));
           }}
         />
       </Portal>

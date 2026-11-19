@@ -20,6 +20,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { ImagePlus, Trash2, X, Check, Star, MessageSquareText, User, UserRound, Gavel, Hammer, Briefcase, ClipboardList, Sparkles, Users } from 'lucide-react';
 import { Emoji3D, NEU } from '@/components/neu';
 import { useAuth } from '@/components/AuthProvider';
+import { MAX_SIDE, ONE_YEAR_CACHE, shrinkImage } from '@/lib/shrinkImage';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { supabase as anonClient } from '@/lib/supabase';
 import { UN_COUNTRIES, getCountryByName, getFlagUrl, countryMatchRank } from '@/lib/countries';
@@ -811,11 +812,11 @@ export function CVEntryModal({
     const supabase = getAuthedClient(session.access_token);
     const uploaded: string[] = [];
     for (const file of selected) {
-      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
-      const path = `cv/${userId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const shrunk = await shrinkImage(file, { maxSide: MAX_SIDE.photo });
+      const path = `cv/${userId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${shrunk.ext}`;
       const { error: upErr } = await supabase.storage
         .from('conference-assets')
-        .upload(path, file, { contentType: file.type, upsert: false });
+        .upload(path, shrunk.blob, { contentType: shrunk.contentType, upsert: false, cacheControl: ONE_YEAR_CACHE });
       if (upErr) {
         setError('A photo could not be uploaded. Please try again.');
         continue;
@@ -838,11 +839,11 @@ export function CVEntryModal({
     setUploadingLogo(true);
     setError('');
     const supabase = getAuthedClient(session.access_token);
-    const ext = (file.name.split('.').pop() || 'png').toLowerCase().replace(/[^a-z0-9]/g, '') || 'png';
-    const path = `cv-logos/${userId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const shrunk = await shrinkImage(file, { maxSide: MAX_SIDE.logo });
+    const path = `cv-logos/${userId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${shrunk.ext}`;
     const { error: upErr } = await supabase.storage
       .from('conference-assets')
-      .upload(path, file, { contentType: file.type, upsert: false });
+      .upload(path, shrunk.blob, { contentType: shrunk.contentType, upsert: false, cacheControl: ONE_YEAR_CACHE });
     if (upErr) {
       setError('The logo could not be uploaded. Please try again.');
     } else {

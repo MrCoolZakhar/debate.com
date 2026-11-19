@@ -21,6 +21,7 @@
 // single insert, which share one transaction timestamp — that shared
 // created_at is what groupBroadcasts() folds them back together on.
 
+import { MAX_SIDE, ONE_YEAR_CACHE, shrinkImage } from '@/lib/shrinkImage';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Megaphone, Info, Zap, PauseCircle, Flag, ImagePlus, X, Trash2,
@@ -335,11 +336,11 @@ export async function uploadBroadcastImage(
   if (file.size > 5 * 1024 * 1024) return { error: 'Image must be under 5MB.' };
   const supabase = await getFreshAuthedClient();
   if (!supabase) return { error: EXPIRED_SESSION };
-  const ext = (file.name.split('.').pop() || 'png').toLowerCase().replace(/[^a-z0-9]/g, '') || 'png';
-  const path = `broadcasts/${conferenceId}-${Date.now()}.${ext}`;
+  const shrunk = await shrinkImage(file, { maxSide: MAX_SIDE.photo });
+  const path = `broadcasts/${conferenceId}-${Date.now()}.${shrunk.ext}`;
   const { error } = await supabase.storage
     .from('conference-assets')
-    .upload(path, file, { contentType: file.type, upsert: false });
+    .upload(path, shrunk.blob, { contentType: shrunk.contentType, upsert: false, cacheControl: ONE_YEAR_CACHE });
   if (error) return { error: friendlyError(error, "Couldn't upload the image. Please try a different one.") };
   const { data } = supabase.storage.from('conference-assets').getPublicUrl(path);
   return { url: data.publicUrl };

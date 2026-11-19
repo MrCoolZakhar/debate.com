@@ -22,6 +22,7 @@ import { NEU, OUTFIT, EASE, Emoji3D } from '@/components/neu';
 import { useScrollLock } from '@/hooks/useScrollLock';
 import { LogoDisc } from '@/components/LogoDisc';
 import { LogoCropModal } from '@/components/LogoCropModal';
+import { MAX_SIDE, ONE_YEAR_CACHE, shrinkImage } from '@/lib/shrinkImage';
 import { safeStorageKey } from '@/lib/storageKey';
 import { notify } from '@/lib/sessionNotifications';
 import { notifyErr, notifyOk, clearErr, clearOk } from '@/lib/appNotify';
@@ -1892,10 +1893,11 @@ export default function SettingsPage() {
       notifyErr('Your session has expired, please refresh and sign in again.', 'settings-partners');
       return null;
     }
-    const path = safeStorageKey(`partner-logos/${conference.id}`, crypto.randomUUID(), file.name);
+    const shrunk = await shrinkImage(file, { maxSide: MAX_SIDE.logo });
+    const path = safeStorageKey(`partner-logos/${conference.id}`, crypto.randomUUID(), `${file.name.replace(/\.[^.]+$/, '') || 'logo'}.${shrunk.ext}`);
     const { error } = await supabase.storage
       .from('conference-assets')
-      .upload(path, file, { contentType: file.type, upsert: true });
+      .upload(path, shrunk.blob, { contentType: shrunk.contentType, upsert: true, cacheControl: ONE_YEAR_CACHE });
     if (error) {
       notifyErr(friendlyError(error, "Couldn't upload the logo. Please try a different image."), 'settings-partners');
       return null;
@@ -2682,9 +2684,9 @@ export default function SettingsPage() {
       notifyErr('Your session has expired, please refresh and sign in again.', 'settings-banner');
       return;
     }
-    const ext = file.name.split('.').pop();
-    const path = 'banners/' + conference.id + '-' + Date.now() + '.' + ext;
-    const { error } = await supabase.storage.from('conference-assets').upload(path, file, { contentType: file.type, upsert: true });
+    const shrunk = await shrinkImage(file, { maxSide: MAX_SIDE.banner });
+    const path = 'banners/' + conference.id + '-' + Date.now() + '.' + shrunk.ext;
+    const { error } = await supabase.storage.from('conference-assets').upload(path, shrunk.blob, { contentType: shrunk.contentType, upsert: true, cacheControl: ONE_YEAR_CACHE });
     if (error) {
       setBannerUploading(false);
       notifyErr(friendlyError(error, "Couldn't upload the banner. Please try a different image."), 'settings-banner');
@@ -2743,9 +2745,9 @@ export default function SettingsPage() {
       notifyErr('Your session has expired, please refresh and sign in again.', 'settings-logo');
       return;
     }
-    const ext = file.name.split('.').pop();
-    const path = 'logos/' + conference.id + '-' + Date.now() + '.' + ext;
-    const { error } = await supabase.storage.from('conference-assets').upload(path, file, { contentType: file.type, upsert: true });
+    const shrunk = await shrinkImage(file, { maxSide: MAX_SIDE.logo });
+    const path = 'logos/' + conference.id + '-' + Date.now() + '.' + shrunk.ext;
+    const { error } = await supabase.storage.from('conference-assets').upload(path, shrunk.blob, { contentType: shrunk.contentType, upsert: true, cacheControl: ONE_YEAR_CACHE });
     if (error) {
       setLogoUploading(false);
       notifyErr(friendlyError(error, "Couldn't upload the logo. Please try a different image."), 'settings-logo');
@@ -4793,7 +4795,7 @@ export default function SettingsPage() {
           onCancel={() => setLogoCropFile(null)}
           onSave={(blob) => {
             setLogoCropFile(null);
-            handleLogoUpload(new File([blob], 'logo.png', { type: 'image/png' }));
+            handleLogoUpload(new File([blob], 'logo.png', { type: blob.type || 'image/png' }));
           }}
         />
       )}

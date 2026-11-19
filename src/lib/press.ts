@@ -19,6 +19,7 @@
  * React state.
  */
 
+import { MAX_SIDE, ONE_YEAR_CACHE, shrinkImage } from '@/lib/shrinkImage';
 import { useEffect, useState } from 'react';
 import { getFreshAuthedClient } from './supabase-auth';
 import { friendlyError } from './friendlyError';
@@ -397,9 +398,9 @@ export async function uploadPressImage(conferenceId: string, file: File): Promis
   if (file.size > 5 * 1024 * 1024) return { error: 'Image must be under 5MB.' };
   const supabase = await getFreshAuthedClient();
   if (!supabase) return { error: 'Your session has expired. Sign in again, then attach it.' };
-  const ext = (file.name.split('.').pop() || 'png').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 8) || 'png';
-  const path = `broadcasts/${conferenceId}-${Date.now()}.${ext}`;
-  const { error } = await supabase.storage.from('conference-assets').upload(path, file, { contentType: file.type, upsert: false });
+  const shrunk = await shrinkImage(file, { maxSide: MAX_SIDE.photo });
+  const path = `broadcasts/${conferenceId}-${Date.now()}.${shrunk.ext}`;
+  const { error } = await supabase.storage.from('conference-assets').upload(path, shrunk.blob, { contentType: shrunk.contentType, upsert: false, cacheControl: ONE_YEAR_CACHE });
   if (error) return { error: friendlyError(error, "Couldn't upload the image. Try a different one.") };
   const { data } = supabase.storage.from('conference-assets').getPublicUrl(path);
   return { url: data.publicUrl };
