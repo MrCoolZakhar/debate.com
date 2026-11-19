@@ -101,7 +101,7 @@ function CrisisHome() {
             {user && list && list.length === 0 && (
               <>
                 <h2 style={{ margin: '0 0 6px', fontSize: 17, fontWeight: 800 }}>No Crises Yet</h2>
-                <p style={{ margin: 0, fontSize: 13.5, color: CK.inkSoft }}>When an organiser switches on Gavelling Crisis for a committee and adds you, it shows up here.</p>
+                <p style={{ margin: 0, fontSize: 13.5, color: CK.inkSoft }}>When you are added to a crisis, it shows up here.</p>
               </>
             )}
             {user && list && list.length > 0 && (

@@ -96,7 +96,8 @@ export function RejectedCard({
  *  No "apply again" here: `applications` is unique on (conference, user, role)
  *  and resubmit_application only reopens 'submitted' / 'rejected' rows, so the
  *  apply page answers a withdrawn row with "You've already applied". Offering
- *  the route back would be a dead end until the database allows it. */
+ *  the route back would be a dead end until the database allows it.
+ *  Since 18 Nov 2026 the conference page offers the other roles after a withdrawal. */
 export function WithdrawnCard({ conferenceSlug }: { conferenceSlug: string; role?: string }) {
   return (
     <SectionCard>
@@ -106,7 +107,7 @@ export function WithdrawnCard({ conferenceSlug }: { conferenceSlug: string; role
           You withdrew this application
         </p>
         <p className="text-[14px] max-w-[380px] mb-6" style={{ color: '#6B5F52', fontFamily: OUTFIT, lineHeight: 1.7 }}>
-          The organizing team no longer has it under review. Any Gavelling credit you spent is refunded. To take part after all, contact the organizing team.
+          The organizing team no longer has it under review. Any Gavelling credit you spent is refunded. To take this role back, contact the organizing team. You can still apply for another role from the conference page.
         </p>
         <Link
           href={`/conferences/${conferenceSlug}`}

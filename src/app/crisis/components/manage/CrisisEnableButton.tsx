@@ -3,13 +3,15 @@
 // Manage > Committees. Already on: a link to the crisis. Not yet: a pop-up with the two packages
 // ("Basic crisis", "Full package", no prices) and "Switch on". The second step replaces the
 // pop-up's content, it never opens another pop-up. Self-contained: it brings its own styles.
+// Part 47: only the accounts allowed to create a crisis (Peter, for now) see "Switch on"; everyone else sees nothing
+// unless the committee already has a crisis.
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Check, ShieldAlert, X } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { notifyErr } from '@/lib/appNotify';
-import { crisisError, crisisForCommittee, enableCrisis } from '@/lib/crisis/api';
+import { crisisCanCreate, crisisError, crisisForCommittee, enableCrisis } from '@/lib/crisis/api';
 
 type Pkg = 'basic' | 'full';
 
@@ -31,11 +33,15 @@ export default function CrisisEnableButton({ conferenceSlug, conferenceCommittee
   const [busy, setBusy] = useState(false);
   const [made, setMade] = useState<string | null>(null);
 
+  // false until we know this account may create a crisis.
+  const [canCreate, setCanCreate] = useState(false);
+
   useEffect(() => {
     let cancelled = false;
     crisisForCommittee(conferenceCommitteeId)
       .then((r) => { if (!cancelled) setSlug(r ? r.slug : null); })
       .catch(() => { if (!cancelled) setSlug(null); });
+    crisisCanCreate().then((ok) => { if (!cancelled) setCanCreate(ok); });
     return () => { cancelled = true; };
   }, [conferenceCommitteeId]);
 
@@ -55,6 +61,7 @@ export default function CrisisEnableButton({ conferenceSlug, conferenceCommittee
   const wrap = (node: React.ReactNode) => (layout === 'tile' ? <div className="px-3.5 pt-3">{node}</div> : node);
 
   if (slug === undefined) return null;
+  if (!slug && !canCreate && !made) return null;
 
   if (slug && !open) {
     return wrap(

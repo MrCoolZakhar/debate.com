@@ -249,6 +249,15 @@ interface RoleConfig {
   hide_dashboard_until_paid?: boolean;
 }
 
+/** Order of "most current" for a person's applications here: holding a role,
+ *  then under review, then waitlisted, then rejected, then withdrawn. */
+const APP_STATUS_RANK: Record<string, number> = {
+  accepted: 0, assigned: 0, 'checked-in': 0, submitted: 1, waitlisted: 2, rejected: 3, withdrawn: 4,
+};
+function appStatusRank(status: string): number {
+  return APP_STATUS_RANK[status] ?? 5;
+}
+
 interface MyApplication {
   id: string;
   role: string;
@@ -1484,8 +1493,13 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
           amountPaidMap.set(row.id, row.amount_paid ?? 0);
         }
       }
+      // Most current first, so myApplications[0] is the live one when a
+      // person has, say, a rejected chair application and a new delegate one
+      // (owner, 18 Nov 2026). Array sort is stable: ties keep their order.
       setMyApplications(
-        ((appsData ?? []) as Omit<MyApplication, 'amount_paid'>[]).map(a => ({ ...a, amount_paid: amountPaidMap.get(a.id) ?? 0 }))
+        ((appsData ?? []) as Omit<MyApplication, 'amount_paid'>[])
+          .map(a => ({ ...a, amount_paid: amountPaidMap.get(a.id) ?? 0 }))
+          .sort((a, b) => appStatusRank(a.status) - appStatusRank(b.status))
       );
 
       const committeeIds = (committeesRes.data as Committee[] ?? []).map(c => c.id);
@@ -2604,7 +2618,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                   onApplicationWithdrawn={(applicationId) => {
                     setMyApplications(prev => prev.map(a => (
                       a.id === applicationId ? { ...a, status: 'withdrawn' } : a
-                    )));
+                    )).sort((a, b) => appStatusRank(a.status) - appStatusRank(b.status)));
                   }}
                 />
                 </div>
@@ -2799,7 +2813,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                           'checked-in': { color: '#A8D5B8',              hint: '' },
                           waitlisted:   { color: 'color-mix(in srgb, var(--gv-on-main) 80%, transparent)', hint: 'You are on the waitlist. We will notify you if a spot opens.' },
                           rejected:     { color: '#E8A9A9',              hint: 'Your application was not accepted this time.' },
-                          withdrawn:    { color: 'color-mix(in srgb, var(--gv-on-main) 80%, transparent)', hint: 'You withdrew this application. Contact the organizing team if you want to take part after all.' },
+                          withdrawn:    { color: 'color-mix(in srgb, var(--gv-on-main) 80%, transparent)', hint: 'You withdrew this application. Contact the organizing team if you want this role back.' },
                         };
                         const meta = STATUS_META[myApp.status] ?? { color: 'color-mix(in srgb, var(--gv-on-main) 80%, transparent)', hint: '' };
                         const statusMark = appStatusMark(myApp.status);
