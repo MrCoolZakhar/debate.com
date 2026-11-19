@@ -5,7 +5,9 @@
 // they already applied to reads "Applied" and opens their role page. Since
 // 16 Nov 2026 every other role is offered, also to someone who HOLDS a role:
 // accepting a role that does not combine removes the old one
-// (src/lib/roleCombos.ts; the database decides).
+// (src/lib/roleCombos.ts; the database decides). Since 18 Nov 2026 (owner)
+// it also shows after a rejection or a withdrawal: a role never applied to is
+// offered, the person's own turned-down role is resubmitted from its role page.
 
 import Link from 'next/link';
 import { RoleApplyCards, type RoleTile } from './RoleApplyCards';
@@ -24,11 +26,13 @@ export default function OtherRolesBlock({ slug, apps, tiles, primaryRole, onPick
   onPick: (role: string) => void;
 }) {
   const live = apps.filter(a => LIVE_STATUSES.has(a.status));
-  if (live.length === 0) return null;
   const appliedRoles = new Set(live.map(a => a.role));
+  // One application per (conference, person, role): a role applied to in any
+  // status can never get a second one, so it is never offered.
+  const everApplied = new Set(apps.map(a => a.role));
   const held = live.find(a => HOLDING_STATUSES.has(a.status)) ?? null;
   const underReview = live.find(a => a.status === 'submitted') ?? null;
-  const offered = tiles.filter(t => !appliedRoles.has(t.role));
+  const offered = tiles.filter(t => !everApplied.has(t.role));
   const appliedOthers = [...appliedRoles].filter(r => r !== primaryRole);
   const line = held
     ? offered.length > 0
@@ -36,7 +40,9 @@ export default function OtherRolesBlock({ slug, apps, tiles, primaryRole, onPick
       : `You are ${roleWithArticle(held.role)} at this conference.`
     : underReview && offered.length > 0
       ? `You applied as ${roleWithArticle(underReview.role)}. You can apply for another role too.`
-      : null;
+      : offered.length > 0
+        ? 'You can still apply for another role.'
+        : null;
   if (!line && offered.length === 0 && appliedOthers.length === 0) return null;
   const labelOf = (role: string) => tiles.find(t => t.role === role)?.label ?? role.replace(/-/g, ' ');
 
