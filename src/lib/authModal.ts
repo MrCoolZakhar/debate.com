@@ -39,6 +39,9 @@ export interface AuthRequest {
   /** Replaces "Log in or sign up" as the first step's title (Title Case),
    *  e.g. the creation wizard's "Sign In to Publish Your Conference". */
   title?: string;
+  /** 'crisis': the Gavelling Crisis look (CrisisAuthSide.tsx): the feature panel instead of the picture, the crisis
+   *  reds, and a line saying Crisis needs an account. The steps are the same. */
+  variant?: 'crisis';
 }
 
 export interface AuthModalState {

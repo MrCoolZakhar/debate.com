@@ -85,7 +85,7 @@ function CrisisHome() {
   useEffect(() => {
     if (loading || user || askedSignIn.current || arrivedWithCode) return;
     askedSignIn.current = true;
-    openAuth({ next: '/crisis' });
+    openAuth({ next: '/crisis', variant: 'crisis' });
   }, [loading, user, arrivedWithCode]);
 
   return (
@@ -93,7 +93,7 @@ function CrisisHome() {
       <header className="flex items-center" style={{ height: 60, padding: '0 18px', gap: 12 }}>
         <BrandLogo height={22} priority />
         <div className="flex-1" />
-        {user ? <ProfileAvatarMenu size={36} /> : <Btn tone="ghost" size="sm" onClick={() => openAuth({ next: '/crisis' })}>Sign in</Btn>}
+        {user ? <ProfileAvatarMenu size={36} /> : <Btn tone="ghost" size="sm" onClick={() => openAuth({ next: '/crisis', variant: 'crisis' })}>Sign in</Btn>}
       </header>
       <main style={{ padding: '18px 18px 60px', maxWidth: 1100, margin: '0 auto' }}>
         <Eyebrow>GAVELLING CRISIS</Eyebrow>
@@ -104,7 +104,7 @@ function CrisisHome() {
               <>
                 <h2 style={{ margin: '0 0 6px', fontSize: 17, fontWeight: 800 }}>Sign In to Gavelling Crisis</h2>
                 <p style={{ margin: '0 0 14px', fontSize: 13.5, color: CK.inkSoft }}>Sign in with your Gavelling account to try the demo crisis as anyone in it, or to open your own crisis.</p>
-                <Btn onClick={() => openAuth({ next: '/crisis' })}>Sign in</Btn>
+                <Btn onClick={() => openAuth({ next: '/crisis', variant: 'crisis' })}>Sign in</Btn>
               </>
             )}
             {(loading || (user && list === null && !error)) && <div className="grid" style={{ gap: 10 }}><Skeleton h={22} w="60%" /><Skeleton h={54} /><Skeleton h={54} /></div>}

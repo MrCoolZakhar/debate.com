@@ -32,7 +32,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, LogOut, Mail, X } from 'lucide-react';
+import { ArrowLeft, LockKeyhole, LogOut, Mail, X } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { supabaseAuthClient } from '@/lib/supabase-auth';
 import { CountryField } from '@/components/CountryField';
@@ -49,6 +49,7 @@ import {
   KIT_CSS, OUTFIT, TermsLine, TextButton,
 } from './authModalKit';
 import AuthQuestionnaire, { CV_QUESTION } from './AuthQuestionnaire';
+import { CrisisAuthSide, CRISIS_AUTH_CSS } from './CrisisAuthSide';
 import { friendlyError } from '@/lib/friendlyError';
 import { joinName, nameProblem, nameProblemMessage, tidyName, titleCaseSuggestion, toTitleCase } from '@/lib/personName';
 
@@ -167,6 +168,8 @@ function AuthModal({ request }: { request: AuthRequest }) {
   const router = useRouter();
   const { signOut } = useAuth();
   const supabase = supabaseAuthClient;
+  // The Gavelling Crisis look (owner, 19 Nov 2026): same steps, crisis panel and reds (CrisisAuthSide.tsx).
+  const crisis = request.variant === 'crisis';
 
   const [step, setStep] = useState<Step>(
     request.step === 'finish' ? 'finish' : request.step === 'forgot' ? 'forgot' : 'email',
@@ -400,12 +403,13 @@ function AuthModal({ request }: { request: AuthRequest }) {
       }}
     >
       <style>{KIT_CSS}</style>
+      {crisis && <style>{CRISIS_AUTH_CSS}</style>}
       <div
         ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="gv-auth-title"
-        className={`gv-auth-panel gv-split${inQuestions ? ' gv-wide' : ''}`}
+        className={`gv-auth-panel gv-split${inQuestions ? ' gv-wide' : ''}${crisis ? ' gv-crisis' : ''}`}
         data-step={step}
         data-hero={longStep ? '0' : '1'}
         data-cta={longStep ? 'sticky' : undefined}
@@ -413,7 +417,7 @@ function AuthModal({ request }: { request: AuthRequest }) {
       >
         {/* Owner, 19 Sep 2026: the "Wall" layout. The designed image on the
             left on every step, the steps on the right; one column below 860px. */}
-        <AuthSideImage />
+        {crisis ? <CrisisAuthSide /> : <AuthSideImage />}
         <div className="gv-auth-main">
         <div className="gv-auth-head">
           <div className="gv-auth-head-l">
@@ -443,10 +447,17 @@ function AuthModal({ request }: { request: AuthRequest }) {
               <div className="gv-auth-brand">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/gavelling-mark.png" alt="" className="gv-auth-mark" />
-                <span className="gv-auth-word">Gavelling</span>
+                <span className="gv-auth-word">{crisis ? 'Gavelling Crisis' : 'Gavelling'}</span>
               </div>
-              <h2 id="gv-auth-title" className="gv-auth-big">{request.title ?? 'Log in or sign up'}</h2>
-              <p className="gv-auth-intro">One account for applying, chairing and organising. Free to start.</p>
+              <h2 id="gv-auth-title" className="gv-auth-big">{request.title ?? (crisis ? 'Sign In to Try Crisis' : 'Log in or sign up')}</h2>
+              {crisis ? (
+                <>
+                  <p className="gv-crisis-need" role="note"><LockKeyhole size={17} strokeWidth={1.8} aria-hidden />You need a Gavelling account to try Crisis. Making one is free and takes a minute.</p>
+                  <p className="gv-auth-intro">Then try the demo crisis as a delegate, a chair, a backroomer or the Crisis Director.</p>
+                </>
+              ) : (
+                <p className="gv-auth-intro">One account for applying, chairing and organising. Free to start.</p>
+              )}
               {request.apply && <p className="gv-notice" role="status">Log in or sign up to carry on with your application. We will bring you straight back to it.</p>}
               {request.notice && <p className="gv-notice" role="status">{request.notice}</p>}
               <FloatInput

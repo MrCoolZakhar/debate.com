@@ -299,7 +299,7 @@ export default function CrisisLayout({ children }: { children: React.ReactNode }
         title="You Are Not in This Crisis"
         body={user ? 'Your account is not on this crisis. Ask your Crisis Director to add you, or enter with your personal code.' : 'Sign in with your Gavelling account, or enter with the personal code and password your Crisis Director gave you.'}
       >
-        {!user && <Btn onClick={() => openAuth({ next: `/crisis/${conf}/${crisisSlug}` })}>Sign in</Btn>}
+        {!user && <Btn onClick={() => openAuth({ next: `/crisis/${conf}/${crisisSlug}`, variant: 'crisis' })}>Sign in</Btn>}
         <Btn tone="ghost" icon={<KeyRound size={15} strokeWidth={1.6} />} onClick={() => router.push(`/crisis?next=${encodeURIComponent(`/crisis/${conf}/${crisisSlug}`)}`)}>Use a personal code</Btn>
       </GateScreen>
     );
