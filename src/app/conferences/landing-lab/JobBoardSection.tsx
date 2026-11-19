@@ -19,6 +19,11 @@
 //     title, the conference short name, the dates and the place; a starter
 //     tile is plainly not a job (an icon, a title, one line, quieter).
 //
+// Heading (owner, 18 Nov 2026): the "Gavelling Job Board" eyebrow in the
+// Sessions section's style, then "LinkedIn for MUN", on one line from 1024px
+// (the left column is 1fr to the tiles' 1.6fr so it fits at 1280). No native
+// title tooltips: the round search button carries the site's HoverHint.
+//
 // Ground: CREAM, the same ground as the Sessions section and the numbers bar
 // above it, so the page reads cream (Sessions, numbers, Job Board) then white
 // (Learn MUN) with no new band edge.
@@ -26,11 +31,12 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { BellRing, Banknote, Clock, Gavel, Landmark, Megaphone, PlusCircle, Search, Sparkles, Crown } from 'lucide-react';
+import { BellRing, Banknote, BriefcaseBusiness, Clock, Gavel, Landmark, Megaphone, PlusCircle, Search, Sparkles, Crown } from 'lucide-react';
+import { HoverHint } from '@/components/HoverHint';
 import type { JobCard as JobCardData } from '@/lib/jobBoard';
 import { jobDates, jobPlace, JobLogo } from '@/app/jobs/JobCard';
 import { CircleFlag } from '@/components/CircleFlag';
-import { CREAM, FOREST, IVORY, SANS } from './shared';
+import { CREAM, FOREST, GOLD, IVORY, SANS } from './shared';
 import { JobRoleGlyph } from '@/lib/jobRoleIcon';
 import { JOB_ROLE_LABEL } from '@/lib/jobBoard';
 
@@ -65,11 +71,19 @@ export default function JobBoardSection({ jobs }: { jobs: JobCardData[] }) {
       <div className="hs-jobs-grid mx-auto" style={{ maxWidth: '1280px' }}>
         {/* ── Left: the words and the search ── */}
         <div className="hs-jobs-left">
+          {/* The eyebrow in the exact style of "Gavelling Sessions" (HomeSections.tsx). */}
+          <p
+            className="inline-flex items-center gap-2"
+            style={{ fontFamily: SANS, fontWeight: 700, fontSize: 'clamp(12px, 0.8vw, 14px)', letterSpacing: '0.14em', textTransform: 'uppercase', color: GOLD, margin: '0 0 12px 0' }}
+          >
+            <BriefcaseBusiness size={15} strokeWidth={2.25} aria-hidden="true" /> Gavelling Job Board
+          </p>
           <h2
             id="hs-jobs-heading"
-            style={{ fontFamily: SANS, fontWeight: 900, fontSize: 'clamp(26px, 2.4vw, 40px)', letterSpacing: '-0.015em', color: INK, margin: '0 0 8px 0', textWrap: 'balance' }}
+            className="hs-jobs-h2"
+            style={{ fontFamily: SANS, fontWeight: 900, fontSize: 'clamp(30px, 3vw, 48px)', lineHeight: 1.05, letterSpacing: '-0.02em', color: INK, margin: '0 0 10px 0', textWrap: 'balance' }}
           >
-            Job Board
+            LinkedIn for MUN
           </h2>
           <p style={{ fontFamily: SANS, fontSize: 'clamp(15px, 1.05vw, 18px)', lineHeight: 1.6, color: INK_70, margin: '0 0 20px 0', textWrap: 'pretty' }}>
             Find chairing, secretariat and staff opportunities at conferences all over the globe.
@@ -134,15 +148,16 @@ function RoleSearch() {
           fontFamily: SANS, fontSize: 'clamp(15px, 1.05vw, 16.5px)', fontWeight: 500, color: INK,
         }}
       />
-      <button
-        type="button"
-        onClick={submit}
-        aria-label={q ? 'Search roles' : 'See all roles'}
-        title={q ? 'Search roles' : 'See all roles'}
-        className="hs-jobs-go inline-flex items-center justify-center flex-shrink-0 focus:outline-none"
-      >
-        <Search size={19} strokeWidth={2.75} aria-hidden="true" />
-      </button>
+      <HoverHint text={q ? 'Search roles' : 'See all roles'}>
+        <button
+          type="button"
+          onClick={submit}
+          aria-label={q ? 'Search roles' : 'See all roles'}
+          className="hs-jobs-go inline-flex items-center justify-center flex-shrink-0 focus:outline-none"
+        >
+          <Search size={19} strokeWidth={2.75} aria-hidden="true" />
+        </button>
+      </HoverHint>
     </div>
   );
 }
@@ -195,7 +210,7 @@ function ListingTile({ card, now }: { card: JobCardData; now: number }) {
 function RoleIcon({ role }: { role: JobCardData['role'] }) {
   const label = JOB_ROLE_LABEL[role] ?? 'Role';
   return (
-    <span className="hs-jobs-roleicon" role="img" aria-label={label} title={label}>
+    <span className="hs-jobs-roleicon" role="img" aria-label={label}>
       <JobRoleGlyph role={role} size={17} />
     </span>
   );
@@ -214,7 +229,8 @@ function StarterTile({ title, line, href, icon: Icon }: { title: string; line: s
 const SECTION_CSS = `
 .hs-jobs-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; }
 @media (min-width: 1024px) {
-  .hs-jobs-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: clamp(32px, 3.5vw, 56px); align-items: center; }
+  .hs-jobs-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); gap: clamp(32px, 3.5vw, 56px); align-items: center; }
+  .hs-jobs-h2 { white-space: nowrap; }
 }
 .hs-jobs-left { min-width: 0; max-width: 560px; }
 @media (min-width: 1024px) { .hs-jobs-left { max-width: none; } }

@@ -16,7 +16,8 @@
 // Owner, 26 Sep 2026: the gap before the conferences must be "one tab max".
 // 27 Sep 2026 (owner's list): the Where field suggests every country (and
 // matching conferences) as you type, a pick becomes a removable country chip;
-// Near you is the visitor's IP country (/api/geo); the grid of compact cards
+// Near you is the visitor's IP country (/api/geo), a chip the visitor turns
+// on, never applied by itself (owner, 18 Nov 2026); the grid of compact cards
 // is the default, Spotlights first as wider feature cards; no count lines;
 // an "Organise your conference" button beside the title.
 // Every control drives a filter the page already had, and so its existing
@@ -264,7 +265,8 @@ export default function ConferencesExploreClient() {
 
   // Region (one continent key, ?continent=) and countries (ISO identities,
   // several, ?country=Name&country=Name). Both AND with every other filter.
-  // A ?continent= or ?country= URL param wins over the near-you default.
+  // Only a ?continent= or ?country= URL param (or the visitor) sets them;
+  // nothing is applied from the visitor's location (owner, 18 Nov 2026).
   const [continent, setContinent] = useState<string | null>(() => {
     const c = searchParams.get('continent');
     return c && CONTINENT_LABELS[c] ? c : null;
@@ -277,28 +279,21 @@ export default function ConferencesExploreClient() {
     }
     return out;
   });
-  const [regionTouched, setRegionTouched] = useState<boolean>(
-    () => !!searchParams.get('continent') || !!searchParams.get('country'),
-  );
   function changeContinent(k: string | null) {
     setContinent(k);
     // A region replaces any countries (27 Sep 2026).
     if (k) setCountryIds([]);
-    setRegionTouched(true);
   }
   function addCountry(id: string) {
     // At most MAX_PLACE_COUNTRIES countries (27 Sep 2026).
     setCountryIds(prev => (prev.includes(id) || prev.length >= MAX_PLACE_COUNTRIES ? prev : [...prev, id]));
-    setRegionTouched(true);
   }
   function removeCountry(id: string) {
     setCountryIds(prev => prev.filter(x => x !== id));
-    setRegionTouched(true);
   }
   function clearRegion() {
     setContinent(null);
     setCountryIds([]);
-    setRegionTouched(true);
   }
 
   // Date sort, soonest-first by default, one click flips to latest-first.
@@ -407,24 +402,10 @@ export default function ConferencesExploreClient() {
       .catch(() => { if (!cancelled) setGeoCountry(null); });
     return () => { cancelled = true; };
   }, []);
-  // Default view once, when geo resolved and the visitor hasn't touched the
-  // control. If the visitor's country already has at least 4 conferences we
-  // lead with "Conferences in {country}". Otherwise we fall back to an "around
-  // you" view of the whole directory so the grid is never empty on first load,
-  // rather than a discouraging country empty state. Geo failure → ALL.
-  const geoDefaultApplied = useRef(false);
-  useEffect(() => {
-    if (geoDefaultApplied.current || regionTouched || loading || !userCountry) return;
-    geoDefaultApplied.current = true;
-    // Identity, not raw strings: a visitor geolocated to "Turkey" must still
-    // match conferences stored as "Türkiye". Same rule as the filter below.
-    const localId = countryIdentity(userCountry);
-    const localCount = conferences.filter(
-      c => countryIdentity(c.country) === localId
-    ).length;
-    // Otherwise the whole directory stays on screen.
-    if (localCount >= 4) void Promise.resolve().then(() => setCountryIds([localId]));
-  }, [userCountry, loading, regionTouched, conferences]);
+  // Explore opens on everything (owner, 18 Nov 2026): the visitor's place is
+  // never applied as a filter by itself. On localhost the browser language
+  // (en-US) used to open it filtered to the United States, and a US visitor got
+  // the same in production. Near you stays a chip the visitor turns on.
 
   // Conference ids the signed-in viewer already applied to, cards show
   // APPLIED instead of the APPLY pill. Conference ids the viewer is already
@@ -787,7 +768,6 @@ export default function ConferencesExploreClient() {
     setSponsoredFilter(false);
     setContinent(null);
     setCountryIds([]);
-    setRegionTouched(true);
     setSearchQuery('');
   }
 
