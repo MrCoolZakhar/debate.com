@@ -25,6 +25,8 @@ const RPC_MESSAGES: Record<string, string> = {
   crisis_bad_role: 'Pick a role for this person.',
   crisis_bad_patch: 'That setting could not be saved.',
   crisis_bad_owner: 'That owner no longer exists. Pick another one and send again.',
+  crisis_hate_speech: 'That has a slur or hate speech in it, which is not allowed on Gavelling. Change it and try again.',
+  crisis_demo_no_email: 'The demo crisis sends no emails. Invites work in your own crisis.',
 };
 
 export function crisisError(error: unknown, fallback = 'Something went wrong. Try again.'): string {
@@ -785,6 +787,19 @@ export async function uploadCrisisFile(ref: CrisisRef, file: File): Promise<{ ur
 // ─────────── View as, room codes ───────────
 
 /** Directors (through their own account) open the crisis as another person on this device. */
+/** The shared demo (part 48): what "Try it as" needs, for any signed-in account. No emails, codes or people on an account. */
+export interface DemoTryAs {
+  members: Member[];
+  characters: Array<Pick<Character, 'id' | 'crisis_id' | 'cabinet_id' | 'name' | 'picture_url' | 'status'>>;
+  cabinets: Array<Pick<Cabinet, 'id' | 'crisis_id' | 'conference_committee_id' | 'name' | 'short_name' | 'color' | 'sort'>>;
+  rooms: Array<{ cabinet_id: string; code: string; chair_password: string | null }>;
+}
+export async function loadDemoTryAs(crisisId: string): Promise<DemoTryAs> {
+  const client = await getCrisisClient('', '');
+  const res = await client.rpc('crisis_demo_try_as', { p_crisis: crisisId });
+  return must(res, 'Could not load the people in this crisis.') as DemoTryAs;
+}
+
 export async function viewAs(ref: CrisisRef, memberId: string): Promise<void> {
   const client = await getCrisisClient('', ''); // the account, never a stored token
   const res = await client.rpc('crisis_view_as', { p_member: memberId });

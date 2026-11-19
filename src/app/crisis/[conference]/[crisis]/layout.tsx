@@ -192,7 +192,7 @@ function TopBar({ v, items }: { v: CrisisContextValue; items: NavItem[] }) {
   const signOutCode = async () => {
     try { await codeLogout(v.ref); } catch { /* the token is cleared below anyway */ }
     clearCrisisToken(v.ref.conf, v.ref.crisis);
-    if (viewingAs) window.location.assign(`/crisis/${v.ref.conf}/${v.ref.crisis}`);
+    if (viewingAs) window.location.assign(v.core.crisis.is_demo ? '/crisis' : `/crisis/${v.ref.conf}/${v.ref.crisis}`);
     else router.replace('/crisis');
   };
   return (

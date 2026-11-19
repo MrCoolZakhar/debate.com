@@ -1,7 +1,9 @@
 'use client';
 // /crisis: the crises you work on (signed in), and the personal code entry for everyone else.
+// Part 48: signed out, the sign-in pop-up opens on arrival (not when a ?code= link brings a code user here). Signed in,
+// everyone also gets the shared demo crisis with "Try it as" (role 'visitor': not a member, so no link into it).
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { KeyRound, ArrowRight } from 'lucide-react';
@@ -77,6 +79,15 @@ function CrisisHome() {
     return () => { cancelled = true; };
   }, [user?.id, loading]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Signed out: ask them to sign in straight away, once per visit. Someone arriving with a personal code link is left to type it.
+  const askedSignIn = useRef(false);
+  const arrivedWithCode = !!search?.get('code');
+  useEffect(() => {
+    if (loading || user || askedSignIn.current || arrivedWithCode) return;
+    askedSignIn.current = true;
+    openAuth({ next: '/crisis' });
+  }, [loading, user, arrivedWithCode]);
+
   return (
     <div className="min-h-screen" style={{ background: CK.pageBg, fontFamily: CK.font, color: CK.ink }}>
       <header className="flex items-center" style={{ height: 60, padding: '0 18px', gap: 12 }}>
@@ -91,8 +102,8 @@ function CrisisHome() {
           <Card warm style={{ padding: 22 }}>
             {!user && !loading && (
               <>
-                <h2 style={{ margin: '0 0 6px', fontSize: 17, fontWeight: 800 }}>Sign In to See Your Crises</h2>
-                <p style={{ margin: '0 0 14px', fontSize: 13.5, color: CK.inkSoft }}>Crisis Directors, staff, chairs and delegates with a Gavelling account find their crisis here.</p>
+                <h2 style={{ margin: '0 0 6px', fontSize: 17, fontWeight: 800 }}>Sign In to Gavelling Crisis</h2>
+                <p style={{ margin: '0 0 14px', fontSize: 13.5, color: CK.inkSoft }}>Sign in with your Gavelling account to try the demo crisis as anyone in it, or to open your own crisis.</p>
                 <Btn onClick={() => openAuth({ next: '/crisis' })}>Sign in</Btn>
               </>
             )}
@@ -106,7 +117,17 @@ function CrisisHome() {
             )}
             {user && list && list.length > 0 && (
               <div className="grid" style={{ gap: 8 }}>
-                {list.map((c) => (
+                {list.map((c) => c.role === 'visitor' ? (
+                  <div key={c.crisis_id} className="flex items-center"
+                    style={{ gap: 12, padding: '10px 12px', borderRadius: 14, background: CK.well, color: CK.ink }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={c.logo_url || '/committee-emblems/crisis.svg'} alt="" width={40} height={40} style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+                    <span className="min-w-0 flex-1">
+                      <b style={{ display: 'block', fontSize: 14.5, overflowWrap: 'anywhere' }}>{c.crisis_name}</b>
+                      <span style={{ display: 'block', fontSize: 12.5, color: CK.inkSoft, overflowWrap: 'anywhere' }}>Demo · Try it as anyone below</span>
+                    </span>
+                  </div>
+                ) : (
                   <Link key={c.crisis_id} href={`/crisis/${c.conference_slug}/${c.crisis_slug}`}
                     className="flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
                     style={{ gap: 12, padding: '10px 12px', borderRadius: 14, background: CK.well, textDecoration: 'none', color: CK.ink }}>
@@ -124,10 +145,10 @@ function CrisisHome() {
           </Card>
           <CodeEntry next={next} initialCode={(search?.get('code') ?? '').toUpperCase()} />
         </div>
-        {user && list && list.filter((c) => ['director', 'assistant_director', 'organiser'].includes(c.role)).map((c) => (
+        {user && list && list.filter((c) => ['director', 'assistant_director', 'organiser', 'visitor'].includes(c.role)).map((c) => (
           <div key={c.crisis_id} style={{ marginTop: 16 }}>
-            <p style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 700, color: CK.inkSoft, overflowWrap: 'anywhere' }}>{c.crisis_name} · {c.conference_acronym}</p>
-            <TryAsPanel cref={{ conf: c.conference_slug, crisis: c.crisis_slug, id: c.crisis_id }} />
+            <p style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 700, color: CK.inkSoft, overflowWrap: 'anywhere' }}>{c.crisis_name} · {c.role === 'visitor' ? 'Demo' : c.conference_acronym}</p>
+            <TryAsPanel cref={{ conf: c.conference_slug, crisis: c.crisis_slug, id: c.crisis_id }} demo={c.role === 'visitor'} />
           </div>
         ))}
       </main>

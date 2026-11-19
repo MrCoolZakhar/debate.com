@@ -11,7 +11,7 @@ import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { CK } from '../../crisisKit';
 
 export default function ViewingAsBanner() {
-  const { ref, role, displayName } = useCrisis();
+  const { ref, role, displayName, core } = useCrisis();
   // sessionStorage is read after mount so the server and the first client render agree.
   const [on, setOn] = useState(false);
   useEffect(() => {
@@ -21,7 +21,8 @@ export default function ViewingAsBanner() {
   if (!on) return null;
   const back = () => {
     clearCrisisToken(ref.conf, ref.crisis);
-    window.location.assign(`/crisis/${ref.conf}/${ref.crisis}`);
+    // The shared demo: someone trying it is not in it on their own account, so they go back to /crisis (part 48).
+    window.location.assign(core.crisis.is_demo ? '/crisis' : `/crisis/${ref.conf}/${ref.crisis}`);
   };
   return (
     <div role="status" className="sticky flex flex-wrap items-center justify-center"

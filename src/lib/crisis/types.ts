@@ -145,6 +145,7 @@ export interface Crisis {
   directives_open: boolean;
   directives_paused_note: string | null;
   next_directive_no: number;
+  is_demo?: boolean;                 // the shared demo anyone signed in may try (part 48)
   created_at: string;
   updated_at: string;
 }
