@@ -295,3 +295,17 @@ Part 40 (14 Nov 2026, SQL docs/crisis/sql/040_staff_invites.sql): backroomers jo
 - The picture is a drawing, not a copy of the live state: Cuba is drawn in the Presidium's tint (the demo map currently has it under ExComm after test edits).
 - Phone: the red band keeps the title and a row of seven portraits.
 - The class names moved from `gv-cs-*` (which clashed with the Conference Spotlight pop-up's) to `gv-cb-*`.
+
+## MIMUN 6.0 Marvel Committee (19 Nov 2026)
+
+- Owner: "make a new Marvel Committee in MIMUN" and turn crisis on, single cabinet, the 2026 map, with his list of 21 delegates and characters, and "cool images for all the characters".
+- MIMUN 6.0 (Nagpur, 21 to 22 Nov 2026, slug m62026) got a new crisis committee, Marvel Committee (live room 5FB18C), and its crisis `marvel` (id bfaa19f7-…, kind single, one cabinet "Marvel Committee", in-world date 21 Nov 2026 09:00, the ordinary modern world map). One seat and one character per delegate: 21 characters, each also a room seat.
+- People: Krishiv Praveen Agrawal (Susan Storm) is linked to his Gavelling account; the other 20 have a personal code and password with their email saved, no invite sent. Vedant Chaudhari plays two characters (Mephisto and Namor), so he has two code seats with the same email; an account can hold only one seat, so he cannot later move both onto one account. Crisis Director: Shriwallabh Chabukswar; Assistant Crisis Director: Yugal Aswani (both on their accounts, added directly, no invite email). Peter is an Assistant Director, so cabinet directives go to their Crisis Director (the first director). Code-only staff: Assistant Crisis Director, Backroom 1 to 3, Chair (of the cabinet), Press.
+- Codes are in private/mimun-marvel-codes.csv (outside git), NOT sent until Peter says so. Nothing was queued in email_outbox.
+- Character pictures are freely licensed Wikimedia Commons photos (cosplay of the character, or the actor who plays them), never Marvel or Disney art, stored in crisis-media under the crisis id.
+
+## Part 49b (19 Nov 2026): chair approval only when someone is in the chair seat
+
+- Owner: "by default set that if there is no chair that the setting for chair approval is turned off".
+- A cabinet directive goes to the chair first only when "Cabinet directives go to the chair first" is on AND the cabinet has a chair seat that someone is in: on a Gavelling account, or signed in at least once with its code. Before, any chair seat counted, so an unused code-only seat held every cabinet directive. Nothing stored changes; the setting still wins when off. The setting's hint says so. SQL: docs/crisis/sql/049_chair_approval_only_with_a_chair.sql.
+- A Director using "Try it as" on the chair seat counts as someone in it from then on.

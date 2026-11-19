@@ -1,0 +1,15 @@
+-- Gavelling Crisis part 49b (19 Nov 2026): a cabinet directive waits for the chair only when someone is in the chair seat.
+-- Owner: "by default set that if there is no chair that the setting for chair approval is turned off".
+-- Before: crisis_submit_directive sent a cabinet directive to the chair whenever the cabinet had ANY chair seat, so a
+-- code-only chair seat nobody had opened (MIMUN 6.0's Marvel Committee) held every cabinet directive with nobody to decide.
+-- Now a chair counts only when the seat is on a Gavelling account (user_id) or someone has signed in with its code
+-- (last_seen_at). The setting chairApprovesCabinetDirectives is unchanged and still wins when it is off.
+-- Only the needs_chair condition changed; the rest of the function is as it was.
+-- Applied 19 Nov 2026 as migration crisis_part49b_chair_approval_only_with_a_chair, by rewriting the live function body
+-- (pg_get_functiondef + replace) so nothing else in it could drift:
+--   needs_chair := k = 'committee'
+--     and coalesce((c.settings ->> 'chairApprovesCabinetDirectives')::boolean, true)
+--     and exists (select 1 from public.crisis_members x where x.crisis_id = p_crisis and x.role = 'chair'
+--                 and x.cabinet_id = me.cabinet_id and (x.user_id is not null or x.last_seen_at is not null));
+-- Checked: every cabinet of GTMUN, HULTMUN and Carrera Espacial still has a chair in the seat (unchanged); MIMUN's Marvel
+-- Committee has none, so its cabinet directives go straight to the backroom until someone signs in with the Chair code.
