@@ -32,6 +32,7 @@ import SiteNav from '@/components/SiteNav';
 import Loader from '@/components/Loader';
 import { useAuth } from '@/components/AuthProvider';
 import { createClient } from '@supabase/supabase-js';
+import { realtimeFallback } from '@/lib/realtimeTransport';
 import { conferenceSlugAttempts, conferenceYear, isSlugTakenError } from '@/lib/conferenceSlug';
 import { UN_COUNTRIES, getCountryByName } from '@/lib/countries';
 import { FlagImg } from '@/components/FlagImg';
@@ -558,7 +559,7 @@ export default function NewConferencePage() {
     return createClient(
       'https://luruhkwrgisytejswlas.supabase.co',
       'sb_publishable_k7NdduzaXK358z8ew18ZKA_vBSieDlV',
-      session ? { global: { headers: { Authorization: 'Bearer ' + session.access_token } } } : {}
+      session ? { ...realtimeFallback(), global: { headers: { Authorization: 'Bearer ' + session.access_token } } } : realtimeFallback()
     );
   }
 

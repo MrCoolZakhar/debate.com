@@ -1,4 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { realtimeFallback } from './realtimeTransport';
 import { OFFLINE_RESILIENCE, resilientFetch } from './offlineResilience';
 
 const SUPABASE_URL = 'https://luruhkwrgisytejswlas.supabase.co';
@@ -25,6 +26,7 @@ export function sessionClient(
     const headers: Record<string, string> = { 'x-session-code': sessionCode };
     if (chairSuffix) headers['x-chair-suffix'] = chairSuffix;
     cache[key] = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      ...realtimeFallback(),
       auth: {
         persistSession: false,
         autoRefreshToken: false,
@@ -44,6 +46,7 @@ let readClient: SupabaseClient | null = null;
 export function sessionReadClient(): SupabaseClient {
   if (!readClient) {
     readClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      ...realtimeFallback(),
       auth: {
         persistSession: false,
         autoRefreshToken: false,

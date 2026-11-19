@@ -5,6 +5,7 @@
 // database matches its hash). The personal-code token wins on the device that used it.
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { realtimeFallback } from '../realtimeTransport';
 import { SUPABASE_URL, SUPABASE_ANON_KEY, supabase } from '@/lib/supabase';
 import { getFreshAuthedClient, supabaseAuthClient } from '@/lib/supabase-auth';
 
@@ -61,6 +62,7 @@ function clientForToken(token: string): SupabaseClient {
   let c = tokenClients.get(token);
   if (!c) {
     c = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      ...realtimeFallback(),
       global: { headers: { 'x-crisis-token': token } },
       auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
     });

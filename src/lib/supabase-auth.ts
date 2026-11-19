@@ -26,6 +26,7 @@ export function createAuthClient() {
 export const supabaseAuthClient = createAuthClient();
 
 import { createClient as _createSupabaseClient } from '@supabase/supabase-js';
+import { realtimeFallback } from './realtimeTransport';
 
 // ── A page left open never tells a signed-in person their session expired ──
 //
@@ -214,6 +215,7 @@ export function getAuthedClient(accessToken: string) {
     'https://luruhkwrgisytejswlas.supabase.co',
     'sb_publishable_k7NdduzaXK358z8ew18ZKA_vBSieDlV',
     {
+      ...realtimeFallback(),
       global: {
         headers: { Authorization: 'Bearer ' + accessToken },
         fetch: makeAuthedFetch(accessToken),

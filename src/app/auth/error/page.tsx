@@ -40,6 +40,13 @@ const COPY: Record<string, { title: string; body: string }> = {
     title: 'This link has already been used',
     body: 'We couldn’t verify this link. Email links only work once, and your mail provider may have opened it before you did. If this was a sign-up confirmation, your account is most likely active already: sign in below and you are in.',
   },
+  /* The link was opened in another browser from the one that asked for it. For a
+     sign-up the address is already confirmed; a reset link has to be asked for again
+     here (resetCopy below). */
+  other_browser: {
+    title: 'Your email is confirmed',
+    body: 'You opened the link in a different browser from the one you signed up in, so we could not log you in here automatically. Log in below with your email and password and you are in.',
+  },
   missing: {
     title: 'Nothing to confirm here',
     body: 'This page is only reachable from an email link, and it looks like the link was incomplete.',
@@ -60,7 +67,12 @@ function AuthErrorInner() {
   const reason = params.get('reason') ?? 'generic';
   const rawNext = params.get('next') ?? '';
   const next = rawNext.startsWith('/') && !rawNext.startsWith('//') ? rawNext : '';
-  const copy = COPY[reason] ?? COPY.generic;
+  const copy = reason === 'other_browser' && next.includes('/auth/reset')
+    ? {
+        title: 'Open the reset link where you asked for it',
+        body: 'Password reset links only work in the browser where you asked for them, and this one was opened somewhere else. Ask for a new link below in this browser and open it here.',
+      }
+    : COPY[reason] ?? COPY.generic;
 
   const supabase = useMemo(() => createAuthClient(), []);
   const [checking, setChecking] = useState(true);

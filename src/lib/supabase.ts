@@ -1,4 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { realtimeFallback } from './realtimeTransport';
 
 let _client: SupabaseClient | null = null;
 
@@ -13,6 +14,7 @@ function getClient(): SupabaseClient {
       SUPABASE_URL,
       SUPABASE_ANON_KEY,
       {
+        ...realtimeFallback(),
         auth: {
           persistSession: false,
           autoRefreshToken: false,

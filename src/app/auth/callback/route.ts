@@ -261,7 +261,12 @@ export async function GET(request: NextRequest) {
     }
 
     const msg = (error?.message || '').toLowerCase();
-    const reason = msg.includes('expire') ? 'expired' : 'invalid';
+    // "code verifier not found" / "no valid flow state": the email link was opened in a
+    // different browser from the one that asked for it (often the mail app's own browser).
+    // Supabase has already verified the address by then, so the person is one log-in away
+    // (auth_flow_failures, 16 to 19 Nov 2026: most sign-in dead ends were this).
+    const otherBrowser = msg.includes('code verifier') || msg.includes('flow state');
+    const reason = otherBrowser ? 'other_browser' : msg.includes('expire') ? 'expired' : 'invalid';
     await logFailure('exchange', { errorText: error?.message ?? null, shownReason: reason });
     return NextResponse.redirect(
       `${origin}/auth/error?reason=${reason}&next=${encodeURIComponent(next)}`,
