@@ -260,7 +260,8 @@ function AddPersonDialog({ onDone, onAdded, onInvited }: { onDone: () => void; o
   const [busy, setBusy] = useState(false);
 
   // A new backroomer is invited by email and joins on their Gavelling account: no cabinet here (Assign backroomers sets that), no personal code.
-  const invite = role === 'backroomer';
+  // Directors and assistants too (part 53): they take the role when they accept with their account.
+  const invite = role === 'backroomer' || role === 'director' || role === 'assistant_director';
   const needsCabinet = role !== 'director' && role !== 'assistant_director' && !invite;
   // A delegate's cabinet follows their character (the database keeps them equal): with a character picked it is read only.
   const pickedChar = role === 'delegate' && character ? core.characters.find((c) => c.id === character) : undefined;
@@ -280,7 +281,7 @@ function AddPersonDialog({ onDone, onAdded, onInvited }: { onDone: () => void; o
     if (!e) { notifyErr('Add their email so we can send the invite.', 'crisis-staff'); return; }
     setBusy(true);
     try {
-      const r = await inviteStaff(ref, { role: 'backroomer', email: e, name: n });
+      const r = await inviteStaff(ref, { role: role as StaffInviteRole, email: e, name: n });
       if (!r.ok) {
         notifyErr(
           r.reason === 'already_member' ? `${e} is already in this crisis as ${ROLE_LABEL[(r.role as MemberRole) ?? 'backroomer'] ?? 'staff'}.`

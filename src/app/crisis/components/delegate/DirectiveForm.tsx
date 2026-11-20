@@ -361,7 +361,7 @@ export default function DirectiveForm({
       if (r.ok) {
         const num = dirNumber({ no: r.no, cabinet_no: r.cabinet_no ?? null });
         const again = (r as { repeat?: boolean }).repeat === true;
-        notifyOk(again ? `Directive ${num} was already sent` : r.awaiting_chair ? `Directive ${num} sent to your chair` : `Directive ${num} sent`);
+        notifyOk(again ? `Directive ${num} was already sent` : r.awaiting_coauthors ? `Directive ${num} sent to your co-authors to sign` : r.awaiting_chair ? `Directive ${num} sent to your chair` : `Directive ${num} sent`);
         requestRef.current = null;
         setVis(null);
         setD(EMPTY);

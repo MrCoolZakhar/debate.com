@@ -1,0 +1,8 @@
+-- Part 53 (20 Nov 2026): a Crisis Director can be invited by email (crisis_staff_invites.role 'director'; crisis_invite_staff
+-- and _crisis_staff_invite_email accept it). Applied as migration crisis_part53_director_invites.
+-- Part 54 (20 Nov 2026): co-authors accept joint directives. crisis_directive_coauthors.status ('pending' | 'accepted', default
+-- 'accepted'), directive status 'awaiting_coauthors' (hidden from staff and chairs by directives_read), crisis_submit_directive
+-- puts a joint directive with co-authors in 'awaiting_coauthors' while settings.coauthorsMustAccept is on (default on) and
+-- notifies them; crisis_respond_coauthor (accept / decline: a decline takes that person off), crisis_send_without_coauthors
+-- (the writer), _crisis_release_joint (queued + the backroom's notice once nobody is pending). Applied as migration
+-- crisis_part54_coauthors_accept; the live definitions are the record (read them with pg_get_functiondef).

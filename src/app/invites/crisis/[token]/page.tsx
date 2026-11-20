@@ -24,6 +24,7 @@ import { MonogramMedallion } from '@/components/MonogramMedallion';
 type Ok = Extract<StaffInvite, { ok: true }>;
 
 const AS_WORDS: Record<Ok['role'], string> = {
+  director: 'a Crisis Director',
   backroomer: 'a backroomer',
   assistant_director: 'an Assistant Crisis Director',
   press: 'press',

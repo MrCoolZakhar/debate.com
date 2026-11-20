@@ -66,7 +66,7 @@ function CodeEntry({ next, initialCode }: { next: string | null; initialCode: st
 }
 
 const INVITE_ROLE: Record<string, string> = {
-  assistant_director: 'Assistant Crisis Director', backroomer: 'Backroom', press: 'Press', chair: 'Chair', delegate: 'Delegate',
+  director: 'Crisis Director', assistant_director: 'Assistant Crisis Director', backroomer: 'Backroom', press: 'Press', chair: 'Chair', delegate: 'Delegate',
 };
 
 /** Invites waiting for this account: someone who signed up on /crisis instead of through the email link finds them here. */

@@ -11,7 +11,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Check, Pencil, Send, Undo2, X } from 'lucide-react';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
-import { addNote, crisisError, editDirective, editNote, withdrawDirective, type CrisisRef } from '@/lib/crisis/api';
+import { addNote, crisisError, editDirective, editNote, respondCoauthor, sendWithoutCoauthors, withdrawDirective, type CrisisRef } from '@/lib/crisis/api';
 import { CHAIR_SEND_BACK_WORD, dirNumber, isChairSendBack } from '@/lib/crisis/format';
 import type { Directive, DirectiveNote } from '@/lib/crisis/types';
 import { Btn, cabinetTint, CK, ThemeTag } from '../../crisisKit';
@@ -67,7 +67,7 @@ export default function DirectiveDialog({
   const [confirmWithdraw, setConfirmWithdraw] = useState(false);
   const [withdrawing, setWithdrawing] = useState(false);
   // Until the crisis team answers it, its author can take it back.
-  const editable = isAuthor && (d.status === 'awaiting_chair' || d.status === 'queued' || d.status === 'claimed' || d.status === 'clarify');
+  const editable = isAuthor && (d.status === 'awaiting_coauthors' || d.status === 'awaiting_chair' || d.status === 'queued' || d.status === 'claimed' || d.status === 'clarify');
   // Edit only while the backroom has not replied (owner, 2 Nov 2026): never once it asked for detail or answered. A directive that
   // went back to the queue after a clarification already carries the backroom's reply, so it is not editable either. A cabinet
   // directive can also be changed only until the chair approved it (owner, 1 Nov 2026).
@@ -133,6 +133,20 @@ export default function DirectiveDialog({
       savingRef.current = false;
       setSaving(false);
     }
+  };
+
+  // A joint directive whose co-authors are still deciding (docs/crisis/sql/054).
+  const waitingCo = d.status === 'awaiting_coauthors';
+  const [coBusy, setCoBusy] = useState(false);
+  const coAction = async (run: () => Promise<{ ok: boolean }>, ok: string) => {
+    if (coBusy) return;
+    setCoBusy(true);
+    try {
+      const r = await run();
+      if (r.ok) notifyOk(ok); else notifyErr('This directive is no longer waiting for co-authors.');
+      onChanged();
+    } catch (e) { notifyErr(crisisError(e, 'Could not save that. Try again.')); }
+    finally { setCoBusy(false); }
   };
 
   const withdraw = async () => {
@@ -320,6 +334,22 @@ export default function DirectiveDialog({
               <span title={whenTitle(d.created_at)} style={{ flex: 'none', fontSize: 12, fontWeight: 600, color: CK.muted }}>
                 Sent {whenLabel(d.created_at)}{replyAt ? `, ${sentBack ? 'sent back' : 'reply'} ${whenLabel(replyAt)}` : ''}
               </span>
+            </div>
+          )}
+          {waitingCo && (
+            <div className="flex items-center flex-wrap" style={{ gap: 8, marginTop: 6, padding: '6px 10px', borderRadius: 10, background: cabinetTint('#7B3F61', 0.09), fontSize: 12.5, fontWeight: 700, color: '#7B3F61' }}>
+              {isAuthor ? (
+                <>
+                  <span style={{ flex: '1 1 200px' }}>Waiting for your co-authors to accept. It goes to the backroom once they have.</span>
+                  <Btn tone="ghost" size="sm" disabled={coBusy} onClick={() => { void coAction(() => sendWithoutCoauthors(cref, d.id), 'Sent to the backroom'); }}>Send without them</Btn>
+                </>
+              ) : (
+                <>
+                  <span style={{ flex: '1 1 200px' }}>You are asked to sign this joint directive.</span>
+                  <Btn tone="green" size="sm" disabled={coBusy} onClick={() => { void coAction(() => respondCoauthor(cref, d.id, true), 'Signed'); }}>Accept and sign</Btn>
+                  <Btn tone="ghost" size="sm" disabled={coBusy} onClick={() => { void coAction(() => respondCoauthor(cref, d.id, false), 'You are off this directive'); }}>Decline</Btn>
+                </>
+              )}
             </div>
           )}
           {/* Tiny facts: who it is from, who signed it, the themes as icons, and Edit / Withdraw. No "To". */}

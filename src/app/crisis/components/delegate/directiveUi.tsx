@@ -3,7 +3,7 @@
 // and chair pages (the chair page uses StatusLine and whenLabel).
 
 import {
-  CheckCircle2, CircleDot, CircleHelp, Clock, Contrast, Gavel, Hourglass, PencilLine, Undo2, UserRoundCog, XCircle,
+  CheckCircle2, CircleDot, CircleHelp, Clock, Contrast, Gavel, Hourglass, PencilLine, Undo2, UserRoundCog, UsersRound, XCircle,
 } from 'lucide-react';
 import type { CSSProperties, ReactNode } from 'react';
 import { OUTCOME_LABEL, type Directive, type DirectiveKind, type DirectiveOutcome, type DirectiveStatus } from '@/lib/crisis/types';
@@ -12,6 +12,7 @@ import { CK, fieldStyle, THEME_STYLE } from '../../crisisKit';
 import { KIND_ICON } from '../directives/directiveKit';
 
 export const STATUS_WORDS: Record<DirectiveStatus, string> = {
+  awaiting_coauthors: 'Waiting for co-authors',
   awaiting_chair: 'With your chair',
   changes_requested: 'Changes asked for',
   rejected: 'Rejected by your chair',
@@ -24,6 +25,7 @@ export const STATUS_WORDS: Record<DirectiveStatus, string> = {
 
 export function statusIcon(s: DirectiveStatus, size = 15): ReactNode {
   const p = { size, strokeWidth: 1.5, 'aria-hidden': true } as const;
+  if (s === 'awaiting_coauthors') return <UsersRound {...p} />;
   if (s === 'awaiting_chair') return <Gavel {...p} />;
   if (s === 'changes_requested') return <PencilLine {...p} />;
   if (s === 'queued') return <Hourglass {...p} />;
@@ -35,7 +37,7 @@ export function statusIcon(s: DirectiveStatus, size = 15): ReactNode {
 
 export function statusColor(s: DirectiveStatus): string {
   if (s === 'answered') return CK.ok;
-  if (s === 'awaiting_chair' || s === 'changes_requested') return PLUM;
+  if (s === 'awaiting_chair' || s === 'changes_requested' || s === 'awaiting_coauthors') return PLUM;
   if (s === 'clarify') return BLUE;
   if (s === 'withdrawn') return CK.muted;
   return CK.goldDeep;

@@ -281,7 +281,7 @@ export async function issueCode(ref: CrisisRef, memberId: string): Promise<{ cod
 
 // ─────────── Staff invites (part 40) ───────────
 
-export type StaffInviteRole = 'assistant_director' | 'backroomer' | 'press';
+export type StaffInviteRole = 'director' | 'assistant_director' | 'backroomer' | 'press';
 /** A seat's invite (part 46) carries the member it links: a chair or delegate already on the list. */
 export type InviteRole = StaffInviteRole | 'chair' | 'delegate';
 
@@ -370,7 +370,7 @@ export async function listMyPendingInvites(): Promise<MyPendingInvite[]> {
 // ─────────── Directives ───────────
 
 /** Directives still being worked on (everyone waits on someone): always loaded in full. */
-export const OPEN_DIRECTIVE_STATUSES: DirectiveStatus[] = ['awaiting_chair', 'changes_requested', 'queued', 'claimed', 'clarify'];
+export const OPEN_DIRECTIVE_STATUSES: DirectiveStatus[] = ['awaiting_coauthors', 'awaiting_chair', 'changes_requested', 'queued', 'claimed', 'clarify'];
 /** Finished ones: loaded newest first, in pages. */
 export const CLOSED_DIRECTIVE_STATUSES: DirectiveStatus[] = ['answered', 'rejected', 'withdrawn'];
 export const DIRECTIVE_PAGE = 200;
@@ -450,11 +450,25 @@ export interface DirectiveDraft {
   request_id?: string;
 }
 export type SubmitResult =
-  | { ok: true; id: string; no: number; cabinet_no?: number | null; awaiting_chair?: boolean }
+  | { ok: true; id: string; no: number; cabinet_no?: number | null; awaiting_chair?: boolean; awaiting_coauthors?: boolean }
   | { ok: false; reason: 'paused'; note?: string | null }
   | { ok: false; reason: 'cooldown'; wait_seconds: number }
   | { ok: false; reason: 'too_long'; limit: number }
   | { ok: false; reason: 'inactive'; status: 'dead' | 'arrested' | 'missing' };
+
+/** A co-author signs a joint directive (accept) or steps out of it (decline) (docs/crisis/sql/054). `sent` = it went to the backroom. */
+export async function respondCoauthor(ref: CrisisRef, directiveId: string, accept: boolean): Promise<{ ok: boolean; sent?: boolean; reason?: 'not_pending' }> {
+  const client = await c(ref);
+  const res = await client.rpc('crisis_respond_coauthor', { p_directive: directiveId, p_accept: accept });
+  return must(res, 'Could not save your answer. Try again.') as { ok: boolean; sent?: boolean; reason?: 'not_pending' };
+}
+
+/** The author sends a joint directive on without the co-authors who have not answered yet. */
+export async function sendWithoutCoauthors(ref: CrisisRef, directiveId: string): Promise<{ ok: boolean }> {
+  const client = await c(ref);
+  const res = await client.rpc('crisis_send_without_coauthors', { p_directive: directiveId });
+  return must(res, 'Could not send it. Try again.') as { ok: boolean };
+}
 
 export async function submitDirective(ref: CrisisRef, d: DirectiveDraft): Promise<SubmitResult> {
   const client = await c(ref);

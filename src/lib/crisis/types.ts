@@ -57,6 +57,8 @@ export interface CrisisSettings {
   landmarks: Landmark[];
   /** Delegates mark each directive Public or Private and staff see the mark (docs/crisis/sql/051). Default off. */
   publicPrivateDirectives: boolean;
+  /** A joint directive waits until every co-author accepts it (docs/crisis/sql/054). Default on. */
+  coauthorsMustAccept: boolean;
 }
 
 /** A named place on the map. */
@@ -114,6 +116,7 @@ export const DEFAULT_SETTINGS: CrisisSettings = {
   historicalMap: 'none',
   landmarks: [],
   publicPrivateDirectives: false,
+  coauthorsMustAccept: true,
 };
 
 export function readSettings(raw: unknown): CrisisSettings {
@@ -133,6 +136,7 @@ export function readSettings(raw: unknown): CrisisSettings {
     historicalMap: (s as { historicalMap?: unknown }).historicalMap === 'etatmajor' ? 'etatmajor' : 'none',
     landmarks: readLandmarks(s),
     publicPrivateDirectives: s.publicPrivateDirectives === true,
+    coauthorsMustAccept: s.coauthorsMustAccept !== false,
   };
 }
 
@@ -214,7 +218,7 @@ export interface CharacterSecret {
 }
 
 export type DirectiveKind = 'personal' | 'joint' | 'committee' | 'press_release' | 'communique';
-export type DirectiveStatus = 'awaiting_chair' | 'changes_requested' | 'rejected' | 'queued' | 'claimed' | 'clarify' | 'answered' | 'withdrawn';
+export type DirectiveStatus = 'awaiting_coauthors' | 'awaiting_chair' | 'changes_requested' | 'rejected' | 'queued' | 'claimed' | 'clarify' | 'answered' | 'withdrawn';
 export type DirectiveOutcome = 'approved' | 'partial' | 'denied' | 'clarify' | 'later';
 
 export const KIND_LABEL: Record<DirectiveKind, string> = {
