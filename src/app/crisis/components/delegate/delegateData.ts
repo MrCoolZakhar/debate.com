@@ -3,7 +3,7 @@
 // Both go through RLS, so a delegate only gets rows for directives they may see.
 
 import { UserFacingError } from '@/lib/friendlyError';
-import { crisisError, type CrisisRef } from '@/lib/crisis/api';
+import { crisisError, sharedRead, sharedReadKey, type CrisisRef } from '@/lib/crisis/api';
 import { getCrisisClient } from '@/lib/crisis/client';
 import type { DirectiveNote } from '@/lib/crisis/types';
 
@@ -18,9 +18,12 @@ export async function listAllNotes(ref: CrisisRef): Promise<DirectiveNote[]> {
 /** Co-authors of the directives this person may read. */
 export async function listCoauthors(ref: CrisisRef): Promise<Array<{ directive_id: string; character_id: string; status?: 'pending' | 'accepted' }>> {
   const client = await getCrisisClient(ref.conf, ref.crisis);
-  const res = await client.from('crisis_directive_coauthors').select('directive_id, character_id, status').limit(5000);
-  if (res.error) throw new UserFacingError(crisisError(res.error, 'Could not load the co-authors.'));
-  return (res.data ?? []) as Array<{ directive_id: string; character_id: string; status?: 'pending' | 'accepted' }>;
+  // Shared with every other component reading the same list (20 Nov 2026, crisis load hotfix).
+  return sharedRead(sharedReadKey('listCoauthors', ref, client), ref.id, async () => {
+    const res = await client.from('crisis_directive_coauthors').select('directive_id, character_id, status').limit(5000);
+    if (res.error) throw new UserFacingError(crisisError(res.error, 'Could not load the co-authors.'));
+    return (res.data ?? []) as Array<{ directive_id: string; character_id: string; status?: 'pending' | 'accepted' }>;
+  });
 }
 
 /** Is this character listed as a co-author of the directive? */

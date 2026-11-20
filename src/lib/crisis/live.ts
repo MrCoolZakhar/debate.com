@@ -5,6 +5,9 @@
 // re-reads only the slices whose tables changed, through RLS, ~250 ms after the first ping.
 // Safety nets: a poll every 20 s while visible and the live channel is NOT connected (a slow 90 s
 // poll while it is), a full re-read when the tab comes back or the socket re-subscribes. Works the same for account users and personal-code users.
+// 20 Nov 2026 (crisis load hotfix): ONE safety poll per crisis per tab (60 s down, 180 s live, jittered 0.8 to 1.2), owned by the
+// shared entry and firing every listener's full re-read at once so the shared reads in api.ts collapse them; a re-subscribe
+// re-read runs at most once every 30 s per crisis per tab.
 //
 // One channel per crisis is shared by every hook on the page (realtime-js hands back the same
 // channel for the same topic), so it is reference-counted here and removed only by the last user.
@@ -23,8 +26,12 @@ export interface CrisisPing { t: CrisisTable; op: 'insert' | 'update' | 'delete'
 
 const COALESCE_MS = 250;
 /** Poll while the live channel is down, and the slow safety poll while it is up. */
-const POLL_MS = 20_000;
-const POLL_LIVE_MS = 90_000;
+const POLL_MS = 60_000;
+const POLL_LIVE_MS = 180_000;
+/** A flapping channel re-reads everything at most once in this window (per crisis per tab). */
+const RESUBSCRIBE_MIN_GAP_MS = 30_000;
+/** Each wait is multiplied by 0.8 to 1.2 so many screens never poll in step. */
+const jitter = (ms: number) => Math.round(ms * (0.8 + Math.random() * 0.4));
 
 // The cabinet a non-staff viewer belongs to, per crisis. A ping that names another cabinet is dropped before any listener
 // sees it, so a delegate's page does not re-read for every other cabinet's directive. null / unset = no filtering (staff).
@@ -61,9 +68,22 @@ export function useSingleFlight(run: () => Promise<void>): () => Promise<void> {
   return useCallback(() => flight(run), [flight, run]);
 }
 
-interface Listener { onPing: (p: CrisisPing) => void; onResubscribe: () => void; onStatus: (live: boolean) => void }
-interface Shared { channel: RealtimeChannel; listeners: Set<Listener>; live: boolean }
+interface Listener { onPing: (p: CrisisPing) => void; onResubscribe: () => void; onStatus: (live: boolean) => void; onPoll: () => void }
+interface Shared { channel: RealtimeChannel; listeners: Set<Listener>; live: boolean; pollTimer: number | null; lastResubAt: number }
 const shared = new Map<string, Shared>();
+
+/** (Re)arm the one safety poll of this crisis: POLL_MS while the channel is down, POLL_LIVE_MS while it is up, jittered. */
+function schedulePoll(crisisId: string, entry: Shared): void {
+  if (entry.pollTimer !== null) window.clearTimeout(entry.pollTimer);
+  entry.pollTimer = null;
+  if (shared.get(crisisId) !== entry || entry.listeners.size === 0) return;
+  entry.pollTimer = window.setTimeout(() => {
+    entry.pollTimer = null;
+    if (shared.get(crisisId) !== entry) return;
+    if (document.visibilityState === 'visible') for (const x of [...entry.listeners]) x.onPoll();
+    schedulePoll(crisisId, entry);
+  }, jitter(entry.live ? POLL_LIVE_MS : POLL_MS));
+}
 
 function join(crisisId: string, l: Listener): () => void {
   let s = shared.get(crisisId);
@@ -78,13 +98,18 @@ function join(crisisId: string, l: Listener): () => void {
         if (ping.cab && mine && ping.cab !== mine) return;
         for (const x of listeners) x.onPing(ping);
       });
-    const entry: Shared = { channel, listeners, live: false };
+    const entry: Shared = { channel, listeners, live: false, pollTimer: null, lastResubAt: 0 };
     let wasSubscribed = false;
     channel.subscribe((status) => {
       const ok = status === 'SUBSCRIBED';
+      const changed = ok !== entry.live;
       entry.live = ok;
       for (const x of listeners) x.onStatus(ok);
-      if (ok && wasSubscribed) for (const x of listeners) x.onResubscribe();
+      if (changed) schedulePoll(crisisId, entry);
+      if (ok && wasSubscribed && Date.now() - entry.lastResubAt >= RESUBSCRIBE_MIN_GAP_MS) {
+        entry.lastResubAt = Date.now();
+        for (const x of listeners) x.onResubscribe();
+      }
       if (ok) wasSubscribed = true;
     });
     s = entry;
@@ -92,11 +117,14 @@ function join(crisisId: string, l: Listener): () => void {
   }
   s.listeners.add(l);
   l.onStatus(s.live);
+  if (s.pollTimer === null) schedulePoll(crisisId, s);
   return () => {
     const cur = shared.get(crisisId);
     if (!cur) return;
     cur.listeners.delete(l);
     if (cur.listeners.size === 0) {
+      if (cur.pollTimer !== null) window.clearTimeout(cur.pollTimer);
+      cur.pollTimer = null;
       shared.delete(crisisId);
       void anonClient.removeChannel(cur.channel);
     }
@@ -130,18 +158,7 @@ export function useCrisisLive(
       pending = new Set(); pings = [];
       if (t.size) cb.current(t, p);
     };
-    // Poll every 20 s while the channel is down; a slow safety poll (90 s) while it is connected.
-    let isLive = false;
-    let pollTimer: number | null = null;
-    let closed = false;
-    const schedule = () => {
-      if (pollTimer !== null) window.clearTimeout(pollTimer);
-      if (closed) return;
-      pollTimer = window.setTimeout(() => {
-        if (document.visibilityState === 'visible') cb.current(null, []);
-        schedule();
-      }, isLive ? POLL_LIVE_MS : POLL_MS);
-    };
+    // The safety poll lives in the shared entry (one per crisis per tab, 20 Nov 2026); it calls onPoll on every listener at once.
     const leave = join(crisisId, {
       onPing: (ping) => {
         if (want && !want.has(ping.t)) return;
@@ -150,16 +167,14 @@ export function useCrisisLive(
         if (timer === null) timer = window.setTimeout(flush, COALESCE_MS);
       },
       onResubscribe: () => cb.current(null, []),
-      onStatus: (ok) => { setLive(ok); if (ok !== isLive) { isLive = ok; schedule(); } },
+      onStatus: (ok) => setLive(ok),
+      onPoll: () => cb.current(null, []),
     });
-    schedule();
     const onVisible = () => { if (document.visibilityState === 'visible') cb.current(null, []); };
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('online', onVisible);
     return () => {
-      closed = true;
       if (timer !== null) window.clearTimeout(timer);
-      if (pollTimer !== null) window.clearTimeout(pollTimer);
       document.removeEventListener('visibilitychange', onVisible);
       window.removeEventListener('online', onVisible);
       leave();
