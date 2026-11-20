@@ -444,6 +444,8 @@ export async function listNotes(ref: CrisisRef, directiveId: string): Promise<Di
 export interface DirectiveDraft {
   kind: DirectiveKind; title: string; receiver?: string | null; body: string; themes: string[];
   resources_used?: string; goal?: string; affects?: string; covert?: boolean; coauthors?: string[];
+  /** Public or Private (docs/crisis/sql/051); the database keeps it only while the setting is on. */
+  visibility?: 'public' | 'private';
   /** The same id on a retry returns the directive already sent instead of a second one (docs/crisis/sql/029b). */
   request_id?: string;
 }

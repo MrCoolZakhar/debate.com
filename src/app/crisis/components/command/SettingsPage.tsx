@@ -91,6 +91,7 @@ function SettingsBody() {
           </ChoiceRow>
           <ToggleRow title="Cabinet directives go to the chair first" checked={s.chairApprovesCabinetDirectives} onChange={(on) => save('chairApprovesCabinetDirectives', on)} hint="The chair of the cabinet approves them before the backroom sees them. A cabinet with nobody in its chair seat skips this step." />
           <ToggleRow title="Cabinet directives go to the Crisis Director first" checked={s.cabinetDirectivesToDirector !== false} onChange={(on) => save('cabinetDirectivesToDirector', on)} hint="New cabinet directives land with you. You review them or hand them to a backroomer. Off: they go to the backroomer who owns the writer's character." />
+          <ToggleRow title="Public and private directives" checked={s.publicPrivateDirectives} onChange={(on) => save('publicPrivateDirectives', on)} hint="On: delegates mark every directive Public or Private when they send it, and the crisis team sees the mark on it." />
           <ChoiceRow title="Queue order" hint="Fair: the longest wait first, then whoever heard back least recently. Oldest and newest go by when the directive was sent.">
             <Segmented
               ariaLabel="Queue order"

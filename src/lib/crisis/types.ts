@@ -55,6 +55,8 @@ export interface CrisisSettings {
   historicalMap: 'none' | 'etatmajor';
   /** Named places on the map (a club, a palace, a newspaper office), shown to everyone with their description. */
   landmarks: Landmark[];
+  /** Delegates mark each directive Public or Private and staff see the mark (docs/crisis/sql/051). Default off. */
+  publicPrivateDirectives: boolean;
 }
 
 /** A named place on the map. */
@@ -111,6 +113,7 @@ export const DEFAULT_SETTINGS: CrisisSettings = {
   thirdParties: [],
   historicalMap: 'none',
   landmarks: [],
+  publicPrivateDirectives: false,
 };
 
 export function readSettings(raw: unknown): CrisisSettings {
@@ -129,6 +132,7 @@ export function readSettings(raw: unknown): CrisisSettings {
     thirdParties: readThirdParties(s),
     historicalMap: (s as { historicalMap?: unknown }).historicalMap === 'etatmajor' ? 'etatmajor' : 'none',
     landmarks: readLandmarks(s),
+    publicPrivateDirectives: s.publicPrivateDirectives === true,
   };
 }
 
@@ -246,6 +250,8 @@ export interface Directive {
   goal: string | null;
   affects: string | null;
   covert: boolean;
+  /** Public or Private, chosen by the delegate while settings.publicPrivateDirectives is on (docs/crisis/sql/051); null otherwise. */
+  visibility?: 'public' | 'private' | null;
   status: DirectiveStatus;
   outcome: DirectiveOutcome | null;
   reply: string | null;

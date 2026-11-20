@@ -214,6 +214,7 @@ export default function DelegateHome() {
             ownCabinetId={cabinetId}
             cabinetNames={cabinetNames}
             wordLimit={settings.wordLimit}
+            askVisibility={settings.publicPrivateDirectives}
             open={open}
             pausedNote={pausedNote}
             blockedReason={inactive ? inactive.title : null}

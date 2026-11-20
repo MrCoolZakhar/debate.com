@@ -11,6 +11,7 @@
 // and no backroomer (cabinet directives do not care who the responsible backroomer is).
 
 import { Clock, MessageCircle, Pencil } from 'lucide-react';
+import { VisibilityMark, visibilityOf } from './visibilityMark';
 import type { Directive } from '@/lib/crisis/types';
 import { dirNumber } from '@/lib/crisis/format';
 import { Avatar, CK } from '../../crisisKit';
@@ -81,6 +82,7 @@ export default function QueueRow({ d, names, whenLabel, sev, selected, delegateN
           <span style={{ display: 'block', marginTop: compact ? 5 : 7, fontSize: compact ? 15.5 : 18, fontWeight: 800, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{d.title}</span>
           {/* The bottom line: the icons and the wait. */}
           <CabinetFoot marginTop={compact ? 6 : 8}>
+            <VisibilityMark v={visibilityOf(d)} size="sm" />
             {delegateNote && <MessageCircle size={14} strokeWidth={1.5} aria-label="The delegate sent a note" style={{ color: '#3E6A9A' }} />}
             {d.themes.length > 0 && <ThemeTags themes={d.themes} maxChips={1} />}
             <span className="inline-flex items-center" style={{ gap: 3, fontSize: 12, fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: waitColor, flex: 'none' }}>
@@ -152,6 +154,7 @@ export default function QueueRow({ d, names, whenLabel, sev, selected, delegateN
             </span>
           </span>
           <span className="flex flex-wrap items-center justify-end" style={{ gap: '4px 8px', marginLeft: 'auto' }}>
+            <VisibilityMark v={visibilityOf(d)} size="sm" />
             {delegateNote && <MessageCircle size={14} strokeWidth={1.5} aria-label="The delegate sent a note" style={{ color: '#3E6A9A' }} />}
             {d.themes.length > 0 && <ThemeTags themes={d.themes} maxChips={1} />}
             <KindIcon size={14} strokeWidth={1.5} aria-label={d.kind} style={{ flex: 'none', color: CK.red }} />
