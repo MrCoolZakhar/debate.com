@@ -11,7 +11,7 @@ import BrandLogo from '@/components/BrandLogo';
 import ProfileAvatarMenu from '@/components/ProfileAvatar';
 import { useAuth } from '@/components/AuthProvider';
 import { openAuth } from '@/lib/authModal';
-import { codeLogin, crisisError, listMyCrises, type MyCrisis } from '@/lib/crisis/api';
+import { codeLogin, crisisError, listMyCrises, listMyPendingInvites, respondStaffInvite, type MyCrisis, type MyPendingInvite } from '@/lib/crisis/api';
 import { ROLE_LABEL, type CrisisRole } from '@/lib/crisis/types';
 import { CK, Btn, Card, Eyebrow, fieldStyle, FieldLabel, Skeleton } from './crisisKit';
 import { Suspense } from 'react';
@@ -65,12 +65,67 @@ function CodeEntry({ next, initialCode }: { next: string | null; initialCode: st
   );
 }
 
+const INVITE_ROLE: Record<string, string> = {
+  assistant_director: 'Assistant Crisis Director', backroomer: 'Backroom', press: 'Press', chair: 'Chair', delegate: 'Delegate',
+};
+
+/** Invites waiting for this account: someone who signed up on /crisis instead of through the email link finds them here. */
+function PendingInvites({ invites, onAccepted }: { invites: MyPendingInvite[]; onAccepted: () => void }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const accept = async (inv: MyPendingInvite) => {
+    if (busy) return;
+    setBusy(inv.token); setError(null);
+    try {
+      const r = await respondStaffInvite(inv.token, true);
+      if (r.ok && r.accepted) { router.push(`/crisis/${r.conference_slug}/${r.crisis_slug}`); return; }
+      setError(!r.ok && r.reason === 'already_member' ? 'You already have another seat in this crisis.' : 'This invite can no longer be accepted. Ask your Crisis Director for a new one.');
+      onAccepted();
+    } catch (err) {
+      setError(crisisError(err, 'Could not accept this invite. Try again.'));
+    } finally {
+      setBusy(null);
+    }
+  };
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <h2 style={{ margin: '0 0 8px', fontSize: 17, fontWeight: 800 }}>Your Invites</h2>
+      <div className="grid" style={{ gap: 8 }}>
+        {invites.map((inv) => (
+          <div key={inv.token} className="flex items-center" style={{ gap: 12, padding: '10px 12px', borderRadius: 14, background: CK.well }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={inv.logo_url || '/committee-emblems/crisis.svg'} alt="" width={40} height={40} style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+            <span className="min-w-0 flex-1">
+              <b style={{ display: 'block', fontSize: 14.5, overflowWrap: 'anywhere' }}>{inv.crisis_name}</b>
+              <span style={{ display: 'block', fontSize: 12.5, color: CK.inkSoft, overflowWrap: 'anywhere' }}>
+                {[inv.acronym, inv.character_name ? `as ${inv.character_name}` : (INVITE_ROLE[inv.role] ?? inv.role)].filter(Boolean).join(' · ')}
+              </span>
+            </span>
+            <Btn tone="red" size="sm" disabled={!!busy} onClick={() => accept(inv)}>{busy === inv.token ? 'Accepting' : 'Accept'}</Btn>
+          </div>
+        ))}
+      </div>
+      {error && <p role="alert" style={{ margin: '8px 0 0', fontSize: 13, color: CK.danger, fontWeight: 600 }}>{error}</p>}
+    </div>
+  );
+}
+
 function CrisisHome() {
   const { user, loading } = useAuth();
   const search = useSearchParams();
   const next = search?.get('next') ?? null;
   const [list, setList] = useState<MyCrisis[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [invites, setInvites] = useState<MyPendingInvite[]>([]);
+  const [invitesTick, setInvitesTick] = useState(0);
+
+  useEffect(() => {
+    if (loading || !user) return;
+    let cancelled = false;
+    listMyPendingInvites().then((l) => { if (!cancelled) setInvites(l); }).catch(() => { /* the email link still works */ });
+    return () => { cancelled = true; };
+  }, [user?.id, loading, invitesTick]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (loading || !user) return;
@@ -100,6 +155,7 @@ function CrisisHome() {
         <h1 style={{ margin: '4px 0 18px', fontSize: 'clamp(26px, 3vw, 36px)', fontWeight: 800 }}>Your Crises</h1>
         <div className="grid" style={{ gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', alignItems: 'start' }}>
           <Card warm style={{ padding: 22 }}>
+            {user && invites.length > 0 && <PendingInvites invites={invites} onAccepted={() => setInvitesTick((n) => n + 1)} />}
             {!user && !loading && (
               <>
                 <h2 style={{ margin: '0 0 6px', fontSize: 17, fontWeight: 800 }}>Sign In to Gavelling Crisis</h2>
@@ -109,7 +165,7 @@ function CrisisHome() {
             )}
             {(loading || (user && list === null && !error)) && <div className="grid" style={{ gap: 10 }}><Skeleton h={22} w="60%" /><Skeleton h={54} /><Skeleton h={54} /></div>}
             {error && <p role="alert" style={{ color: CK.danger, fontWeight: 600, margin: 0 }}>{error}</p>}
-            {user && list && list.length === 0 && (
+            {user && list && list.length === 0 && invites.length === 0 && (
               <>
                 <h2 style={{ margin: '0 0 6px', fontSize: 17, fontWeight: 800 }}>No Crises Yet</h2>
                 <p style={{ margin: 0, fontSize: 13.5, color: CK.inkSoft }}>When you are added to a crisis, it shows up here.</p>

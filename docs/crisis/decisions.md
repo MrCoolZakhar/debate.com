@@ -310,3 +310,8 @@ Part 40 (14 Nov 2026, SQL docs/crisis/sql/040_staff_invites.sql): backroomers jo
 - A cabinet directive goes to the chair first only when "Cabinet directives go to the chair first" is on AND the cabinet has a chair seat that someone is in: on a Gavelling account, or signed in at least once with its code. Before, any chair seat counted, so an unused code-only seat held every cabinet directive. Nothing stored changes; the setting still wins when off. The setting's hint says so. SQL: docs/crisis/sql/049_chair_approval_only_with_a_chair.sql.
 - A Director using "Try it as" on the chair seat counts as someone in it from then on.
 - Invites (owner, 19 Nov 2026, "Email invites"): 19 seat invites emailed through crisis_staff_invites and _crisis_staff_invite_email, one per code-only delegate seat with an email. Not invited: Krishiv (already on his account) and Namor (Vedant's second seat: his email now sits only on Mephisto, because one account holds one seat; Namor stays on its code).
+
+## Part 50: invites on /crisis (20 Nov 2026)
+- Jose Sánchez (La Carrera Espacial backroom) made his account on /crisis instead of through his invite link, so his invite stayed pending and /crisis said "No Crises Yet". His account was put on his existing backroom seat by hand and the invite marked accepted.
+- /crisis now shows "Your Invites" for a signed-in person: pending invites for the account or its confirmed email (`crisis_my_pending_invites`), each with Accept, which runs `respond_crisis_staff_invite` like the email link.
+- Accepting a staff invite sent for an existing code seat of the same role now puts the account on that seat instead of adding a second row (record: docs/crisis/sql/050_my_pending_invites.sql).

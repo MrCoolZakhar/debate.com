@@ -352,6 +352,21 @@ export async function respondStaffInvite(token: string, accept: boolean): Promis
   return res.data as RespondStaffInviteResult;
 }
 
+export interface MyPendingInvite {
+  token: string; role: InviteRole; crisis_name: string; crisis_slug: string; conference_slug: string;
+  acronym: string | null; logo_url: string | null; character_name: string | null; cabinet_name: string | null;
+}
+
+/** Invites waiting for the signed-in account (or its confirmed email), so someone who signed up without the link
+ *  still finds them on /crisis (docs/crisis/sql/050). */
+export async function listMyPendingInvites(): Promise<MyPendingInvite[]> {
+  const client = await getFreshAuthedClient();
+  if (!client) return [];
+  const res = await client.rpc('crisis_my_pending_invites');
+  if (res.error) throw new UserFacingError(crisisError(res.error, 'Could not load your invites.'));
+  return (Array.isArray(res.data) ? res.data : []) as MyPendingInvite[];
+}
+
 // ─────────── Directives ───────────
 
 /** Directives still being worked on (everyone waits on someone): always loaded in full. */
