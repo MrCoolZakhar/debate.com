@@ -170,13 +170,18 @@ export async function fetchDelegatePrices(
   if (ids.length === 0) return out;
   const currencyOf = new Map(conferences.map(c => [c.id, c.fee_currency ?? '']));
 
-  const { data } = await (client.from('conference_public_fees') as FeeQuery)
-    .select('conference_id, fee_amount, fee_currency, fee_phases, is_enabled, applications_open_at')
-    .eq('role', 'delegate')
-    .in('conference_id', ids);
+  // In batches: hundreds of ids in one `in` filter made a 30 KB URL that PostgREST refused (400), so every price read TBD.
+  const data: DelegateFeeRow[] = [];
+  for (let i = 0; i < ids.length; i += 150) {
+    const res = await (client.from('conference_public_fees') as FeeQuery)
+      .select('conference_id, fee_amount, fee_currency, fee_phases, is_enabled, applications_open_at')
+      .eq('role', 'delegate')
+      .in('conference_id', ids.slice(i, i + 150));
+    for (const row of res.data ?? []) data.push(row);
+  }
 
   for (const id of ids) out.set(id, TBD_PRICE);
-  for (const row of data ?? []) {
+  for (const row of data) {
     out.set(row.conference_id, displayDelegatePrice(row, currencyOf.get(row.conference_id) ?? '', today));
   }
   return out;
