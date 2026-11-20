@@ -13,7 +13,8 @@ import { Btn, Card, CardTitle, CK, Skeleton } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { ZoomableImage } from './ImageLightbox';
 
-const POLL_MS = 20_000;
+// 20 Nov 2026 (crisis load hotfix): 20 s became 60 s.
+const POLL_MS = 60_000;
 const KEEP_DECIDED = 5;
 
 function whenText(iso: string | null): string {

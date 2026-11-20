@@ -39,6 +39,44 @@ async function c(ref: Pick<CrisisRef, 'conf' | 'crisis'>): Promise<SupabaseClien
   return getCrisisClient(ref.conf, ref.crisis);
 }
 
+// ─────────── Shared reads (20 Nov 2026, crisis load hotfix) ───────────
+// Several components on one page read the same list on the same ping (a delegate's page read crisis_directives 8 times per ping).
+// sharedRead runs a read once: a caller with the same key gets the read in flight, or its result if it finished under
+// SHARED_READ_KEEP_MS ago. A failed read is never kept. Every write to directives, co-authors, notes or notifications calls
+// forgetSharedReads before and after it, so a page that writes and re-reads never sees a result from before its own write.
+const SHARED_READ_KEEP_MS = 1_500;
+interface SharedReadEntry { refId: string; promise: Promise<unknown>; doneAt: number | null }
+const sharedReads = new Map<string, SharedReadEntry>();
+// Each Supabase client gets its own number, so an account user and a personal-code user in one tab never share a result.
+const clientIds = new WeakMap<object, number>();
+let nextClientId = 1;
+/** A stable id for the client a read uses (part of every shared-read key). */
+export function crisisClientKey(client: object): number {
+  let id = clientIds.get(client);
+  if (id === undefined) { id = nextClientId++; clientIds.set(client, id); }
+  return id;
+}
+/** The shared-read key: the function name, the crisis, the conference and crisis slugs, and the client used. */
+export function sharedReadKey(name: string, ref: CrisisRef, client: object): string {
+  return `${name}|${ref.id}|${ref.conf}|${ref.crisis}|${crisisClientKey(client)}`;
+}
+export function sharedRead<T>(key: string, refId: string, run: () => Promise<T>): Promise<T> {
+  const hit = sharedReads.get(key);
+  if (hit && (hit.doneAt === null || Date.now() - hit.doneAt < SHARED_READ_KEEP_MS)) return hit.promise as Promise<T>;
+  const entry: SharedReadEntry = { refId, promise: Promise.resolve(), doneAt: null };
+  const promise = run().then(
+    (v) => { if (sharedReads.get(key) === entry) entry.doneAt = Date.now(); return v; },
+    (e) => { if (sharedReads.get(key) === entry) sharedReads.delete(key); throw e; },
+  );
+  entry.promise = promise;
+  sharedReads.set(key, entry);
+  return promise;
+}
+/** Drop every kept or in-flight shared read of this crisis (callers already holding a promise keep it). */
+export function forgetSharedReads(refId: string): void {
+  for (const [k, e] of sharedReads) if (e.refId === refId) sharedReads.delete(k);
+}
+
 function must<T>(res: { data: T | null; error: unknown }, fallback: string): T {
   if (res.error) throw new UserFacingError(crisisError(res.error, fallback));
   if (res.data === null) throw new UserFacingError(fallback);
@@ -391,6 +429,9 @@ async function readAllRows<T>(page: (from: number, to: number) => PromiseLike<{ 
 /** Every open directive plus the newest page of finished ones, newest first. For older finished ones use listClosedDirectivesPage. */
 export async function listDirectives(ref: CrisisRef): Promise<Directive[]> {
   const client = await c(ref);
+  return sharedRead(sharedReadKey('listDirectives', ref, client), ref.id, () => readDirectives(ref, client));
+}
+async function readDirectives(ref: CrisisRef, client: SupabaseClient): Promise<Directive[]> {
   const [open, closed] = await Promise.all([
     readAllRows<Directive>((from, to) => client.from('crisis_directives').select('*').eq('crisis_id', ref.id)
       .in('status', OPEN_DIRECTIVE_STATUSES).order('no', { ascending: false }).range(from, to), 'Could not load the directives.'),
@@ -458,29 +499,37 @@ export type SubmitResult =
 
 /** A co-author signs a joint directive (accept) or steps out of it (decline) (docs/crisis/sql/054). `sent` = it went to the backroom. */
 export async function respondCoauthor(ref: CrisisRef, directiveId: string, accept: boolean): Promise<{ ok: boolean; sent?: boolean; reason?: 'not_pending' }> {
+  forgetSharedReads(ref.id);
   const client = await c(ref);
   const res = await client.rpc('crisis_respond_coauthor', { p_directive: directiveId, p_accept: accept });
+  forgetSharedReads(ref.id);
   return must(res, 'Could not save your answer. Try again.') as { ok: boolean; sent?: boolean; reason?: 'not_pending' };
 }
 
 /** The author sends a joint directive on without the co-authors who have not answered yet. */
 export async function sendWithoutCoauthors(ref: CrisisRef, directiveId: string): Promise<{ ok: boolean }> {
+  forgetSharedReads(ref.id);
   const client = await c(ref);
   const res = await client.rpc('crisis_send_without_coauthors', { p_directive: directiveId });
+  forgetSharedReads(ref.id);
   return must(res, 'Could not send it. Try again.') as { ok: boolean };
 }
 
 export async function submitDirective(ref: CrisisRef, d: DirectiveDraft): Promise<SubmitResult> {
+  forgetSharedReads(ref.id);
   const client = await c(ref);
   const res = await client.rpc('crisis_submit_directive', { p_crisis: ref.id, p: d });
+  forgetSharedReads(ref.id);
   return must(res, 'Could not send the directive. Your text is kept, try again.') as SubmitResult;
 }
 
 /** The chair of a cabinet sends a waiting cabinet directive on to the backroom (approve) or turns it back with an optional note.
  *  False means it was no longer waiting. */
 export async function reviewDirectiveAsChair(ref: CrisisRef, directiveId: string, approve: boolean, note?: string | null): Promise<boolean> {
+  forgetSharedReads(ref.id);
   const client = await c(ref);
   const res = await client.rpc('crisis_chair_review_directive', { p_directive: directiveId, p_approve: approve, p_note: note?.trim() ? note.trim() : null });
+  forgetSharedReads(ref.id);
   if (res.error) throw new UserFacingError(crisisError(res.error, 'Could not save that decision. Try again.'));
   return res.data === true;
 }
@@ -488,8 +537,10 @@ export async function reviewDirectiveAsChair(ref: CrisisRef, directiveId: string
 /** The chair asks for changes on a waiting cabinet directive (docs/crisis/sql/028): it goes back to its author as a draft,
  *  with the note. False means it was no longer waiting. Reject is reviewDirectiveAsChair(..., false). */
 export async function requestDirectiveChanges(ref: CrisisRef, directiveId: string, note?: string | null): Promise<boolean> {
+  forgetSharedReads(ref.id);
   const client = await c(ref);
   const res = await client.rpc('crisis_chair_request_changes', { p_directive: directiveId, p_note: note?.trim() ? note.trim() : null });
+  forgetSharedReads(ref.id);
   if (res.error) throw new UserFacingError(crisisError(res.error, 'Could not send it back. Try again.'));
   return res.data === true;
 }
@@ -502,15 +553,19 @@ export type ResendResult =
 
 /** The author sends a directive the chair returned (status changes_requested) again, edited. It keeps its number. */
 export async function resendDirective(ref: CrisisRef, directiveId: string, d: Pick<DirectiveDraft, 'title' | 'body' | 'themes' | 'receiver' | 'covert'>): Promise<ResendResult> {
+  forgetSharedReads(ref.id);
   const client = await c(ref);
   const res = await client.rpc('crisis_resend_directive', { p_directive: directiveId, p: d });
+  forgetSharedReads(ref.id);
   return must(res, 'Could not send the directive. Your text is kept, try again.') as ResendResult;
 }
 
 /** Claim for yourself (memberId omitted) or hand to another staff member. */
 export async function assignDirective(ref: CrisisRef, directiveId: string, memberId?: string | null): Promise<void> {
+  forgetSharedReads(ref.id);
   const client = await c(ref);
   const res = await client.rpc('crisis_assign_directive', { p_directive: directiveId, p_member: memberId ?? null });
+  forgetSharedReads(ref.id);
   must(res, 'Could not move this directive.');
 }
 
@@ -535,8 +590,10 @@ export type AnswerResult =
 /** Sends a reply. Put a `request_id` in effects that stays the same across retries of the same reply (a repeat is a
  *  no-op), and `edit: true` to change an answered directive's words and outcome (its effects never run again). */
 export async function answerDirective(ref: CrisisRef, directiveId: string, outcome: DirectiveOutcome, reply: string, effects: AnswerEffects & { request_id?: string; edit?: boolean } = {}): Promise<AnswerResult> {
+  forgetSharedReads(ref.id);
   const client = await c(ref);
   const res = await client.rpc('crisis_answer_directive', { p_directive: directiveId, p_outcome: outcome, p_reply: reply, p_effects: effects });
+  forgetSharedReads(ref.id);
   return must(res, 'Could not send the reply. It is kept, try again.') as AnswerResult;
 }
 
@@ -544,15 +601,19 @@ export type EditDirectiveResult = { ok: true } | { ok: false; reason: 'answered'
 
 /** The author edits their directive until staff answer it (docs/crisis/sql/030). */
 export async function editDirective(ref: CrisisRef, directiveId: string, d: Partial<Pick<DirectiveDraft, 'title' | 'body' | 'themes' | 'receiver' | 'covert'>>): Promise<EditDirectiveResult> {
+  forgetSharedReads(ref.id);
   const client = await c(ref);
   const res = await client.rpc('crisis_edit_directive', { p_directive: directiveId, p: d });
+  forgetSharedReads(ref.id);
   return must(res, 'Could not save your changes. Your text is kept, try again.') as EditDirectiveResult;
 }
 
 /** The author withdraws their directive until staff answer it. */
 export async function withdrawDirective(ref: CrisisRef, directiveId: string): Promise<{ ok: boolean; reason?: 'answered' }> {
+  forgetSharedReads(ref.id);
   const client = await c(ref);
   const res = await client.rpc('crisis_withdraw_directive', { p_directive: directiveId });
+  forgetSharedReads(ref.id);
   return must(res, 'Could not withdraw the directive. Try again.') as { ok: boolean; reason?: 'answered' };
 }
 
@@ -566,8 +627,10 @@ export async function loadChairRooms(ref: CrisisRef): Promise<Array<{ cabinet_id
 
 /** The author changes their own latest clarification note until the backroom replies after it (docs/crisis/sql/029, part 36). */
 export async function editNote(ref: CrisisRef, noteId: string, body: string): Promise<{ ok: boolean; reason?: 'replied' | 'empty' }> {
+  forgetSharedReads(ref.id);
   const client = await c(ref);
   const res = await client.rpc('crisis_edit_note', { p_note: noteId, p_body: body });
+  forgetSharedReads(ref.id);
   return must(res, 'Could not save your change. Your text is kept, try again.') as { ok: boolean; reason?: 'replied' | 'empty' };
 }
 
@@ -580,13 +643,17 @@ export async function giveSpare(ref: CrisisRef, memberId: string, spareId: strin
 
 /** Tells the crisis team a reply to this directive is being typed (on) or no longer is (off). Presence only, never an error to the person. */
 export async function markDrafting(ref: CrisisRef, directiveId: string, on = true): Promise<void> {
+  forgetSharedReads(ref.id);
   const client = await c(ref);
   await client.rpc('crisis_mark_drafting', { p_directive: directiveId, p_on: on });
+  forgetSharedReads(ref.id);
 }
 
 export async function addNote(ref: CrisisRef, directiveId: string, body: string, internal = false): Promise<void> {
+  forgetSharedReads(ref.id);
   const client = await c(ref);
   const res = await client.rpc('crisis_add_directive_note', { p_directive: directiveId, p_body: body, p_internal: internal });
+  forgetSharedReads(ref.id);
   must(res, 'Could not send the note.');
 }
 
@@ -932,14 +999,18 @@ export async function cancelMeeting(ref: CrisisRef, meetingId: string): Promise<
 
 export async function listNotifications(ref: CrisisRef): Promise<CrisisNotification[]> {
   const client = await c(ref);
-  const res = await client.from('crisis_notifications').select('*').eq('crisis_id', ref.id).order('created_at', { ascending: false }).limit(80);
-  return must(res, 'Could not load notifications.') as CrisisNotification[];
+  return sharedRead(sharedReadKey('listNotifications', ref, client), ref.id, async () => {
+    const res = await client.from('crisis_notifications').select('*').eq('crisis_id', ref.id).order('created_at', { ascending: false }).limit(80);
+    return must(res, 'Could not load notifications.') as CrisisNotification[];
+  });
 }
 
 /** Mark some (or, with no ids, all) of my notifications read. */
 export async function markNotificationsRead(ref: CrisisRef, ids?: string[]): Promise<void> {
+  forgetSharedReads(ref.id);
   const client = await c(ref);
   const res = await client.rpc('crisis_mark_notifications_read', { p_crisis: ref.id, p_ids: ids ?? null });
+  forgetSharedReads(ref.id);
   if (res.error) throw new UserFacingError(crisisError(res.error, 'Could not mark those as read.'));
 }
 

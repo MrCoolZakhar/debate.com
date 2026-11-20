@@ -27,7 +27,8 @@ export function useMeetingResponses(ref: CrisisRef, enabled: boolean, fast = fal
   }, [reload]);
   useEffect(() => {
     if (!enabled || !fast) return undefined;
-    const t = window.setInterval(() => { if (document.visibilityState === 'visible') void reload(); }, 8000);
+    // 20 Nov 2026 (crisis load hotfix): the fast re-read went from every 8 s to every 15 s.
+    const t = window.setInterval(() => { if (document.visibilityState === 'visible') void reload(); }, 15_000);
     return () => window.clearInterval(t);
   }, [enabled, fast, reload]);
   useCrisisLive(enabled ? ref.id : null, ['crisis_meetings'], () => { void reload(); });
