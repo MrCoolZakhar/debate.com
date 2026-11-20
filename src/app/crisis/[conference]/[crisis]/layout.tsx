@@ -23,7 +23,6 @@ import CabinetDirectivePrompt from '../../components/directives/CabinetDirective
 import ChairDirectivePrompt from '../../components/chair/ChairDirectivePrompt';
 import DelegateReplyPrompt from '../../components/delegate/DelegateReplyPrompt';
 import MeetingInvitePrompt from '../../components/meetings/MeetingInvitePrompt';
-import CoauthorInvitePrompt from '../../components/delegate/CoauthorInvitePrompt';
 import ViewingAsBanner from '../../components/command/ViewingAsBanner';
 import NotificationBell from '../../components/notifications/NotificationBell';
 import { CharacterProfileProvider } from '../../components/character/CharacterProfileHost';
@@ -353,7 +352,6 @@ export default function CrisisLayout({ children }: { children: React.ReactNode }
         <ChairDirectivePrompt />
         <DelegateReplyPrompt />
         <MeetingInvitePrompt />
-        <CoauthorInvitePrompt />
       </div>
       </CharacterProfileProvider>
     </CrisisProvider>
