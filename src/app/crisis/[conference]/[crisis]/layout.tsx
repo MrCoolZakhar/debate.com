@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard, ScrollText, Map as MapIcon, Newspaper, ContactRound, UsersRound, Settings, Presentation,
-  Home, LogOut, KeyRound, CalendarClock, Boxes, Ellipsis, Megaphone,
+  Home, LogOut, KeyRound, CalendarClock, Boxes, Ellipsis, Megaphone, MessagesSquare,
 } from 'lucide-react';
 import BrandLogo from '@/components/BrandLogo';
 import ProfileAvatarMenu from '@/components/ProfileAvatar';
@@ -26,6 +26,7 @@ import MeetingInvitePrompt from '../../components/meetings/MeetingInvitePrompt';
 import ViewingAsBanner from '../../components/command/ViewingAsBanner';
 import NotificationBell from '../../components/notifications/NotificationBell';
 import { CharacterProfileProvider } from '../../components/character/CharacterProfileHost';
+import { useBackroomMessages } from '../../components/messages/useBackroomMessages';
 
 interface NavItem { href: string; label: string; icon: React.ReactNode; section?: string; external?: boolean }
 
@@ -37,12 +38,14 @@ function navFor(role: CrisisRole, base: string, confSlug: string): NavItem[] {
   const meetings = (section?: string): NavItem => ({ href: `${base}/meetings`, label: 'Meetings', icon: ic(CalendarClock), section });
   const characters = (section?: string, label = 'Characters'): NavItem => ({ href: `${base}/characters`, label, icon: ic(ContactRound), section });
   const resources = (section?: string): NavItem => ({ href: `${base}/resources`, label: 'Resources', icon: ic(Boxes), section });
+  // Messages between delegates and the crisis team outside a directive (docs/crisis/sql/052).
+  const messages = (section?: string): NavItem => ({ href: `${base}/messages`, label: 'Messages', icon: ic(MessagesSquare), section });
   if (role === 'director' || role === 'assistant_director' || role === 'organiser') {
     return [
       { href: base, label: 'Command', icon: ic(LayoutDashboard) },
       map,
       { href: `${base}/directives`, label: 'Directives', icon: ic(ScrollText), section: 'RUN' },
-      news('RUN'), meetings('RUN'),
+      messages('RUN'), news('RUN'), meetings('RUN'),
       characters('WORLD'), resources('WORLD'),
       { href: `${base}/staff`, label: 'Staff and access', icon: ic(UsersRound), section: 'SET UP' },
       { href: `${base}/settings`, label: 'Settings', icon: ic(Settings), section: 'SET UP' },
@@ -51,6 +54,7 @@ function navFor(role: CrisisRole, base: string, confSlug: string): NavItem[] {
   if (role === 'backroomer') {
     return [
       { href: base, label: 'Directives', icon: ic(ScrollText) },
+      messages(),
       map,
       news('RUN'), meetings('RUN'),
       characters('WORLD'), resources('WORLD'),
@@ -64,10 +68,33 @@ function navFor(role: CrisisRole, base: string, confSlug: string): NavItem[] {
     return [{ href: base, label: 'News', icon: ic(Newspaper) }, map, characters(), { href: `/conferences/${confSlug}/press`, label: 'Press Desk', icon: ic(Megaphone), external: true }];
   }
   // Delegates: "Cabinet" (Peter, 26 Oct 2026). History is a tab inside the Map page for everybody (27 Oct 2026).
-  return [{ href: base, label: 'My crisis', icon: ic(Home) }, { href: `${base}/directives`, label: 'Directives', icon: ic(ScrollText) }, map, news(), meetings(), characters(undefined, 'Cabinet')];
+  return [{ href: base, label: 'My crisis', icon: ic(Home) }, { href: `${base}/directives`, label: 'Directives', icon: ic(ScrollText) }, messages(), map, news(), meetings(), characters(undefined, 'Cabinet')];
 }
 
-function Rail({ v, items }: { v: CrisisContextValue; items: NavItem[] }) {
+/** The red count on a rail or phone-bar icon (unread messages). */
+function NavBadge({ n }: { n: number | undefined }) {
+  if (!n) return null;
+  return (
+    <span aria-label={`${n} unread`} style={{ position: 'absolute', top: -6, right: -8, minWidth: 17, height: 17, padding: '0 4px', borderRadius: 9, background: '#E5484D', color: '#FFFFFF', fontSize: 10.5, fontWeight: 800, lineHeight: '17px', textAlign: 'center', boxShadow: '0 0 0 2px #6A1919' }}>
+      {n > 99 ? '99+' : n}
+    </span>
+  );
+}
+
+/** The top bar and the rail, with the unread count on Messages (one read for both). */
+function ShellNav({ v, items }: { v: CrisisContextValue; items: NavItem[] }) {
+  const canMessage = v.staff || (v.role === 'delegate' && !!v.characterId);
+  const box = useBackroomMessages(v.ref, { enabled: canMessage, staff: v.staff, memberId: v.memberId });
+  const badges = useMemo(() => ({ [`${crisisBase(v.ref)}/messages`]: box.unreadTotal }), [v.ref, box.unreadTotal]);
+  return (
+    <>
+      <TopBar v={v} items={items} badges={badges} />
+      <Rail v={v} items={items} badges={badges} />
+    </>
+  );
+}
+
+function Rail({ v, items, badges }: { v: CrisisContextValue; items: NavItem[]; badges: Record<string, number> }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   // A new page closes the rail (adjusted while rendering, so no effect sets state).
@@ -149,7 +176,7 @@ function Rail({ v, items }: { v: CrisisContextValue; items: NavItem[] }) {
                   background: 'transparent', color: active ? CK.red2 : 'rgba(255,232,214,0.78)', transition: 'color 200ms ease',
                 }}
               >
-                <span className="flex-shrink-0" style={{ lineHeight: 0 }}>{it.icon}</span>
+                <span className="flex-shrink-0" style={{ lineHeight: 0, position: 'relative' }}>{it.icon}<NavBadge n={badges[it.href]} /></span>
                 <span style={{ whiteSpace: 'nowrap', opacity: open ? 1 : 0, transition: 'opacity 200ms ease 60ms' }}>{it.label}</span>
               </Link>
             </div>
@@ -160,7 +187,7 @@ function Rail({ v, items }: { v: CrisisContextValue; items: NavItem[] }) {
   );
 }
 
-function TopBar({ v, items }: { v: CrisisContextValue; items: NavItem[] }) {
+function TopBar({ v, items, badges }: { v: CrisisContextValue; items: NavItem[]; badges: Record<string, number> }) {
   const router = useRouter();
   const pathname = usePathname();
   // No background at rest (house rule); a soft one once the page scrolls under the bar.
@@ -192,7 +219,7 @@ function TopBar({ v, items }: { v: CrisisContextValue; items: NavItem[] }) {
   const signOutCode = async () => {
     try { await codeLogout(v.ref); } catch { /* the token is cleared below anyway */ }
     clearCrisisToken(v.ref.conf, v.ref.crisis);
-    if (viewingAs) window.location.assign(`/crisis/${v.ref.conf}/${v.ref.crisis}`);
+    if (viewingAs) window.location.assign(v.core.crisis.is_demo ? '/crisis' : `/crisis/${v.ref.conf}/${v.ref.crisis}`);
     else router.replace('/crisis');
   };
   return (
@@ -229,7 +256,7 @@ function TopBar({ v, items }: { v: CrisisContextValue; items: NavItem[] }) {
               const active = it.href === pathname || (pathname?.startsWith(it.href + '/') ?? false);
               return (
                 <Link key={it.href} href={it.href} target={it.external ? '_blank' : undefined} rel={it.external ? 'noopener noreferrer' : undefined} role="menuitem" className="flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]" style={{ gap: 12, height: 44, padding: '0 12px', borderRadius: 11, textDecoration: 'none', fontWeight: 600, fontSize: 14.5, background: active ? '#F8EFE5' : 'transparent', color: active ? CK.red2 : 'rgba(255,232,214,0.9)' }}>
-                  {it.icon}<span>{it.label}</span>
+                  <span style={{ position: 'relative', lineHeight: 0 }}>{it.icon}<NavBadge n={badges[it.href]} /></span><span>{it.label}</span>
                 </Link>
               );
             })}
@@ -239,7 +266,7 @@ function TopBar({ v, items }: { v: CrisisContextValue; items: NavItem[] }) {
           const active = it.href === pathname;
           return (
             <Link key={it.href} href={it.href} target={it.external ? '_blank' : undefined} rel={it.external ? 'noopener noreferrer' : undefined} className="flex flex-col items-center focus:outline-none" style={{ gap: 2, fontSize: 10.5, fontWeight: 700, textDecoration: 'none', color: active ? CK.gold : 'rgba(255,232,214,0.78)', padding: '4px 6px' }}>
-              {it.icon}
+              <span style={{ position: 'relative', lineHeight: 0 }}>{it.icon}<NavBadge n={badges[it.href]} /></span>
               <span>{it.label}</span>
             </Link>
           );
@@ -299,7 +326,7 @@ export default function CrisisLayout({ children }: { children: React.ReactNode }
         title="You Are Not in This Crisis"
         body={user ? 'Your account is not on this crisis. Ask your Crisis Director to add you, or enter with your personal code.' : 'Sign in with your Gavelling account, or enter with the personal code and password your Crisis Director gave you.'}
       >
-        {!user && <Btn onClick={() => openAuth({ next: `/crisis/${conf}/${crisisSlug}` })}>Sign in</Btn>}
+        {!user && <Btn onClick={() => openAuth({ next: `/crisis/${conf}/${crisisSlug}`, variant: 'crisis' })}>Sign in</Btn>}
         <Btn tone="ghost" icon={<KeyRound size={15} strokeWidth={1.6} />} onClick={() => router.push(`/crisis?next=${encodeURIComponent(`/crisis/${conf}/${crisisSlug}`)}`)}>Use a personal code</Btn>
       </GateScreen>
     );
@@ -313,8 +340,7 @@ export default function CrisisLayout({ children }: { children: React.ReactNode }
     <CrisisProvider value={v}>
       <CharacterProfileProvider>
       <div className="min-h-screen" style={{ ['--crisis-bar-h' as string]: '56px', background: CK.pageBg, backgroundAttachment: 'fixed', color: CK.ink, fontFamily: CK.font }}>
-        <TopBar v={v} items={items} />
-        <Rail v={v} items={items} />
+        <ShellNav v={v} items={items} />
         <main className="crisis-main" style={{ padding: '4px 18px 90px', marginLeft: 0 }}>
           <MotionStyles />
           <style>{'@media (min-width: 768px) { .crisis-main { padding-left: 98px !important; padding-bottom: 18px !important; } }'}</style>

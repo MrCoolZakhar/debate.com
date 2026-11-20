@@ -89,12 +89,14 @@ export async function fetchListedConferences(): Promise<ListedConference[]> {
 
     const [prices, windows] = await Promise.all([
       fetchDelegatePrices(supabase, rows),
-      supabase
+      // In batches of 150 ids: one `in` filter with every public conference was a 30 KB URL that PostgREST refused (400).
+      Promise.all(Array.from({ length: Math.ceil(rows.length / 150) }, (_, i) => supabase
         .from('conference_public_fees')
         .select('conference_id, is_enabled, applications_open_at, applications_close_at')
         .eq('role', 'delegate')
-        .in('conference_id', rows.map(r => r.id))
-        .then(({ data: w }) => new Map(((w as WindowRow[]) ?? []).map(x => [x.conference_id, x])), () => new Map<string, WindowRow>()),
+        .in('conference_id', rows.slice(i * 150, i * 150 + 150).map(r => r.id))
+        .then(({ data: w }) => ((w as WindowRow[]) ?? []), () => [] as WindowRow[])))
+        .then((parts) => new Map(parts.flat().map(x => [x.conference_id, x]))),
     ]);
     const now = Date.now();
     return rows.map(r => ({

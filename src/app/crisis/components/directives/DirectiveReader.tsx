@@ -26,6 +26,7 @@ import { isExtra, type ReaderItem } from './inboxItems';
 import { FrontShell, HIDDEN, MAX_STACK, NavControls, NextShell, ResponsibleFoot, STRIP } from './readerParts';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { DirectiveBody, plainText } from './attachedImage';
+import { VisibilityMark, visibilityOf } from './visibilityMark';
 
 /** What the chair's page tells the reader: how to say a directive's state, and what its button says. */
 export interface ReaderReadOnly {
@@ -184,6 +185,7 @@ function FrontCard({ d, names, lane, now, index, total, onPrev, onNext, onRespon
   const facts: ReactNode[] = [];
   facts.push(<span key="w">{d.word_count} words</span>);
   if (d.receiver?.trim()) facts.push(<span key="t">To {d.receiver}</span>);
+  if (visibilityOf(d)) facts.push(<VisibilityMark key="v" v={visibilityOf(d)} />);
   if (d.covert) facts.push(<span key="c" style={{ color: CK.redDeep }}>Covert</span>);
   // The backroom sees the responsible person on the card's bottom row (and can change it there); the chair's read-only reader keeps the sentence.
   if (!isCab && readOnly) facts.push(<span key="r">{responsible ? `Responsible for this directive: ${memberName(responsible, names)}` : 'Nobody responsible for this directive yet'}</span>);

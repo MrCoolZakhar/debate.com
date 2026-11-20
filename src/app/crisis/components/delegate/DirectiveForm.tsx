@@ -7,7 +7,7 @@
 // again. Every SubmitResult is handled: ok clears the form; paused, cooldown and too_long keep the text.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { Check, Landmark, NotebookPen, PauseCircle, Plus, Send, Tags, Timer, Trash2, UserPlus, UserX, X } from 'lucide-react';
+import { Check, Landmark, Lock, Megaphone, NotebookPen, PauseCircle, Plus, Send, Tags, Timer, Trash2, UserPlus, UserX, X } from 'lucide-react';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { crisisError, editDirective, resendDirective, submitDirective, type CrisisRef, type DirectiveDraft } from '@/lib/crisis/api';
 import { dirNumber, timeAgo } from '@/lib/crisis/format';
@@ -68,7 +68,7 @@ function linkStyle(onRed: boolean): CSSProperties {
 }
 
 export default function DirectiveForm({
-  cref, memberId, characterId, world, ownCabinetId, cabinetNames, wordLimit, open, pausedNote, blockedReason, onSent, prefill, cabinet, resend, onResendDone, onCooldown,
+  cref, memberId, characterId, world, ownCabinetId, cabinetNames, wordLimit, open, pausedNote, blockedReason, onSent, prefill, cabinet, resend, onResendDone, onCooldown, askVisibility = false,
 }: {
   cref: CrisisRef;
   memberId: string | null;
@@ -89,6 +89,8 @@ export default function DirectiveForm({
   onResendDone?: () => void;
   /** Tells the page when the cooldown before the next directive ends (a time in ms), or null when there is none. */
   onCooldown?: (until: number | null) => void;
+  /** The crisis asks delegates to mark each new directive Public or Private (settings.publicPrivateDirectives, docs/crisis/sql/051). */
+  askVisibility?: boolean;
 }) {
   const draftKey = draftOldKey(cref.id, memberId); // the old single draft, carried over into the list
   const listKey = draftListKey(cref.id, memberId);
@@ -105,6 +107,8 @@ export default function DirectiveForm({
   const [until, setUntil] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [problem, setProblem] = useState<string | null>(null);
+  // Public or Private for the next new directive; asked only while the crisis has the setting on, and required then.
+  const [vis, setVis] = useState<'public' | 'private' | null>(null);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const sendingRef = useRef(false);
   // One id per directive being written. A retry of the SAME send (a lost answer, then Try again) reuses it, so the
@@ -271,13 +275,14 @@ export default function DirectiveForm({
   const waitLeft = until === null ? 0 : Math.max(0, Math.ceil((until - now) / 1000));
   const changing = editing?.mode === 'edit'; // an unanswered directive changed in place
   const needsCo = !editing && d.kind === 'joint' && d.coauthors.length === 0;
+  const needsVis = askVisibility && !editing && vis === null;
   const cabinetName = ownCabinetId ? cabinetNames[ownCabinetId] ?? 'your cabinet' : null;
   const complete = d.title.trim() !== '' && d.body.trim() !== '';
   const blocked = blockedReason ?? (lockedFor && lockedFor.character === characterId ? lockedFor.text : null);
   // Changing a directive is not sending a new one: paused directives, a locked character and the cooldown do not stand in its way (the database decides).
   const canSend = changing
     ? complete && !over && !sending && !attach.uploading
-    : open && !blocked && complete && !over && !needsCo && waitLeft === 0 && !sending && !attach.uploading;
+    : open && !blocked && complete && !over && !needsCo && !needsVis && waitLeft === 0 && !sending && !attach.uploading;
 
   // Co-authors can be any character in the crisis, from any cabinet.
   const coauthorOptions = useMemo<MultiOption[]>(() => {
@@ -347,6 +352,7 @@ export default function DirectiveForm({
         kind, title: d.title.trim(), body: withAttached(d.body, attach.url), themes: d.themes,
         covert: true, // a personal directive is always secret
         coauthors: kind === 'joint' ? d.coauthors : [],
+        ...(askVisibility && vis ? { visibility: vis } : {}),
       };
       // The same send keeps its id; changed content is a different send.
       const sig = JSON.stringify(draft);
@@ -355,8 +361,9 @@ export default function DirectiveForm({
       if (r.ok) {
         const num = dirNumber({ no: r.no, cabinet_no: r.cabinet_no ?? null });
         const again = (r as { repeat?: boolean }).repeat === true;
-        notifyOk(again ? `Directive ${num} was already sent` : r.awaiting_chair ? `Directive ${num} sent to your chair` : `Directive ${num} sent`);
+        notifyOk(again ? `Directive ${num} was already sent` : r.awaiting_coauthors ? `Directive ${num} sent to your co-authors to sign` : r.awaiting_chair ? `Directive ${num} sent to your chair` : `Directive ${num} sent`);
         requestRef.current = null;
+        setVis(null);
         setD(EMPTY);
         attach.setUrl(null);
         const sentId = activeId;
@@ -584,6 +591,32 @@ export default function DirectiveForm({
             triggerStyle={{ ...chipBg, width: SQUARE, height: SQUARE, padding: 0, justifyContent: 'center' }}
             triggerTitle={d.themes.length ? `Themes: ${d.themes.join(', ')}` : 'Themes (optional)'}
           />
+          {askVisibility && !editing && (
+            <span role="radiogroup" aria-label="Public or private directive" className="inline-flex" style={{ background: CK.well, borderRadius: 11, padding: 3, gap: 2, boxShadow: needsVis && complete ? `inset 0 0 0 1.5px ${CK.red}` : 'none' }}>
+              {(['public', 'private'] as const).map((v) => {
+                const on = vis === v;
+                const Icon = v === 'public' ? Megaphone : Lock;
+                return (
+                  <button
+                    key={v}
+                    type="button"
+                    role="radio"
+                    aria-checked={on}
+                    onClick={() => { setProblem(null); setVis(v); }}
+                    title={v === 'public' ? 'Public: an open action everyone can know about' : 'Private: a secret action'}
+                    className="inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+                    style={{
+                      gap: 5, border: 0, padding: '5px 10px', borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: 'pointer', fontFamily: CK.font,
+                      background: on ? CK.card : 'transparent', color: on ? (v === 'public' ? CK.forest : CK.redDeep) : CK.inkSoft, boxShadow: on ? CK.shadowSm : 'none',
+                      transition: 'background-color 160ms ease, color 160ms ease, box-shadow 160ms ease',
+                    }}
+                  >
+                    <Icon size={14} strokeWidth={1.6} aria-hidden />{v === 'public' ? 'Public' : 'Private'}
+                  </button>
+                );
+              })}
+            </span>
+          )}
           {d.kind === 'joint' && !editing && (
             <MultiSelect
               id="dir-co"
@@ -626,6 +659,7 @@ export default function DirectiveForm({
         {problem && <p role="alert" style={{ flex: 'none', margin: 0, fontSize: 13.5, fontWeight: 600, color: CK.danger }}>{problem}</p>}
         {over && !problem && <p style={{ flex: 'none', margin: 0, fontSize: 13, color: CK.danger }}>That is {words - wordLimit} words over the limit.</p>}
         {needsCo && <p style={{ flex: 'none', margin: 0, fontSize: 13, color: CK.muted }}>Pick at least one co-author for a joint directive.</p>}
+        {needsVis && complete && <p style={{ flex: 'none', margin: 0, fontSize: 13, color: CK.muted }}>Choose Public or Private before you send it.</p>}
 
         <div className="flex flex-wrap items-center gap-2.5" style={{ flex: 'none' }}>
           <Btn tone={isCab ? 'red' : 'green'} icon={waitLeft > 0 && !editing ? <Timer size={16} strokeWidth={1.5} /> : changing ? <Check size={16} strokeWidth={1.5} /> : isCab ? <Landmark size={16} strokeWidth={1.5} /> : <Send size={16} strokeWidth={1.5} />} disabled={!canSend} onClick={send} style={isCab ? { padding: '10px 18px', fontSize: 14 } : undefined}>

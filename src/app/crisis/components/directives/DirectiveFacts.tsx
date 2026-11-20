@@ -9,7 +9,7 @@
 // the reply itself, with its outcome and every change, goes out only on Send reply.
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { ChevronDown, Clock, FileText, Lock, Pencil, UserRound, VenetianMask } from 'lucide-react';
+import { ChevronDown, Clock, Eye, FileText, Lock, Pencil, UserRound, VenetianMask } from 'lucide-react';
 import GSelect from '@/components/GSelect';
 import Portal from '@/components/Portal';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
@@ -21,6 +21,7 @@ import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { StaffPic, ThemeIcons } from './directiveParts';
 import { authorName, isBeingWritten, memberName, type Names } from './directiveKit';
 import { useNow } from './useNow';
+import { VisibilityMark, visibilityOf } from './visibilityMark';
 
 const SEV_COLOR = { ok: CK.ink, late: CK.goldDeep, very: CK.danger } as const;
 
@@ -124,6 +125,7 @@ export default function DirectiveFacts({ d, names, editing, onChanged, compact =
         </Fact>
         <Fact big icon={<Clock size={13} strokeWidth={1.6} />} label={waitLabelText}><span style={{ color: SEV_COLOR[sev] }}>{waitValue}</span></Fact>
         <Fact big icon={<FileText size={13} strokeWidth={1.6} />} label="Length">{d.word_count} words</Fact>
+        {visibilityOf(d) && <Fact big icon={<Eye size={13} strokeWidth={1.6} />} label="Shared">{<VisibilityMark v={visibilityOf(d)} />}</Fact>}
         {themeCount > 0 && (
           <Fact big icon={<VenetianMask size={13} strokeWidth={1.6} />} label={covertShown && d.themes.length === 0 ? 'Covert' : 'Themes'}>
             {themeCount > 2 ? (
@@ -159,6 +161,7 @@ export default function DirectiveFacts({ d, names, editing, onChanged, compact =
     <div className="dp-facts flex flex-col" style={{ flex: '0 1 150px', gap: 8, minWidth: 120, paddingTop: 12 }}>
       <Fact icon={<Clock size={13} strokeWidth={1.6} />} label={waitLabelText}><span style={{ color: SEV_COLOR[sev] }}>{waitValue}</span></Fact>
       <Fact icon={<FileText size={13} strokeWidth={1.6} />} label="Length">{d.word_count} words</Fact>
+      {visibilityOf(d) && <Fact icon={<Eye size={13} strokeWidth={1.6} />} label="Shared">{<VisibilityMark v={visibilityOf(d)} />}</Fact>}
     </div>
     {(d.themes.length > 0 || covertShown) && (
       <div className="flex flex-col" style={{ flex: '0 1 150px', minWidth: 110, paddingTop: 12 }}>

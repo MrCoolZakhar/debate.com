@@ -21,6 +21,7 @@ import type { WorldCharacter } from './DirectiveForm';
 type FilterKey = 'waiting' | 'answered' | 'changes' | 'withdrawn' | 'drafts' | 'all';
 
 const GROUP: Record<DirectiveStatus, Exclude<FilterKey, 'all' | 'drafts'>> = {
+  awaiting_coauthors: 'waiting',
   awaiting_chair: 'waiting',
   queued: 'waiting',
   claimed: 'waiting',

@@ -55,6 +55,10 @@ export interface CrisisSettings {
   historicalMap: 'none' | 'etatmajor';
   /** Named places on the map (a club, a palace, a newspaper office), shown to everyone with their description. */
   landmarks: Landmark[];
+  /** Delegates mark each directive Public or Private and staff see the mark (docs/crisis/sql/051). Default off. */
+  publicPrivateDirectives: boolean;
+  /** A joint directive waits until every co-author accepts it (docs/crisis/sql/054). Default on. */
+  coauthorsMustAccept: boolean;
 }
 
 /** A named place on the map. */
@@ -111,6 +115,8 @@ export const DEFAULT_SETTINGS: CrisisSettings = {
   thirdParties: [],
   historicalMap: 'none',
   landmarks: [],
+  publicPrivateDirectives: false,
+  coauthorsMustAccept: true,
 };
 
 export function readSettings(raw: unknown): CrisisSettings {
@@ -129,6 +135,8 @@ export function readSettings(raw: unknown): CrisisSettings {
     thirdParties: readThirdParties(s),
     historicalMap: (s as { historicalMap?: unknown }).historicalMap === 'etatmajor' ? 'etatmajor' : 'none',
     landmarks: readLandmarks(s),
+    publicPrivateDirectives: s.publicPrivateDirectives === true,
+    coauthorsMustAccept: s.coauthorsMustAccept !== false,
   };
 }
 
@@ -145,6 +153,7 @@ export interface Crisis {
   directives_open: boolean;
   directives_paused_note: string | null;
   next_directive_no: number;
+  is_demo?: boolean;                 // the shared demo anyone signed in may try (part 48)
   created_at: string;
   updated_at: string;
 }
@@ -209,7 +218,7 @@ export interface CharacterSecret {
 }
 
 export type DirectiveKind = 'personal' | 'joint' | 'committee' | 'press_release' | 'communique';
-export type DirectiveStatus = 'awaiting_chair' | 'changes_requested' | 'rejected' | 'queued' | 'claimed' | 'clarify' | 'answered' | 'withdrawn';
+export type DirectiveStatus = 'awaiting_coauthors' | 'awaiting_chair' | 'changes_requested' | 'rejected' | 'queued' | 'claimed' | 'clarify' | 'answered' | 'withdrawn';
 export type DirectiveOutcome = 'approved' | 'partial' | 'denied' | 'clarify' | 'later';
 
 export const KIND_LABEL: Record<DirectiveKind, string> = {
@@ -245,6 +254,8 @@ export interface Directive {
   goal: string | null;
   affects: string | null;
   covert: boolean;
+  /** Public or Private, chosen by the delegate while settings.publicPrivateDirectives is on (docs/crisis/sql/051); null otherwise. */
+  visibility?: 'public' | 'private' | null;
   status: DirectiveStatus;
   outcome: DirectiveOutcome | null;
   reply: string | null;
@@ -403,7 +414,7 @@ export const MEETING_STATUS_LABEL: Record<MeetingStatus, string> = {
 };
 
 /** A bell notification for one member, written by database triggers (docs/crisis/sql/011). */
-export type NotificationKind = 'directive_answer' | 'directive_new' | 'directive_note' | 'news' | 'unit' | 'reveal' | 'territory' | 'meeting' | 'status';
+export type NotificationKind = 'directive_answer' | 'directive_new' | 'directive_note' | 'news' | 'unit' | 'reveal' | 'territory' | 'meeting' | 'status' | 'message';
 export interface CrisisNotification {
   id: string;
   crisis_id: string;

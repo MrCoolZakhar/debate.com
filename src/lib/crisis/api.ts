@@ -25,6 +25,8 @@ const RPC_MESSAGES: Record<string, string> = {
   crisis_bad_role: 'Pick a role for this person.',
   crisis_bad_patch: 'That setting could not be saved.',
   crisis_bad_owner: 'That owner no longer exists. Pick another one and send again.',
+  crisis_hate_speech: 'That has a slur or hate speech in it, which is not allowed on Gavelling. Change it and try again.',
+  crisis_demo_no_email: 'The demo crisis sends no emails. Invites work in your own crisis.',
 };
 
 export function crisisError(error: unknown, fallback = 'Something went wrong. Try again.'): string {
@@ -35,6 +37,44 @@ export function crisisError(error: unknown, fallback = 'Something went wrong. Tr
 
 async function c(ref: Pick<CrisisRef, 'conf' | 'crisis'>): Promise<SupabaseClient> {
   return getCrisisClient(ref.conf, ref.crisis);
+}
+
+// ─────────── Shared reads (20 Nov 2026, crisis load hotfix) ───────────
+// Several components on one page read the same list on the same ping (a delegate's page read crisis_directives 8 times per ping).
+// sharedRead runs a read once: a caller with the same key gets the read in flight, or its result if it finished under
+// SHARED_READ_KEEP_MS ago. A failed read is never kept. Every write to directives, co-authors, notes or notifications calls
+// forgetSharedReads before and after it, so a page that writes and re-reads never sees a result from before its own write.
+const SHARED_READ_KEEP_MS = 1_500;
+interface SharedReadEntry { refId: string; promise: Promise<unknown>; doneAt: number | null }
+const sharedReads = new Map<string, SharedReadEntry>();
+// Each Supabase client gets its own number, so an account user and a personal-code user in one tab never share a result.
+const clientIds = new WeakMap<object, number>();
+let nextClientId = 1;
+/** A stable id for the client a read uses (part of every shared-read key). */
+export function crisisClientKey(client: object): number {
+  let id = clientIds.get(client);
+  if (id === undefined) { id = nextClientId++; clientIds.set(client, id); }
+  return id;
+}
+/** The shared-read key: the function name, the crisis, the conference and crisis slugs, and the client used. */
+export function sharedReadKey(name: string, ref: CrisisRef, client: object): string {
+  return `${name}|${ref.id}|${ref.conf}|${ref.crisis}|${crisisClientKey(client)}`;
+}
+export function sharedRead<T>(key: string, refId: string, run: () => Promise<T>): Promise<T> {
+  const hit = sharedReads.get(key);
+  if (hit && (hit.doneAt === null || Date.now() - hit.doneAt < SHARED_READ_KEEP_MS)) return hit.promise as Promise<T>;
+  const entry: SharedReadEntry = { refId, promise: Promise.resolve(), doneAt: null };
+  const promise = run().then(
+    (v) => { if (sharedReads.get(key) === entry) entry.doneAt = Date.now(); return v; },
+    (e) => { if (sharedReads.get(key) === entry) sharedReads.delete(key); throw e; },
+  );
+  entry.promise = promise;
+  sharedReads.set(key, entry);
+  return promise;
+}
+/** Drop every kept or in-flight shared read of this crisis (callers already holding a promise keep it). */
+export function forgetSharedReads(refId: string): void {
+  for (const [k, e] of sharedReads) if (e.refId === refId) sharedReads.delete(k);
 }
 
 function must<T>(res: { data: T | null; error: unknown }, fallback: string): T {
@@ -279,7 +319,7 @@ export async function issueCode(ref: CrisisRef, memberId: string): Promise<{ cod
 
 // ─────────── Staff invites (part 40) ───────────
 
-export type StaffInviteRole = 'assistant_director' | 'backroomer' | 'press';
+export type StaffInviteRole = 'director' | 'assistant_director' | 'backroomer' | 'press';
 /** A seat's invite (part 46) carries the member it links: a chair or delegate already on the list. */
 export type InviteRole = StaffInviteRole | 'chair' | 'delegate';
 
@@ -350,10 +390,25 @@ export async function respondStaffInvite(token: string, accept: boolean): Promis
   return res.data as RespondStaffInviteResult;
 }
 
+export interface MyPendingInvite {
+  token: string; role: InviteRole; crisis_name: string; crisis_slug: string; conference_slug: string;
+  acronym: string | null; logo_url: string | null; character_name: string | null; cabinet_name: string | null;
+}
+
+/** Invites waiting for the signed-in account (or its confirmed email), so someone who signed up without the link
+ *  still finds them on /crisis (docs/crisis/sql/050). */
+export async function listMyPendingInvites(): Promise<MyPendingInvite[]> {
+  const client = await getFreshAuthedClient();
+  if (!client) return [];
+  const res = await client.rpc('crisis_my_pending_invites');
+  if (res.error) throw new UserFacingError(crisisError(res.error, 'Could not load your invites.'));
+  return (Array.isArray(res.data) ? res.data : []) as MyPendingInvite[];
+}
+
 // ─────────── Directives ───────────
 
 /** Directives still being worked on (everyone waits on someone): always loaded in full. */
-export const OPEN_DIRECTIVE_STATUSES: DirectiveStatus[] = ['awaiting_chair', 'changes_requested', 'queued', 'claimed', 'clarify'];
+export const OPEN_DIRECTIVE_STATUSES: DirectiveStatus[] = ['awaiting_coauthors', 'awaiting_chair', 'changes_requested', 'queued', 'claimed', 'clarify'];
 /** Finished ones: loaded newest first, in pages. */
 export const CLOSED_DIRECTIVE_STATUSES: DirectiveStatus[] = ['answered', 'rejected', 'withdrawn'];
 export const DIRECTIVE_PAGE = 200;
@@ -374,6 +429,9 @@ async function readAllRows<T>(page: (from: number, to: number) => PromiseLike<{ 
 /** Every open directive plus the newest page of finished ones, newest first. For older finished ones use listClosedDirectivesPage. */
 export async function listDirectives(ref: CrisisRef): Promise<Directive[]> {
   const client = await c(ref);
+  return sharedRead(sharedReadKey('listDirectives', ref, client), ref.id, () => readDirectives(ref, client));
+}
+async function readDirectives(ref: CrisisRef, client: SupabaseClient): Promise<Directive[]> {
   const [open, closed] = await Promise.all([
     readAllRows<Directive>((from, to) => client.from('crisis_directives').select('*').eq('crisis_id', ref.id)
       .in('status', OPEN_DIRECTIVE_STATUSES).order('no', { ascending: false }).range(from, to), 'Could not load the directives.'),
@@ -427,27 +485,51 @@ export async function listNotes(ref: CrisisRef, directiveId: string): Promise<Di
 export interface DirectiveDraft {
   kind: DirectiveKind; title: string; receiver?: string | null; body: string; themes: string[];
   resources_used?: string; goal?: string; affects?: string; covert?: boolean; coauthors?: string[];
+  /** Public or Private (docs/crisis/sql/051); the database keeps it only while the setting is on. */
+  visibility?: 'public' | 'private';
   /** The same id on a retry returns the directive already sent instead of a second one (docs/crisis/sql/029b). */
   request_id?: string;
 }
 export type SubmitResult =
-  | { ok: true; id: string; no: number; cabinet_no?: number | null; awaiting_chair?: boolean }
+  | { ok: true; id: string; no: number; cabinet_no?: number | null; awaiting_chair?: boolean; awaiting_coauthors?: boolean }
   | { ok: false; reason: 'paused'; note?: string | null }
   | { ok: false; reason: 'cooldown'; wait_seconds: number }
   | { ok: false; reason: 'too_long'; limit: number }
   | { ok: false; reason: 'inactive'; status: 'dead' | 'arrested' | 'missing' };
 
+/** A co-author signs a joint directive (accept) or steps out of it (decline) (docs/crisis/sql/054). `sent` = it went to the backroom. */
+export async function respondCoauthor(ref: CrisisRef, directiveId: string, accept: boolean): Promise<{ ok: boolean; sent?: boolean; reason?: 'not_pending' }> {
+  forgetSharedReads(ref.id);
+  const client = await c(ref);
+  const res = await client.rpc('crisis_respond_coauthor', { p_directive: directiveId, p_accept: accept });
+  forgetSharedReads(ref.id);
+  return must(res, 'Could not save your answer. Try again.') as { ok: boolean; sent?: boolean; reason?: 'not_pending' };
+}
+
+/** The author sends a joint directive on without the co-authors who have not answered yet. */
+export async function sendWithoutCoauthors(ref: CrisisRef, directiveId: string): Promise<{ ok: boolean }> {
+  forgetSharedReads(ref.id);
+  const client = await c(ref);
+  const res = await client.rpc('crisis_send_without_coauthors', { p_directive: directiveId });
+  forgetSharedReads(ref.id);
+  return must(res, 'Could not send it. Try again.') as { ok: boolean };
+}
+
 export async function submitDirective(ref: CrisisRef, d: DirectiveDraft): Promise<SubmitResult> {
+  forgetSharedReads(ref.id);
   const client = await c(ref);
   const res = await client.rpc('crisis_submit_directive', { p_crisis: ref.id, p: d });
+  forgetSharedReads(ref.id);
   return must(res, 'Could not send the directive. Your text is kept, try again.') as SubmitResult;
 }
 
 /** The chair of a cabinet sends a waiting cabinet directive on to the backroom (approve) or turns it back with an optional note.
  *  False means it was no longer waiting. */
 export async function reviewDirectiveAsChair(ref: CrisisRef, directiveId: string, approve: boolean, note?: string | null): Promise<boolean> {
+  forgetSharedReads(ref.id);
   const client = await c(ref);
   const res = await client.rpc('crisis_chair_review_directive', { p_directive: directiveId, p_approve: approve, p_note: note?.trim() ? note.trim() : null });
+  forgetSharedReads(ref.id);
   if (res.error) throw new UserFacingError(crisisError(res.error, 'Could not save that decision. Try again.'));
   return res.data === true;
 }
@@ -455,8 +537,10 @@ export async function reviewDirectiveAsChair(ref: CrisisRef, directiveId: string
 /** The chair asks for changes on a waiting cabinet directive (docs/crisis/sql/028): it goes back to its author as a draft,
  *  with the note. False means it was no longer waiting. Reject is reviewDirectiveAsChair(..., false). */
 export async function requestDirectiveChanges(ref: CrisisRef, directiveId: string, note?: string | null): Promise<boolean> {
+  forgetSharedReads(ref.id);
   const client = await c(ref);
   const res = await client.rpc('crisis_chair_request_changes', { p_directive: directiveId, p_note: note?.trim() ? note.trim() : null });
+  forgetSharedReads(ref.id);
   if (res.error) throw new UserFacingError(crisisError(res.error, 'Could not send it back. Try again.'));
   return res.data === true;
 }
@@ -469,15 +553,19 @@ export type ResendResult =
 
 /** The author sends a directive the chair returned (status changes_requested) again, edited. It keeps its number. */
 export async function resendDirective(ref: CrisisRef, directiveId: string, d: Pick<DirectiveDraft, 'title' | 'body' | 'themes' | 'receiver' | 'covert'>): Promise<ResendResult> {
+  forgetSharedReads(ref.id);
   const client = await c(ref);
   const res = await client.rpc('crisis_resend_directive', { p_directive: directiveId, p: d });
+  forgetSharedReads(ref.id);
   return must(res, 'Could not send the directive. Your text is kept, try again.') as ResendResult;
 }
 
 /** Claim for yourself (memberId omitted) or hand to another staff member. */
 export async function assignDirective(ref: CrisisRef, directiveId: string, memberId?: string | null): Promise<void> {
+  forgetSharedReads(ref.id);
   const client = await c(ref);
   const res = await client.rpc('crisis_assign_directive', { p_directive: directiveId, p_member: memberId ?? null });
+  forgetSharedReads(ref.id);
   must(res, 'Could not move this directive.');
 }
 
@@ -502,8 +590,10 @@ export type AnswerResult =
 /** Sends a reply. Put a `request_id` in effects that stays the same across retries of the same reply (a repeat is a
  *  no-op), and `edit: true` to change an answered directive's words and outcome (its effects never run again). */
 export async function answerDirective(ref: CrisisRef, directiveId: string, outcome: DirectiveOutcome, reply: string, effects: AnswerEffects & { request_id?: string; edit?: boolean } = {}): Promise<AnswerResult> {
+  forgetSharedReads(ref.id);
   const client = await c(ref);
   const res = await client.rpc('crisis_answer_directive', { p_directive: directiveId, p_outcome: outcome, p_reply: reply, p_effects: effects });
+  forgetSharedReads(ref.id);
   return must(res, 'Could not send the reply. It is kept, try again.') as AnswerResult;
 }
 
@@ -511,15 +601,19 @@ export type EditDirectiveResult = { ok: true } | { ok: false; reason: 'answered'
 
 /** The author edits their directive until staff answer it (docs/crisis/sql/030). */
 export async function editDirective(ref: CrisisRef, directiveId: string, d: Partial<Pick<DirectiveDraft, 'title' | 'body' | 'themes' | 'receiver' | 'covert'>>): Promise<EditDirectiveResult> {
+  forgetSharedReads(ref.id);
   const client = await c(ref);
   const res = await client.rpc('crisis_edit_directive', { p_directive: directiveId, p: d });
+  forgetSharedReads(ref.id);
   return must(res, 'Could not save your changes. Your text is kept, try again.') as EditDirectiveResult;
 }
 
 /** The author withdraws their directive until staff answer it. */
 export async function withdrawDirective(ref: CrisisRef, directiveId: string): Promise<{ ok: boolean; reason?: 'answered' }> {
+  forgetSharedReads(ref.id);
   const client = await c(ref);
   const res = await client.rpc('crisis_withdraw_directive', { p_directive: directiveId });
+  forgetSharedReads(ref.id);
   return must(res, 'Could not withdraw the directive. Try again.') as { ok: boolean; reason?: 'answered' };
 }
 
@@ -533,8 +627,10 @@ export async function loadChairRooms(ref: CrisisRef): Promise<Array<{ cabinet_id
 
 /** The author changes their own latest clarification note until the backroom replies after it (docs/crisis/sql/029, part 36). */
 export async function editNote(ref: CrisisRef, noteId: string, body: string): Promise<{ ok: boolean; reason?: 'replied' | 'empty' }> {
+  forgetSharedReads(ref.id);
   const client = await c(ref);
   const res = await client.rpc('crisis_edit_note', { p_note: noteId, p_body: body });
+  forgetSharedReads(ref.id);
   return must(res, 'Could not save your change. Your text is kept, try again.') as { ok: boolean; reason?: 'replied' | 'empty' };
 }
 
@@ -547,13 +643,17 @@ export async function giveSpare(ref: CrisisRef, memberId: string, spareId: strin
 
 /** Tells the crisis team a reply to this directive is being typed (on) or no longer is (off). Presence only, never an error to the person. */
 export async function markDrafting(ref: CrisisRef, directiveId: string, on = true): Promise<void> {
+  forgetSharedReads(ref.id);
   const client = await c(ref);
   await client.rpc('crisis_mark_drafting', { p_directive: directiveId, p_on: on });
+  forgetSharedReads(ref.id);
 }
 
 export async function addNote(ref: CrisisRef, directiveId: string, body: string, internal = false): Promise<void> {
+  forgetSharedReads(ref.id);
   const client = await c(ref);
   const res = await client.rpc('crisis_add_directive_note', { p_directive: directiveId, p_body: body, p_internal: internal });
+  forgetSharedReads(ref.id);
   must(res, 'Could not send the note.');
 }
 
@@ -785,6 +885,19 @@ export async function uploadCrisisFile(ref: CrisisRef, file: File): Promise<{ ur
 // ─────────── View as, room codes ───────────
 
 /** Directors (through their own account) open the crisis as another person on this device. */
+/** The shared demo (part 48): what "Try it as" needs, for any signed-in account. No emails, codes or people on an account. */
+export interface DemoTryAs {
+  members: Member[];
+  characters: Array<Pick<Character, 'id' | 'crisis_id' | 'cabinet_id' | 'name' | 'picture_url' | 'status'>>;
+  cabinets: Array<Pick<Cabinet, 'id' | 'crisis_id' | 'conference_committee_id' | 'name' | 'short_name' | 'color' | 'sort'>>;
+  rooms: Array<{ cabinet_id: string; code: string; chair_password: string | null }>;
+}
+export async function loadDemoTryAs(crisisId: string): Promise<DemoTryAs> {
+  const client = await getCrisisClient('', '');
+  const res = await client.rpc('crisis_demo_try_as', { p_crisis: crisisId });
+  return must(res, 'Could not load the people in this crisis.') as DemoTryAs;
+}
+
 export async function viewAs(ref: CrisisRef, memberId: string): Promise<void> {
   const client = await getCrisisClient('', ''); // the account, never a stored token
   const res = await client.rpc('crisis_view_as', { p_member: memberId });
@@ -886,13 +999,61 @@ export async function cancelMeeting(ref: CrisisRef, meetingId: string): Promise<
 
 export async function listNotifications(ref: CrisisRef): Promise<CrisisNotification[]> {
   const client = await c(ref);
-  const res = await client.from('crisis_notifications').select('*').eq('crisis_id', ref.id).order('created_at', { ascending: false }).limit(80);
-  return must(res, 'Could not load notifications.') as CrisisNotification[];
+  return sharedRead(sharedReadKey('listNotifications', ref, client), ref.id, async () => {
+    const res = await client.from('crisis_notifications').select('*').eq('crisis_id', ref.id).order('created_at', { ascending: false }).limit(80);
+    return must(res, 'Could not load notifications.') as CrisisNotification[];
+  });
 }
 
 /** Mark some (or, with no ids, all) of my notifications read. */
 export async function markNotificationsRead(ref: CrisisRef, ids?: string[]): Promise<void> {
+  forgetSharedReads(ref.id);
   const client = await c(ref);
   const res = await client.rpc('crisis_mark_notifications_read', { p_crisis: ref.id, p_ids: ids ?? null });
+  forgetSharedReads(ref.id);
   if (res.error) throw new UserFacingError(crisisError(res.error, 'Could not mark those as read.'));
+}
+
+// ─────────── Backroom messages (docs/crisis/sql/052) ───────────
+// One thread per delegate's character. The crisis team reads every thread; a delegate reads their own.
+
+export interface BackroomMessage {
+  id: string; crisis_id: string; character_id: string; author_member_id: string | null;
+  from_staff: boolean; to_member_id: string | null; body: string; created_at: string;
+}
+export interface BackroomRead { member_id: string; character_id: string; read_at: string }
+export interface BackroomContact { id: string; name: string; role: 'director' | 'assistant_director' | 'backroomer' }
+
+export async function listBackroomMessages(ref: CrisisRef): Promise<BackroomMessage[]> {
+  const client = await c(ref);
+  const res = await client.from('crisis_backroom_messages').select('*').eq('crisis_id', ref.id).order('created_at', { ascending: false }).limit(3000);
+  return (must(res, 'Could not load the messages.') as BackroomMessage[]).reverse();
+}
+
+export async function listBackroomReads(ref: CrisisRef): Promise<BackroomRead[]> {
+  const client = await c(ref);
+  const res = await client.from('crisis_backroom_message_reads').select('member_id, character_id, read_at').eq('crisis_id', ref.id);
+  return must(res, 'Could not load the messages.') as BackroomRead[];
+}
+
+export async function backroomContacts(ref: CrisisRef): Promise<BackroomContact[]> {
+  const client = await c(ref);
+  const res = await client.rpc('crisis_backroom_contacts', { p_crisis: ref.id });
+  const data = must(res, 'Could not load the crisis team.');
+  return (Array.isArray(data) ? data : []) as BackroomContact[];
+}
+
+export type SendBackroomResult = { ok: true; id: string } | { ok: false; reason: 'empty' | 'too_long' | 'slow_down'; limit?: number };
+
+/** A delegate writes to the backroom (toMember null) or one person on the crisis team; staff answer in a character's thread. */
+export async function sendBackroomMessage(ref: CrisisRef, body: string, opts: { toMember?: string | null; character?: string | null } = {}): Promise<SendBackroomResult> {
+  const client = await c(ref);
+  const res = await client.rpc('crisis_send_backroom_message', { p_crisis: ref.id, p_body: body, p_to_member: opts.toMember ?? null, p_character: opts.character ?? null });
+  return must(res, 'Could not send the message. Your text is kept, try again.') as SendBackroomResult;
+}
+
+export async function markBackroomRead(ref: CrisisRef, characterId: string): Promise<void> {
+  const client = await c(ref);
+  const res = await client.rpc('crisis_mark_backroom_read', { p_crisis: ref.id, p_character: characterId });
+  if (res.error) throw new UserFacingError(crisisError(res.error, 'Could not mark it read.'));
 }

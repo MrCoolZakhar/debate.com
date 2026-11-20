@@ -10,7 +10,7 @@ import Portal from '@/components/Portal';
 import { useAuth } from '@/components/AuthProvider';
 import { notifyErr } from '@/lib/appNotify';
 import { clearCrisisToken, getCrisisClient, keepViewTokenInThisTab, peekDeviceToken } from '@/lib/crisis/client';
-import { crisisError, viewAs, type CrisisRef } from '@/lib/crisis/api';
+import { crisisError, loadDemoTryAs, viewAs, type CrisisRef } from '@/lib/crisis/api';
 import { MEMBER_COLUMNS, ROLE_LABEL, type Cabinet, type Character, type Member } from '@/lib/crisis/types';
 import { Avatar, Btn, CK, Card, CardTitle, Skeleton, useScrollLock } from '../../crisisKit';
 
@@ -20,6 +20,14 @@ interface Loaded {
   cabinets: Cabinet[];
   rooms: Map<string, { code: string; chairPassword: string | null }>; // cabinet id -> live room
   selfUserId: string | null; // the signed-in account, to tell which member is you
+}
+
+/** The shared demo (part 48): anyone signed in, through one database call that leaves out emails, codes and account people. */
+async function loadDemo(crisisId: string): Promise<Loaded> {
+  const d = await loadDemoTryAs(crisisId);
+  const rooms = new Map<string, { code: string; chairPassword: string | null }>();
+  for (const r of d.rooms) rooms.set(r.cabinet_id, { code: r.code, chairPassword: r.chair_password });
+  return { members: d.members, characters: d.characters as Character[], cabinets: d.cabinets as Cabinet[], rooms, selfUserId: null };
 }
 
 async function loadTryAs(crisisId: string): Promise<Loaded> {
@@ -63,7 +71,7 @@ function Chip({ onClick, href, icon, children, tone = 'plain', busy }: {
   return <button type="button" onClick={onClick} disabled={busy} className={cls} style={style}>{icon}{children}</button>;
 }
 
-export default function TryAsPanel({ cref, compact }: { cref: CrisisRef; compact?: boolean }) {
+export default function TryAsPanel({ cref, compact, demo }: { cref: CrisisRef; compact?: boolean; demo?: boolean }) {
   const [data, setData] = useState<Loaded | null>(null);
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -74,9 +82,9 @@ export default function TryAsPanel({ cref, compact }: { cref: CrisisRef; compact
   useEffect(() => {
     if (noAccount || authLoading) return;
     let cancelled = false;
-    loadTryAs(cref.id).then((d) => { if (!cancelled) setData(d); }).catch(() => { if (!cancelled) setFailed(true); });
+    (demo ? loadDemo(cref.id) : loadTryAs(cref.id)).then((d) => { if (!cancelled) setData(d); }).catch(() => { if (!cancelled) setFailed(true); });
     return () => { cancelled = true; };
-  }, [cref.id, noAccount, authLoading]);
+  }, [cref.id, noAccount, authLoading, demo]);
 
   const charName = useMemo(() => new Map((data?.characters ?? []).map((c) => [c.id, c.name])), [data]);
   const charPicture = useMemo(() => new Map((data?.characters ?? []).map((c) => [c.id, c.picture_url])), [data]);
@@ -119,7 +127,9 @@ export default function TryAsPanel({ cref, compact }: { cref: CrisisRef; compact
 
   return (
     <Card>
-      <CardTitle icon={<Eye size={17} strokeWidth={1.5} />} sub="Look around as someone else in this tab, for testing. Nothing you do signs them out. Use Back to my account at the top to return.">
+      <CardTitle icon={<Eye size={17} strokeWidth={1.5} />} sub={demo
+        ? 'Pick anyone to see the crisis as they do. This demo is shared, so other people trying it see what you write. Use Back to my account at the top to come back here.'
+        : 'Look around as someone else in this tab, for testing. Nothing you do signs them out. Use Back to my account at the top to return.'}>
         Try It As
       </CardTitle>
       {noAccount && <p style={{ margin: 0, fontSize: 14, color: CK.inkSoft }}>Try it as works when you are signed in with your Gavelling account.</p>}

@@ -1,7 +1,9 @@
 'use client';
 // /crisis: the crises you work on (signed in), and the personal code entry for everyone else.
+// Part 48: signed out, the sign-in pop-up opens on arrival (not when a ?code= link brings a code user here). Signed in,
+// everyone also gets the shared demo crisis with "Try it as" (role 'visitor': not a member, so no link into it).
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { KeyRound, ArrowRight } from 'lucide-react';
@@ -9,7 +11,7 @@ import BrandLogo from '@/components/BrandLogo';
 import ProfileAvatarMenu from '@/components/ProfileAvatar';
 import { useAuth } from '@/components/AuthProvider';
 import { openAuth } from '@/lib/authModal';
-import { codeLogin, crisisError, listMyCrises, type MyCrisis } from '@/lib/crisis/api';
+import { codeLogin, crisisError, listMyCrises, listMyPendingInvites, respondStaffInvite, type MyCrisis, type MyPendingInvite } from '@/lib/crisis/api';
 import { ROLE_LABEL, type CrisisRole } from '@/lib/crisis/types';
 import { CK, Btn, Card, Eyebrow, fieldStyle, FieldLabel, Skeleton } from './crisisKit';
 import { Suspense } from 'react';
@@ -63,12 +65,67 @@ function CodeEntry({ next, initialCode }: { next: string | null; initialCode: st
   );
 }
 
+const INVITE_ROLE: Record<string, string> = {
+  director: 'Crisis Director', assistant_director: 'Assistant Crisis Director', backroomer: 'Backroom', press: 'Press', chair: 'Chair', delegate: 'Delegate',
+};
+
+/** Invites waiting for this account: someone who signed up on /crisis instead of through the email link finds them here. */
+function PendingInvites({ invites, onAccepted }: { invites: MyPendingInvite[]; onAccepted: () => void }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const accept = async (inv: MyPendingInvite) => {
+    if (busy) return;
+    setBusy(inv.token); setError(null);
+    try {
+      const r = await respondStaffInvite(inv.token, true);
+      if (r.ok && r.accepted) { router.push(`/crisis/${r.conference_slug}/${r.crisis_slug}`); return; }
+      setError(!r.ok && r.reason === 'already_member' ? 'You already have another seat in this crisis.' : 'This invite can no longer be accepted. Ask your Crisis Director for a new one.');
+      onAccepted();
+    } catch (err) {
+      setError(crisisError(err, 'Could not accept this invite. Try again.'));
+    } finally {
+      setBusy(null);
+    }
+  };
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <h2 style={{ margin: '0 0 8px', fontSize: 17, fontWeight: 800 }}>Your Invites</h2>
+      <div className="grid" style={{ gap: 8 }}>
+        {invites.map((inv) => (
+          <div key={inv.token} className="flex items-center" style={{ gap: 12, padding: '10px 12px', borderRadius: 14, background: CK.well }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={inv.logo_url || '/committee-emblems/crisis.svg'} alt="" width={40} height={40} style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+            <span className="min-w-0 flex-1">
+              <b style={{ display: 'block', fontSize: 14.5, overflowWrap: 'anywhere' }}>{inv.crisis_name}</b>
+              <span style={{ display: 'block', fontSize: 12.5, color: CK.inkSoft, overflowWrap: 'anywhere' }}>
+                {[inv.acronym, inv.character_name ? `as ${inv.character_name}` : (INVITE_ROLE[inv.role] ?? inv.role)].filter(Boolean).join(' · ')}
+              </span>
+            </span>
+            <Btn tone="red" size="sm" disabled={!!busy} onClick={() => accept(inv)}>{busy === inv.token ? 'Accepting' : 'Accept'}</Btn>
+          </div>
+        ))}
+      </div>
+      {error && <p role="alert" style={{ margin: '8px 0 0', fontSize: 13, color: CK.danger, fontWeight: 600 }}>{error}</p>}
+    </div>
+  );
+}
+
 function CrisisHome() {
   const { user, loading } = useAuth();
   const search = useSearchParams();
   const next = search?.get('next') ?? null;
   const [list, setList] = useState<MyCrisis[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [invites, setInvites] = useState<MyPendingInvite[]>([]);
+  const [invitesTick, setInvitesTick] = useState(0);
+
+  useEffect(() => {
+    if (loading || !user) return;
+    let cancelled = false;
+    listMyPendingInvites().then((l) => { if (!cancelled) setInvites(l); }).catch(() => { /* the email link still works */ });
+    return () => { cancelled = true; };
+  }, [user?.id, loading, invitesTick]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (loading || !user) return;
@@ -77,28 +134,38 @@ function CrisisHome() {
     return () => { cancelled = true; };
   }, [user?.id, loading]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Signed out: ask them to sign in straight away, once per visit. Someone arriving with a personal code link is left to type it.
+  const askedSignIn = useRef(false);
+  const arrivedWithCode = !!search?.get('code');
+  useEffect(() => {
+    if (loading || user || askedSignIn.current || arrivedWithCode) return;
+    askedSignIn.current = true;
+    openAuth({ next: '/crisis', variant: 'crisis' });
+  }, [loading, user, arrivedWithCode]);
+
   return (
     <div className="min-h-screen" style={{ background: CK.pageBg, fontFamily: CK.font, color: CK.ink }}>
       <header className="flex items-center" style={{ height: 60, padding: '0 18px', gap: 12 }}>
         <BrandLogo height={22} priority />
         <div className="flex-1" />
-        {user ? <ProfileAvatarMenu size={36} /> : <Btn tone="ghost" size="sm" onClick={() => openAuth({ next: '/crisis' })}>Sign in</Btn>}
+        {user ? <ProfileAvatarMenu size={36} /> : <Btn tone="ghost" size="sm" onClick={() => openAuth({ next: '/crisis', variant: 'crisis' })}>Sign in</Btn>}
       </header>
       <main style={{ padding: '18px 18px 60px', maxWidth: 1100, margin: '0 auto' }}>
         <Eyebrow>GAVELLING CRISIS</Eyebrow>
         <h1 style={{ margin: '4px 0 18px', fontSize: 'clamp(26px, 3vw, 36px)', fontWeight: 800 }}>Your Crises</h1>
         <div className="grid" style={{ gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', alignItems: 'start' }}>
           <Card warm style={{ padding: 22 }}>
+            {user && invites.length > 0 && <PendingInvites invites={invites} onAccepted={() => setInvitesTick((n) => n + 1)} />}
             {!user && !loading && (
               <>
-                <h2 style={{ margin: '0 0 6px', fontSize: 17, fontWeight: 800 }}>Sign In to See Your Crises</h2>
-                <p style={{ margin: '0 0 14px', fontSize: 13.5, color: CK.inkSoft }}>Crisis Directors, staff, chairs and delegates with a Gavelling account find their crisis here.</p>
-                <Btn onClick={() => openAuth({ next: '/crisis' })}>Sign in</Btn>
+                <h2 style={{ margin: '0 0 6px', fontSize: 17, fontWeight: 800 }}>Sign In to Gavelling Crisis</h2>
+                <p style={{ margin: '0 0 14px', fontSize: 13.5, color: CK.inkSoft }}>Sign in with your Gavelling account to try the demo crisis as anyone in it, or to open your own crisis.</p>
+                <Btn onClick={() => openAuth({ next: '/crisis', variant: 'crisis' })}>Sign in</Btn>
               </>
             )}
             {(loading || (user && list === null && !error)) && <div className="grid" style={{ gap: 10 }}><Skeleton h={22} w="60%" /><Skeleton h={54} /><Skeleton h={54} /></div>}
             {error && <p role="alert" style={{ color: CK.danger, fontWeight: 600, margin: 0 }}>{error}</p>}
-            {user && list && list.length === 0 && (
+            {user && list && list.length === 0 && invites.length === 0 && (
               <>
                 <h2 style={{ margin: '0 0 6px', fontSize: 17, fontWeight: 800 }}>No Crises Yet</h2>
                 <p style={{ margin: 0, fontSize: 13.5, color: CK.inkSoft }}>When you are added to a crisis, it shows up here.</p>
@@ -106,7 +173,17 @@ function CrisisHome() {
             )}
             {user && list && list.length > 0 && (
               <div className="grid" style={{ gap: 8 }}>
-                {list.map((c) => (
+                {list.map((c) => c.role === 'visitor' ? (
+                  <div key={c.crisis_id} className="flex items-center"
+                    style={{ gap: 12, padding: '10px 12px', borderRadius: 14, background: CK.well, color: CK.ink }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={c.logo_url || '/committee-emblems/crisis.svg'} alt="" width={40} height={40} style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+                    <span className="min-w-0 flex-1">
+                      <b style={{ display: 'block', fontSize: 14.5, overflowWrap: 'anywhere' }}>{c.crisis_name}</b>
+                      <span style={{ display: 'block', fontSize: 12.5, color: CK.inkSoft, overflowWrap: 'anywhere' }}>Demo · Try it as anyone below</span>
+                    </span>
+                  </div>
+                ) : (
                   <Link key={c.crisis_id} href={`/crisis/${c.conference_slug}/${c.crisis_slug}`}
                     className="flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
                     style={{ gap: 12, padding: '10px 12px', borderRadius: 14, background: CK.well, textDecoration: 'none', color: CK.ink }}>
@@ -124,10 +201,10 @@ function CrisisHome() {
           </Card>
           <CodeEntry next={next} initialCode={(search?.get('code') ?? '').toUpperCase()} />
         </div>
-        {user && list && list.filter((c) => ['director', 'assistant_director', 'organiser'].includes(c.role)).map((c) => (
+        {user && list && list.filter((c) => ['director', 'assistant_director', 'organiser', 'visitor'].includes(c.role)).map((c) => (
           <div key={c.crisis_id} style={{ marginTop: 16 }}>
-            <p style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 700, color: CK.inkSoft, overflowWrap: 'anywhere' }}>{c.crisis_name} · {c.conference_acronym}</p>
-            <TryAsPanel cref={{ conf: c.conference_slug, crisis: c.crisis_slug, id: c.crisis_id }} />
+            <p style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 700, color: CK.inkSoft, overflowWrap: 'anywhere' }}>{c.crisis_name} · {c.role === 'visitor' ? 'Demo' : c.conference_acronym}</p>
+            <TryAsPanel cref={{ conf: c.conference_slug, crisis: c.crisis_slug, id: c.crisis_id }} demo={c.role === 'visitor'} />
           </div>
         ))}
       </main>
