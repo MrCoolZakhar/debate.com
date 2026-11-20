@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { FIT_BASE_H, fitZoomNow } from '@/lib/fitScale';
+import { FIT_BASE_H, fitZoomNow, watchDevicePixelRatio } from '@/lib/fitScale';
 
 // Vertical reference height. By default everything is laid out at this height and scaled
 // to fit the window's height (fixed cockpits like chair/delegate/voting are built to this).
@@ -53,6 +53,9 @@ export default function FitToScreen({
     compute();
     window.addEventListener('resize', compute);
     window.visualViewport?.addEventListener('resize', compute);
+    // A density change can come with no resize event (Chrome sharing this tab); recompute so
+    // fitZoomNow sees it as it happens and tells it apart from a zoom.
+    const unwatchDpr = watchDevicePixelRatio(compute);
     // Recompute when the content's own height changes (e.g. the join step reveals the
     // co-chair fields). Only needed in fitContent mode.
     let ro: ResizeObserver | undefined;
@@ -63,6 +66,7 @@ export default function FitToScreen({
     return () => {
       window.removeEventListener('resize', compute);
       window.visualViewport?.removeEventListener('resize', compute);
+      unwatchDpr();
       ro?.disconnect();
     };
   }, [fitContent]);
