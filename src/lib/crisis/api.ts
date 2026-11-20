@@ -928,3 +928,47 @@ export async function markNotificationsRead(ref: CrisisRef, ids?: string[]): Pro
   const res = await client.rpc('crisis_mark_notifications_read', { p_crisis: ref.id, p_ids: ids ?? null });
   if (res.error) throw new UserFacingError(crisisError(res.error, 'Could not mark those as read.'));
 }
+
+// ─────────── Backroom messages (docs/crisis/sql/052) ───────────
+// One thread per delegate's character. The crisis team reads every thread; a delegate reads their own.
+
+export interface BackroomMessage {
+  id: string; crisis_id: string; character_id: string; author_member_id: string | null;
+  from_staff: boolean; to_member_id: string | null; body: string; created_at: string;
+}
+export interface BackroomRead { member_id: string; character_id: string; read_at: string }
+export interface BackroomContact { id: string; name: string; role: 'director' | 'assistant_director' | 'backroomer' }
+
+export async function listBackroomMessages(ref: CrisisRef): Promise<BackroomMessage[]> {
+  const client = await c(ref);
+  const res = await client.from('crisis_backroom_messages').select('*').eq('crisis_id', ref.id).order('created_at', { ascending: false }).limit(3000);
+  return (must(res, 'Could not load the messages.') as BackroomMessage[]).reverse();
+}
+
+export async function listBackroomReads(ref: CrisisRef): Promise<BackroomRead[]> {
+  const client = await c(ref);
+  const res = await client.from('crisis_backroom_message_reads').select('member_id, character_id, read_at').eq('crisis_id', ref.id);
+  return must(res, 'Could not load the messages.') as BackroomRead[];
+}
+
+export async function backroomContacts(ref: CrisisRef): Promise<BackroomContact[]> {
+  const client = await c(ref);
+  const res = await client.rpc('crisis_backroom_contacts', { p_crisis: ref.id });
+  const data = must(res, 'Could not load the crisis team.');
+  return (Array.isArray(data) ? data : []) as BackroomContact[];
+}
+
+export type SendBackroomResult = { ok: true; id: string } | { ok: false; reason: 'empty' | 'too_long' | 'slow_down'; limit?: number };
+
+/** A delegate writes to the backroom (toMember null) or one person on the crisis team; staff answer in a character's thread. */
+export async function sendBackroomMessage(ref: CrisisRef, body: string, opts: { toMember?: string | null; character?: string | null } = {}): Promise<SendBackroomResult> {
+  const client = await c(ref);
+  const res = await client.rpc('crisis_send_backroom_message', { p_crisis: ref.id, p_body: body, p_to_member: opts.toMember ?? null, p_character: opts.character ?? null });
+  return must(res, 'Could not send the message. Your text is kept, try again.') as SendBackroomResult;
+}
+
+export async function markBackroomRead(ref: CrisisRef, characterId: string): Promise<void> {
+  const client = await c(ref);
+  const res = await client.rpc('crisis_mark_backroom_read', { p_crisis: ref.id, p_character: characterId });
+  if (res.error) throw new UserFacingError(crisisError(res.error, 'Could not mark it read.'));
+}

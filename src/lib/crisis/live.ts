@@ -16,7 +16,7 @@ import { anonClient } from './client';
 export type CrisisTable =
   | 'crises' | 'crisis_cabinets' | 'crisis_members' | 'crisis_characters' | 'crisis_character_secrets'
   | 'crisis_directives' | 'crisis_directive_notes' | 'crisis_news' | 'crisis_resource_types' | 'crisis_resources'
-  | 'crisis_map_regions' | 'crisis_map_drafts' | 'crisis_units' | 'crisis_shapes' | 'crisis_messages' | 'crisis_meetings' | 'crisis_meeting_responses' | 'crisis_notifications' | 'crisis_staff_invites';
+  | 'crisis_map_regions' | 'crisis_map_drafts' | 'crisis_units' | 'crisis_shapes' | 'crisis_messages' | 'crisis_meetings' | 'crisis_meeting_responses' | 'crisis_notifications' | 'crisis_staff_invites' | 'crisis_backroom_messages';
 
 /** `cab` is the cabinet the row belongs to (null = everyone). Only crisis_directives, crisis_resources and crisis_news carry it. */
 export interface CrisisPing { t: CrisisTable; op: 'insert' | 'update' | 'delete'; id: string | null; cab?: string | null }

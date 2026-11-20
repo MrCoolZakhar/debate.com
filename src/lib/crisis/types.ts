@@ -410,7 +410,7 @@ export const MEETING_STATUS_LABEL: Record<MeetingStatus, string> = {
 };
 
 /** A bell notification for one member, written by database triggers (docs/crisis/sql/011). */
-export type NotificationKind = 'directive_answer' | 'directive_new' | 'directive_note' | 'news' | 'unit' | 'reveal' | 'territory' | 'meeting' | 'status';
+export type NotificationKind = 'directive_answer' | 'directive_new' | 'directive_note' | 'news' | 'unit' | 'reveal' | 'territory' | 'meeting' | 'status' | 'message';
 export interface CrisisNotification {
   id: string;
   crisis_id: string;

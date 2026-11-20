@@ -6,8 +6,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation';
 import {
   Bell, Swords, Ship, Eye, Flag, CheckCircle2, XCircle, HelpCircle, ScrollText, MessageCircle, Newspaper,
-  CalendarClock, Skull, UserX, User, X,
-} from 'lucide-react';
+  CalendarClock, Skull, UserX, User, X, MessagesSquare } from 'lucide-react';
 import Portal from '@/components/Portal';
 import type { CrisisNotification } from '@/lib/crisis/types';
 import { crisisError, listNotifications, markNotificationsRead } from '@/lib/crisis/api';
@@ -40,6 +39,7 @@ function kindLook(n: CrisisNotification): Look {
     case 'directive_note': return { icon: <MessageCircle {...p} />, color: '#2F6690', label: 'Directive note' };
     case 'news': return { icon: <Newspaper {...p} />, color: '#3E6A9A', label: 'News' };
     case 'meeting': return { icon: <CalendarClock {...p} />, color: '#2F6B5A', label: 'Meeting' };
+    case 'message': return { icon: <MessagesSquare {...p} />, color: '#2F6690', label: 'Message' };
     case 'status':
       if (/dead|died|killed|assassinat/.test(t)) return { icon: <Skull {...p} />, color: CK.redDeep, label: 'Character status' };
       if (/arrest|captur|detain|imprison/.test(t)) return { icon: <UserX {...p} />, color: '#C26A1B', label: 'Character status' };
