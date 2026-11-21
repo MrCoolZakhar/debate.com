@@ -4,7 +4,7 @@
 // (crisis, cabinets, people, characters) and keeps it live. Pages read it with useCrisis().
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { crisisError, heartbeat, loadCore, readPresence, resolveCrisis, type CrisisCore, type CrisisRef } from '@/lib/crisis/api';
+import { CrisisAccessLost, crisisError, heartbeat, loadCore, readPresence, resolveCrisis, type CrisisCore, type CrisisRef } from '@/lib/crisis/api';
 import { ensureServerClock } from '@/lib/serverClock';
 import { createFlight, setLiveViewerCabinet, useCrisisLive } from '@/lib/crisis/live';
 import { readSettings, isDirector, isStaff, type CrisisRole, type CrisisSettings, type ResolvedCrisis } from '@/lib/crisis/types';
@@ -47,6 +47,7 @@ export type CrisisGate =
   | { state: 'loading' }
   | { state: 'not_found' }
   | { state: 'denied' }
+  | { state: 'removed' }
   | { state: 'error'; message: string }
   | { state: 'ready'; value: CrisisContextValue };
 
@@ -55,6 +56,8 @@ export function useCrisisGate(conf: string, crisis: string, identityKey: string)
   const [resolved, setResolved] = useState<ResolvedCrisis | null>(null);
   const [core, setCore] = useState<CrisisCore | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Taken off the crisis, or it was closed: loadCore threw CrisisAccessLost (prompt 56).
+  const [removed, setRemoved] = useState(false);
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => { ensureServerClock(); }, []);
@@ -62,6 +65,7 @@ export function useCrisisGate(conf: string, crisis: string, identityKey: string)
   useEffect(() => {
     let cancelled = false;
     setError(null);
+    setRemoved(false);
     (async () => {
       try {
         const r = await resolveCrisis(conf, crisis);
@@ -72,7 +76,9 @@ export function useCrisisGate(conf: string, crisis: string, identityKey: string)
           if (!cancelled) setCore(c);
         }
       } catch (e) {
-        if (!cancelled) setError(crisisError(e, 'Could not open this crisis.'));
+        if (cancelled) return;
+        if (e instanceof CrisisAccessLost) setRemoved(true);
+        else setError(crisisError(e, 'Could not open this crisis.'));
       }
     })();
     return () => { cancelled = true; };
@@ -178,7 +184,8 @@ export function useCrisisGate(conf: string, crisis: string, identityKey: string)
   }, [ref, resolved, core, live, reloadCore, watchPresence, memberId, cabinetId, characterId]);
 
   let gate: CrisisGate;
-  if (error && !value) gate = { state: 'error', message: error };
+  if (removed) gate = { state: 'removed' };
+  else if (error && !value) gate = { state: 'error', message: error };
   else if (!resolved) gate = { state: 'loading' };
   else if (!resolved.found) gate = { state: 'not_found' };
   else if (!resolved.allowed) gate = { state: 'denied' };

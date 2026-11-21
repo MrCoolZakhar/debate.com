@@ -118,6 +118,19 @@ const HINT_MESSAGES: Record<string, string> = {
   role_not_open: "Applications for this role haven't opened yet. Your answers are saved, so you can send them once applications open.",
 };
 
+/** A NOT NULL column a person can leave empty, and how to name it in "Add {label} before saving." (prompt 56). */
+const REQUIRED_FIELD_LABELS: Record<string, string> = {
+  country: 'the country',
+  city: 'the city',
+  full_name: 'the conference name',
+  acronym: 'the acronym',
+  start_date: 'the start date',
+  end_date: 'the end date',
+  name: 'a name',
+  title: 'a title',
+  email: 'an email address',
+};
+
 const DEFAULT_FALLBACK = 'Something went wrong. Please try again.';
 
 /** Marks an error whose message we wrote ourselves, for a person, at the
@@ -236,8 +249,13 @@ export function friendlyError(error: unknown, fallback: string = DEFAULT_FALLBAC
   }
 
   // b. Network.
-  if (/Failed to fetch|NetworkError|Load failed/.test(message)) {
+  if (/Failed to fetch|NetworkError|Load failed|Failed to send a request to the Edge Function/.test(message)) {
     return say("We couldn't reach Gavelling. Check your connection and try again.", 'network', true, message, code);
+  }
+
+  // b1. Timeouts (prompt 56): the database or the gateway gave up waiting.
+  if (code === '57014' || /statement timeout|upstream request timeout|Gateway Time-?out/i.test(message)) {
+    return say('Gavelling is busy right now and this took too long. Wait a moment and try again.', 'timeout', true, message, code);
   }
 
   // b2. Storage's two refusals (prompt 21): a type the bucket does not allow,
@@ -281,6 +299,23 @@ export function friendlyError(error: unknown, fallback: string = DEFAULT_FALLBAC
   // message names the person and the role they hold, already a sentence.
   if (isErrorLike(error) && error.hint === 'holds_role' && message && !looksTechnical(message)) {
     return say(message, 'trigger_hint', true, message, code);
+  }
+
+  // e1b. Not found, or no longer visible to this person (prompt 56): a single-row read that came back empty.
+  if (code === 'PGRST116') {
+    return say("We couldn't find this. It may have been removed, or you may no longer have access to it.", 'not_found', true, message, code);
+  }
+
+  // e1c. A link whose id is not a whole uuid, usually cut off when it was copied (prompt 56). Wins over the generic 22P02 sentence.
+  if (code === '22P02' && /type uuid/i.test(message)) {
+    return say("This link isn't valid. It may have been cut off when it was copied. Ask for the link again.", 'bad_link', true, message, code);
+  }
+
+  // e1d. A required field, named (prompt 56). An unknown column falls through to the generic 23502 sentence below.
+  if (code === '23502') {
+    const column = message.match(/null value in column "([^"]+)"/)?.[1];
+    const label = column ? REQUIRED_FIELD_LABELS[column] : undefined;
+    if (label) return say(`Add ${label} before saving.`, 'required_field', true, message, code);
   }
 
   // e. By SQLSTATE.

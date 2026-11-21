@@ -988,7 +988,30 @@ export async function turnOnDefaultEmail(
     // Inserting it off would quietly reduce what people already receive.
     ...(event?.recurring ? { recurring_enabled: true, recurring_interval_days: 3, recurring_max_sends: 3 } : {}),
   });
+  // A double press or a second tab inserted the row first (prompt 56): switch that row on instead of reporting "That already exists."
+  if (error && (error as { code?: string }).code === '23505') return setExistingEmailEnabled(supabase, conferenceId, eventKey, true, error, 'Could not turn this on.');
   return { ok: !error, error: error ? friendlyError(error, 'Could not turn this on.') : undefined };
+}
+
+/** The row another press inserted first: select it again and set `enabled`, answering like the update branches above.
+ *  When it still cannot be found, the original insert error is returned as before. */
+async function setExistingEmailEnabled(
+  supabase: ReturnType<typeof getAuthedClient>,
+  conferenceId: string,
+  eventKey: string,
+  enabled: boolean,
+  insertError: unknown,
+  fallback: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const { data: row } = await supabase
+    .from('email_templates')
+    .select('id')
+    .eq('conference_id', conferenceId)
+    .eq('event_key', eventKey)
+    .maybeSingle();
+  if (!row) return { ok: false, error: friendlyError(insertError, fallback) };
+  const { error } = await supabase.from('email_templates').update({ enabled }).eq('id', (row as { id: string }).id);
+  return { ok: !error, error: error ? friendlyError(error, fallback) : undefined };
 }
 
 /** Turning OFF an event that has no row yet but is on by default
@@ -1020,6 +1043,8 @@ export async function turnOffDefaultEmail(
     enabled: false,
     delivery: 'immediate',
   });
+  // A double press or a second tab inserted the row first (prompt 56): switch that row off instead of reporting "That already exists."
+  if (error && (error as { code?: string }).code === '23505') return setExistingEmailEnabled(supabase, conferenceId, eventKey, false, error, 'Could not turn this off.');
   return { ok: !error, error: error ? friendlyError(error, 'Could not turn this off.') : undefined };
 }
 

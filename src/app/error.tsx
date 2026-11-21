@@ -9,6 +9,7 @@
 
 import { useEffect } from 'react';
 import Link from 'next/link';
+import { AlertTriangle } from 'lucide-react';
 import { reportCrash, recoverFromStaleDeploy, isStaleDeployError } from '@/lib/reportCrash';
 
 const OUTFIT = "var(--font-brand), sans-serif";
@@ -51,7 +52,7 @@ export default function Error({
             backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.20)',
           }}
         >
-          <span aria-hidden style={{ fontSize: 26 }}>⚠️</span>
+          <AlertTriangle aria-hidden size={26} strokeWidth={1.5} color="#8B2020" />
         </div>
 
         <h2 className="font-black mb-2" style={{ color: '#1C1410', fontFamily: OUTFIT, fontSize: 21, letterSpacing: '-0.01em' }}>

@@ -15,6 +15,9 @@ import {
   type ResolvedCrisis, type RegionGeometry, type DirectiveOutcome, type DirectiveKind, type DirectiveStatus, type Meeting, type MeetingStatus, type CharacterStatus, type CrisisNotification,
 } from './types';
 
+/** loadCore's refusal when this person can no longer see the crisis (taken off it, or it was closed). The gate shows 'removed'. */
+export class CrisisAccessLost extends UserFacingError {}
+
 export interface CrisisRef { conf: string; crisis: string; id: string }
 
 const RPC_MESSAGES: Record<string, string> = {
@@ -193,6 +196,9 @@ export async function loadCore(ref: CrisisRef): Promise<CrisisCore> {
     client.from('crisis_members').select(MEMBER_COLUMNS).eq('crisis_id', ref.id).order('display_name'),
     client.from('crisis_characters').select('*').eq('crisis_id', ref.id).order('sort').order('name'),
   ]);
+  // The crisis row is gone from this person's view: they were taken off it, or it was closed (prompt 56).
+  const crErr = cr.error as { code?: string } | null;
+  if (crErr?.code === 'PGRST116' || (!cr.error && cr.data === null)) throw new CrisisAccessLost("You don't have access to this crisis anymore.");
   const members = must(mem, 'Could not load the people.') as unknown as Member[];
   const characters = must(chars, 'Could not load the characters.') as Character[];
   // Non-staff read only their own row and their own cabinet's characters (docs/crisis/sql/029a); everyone else comes from
@@ -370,7 +376,10 @@ export type StaffInvite =
   | { ok: false; reason: 'not_found' };
 
 /** What the invite page shows. Callable signed out. */
+const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export async function getStaffInvite(token: string): Promise<StaffInvite> {
+  // A token that is not a whole uuid was cut off when the link was copied; the RPC is never called for it (prompt 56).
+  if (!UUID_SHAPE.test(token)) throw new UserFacingError("This invite link isn't valid. It may have been cut off when it was copied. Ask your Crisis Director to send it again.");
   const res = await anonClient.rpc('get_crisis_staff_invite', { p_token: token });
   if (res.error || !res.data) throw new UserFacingError(crisisError(res.error, 'Could not load this invite.'));
   return res.data as StaffInvite;

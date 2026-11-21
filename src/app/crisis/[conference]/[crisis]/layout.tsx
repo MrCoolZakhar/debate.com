@@ -331,6 +331,9 @@ export default function CrisisLayout({ children }: { children: React.ReactNode }
       </GateScreen>
     );
   }
+  if (gate.state === 'removed') {
+    return <GateScreen title="You No Longer Have Access" body="You were taken off this crisis, or it was closed. Ask your Crisis Director if you think this is a mistake."><Btn onClick={() => router.push('/crisis')}>Go to my crises</Btn></GateScreen>;
+  }
   if (gate.state === 'error') {
     return <GateScreen title="Could Not Open the Crisis" body={gate.message}><Btn onClick={retry}>Try again</Btn></GateScreen>;
   }
