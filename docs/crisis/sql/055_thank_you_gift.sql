@@ -1,0 +1,1 @@
+-- Applied 22 Nov 2026 as migration crisis_part55_thank_you_gift: crisis_gifts, crisis_my_gift, crisis_save_gift, crisis_activate_gift (the claim_promo_code Unlimited grant for the member's own account), trigger zz_crisis_gift_claimed on promo_claims. Seeded 29 personal codes CARRERA-XXXXXX (60 days, 1 claim, valid 1 year) for La Carrera Espacial delegates.
