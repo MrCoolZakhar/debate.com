@@ -41,7 +41,7 @@ import { WizardShell, TwoTabPick, CardSelect } from '@/components/wizard';
 import { NEU, OUTFIT, EASE, Emoji3D } from '@/components/neu';
 import { IdentityStep } from './IdentityStep';
 import IntentStep from './IntentStep';
-import ReviewStep from './ReviewStep';
+import ReviewStep, { type ReviewValues } from './ReviewStep';
 import { LogoCropModal } from '@/components/LogoCropModal';
 import { uploadConferenceAsset } from '@/lib/conferenceAssets';
 import { normalizeSocialUrl } from '@/lib/socialLinks';
@@ -1322,12 +1322,30 @@ export default function NewConferencePage() {
 
   // Acronyms where there is one, so the row reads "UNSC, DISEC, WHO" rather
   // than three wrapped sentences. ReviewRow wraps a long list, never cuts it.
-  const chairsToInvite = committees.reduce((n, c) => n + (c.chairInvites?.length ?? 0), 0);
-  const paymentSummary =
-    payChoice === 'free' ? 'Free'
-    : payChoice === 'paid' ? 'Paid, set up in Financials'
-    : 'Not answered';
+  /** The Ready to Publish step edits in place (owner, 22 Nov 2026): each key goes to its own setter. */
+  function applyReviewPatch(patch: Partial<ReviewValues>) {
+    if (patch.fullName !== undefined) setFullName(patch.fullName);
+    if (patch.acronym !== undefined) { acronymTouched.current = true; setAcronym(patch.acronym); }
+    if (patch.bannerUrl !== undefined) { setBannerUrl(patch.bannerUrl); setBannerError(''); }
+    if (patch.startDate !== undefined) setStartDate(patch.startDate);
+    if (patch.endDate !== undefined) setEndDate(patch.endDate);
+    if (patch.datesTbd !== undefined) setDatesTbd(patch.datesTbd);
+    if (patch.country !== undefined) setCountry(patch.country);
+    if (patch.city !== undefined) setCity(patch.city);
+    if (patch.format !== undefined) setFormat(patch.format as typeof format);
+    if (patch.studentLevel !== undefined) setStudentLevel(patch.studentLevel as typeof studentLevel);
+    if (patch.expectedDelegates !== undefined) { setExpectedDelegates(patch.expectedDelegates); setDelegateRange(''); }
+    if (patch.description !== undefined) setDescription(patch.description);
+    if (patch.instagram !== undefined) setInstagram(patch.instagram);
+    if (patch.facebook !== undefined) setFacebook(patch.facebook);
+    if (patch.tiktok !== undefined) setTiktok(patch.tiktok);
+    if (patch.whatsapp !== undefined) setWhatsapp(patch.whatsapp);
+    if (patch.website !== undefined) setWebsite(patch.website);
+    if (patch.payChoice !== undefined) setPayChoice(patch.payChoice);
+    if (patch.intentKeys !== undefined) setIntentKeys(patch.intentKeys);
+  }
 
+  const chairsToInvite = committees.reduce((n, c) => n + (c.chairInvites?.length ?? 0), 0);
   // The logo, banner, description and socials steps are skippable and none of
   // them gates creation. Everything else does: the head count is a real
   // positive number, at least one committee exists (one is the minimum a
@@ -1818,29 +1836,36 @@ export default function NewConferencePage() {
                 onBack={back}
               >
                 <ReviewStep
-                  fullName={fullName}
-                  acronym={acronym}
-                  logoUrl={logoUrl}
-                  bannerUrl={bannerUrl}
-                  dateLabel={datesTbd ? '' : formatDateRange(startDate, endDate)}
-                  datesTbd={datesTbd}
-                  year={datesTbd ? '' : String(conferenceYear(startDate, endDate) ?? '')}
-                  slug={conferenceSlugLadder({ acronym, fullName, year: datesTbd ? null : conferenceYear(startDate, endDate) })[0] ?? acronym.trim().toLowerCase()}
-                  country={country}
-                  city={city}
-                  format={format}
-                  studentLevel={studentLevel}
-                  expectedDelegates={expectedDelegates}
+                  values={{
+                    fullName, acronym, logoUrl, bannerUrl, startDate, endDate, datesTbd, country, city,
+                    format, studentLevel, expectedDelegates, description,
+                    instagram, facebook, tiktok, whatsapp, website, payChoice, intentKeys,
+                  }}
+                  set={applyReviewPatch}
                   committees={committees}
                   chairsToInvite={chairsToInvite}
-                  description={description}
-                  socials={{ instagram, facebook, tiktok, whatsapp, website }}
-                  paymentSummary={paymentSummary}
-                  intentKeys={intentKeys}
+                  dateLabel={datesTbd ? '' : formatDateRange(startDate, endDate)}
+                  year={datesTbd ? '' : String(conferenceYear(startDate, endDate) ?? '')}
+                  slug={conferenceSlugLadder({ acronym, fullName, year: datesTbd ? null : conferenceYear(startDate, endDate) })[0] ?? acronym.trim().toLowerCase()}
+                  todayISO={todayISO}
+                  bannerPresets={BANNER_PRESETS}
+                  logoUploading={logoUploading}
+                  bannerUploading={bannerUploading}
+                  onPickLogo={(f) => setLogoCropFile(f)}
+                  onPickBanner={(f) => { void handleBannerUpload(f); }}
+                  onEditCommittee={openEditCommittee}
+                  onAddCommittee={openNewCommittee}
+                  onRemoveCommittee={removeCommittee}
                   renderEmblem={(c, size) => <CommitteeEmblem committee={c} size={size} />}
-                  onEdit={editFromReview}
-                  actions={<>
-
+                  publish={{
+                    onPublish: () => { void handleCreate('publish'); },
+                    onDraft: () => { void handleCreate('draft'); },
+                    publishLabel: user ? 'Publish' : 'Sign in to publish',
+                    draftLabel: user ? 'Save as draft' : 'Sign in to save as draft',
+                    disabled: submitting || (user ? !readyToCreate : !answersComplete),
+                    busy: submitting ? submittingMode : null,
+                  }}
+                  extra={<>
                 {/* Contact email, required by the directory, prefilled from your
                     profile. Signed out it is not asked: the account's address
                     fills it once they sign in. */}
@@ -1896,31 +1921,6 @@ export default function NewConferencePage() {
                     {error}
                   </div>
                 )}
-
-                <div className="flex flex-col items-center" style={{ marginTop: 24, gap: 10 }}>
-                  <PrimaryButton
-                    onClick={() => { void handleCreate('publish'); }}
-                    disabled={submitting || (user ? !readyToCreate : !answersComplete)}
-                    style={{ padding: '14px 38px' }}
-                  >
-                    {submitting && submittingMode === 'publish' ? 'Publishing' : user ? 'Publish' : 'Sign in to publish'}
-                  </PrimaryButton>
-                  <button
-                    type="button"
-                    onClick={() => { void handleCreate('draft'); }}
-                    disabled={submitting || (user ? !readyToCreate : !answersComplete)}
-                    className="focus:outline-none focus-visible:shadow-[0_0_0_3px_#EED98A]"
-                    style={{
-                      fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 700, color: NEU.ink,
-                      textDecoration: 'underline', textDecorationThickness: 1.5, textUnderlineOffset: 3,
-                      background: 'none', border: 0, borderRadius: 8, padding: '6px 10px',
-                      cursor: submitting || (user ? !readyToCreate : !answersComplete) ? 'not-allowed' : 'pointer',
-                      opacity: submitting || (user ? !readyToCreate : !answersComplete) ? 0.45 : 1,
-                    }}
-                  >
-                    {submitting && submittingMode === 'draft' ? 'Saving' : user ? 'Save as draft' : 'Sign in to save as draft'}
-                  </button>
-                </div>
                   </>}
                 />
               </WizardShell>

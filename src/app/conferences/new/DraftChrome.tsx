@@ -87,7 +87,7 @@ export function DraftSavedNote({ state, error, onDevice }: { state: SaveState; e
     <div
       role="status"
       aria-live="polite"
-      className="fixed left-4 bottom-20 lg:bottom-4 z-20 inline-flex items-center gap-1.5"
+      className="gv-draft-saved fixed left-4 bottom-20 lg:bottom-4 z-20 inline-flex items-center gap-1.5"
       style={{
         fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600,
         color: failed ? '#8B2020' : NEU.inkSoft, maxWidth: 'calc(100vw - 32px)',
