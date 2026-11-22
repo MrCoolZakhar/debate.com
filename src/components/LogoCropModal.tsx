@@ -34,6 +34,9 @@ import { X, ZoomIn, ZoomOut, Move } from 'lucide-react';
 import { useScrollLock } from '@/hooks/useScrollLock';
 import { useModalEscape } from '@/components/ModalOverlay';
 
+/** Object URLs waiting to be freed after an unmount (see the effect beside createObjectURL). */
+const pendingRevokes = new Map<string, ReturnType<typeof setTimeout>>();
+
 const STAGE_MAX = 340;         // square preview stage (px), shrinks on phones
 const CIRCLE_RATIO = 0.84;     // circle diameter as a share of the stage
 const OUT = 512;               // exported square canvas (px); 512 since 19 Nov 2026 (egress)
@@ -152,7 +155,19 @@ export function LogoCropModal({
   useScrollLock(true);
 
   const objectUrl = useMemo(() => URL.createObjectURL(file), [file]);
-  useEffect(() => () => URL.revokeObjectURL(objectUrl), [objectUrl]);
+  // Freed a moment after the LAST unmount, never on a remount: React's development
+  // Strict Mode unmounts and remounts once, and revoking on that first cleanup left the
+  // memoised URL dead, so the picture never loaded and Save stayed off (22 Nov 2026).
+  useEffect(() => {
+    const pending = pendingRevokes.get(objectUrl);
+    if (pending) { clearTimeout(pending); pendingRevokes.delete(objectUrl); }
+    return () => {
+      pendingRevokes.set(objectUrl, setTimeout(() => {
+        pendingRevokes.delete(objectUrl);
+        URL.revokeObjectURL(objectUrl);
+      }, 1000));
+    };
+  }, [objectUrl]);
 
   // Stage size is fixed per open: the modal is never resized mid-crop in practice,
   // and every offset below is in these px.
