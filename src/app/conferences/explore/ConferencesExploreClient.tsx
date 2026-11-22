@@ -140,6 +140,8 @@ const BIG_CONFERENCE_DELEGATES = 500;
 /** The most countries the Where field adds as pills (27 Sep 2026). */
 const MAX_PLACE_COUNTRIES = 5;
 const BIG_CONFERENCE_LIMIT = 4;
+/** WorldMUN leads Bigger Conferences Worth Travelling while it takes applications (owner, 22 Nov 2026). */
+const WORLDMUN_ID = 'd9cda4bb-5a39-4882-8812-e83ba8fe0be2';
 
 
 
@@ -748,11 +750,20 @@ export default function ConferencesExploreClient() {
   const bigElsewhere = useMemo(() => {
     if (!countryFilterActive) return [];
     const shown = new Set(sorted.map(c => c.id));
-    return conferences
+    const big = conferences
       .filter(c => !shown.has(c.id) && !hasConcluded(c) && !hasNoDates(c) && (c.expected_delegates ?? 0) >= BIG_CONFERENCE_DELEGATES)
-      .sort((a, b) => compareStartDate(a.start_date, b.start_date, 'asc'))
-      .slice(0, BIG_CONFERENCE_LIMIT);
-  }, [conferences, sorted, countryFilterActive]);
+      .sort((a, b) => compareStartDate(a.start_date, b.start_date, 'asc'));
+    // Organiser-run conferences only, while there are enough of them; Gavelling
+    // listings only fill places nobody else can (owner, 22 Nov 2026).
+    // WorldMUN goes first whenever its applications are open on Gavelling;
+    // otherwise it takes its place in date order like any organiser-run one.
+    const worldmunOpen = (facets.get(WORLDMUN_ID)?.open_roles?.length ?? 0) > 0;
+    const worldmun = worldmunOpen ? big.filter(c => c.id === WORLDMUN_ID) : [];
+    const rest = worldmunOpen ? big.filter(c => c.id !== WORLDMUN_ID) : big;
+    const own = rest.filter(c => !isGavellingListing(c));
+    const listed = rest.filter(c => isGavellingListing(c));
+    return [...worldmun, ...own, ...listed].slice(0, BIG_CONFERENCE_LIMIT);
+  }, [conferences, sorted, countryFilterActive, facets]);
   // Only when the filter is genuinely narrowing: never under the full directory.
   const showBigElsewhere =
     !loading && countryFilterActive && bigElsewhere.length > 0 && sorted.length + undated.length < upcomingCount;
