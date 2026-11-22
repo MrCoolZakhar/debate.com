@@ -393,7 +393,7 @@ export default function VariantStagefront({
               </p>
 
               <div className="flex flex-col gap-3" style={{ marginTop: '32px', maxWidth: 'clamp(460px, 40vw, 640px)' }}>
-                <HeroSearchBar conferences={conferences} />
+                <HeroSearchBar conferences={conferences} total={stats?.total_conferences ?? null} />
                 <div className="flex justify-end">
                   {/* Straight into creating (owner, 25 Sep 2026: the /organisers page in between "adds nothing"). */}
                   <HeroTextLink href="/conferences/new" label="Organising one? List it free" />
@@ -629,7 +629,12 @@ export default function VariantStagefront({
 // way the Explore directory does — on submit it navigates to /conferences/explore
 // with the query as `?search=`, which the Explore client reads to pre-fill and
 // filter (name · acronym · city · country). Empty query just opens Explore.
-function HeroSearchBar({ conferences }: { conferences: LabConference[] }) {
+function HeroSearchBar({ conferences, total }: { conferences: LabConference[]; total: number | null }) {
+  // The same platform total as the "conferences" figure under the hero (Gavelling listings
+  // included; owner, 22 Nov 2026). en-US so the server and the browser print it alike.
+  const searchPlaceholder = total && total > 0
+    ? `Search ${total.toLocaleString('en-US')} conferences`
+    : 'Search conferences';
   const router = useRouter();
   const [query, setQuery] = useState('');
   const [focused, setFocused] = useState(false);
@@ -685,7 +690,7 @@ function HeroSearchBar({ conferences }: { conferences: LabConference[] }) {
           onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
           onFocus={() => { setFocused(true); router.prefetch('/conferences/explore'); }}
           onBlur={() => setTimeout(() => setFocused(false), 150)}
-          placeholder="Search by conference name or city…"
+          placeholder={searchPlaceholder}
           aria-label="Search conferences by name or city"
           className="sf-hero-search-input"
           style={{
