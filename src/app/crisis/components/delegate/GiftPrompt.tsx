@@ -3,6 +3,7 @@
 // crisis_gifts gets one pop-up on any page: Peter's note, the 24 December launch, a scratch-off voucher for 2 months of
 // Unlimited with the benefits under the foil, Activate now (crisis_activate_gift) or Save for later (the code stays
 // redeemable on the Promo code page for a year). ONE read on load, no live subscription. Never over another dialog.
+// GiftCard is also shown on every Gavelling page by src/components/CrisisGiftGate.tsx for a signed-in account (part 56).
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Portal from '@/components/Portal';
@@ -69,34 +70,45 @@ const CSS = `
 `;
 
 export default function GiftPrompt() {
-  const { ref, role } = useCrisis();
-  const enabled = role === 'delegate';
+  const { ref } = useCrisis();
   const [gift, setGift] = useState<CrisisGift | null>(null);
-  const [closed, setClosed] = useState(false);
-  const [blocked, setBlocked] = useState(false);
-  const [revealed, setRevealed] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const boxRef = useRef<HTMLDivElement>(null);
-  const cvRef = useRef<HTMLCanvasElement>(null);
-  const coinRef = useRef<HTMLDivElement>(null);
-  const fxRef = useRef<HTMLCanvasElement>(null);
-
   useEffect(() => {
-    if (!enabled) return undefined;
     let off = false;
     void myGift(ref).then((g) => { if (!off) setGift(g); });
     return () => { off = true; };
-  }, [enabled, ref]);
+  }, [ref]);
+  const activate = useCallback(async () => {
+    try {
+      const r = await activateGift(ref);
+      if (!r.ok) { notifyErr(r.message ?? 'Could not activate your voucher. Try again.'); return false; }
+      notifyOk('Activated. Enjoy two months of Unlimited');
+      return true;
+    } catch (e) { notifyErr(crisisError(e, 'Could not activate your voucher. Try again.')); return false; }
+  }, [ref]);
+  const later = useCallback(() => {
+    notifyOk('Saved. Activate it any time on Manage account, Promo code');
+    void saveGift(ref).catch(() => { /* it shows again next visit */ });
+  }, [ref]);
+  if (!gift || gift.activated || gift.saved) return null;
+  return <GiftCard code={gift.code} activate={activate} onLater={later} />;
+}
 
+export function GiftCard({ code, activate, onLater }: { code: string; activate: () => Promise<boolean>; onLater: () => void }) {
+  const [blocked, setBlocked] = useState(false);
+  const [revealed, setRevealed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [gone, setGone] = useState(false);
   useEffect(() => {
-    if (!gift || gift.activated || gift.saved || closed) return undefined;
     const watch = () => setBlocked(otherDialogOpen());
     watch();
     const t = window.setInterval(watch, 1500);
     return () => window.clearInterval(t);
-  }, [gift, closed]);
-
-  const shown = !!gift && !gift.activated && !gift.saved && !closed;
+  }, []);
+  const shown = !gone;
+  const boxRef = useRef<HTMLDivElement>(null);
+  const cvRef = useRef<HTMLCanvasElement>(null);
+  const coinRef = useRef<HTMLDivElement>(null);
+  const fxRef = useRef<HTMLCanvasElement>(null);
 
   // The scratch layer, the coin hint, the falling foil and the confetti. Canvas only, no React state per frame.
   useEffect(() => {
@@ -187,25 +199,14 @@ export default function GiftPrompt() {
     };
   }, [shown]);
 
-  const activate = useCallback(async () => {
+  const onActivate = useCallback(async () => {
     if (busy) return;
     setBusy(true);
-    try {
-      const r = await activateGift(ref);
-      if (!r.ok) { notifyErr(r.message ?? 'Could not activate your voucher. Try again.'); return; }
-      notifyOk('Activated. Enjoy two months of Unlimited');
-      setGift((g) => (g ? { ...g, activated: true } : g));
-    } catch (e) { notifyErr(crisisError(e, 'Could not activate your voucher. Try again.')); }
-    finally { setBusy(false); }
-  }, [busy, ref]);
+    try { if (await activate()) setGone(true); } finally { setBusy(false); }
+  }, [busy, activate]);
+  const later = useCallback(() => { setGone(true); onLater(); }, [onLater]);
 
-  const later = useCallback(() => {
-    setClosed(true);
-    notifyOk('Saved. Activate it any time on Manage account, Promo code');
-    void saveGift(ref).catch(() => { /* it shows again next visit */ });
-  }, [ref]);
-
-  if (!enabled || !shown) return null;
+  if (!shown) return null;
 
   return (
     <Portal>
@@ -237,7 +238,7 @@ export default function GiftPrompt() {
                   <img alt="" src={IMG.gift} />
                   <div><small>Gavelling Unlimited</small><strong>2 months free</strong></div>
                 </div>
-                <span className="r">Use any time<br />in the next year<code>{gift.code}</code></span>
+                <span className="r">Use any time<br />in the next year<code>{code}</code></span>
               </div>
               <ul className="cg-perks">
                 <li><svg viewBox="0 0 24 24" aria-hidden><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8Z" /><circle cx="7.5" cy="7.5" r="1.5" /></svg><span><b>Discounted conferences</b> <em>across Gavelling</em></span></li>
@@ -257,7 +258,7 @@ export default function GiftPrompt() {
               <span><b>Enjoyed it? Tell your friends.</b> If your conference wants to run a crisis on Gavelling, get in touch at <code>info@gavelling.com</code></span>
             </div>
             <div className="cg-actions">
-              <button type="button" className="cg-btn main" disabled={!revealed || busy} onClick={() => void activate()}>Activate now</button>
+              <button type="button" className="cg-btn main" disabled={!revealed || busy} onClick={() => void onActivate()}>Activate now</button>
               <button type="button" className="cg-btn ghost" disabled={busy} onClick={later}>Save for later</button>
             </div>
           </div>
