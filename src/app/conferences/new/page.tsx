@@ -28,7 +28,7 @@
 import { pressAwareCommitteeType } from '@/lib/press';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AlertTriangle, Mail, Pencil, Check, Camera, ThumbsUp, Music2, MessageCircle, Globe, Plus, ClipboardList, CreditCard, Building2, Megaphone, Trash2, Gift, Banknote, UserPlus, type LucideIcon } from 'lucide-react';
+import { AlertTriangle, Mail, Pencil, Check, Camera, ThumbsUp, Music2, MessageCircle, Globe, Plus, Trash2, Gift, Banknote, UserPlus, type LucideIcon } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import Loader from '@/components/Loader';
 import { useAuth } from '@/components/AuthProvider';
@@ -40,6 +40,7 @@ import { FlagImg } from '@/components/FlagImg';
 import { WizardShell, TwoTabPick, CardSelect } from '@/components/wizard';
 import { NEU, OUTFIT, EASE, Emoji3D } from '@/components/neu';
 import { IdentityStep } from './IdentityStep';
+import IntentStep from './IntentStep';
 import { LogoCropModal } from '@/components/LogoCropModal';
 import { uploadConferenceAsset } from '@/lib/conferenceAssets';
 import { normalizeSocialUrl } from '@/lib/socialLinks';
@@ -140,19 +141,6 @@ const REVIEW_STEP = TOTAL_STEPS;
 // question about the organiser rather than about the conference. It has no
 // skip link and a disabled Continue.
 
-// Lucide stand-in per intent option, handed to Emoji3D so a card can never be
-// left with an empty icon well when a Fluent asset does not resolve. The case
-// that prompted it is fixed (INTENT_OPTIONS asked for "Globe showing
-// Europe-Africa"; the asset folder is lower case), but the Fluent names are
-// hand-written strings with no compile-time check, so the net stays.
-const INTENT_FALLBACK_ICONS: Record<string, LucideIcon> = {
-  applications: ClipboardList,
-  payments: CreditCard,
-  committees: Building2,
-  emails: Mail,
-  chairs: Globe,
-  marketing: Megaphone,
-};
 
 // ── Step 8, how delegates pay ──────────────────────────────────────────────
 
@@ -1788,42 +1776,18 @@ export default function NewConferencePage() {
             {step === 9 && (
               <WizardShell
                 step={9} total={TOTAL_STEPS}
+                maxWidth={960}
                 title="What will you use Gavelling for?"
-                sub="Pick everything that applies. Your dashboard will put those first. Nothing is switched off by this."
+                sub="Pick everything that applies. Your dashboard puts those first."
                 onBack={back}
               >
-                <CardSelect
-                  options={INTENT_OPTIONS.map((o) => ({
-                    key: o.key,
-                    label: o.label,
-                    sub: o.sub,
-                    icon: (
-                      <Emoji3D
-                        name={o.emoji}
-                        size={56}
-                        fallback={INTENT_FALLBACK_ICONS[o.key]}
-                        fallbackColor={NEU.forest}
-                      />
-                    ),
-                  }))}
-                  value={intentKeys}
-                  onChange={toggleIntent}
-                  multiple
-                  columns={3}
-                  size="lg"
-                  // Short headings, so the big cards can carry them — and both
-                  // opt-ins are on: the labels wrap instead of truncating, and
-                  // the grid drops to fewer columns rather than squeezing three
-                  // big cards into a phone. This replaced a scoped CSS override
-                  // that un-truncated the shared component from the outside.
-                  wrapText
-                  minColumnWidth={190}
-                />
+                {/* Six compact cards that always fit one screen (owner, 22 Nov 2026): IntentStep.tsx. */}
+                <IntentStep value={intentKeys} onToggle={toggleIntent} />
 
                 {/* Select all. Secondary to the cards on purpose: a tick, not a
                     seventh card. Ticked once all six are on, however they got
                     there, and unticking clears them. */}
-                <div className="flex justify-center" style={{ marginTop: 18 }}>
+                <div className="flex justify-center" style={{ marginTop: 'clamp(6px, 1.2vh, 16px)' }}>
                   <button
                     type="button"
                     role="checkbox"
@@ -1831,7 +1795,7 @@ export default function NewConferencePage() {
                     onClick={toggleAllIntents}
                     className="flex items-center gap-2.5 focus:outline-none"
                     style={{
-                      padding: '9px 16px', borderRadius: 999, border: 'none',
+                      padding: '6px 14px', borderRadius: 999, border: 'none',
                       background: 'none', cursor: 'pointer',
                     }}
                   >
