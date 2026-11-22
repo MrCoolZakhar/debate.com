@@ -3,9 +3,9 @@
 // PublishControls — the conference's status and Publish / Unpublish, in the
 // manage header (prompt 106; they used to sit on the dashboard). A pill says
 // "Public" or "Draft" (icon and word), and the button beside it:
-//   Publish    the same gate as the dashboard's checklist row (at least one
-//              committee, read here with a head count when pressed; payments
-//              never block publishing, owner 12 Oct 2026), then PublishModal
+//   Publish    a logo, a banner and at least one committee (src/lib/publishReadiness.ts,
+//              owner 22 Nov 2026; payments never block publishing, owner 12 Oct 2026),
+//              then PublishModal
 //   Unpublish  "Unpublish Your Conference?" first, then is_public false and
 //              status 'private' as a verified write (exactly one row)
 // Publishing is open to every organizer, as it is on the dashboard (the
@@ -20,6 +20,7 @@ import { friendlyError } from '@/lib/friendlyError';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import type { Conference } from './layout';
 import PublishModal from './PublishModal';
+import { checkPublishReady } from '@/lib/publishReadiness';
 
 const CSS = `
 .gv-pc-pill{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;border-radius:999px;font-size:12.5px;font-weight:700;white-space:nowrap}
@@ -89,9 +90,10 @@ export default function PublishControls({ conference, onChanged, light }: {
     try {
       const c = await getFreshAuthedClient();
       if (!c) { notifyErr('Your session has expired. Please sign in again.', 'publish'); return; }
-      const { count, error } = await c.from('conference_committees').select('id', { count: 'exact', head: true }).eq('conference_id', conference.id);
-      if (error) { notifyErr(friendlyError(error, 'Could not check your committees. Try again in a moment.'), 'publish'); return; }
-      if (!count) { notifyErr('Add at least one committee before publishing.', 'publish'); return; }
+      // A logo, a banner and a committee before anything goes public (owner, 22 Nov 2026).
+      const ready = await checkPublishReady(c, conference.id, conference);
+      if (ready.error) { notifyErr(friendlyError(ready.error, 'Could not check your conference. Try again in a moment.'), 'publish'); return; }
+      if (ready.sentence) { notifyErr(ready.sentence, 'publish'); return; }
       setPublishing(true);
     } finally {
       busyRef.current = false; setChecking(false);

@@ -2,6 +2,7 @@
 
 import { FoundersWelcome } from '@/components/conferences/FoundersWelcome';
 import EmailIssuesNotice from '@/components/conferences/EmailIssuesNotice';
+import CreateOutcomeNotice from './CreateOutcomeNotice';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { notifyOk } from '@/lib/appNotify';
 import { notify } from '@/lib/sessionNotifications';
@@ -1599,6 +1600,8 @@ export default function DashboardPage() {
         {/* Headless: keeps the stored checkmark in step with the checklist in
             both card states. */}
         <VerificationRefresher doneCount={doneCount} />
+        {/* Headless. Says once if the wizard's Publish or a chair invite failed. */}
+        <CreateOutcomeNotice />
         {/* Headless. Raises a card as each row leaves the list. */}
         <SetupCompletionNotices
           conferenceId={conference.id}

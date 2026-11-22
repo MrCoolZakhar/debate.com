@@ -6,7 +6,7 @@
 // create flow), MonogramMedallion (fallback emblem), ModalOverlay (house modal
 // backdrop) and sessionCommitteeClient (the header client a live room's RLS accepts).
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { X, UserPlus, Mail, Send } from 'lucide-react';
 import { NEU, OUTFIT } from '@/components/neu';
 import { usePressCommitteesAvailable, pressAwareCommitteeType } from '@/lib/press';
@@ -54,6 +54,7 @@ import {
 } from '@/lib/chairInvites';
 import { ChairTitleChips, ChairTitleSelect } from '@/components/conferences/ChairTitlePicker';
 import type { ChairTitle } from '@/lib/chairTitles';
+import { DraftChairsSection, type DraftChairInvite } from '@/components/committeeSetup/DraftChairs';
 import { queueEventEmail } from '@/lib/emailEvents';
 import { friendlyError } from '@/lib/friendlyError';
 import { normaliseCommitteeLanguage, DEFAULT_COMMITTEE_LANGUAGE } from '@/lib/committeeLanguage';
@@ -107,15 +108,20 @@ export interface EditableCommittee {
  *  the conference exists. With `draft` set the modal never touches the
  *  database: Save hands the collected committee to `onSave` and closes, the
  *  edit flow starts from `draft.initial` instead of fetching slots, and the
- *  chairs section (which needs a committee id) is not drawn because there is
- *  no `existing` row. Everything else, the type chooser, the set-up card, the
+ *  chairs section is the draft-mode twin DraftChairsSection (ChairsDock needs a
+ *  committee id, which does not exist yet): it only COLLECTS `chairInvites`,
+ *  and the wizard sends them after the committee is created (owner, 22 Nov
+ *  2026). Everything else, the type chooser, the set-up card, the
  *  seat list, the emblem crop and upload (storage only, under the id the
  *  wizard minted), is the same code path the dashboard runs.
  *
  *  Without `draft` (every /manage and conference-page call site) nothing
  *  below behaves differently. */
+export type { DraftChairInvite };
 export interface CommitteeDraft extends CommitteeSetupDraft {
   type: CommitteeType;
+  /** Chairs to invite by email once the committee exists (draft mode only). */
+  chairInvites?: DraftChairInvite[];
 }
 export interface CommitteeDraftMode {
   /** null = add a new committee (opens on the type chooser); set = edit it. */
@@ -682,6 +688,11 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
   // roster free-text seats even under a non-crisis type). Null → fall back to the
   // committee_type default. Cleared to 'country'/'character' on preset select.
   const [presetRosterMode, setPresetRosterMode] = useState<'country' | 'character' | null>(draftInitial?.presetRosterMode ?? null);
+  // Draft mode only: the chairs to invite once the committee exists, and
+  // whether the email field holds an address that was typed but not added.
+  const [chairInvites, setChairInvites] = useState<DraftChairInvite[]>(draftInitial?.chairInvites ?? []);
+  const chairTypingRef = useRef(false);
+  const onChairTyping = useCallback((typing: boolean) => { chairTypingRef.current = typing; }, []);
 
   // ── THE SHARED DRAFT ────────────────────────────────────────────────────────
   // One view of this editor's own useStates, in the shape the shared set-up
@@ -1297,7 +1308,8 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
     // Draft mode: no conference row exists yet, so nothing is written. The
     // caller keeps the committee and writes it when the conference is created.
     if (draftMode) {
-      const refusal = draftMode.onSave({ ...draft, type: effectiveType as CommitteeType });
+      if (chairTypingRef.current) { setError('Press Add on the chair email you typed, or clear the field.'); return; }
+      const refusal = draftMode.onSave({ ...draft, type: effectiveType as CommitteeType, chairInvites });
       if (refusal) { setError(refusal); return; }
       onClose();
       return;
@@ -1490,6 +1502,9 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
 
             {isEdit && existing && (
               <ChairsDock embedded conferenceId={conferenceId} committeeId={existing.id} committeeName={name.trim() || existing.name} />
+            )}
+            {draftMode && (
+              <DraftChairsSection invites={chairInvites} onChange={setChairInvites} onTyping={onChairTyping} />
             )}
           </div>
           <input

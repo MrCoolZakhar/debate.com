@@ -14,9 +14,11 @@
  * validation and the insert. Nothing here writes anywhere.
  *
  * What stays exactly as it was on the old steps: the full name and a valid
- * acronym are required (acronymProblem), the logo and banner are optional, the
- * dates are optional (or "to be decided") and the last day may not be before
- * the first.
+ * acronym are required (acronymProblem), the dates are optional (or "to be
+ * decided") and the last day may not be before the first. Since 22 Nov 2026
+ * (owner) the logo is REQUIRED and a banner is always set: the page picks a
+ * random bundled one until the organiser chooses another, so the banner can be
+ * changed but never taken off.
  */
 
 import { useRef, useState } from 'react';
@@ -302,17 +304,9 @@ export function IdentityStep(p: IdentityStepProps) {
 
         {/* Banner presets, and an upload of your own as the last tile. */}
         <div>
-          <Label aside={p.bannerUrl ? (
-            // A banner is optional, so a picked one can always be taken off again.
-            <button
-              type="button"
-              onClick={() => p.onBannerPreset('')}
-              className="focus:outline-none"
-              style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: NEU.ink, textDecoration: 'underline', textDecorationThickness: 1.5, textUnderlineOffset: 3, background: 'none', border: 0, padding: 0, cursor: 'pointer' }}
-            >
-              Remove banner
-            </button>
-          ) : <Optional />}>Banner</Label>
+          {/* A banner is always set (owner, 22 Nov 2026): it can be changed,
+              never removed. */}
+          <Label>Banner</Label>
           <div className="grid" style={{ gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: 8 }}>
             {p.bannerPresets.map((src) => {
               const on = p.bannerUrl === src;

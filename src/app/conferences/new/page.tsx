@@ -11,9 +11,10 @@
  * remaining optional fields (previous editions, the finer public-page
  * details) are deferred to Settings after creation.
  *
- * The conference is PUBLISHED on create, as a second write after the insert
- * (see handleCreate's "PUBLISH ON CREATE" block), and visibility is editable
- * from Settings → Privacy afterwards.
+ * The last step ends in Publish or Save as draft (owner, 22 Nov 2026; see
+ * handleCreate's "PUBLISH OR SAVE AS DRAFT" block): the conference row is
+ * inserted private, then the chosen button makes the final write. Visibility
+ * stays editable from Settings → Privacy afterwards.
  *
  * Progress is saved as the organiser goes (12 Oct 2026, useConferenceDraft.ts
  * + src/lib/conferenceDrafts.ts): on the server once signed in, in this browser
@@ -27,7 +28,7 @@
 import { pressAwareCommitteeType } from '@/lib/press';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AlertTriangle, Mail, Pencil, Check, Camera, ThumbsUp, Music2, MessageCircle, Globe, Plus, ClipboardList, CreditCard, Building2, Megaphone, Trash2, Gift, Banknote, type LucideIcon } from 'lucide-react';
+import { AlertTriangle, Mail, Pencil, Check, Camera, ThumbsUp, Music2, MessageCircle, Globe, Plus, ClipboardList, CreditCard, Building2, Megaphone, Trash2, Gift, Banknote, UserPlus, type LucideIcon } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import Loader from '@/components/Loader';
 import { useAuth } from '@/components/AuthProvider';
@@ -46,6 +47,7 @@ import { acronymProblem } from '@/lib/conferenceLabels';
 import { committeeDisplayName, deriveCommitteeAcronym } from '@/lib/presetNames';
 import { INTENT_OPTIONS, intentPayload } from '@/lib/conferenceIntent';
 import { friendlyError } from '@/lib/friendlyError';
+import { sendChairInvite } from '@/lib/chairInvites';
 // THE ORGANISER DASHBOARD'S COMMITTEE POP-UP, the very component
 // /manage/[slug]/committees opens (24 Sep 2026, owner: "the committee creation
 // in there should be a pop-up, EXACTLY EXACTLY how it is on the organiser
@@ -79,9 +81,11 @@ const ROLE_DEFAULTS = ['delegate', 'chair', 'head-delegate', 'faculty-advisor', 
 
 const TOTAL_STEPS = 10;
 const REVIEW_STEP = TOTAL_STEPS;
-// 1 your conference: name + acronym (REQUIRED), logo, banner, dates (all three
-// optional, as they were as separate steps) · 2 format · 3 level · 4 where
-// · 5 delegates (REQUIRED) · 6 committees (REQUIRED) · 7 description + socials
+// 1 your conference: name + acronym (REQUIRED), logo (REQUIRED since 22 Nov
+// 2026), banner (always set: a random bundled one is picked until the organiser
+// chooses another, 22 Nov 2026), dates (optional) · 2 format · 3 level · 4 where
+// · 5 delegates (REQUIRED) · 6 committees (REQUIRED, at least one, and chairs
+// can be invited there since 22 Nov 2026) · 7 description + socials
 // (skippable) · 8 how delegates pay (REQUIRED) · 9 what they will use
 // Gavelling for (REQUIRED) · 10 review.
 //
@@ -89,9 +93,10 @@ const REVIEW_STEP = TOTAL_STEPS;
 // 5, 8 and 9 of 12). Owner, 24 Sep 2026: "make the first wizard have more
 // information in one page and better looking ... do name, logo, banner and
 // dates in that first step". It is one page with a live preview now
-// (IdentityStep.tsx); every rule each old step had is kept: the logo and the
-// banner were skippable and still are, the dates were optional (or TBD) and
-// still are, and the last day still may not be before the first.
+// (IdentityStep.tsx); every rule each old step had is kept except that the logo
+// is now required and a banner is always set (owner, 22 Nov 2026); the dates
+// were optional (or TBD) and still are, and the last day still may not be
+// before the first.
 //
 // THERE IS NO FEE STEP (owner, 18 Sep 2026). A price is not something to set
 // before a conference exists: the conference and the delegate role config are
@@ -170,6 +175,21 @@ const BANNER_PRESETS = [
   '/banners/preset-5.jpg',
 ];
 
+/** What the last step's two buttons do (owner, 22 Nov 2026). The choice
+ *  survives the sign-in pop-up: a ref for the usual case, sessionStorage for a
+ *  sign-in that reloads the page. An unknown value reads as the private one. */
+type CreateMode = 'publish' | 'draft';
+const CREATE_MODE_KEY = 'gavelling-conference-create-mode';
+function rememberCreateMode(mode: CreateMode | null): void {
+  try {
+    if (mode) sessionStorage.setItem(CREATE_MODE_KEY, mode);
+    else sessionStorage.removeItem(CREATE_MODE_KEY);
+  } catch { /* storage blocked: the ref still holds the choice */ }
+}
+function recallCreateMode(): CreateMode {
+  try { return sessionStorage.getItem(CREATE_MODE_KEY) === 'publish' ? 'publish' : 'draft'; } catch { return 'draft'; }
+}
+
 // Fluent 3D emoji picked to read small→large at a glance: one silhouette →
 // two silhouettes → a huddle of people → a packed stadium for the flagship
 // tier (all four asset paths verified to resolve; Emoji3D falls back to a
@@ -190,9 +210,10 @@ const DELEGATE_RANGES = [
  *  insert writes the committee, and the `committee_country_slots` insert right
  *  after it writes the seats. If you add one, add it there too.
  *
- *  Chairs are deliberately absent: seating or inviting one needs a committee
- *  id, so the pop-up does not draw its chairs section in draft mode. They stay
- *  in the same pop-up at /manage/[slug]/committees. */
+ *  Chairs are collected as `chairInvites` (email, optional name and title) and
+ *  invited by handleCreate once the committee exists (sendChairInvite). Seating
+ *  an accepted applicant stays in /manage/[slug]/committees: a new conference
+ *  has no applicants. */
 interface DraftCommittee extends CommitteeDraft {
   /** Local list key only. The DB mints the real id. */
   key: string;
@@ -423,6 +444,17 @@ function DraftCommitteeCard({
         >
           {COMMITTEE_TYPE_LABEL[committee.type] ?? committee.type}
         </span>
+
+        {(committee.chairInvites?.length ?? 0) > 0 && (
+          <span
+            className="inline-flex items-center gap-1"
+            aria-label={`${committee.chairInvites!.length} ${committee.chairInvites!.length === 1 ? 'chair' : 'chairs'} to invite`}
+            style={{ marginTop: 5, fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: NEU.inkSoft, fontVariantNumeric: 'tabular-nums' }}
+          >
+            <UserPlus size={13} strokeWidth={2} aria-hidden />
+            {committee.chairInvites!.length}
+          </span>
+        )}
       </div>
 
       <div className="flex items-center justify-center gap-2" style={{ padding: '12px 12px 14px' }}>
@@ -570,6 +602,10 @@ export default function NewConferencePage() {
   const [step, setStep] = useState(1);
   const [returnToReview, setReturnToReview] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  // Which last-step button is running, for its "Publishing" / "Saving" label.
+  const [submittingMode, setSubmittingMode] = useState<CreateMode>('publish');
+  // The button pressed before a signed-out visitor was sent to sign in.
+  const createModeRef = useRef<CreateMode | null>(null);
   const [error, setError] = useState('');
   const [stepError, setStepError] = useState('');
 
@@ -602,7 +638,7 @@ export default function NewConferencePage() {
   const [committees, setCommittees] = useState<DraftCommittee[]>([]);
   const [committeeModal, setCommitteeModal] = useState<{ editingKey: string | null; nonce: number } | null>(null);
 
-  // Logo + banner (both optional, step 1). Assets upload to storage as they
+  // Logo (required) + banner (always set), step 1. Assets upload to storage as they
   // are picked, under a client-minted conference id, reused verbatim by the
   // insert below so logo_url / banner_url land on the created row.
   const conferenceIdRef = useRef<string>('');
@@ -714,6 +750,22 @@ export default function NewConferencePage() {
     hasContent: !!fullName.trim() || step > 1,
     restore: restoreDraft,
   });
+
+  // A BANNER IS ALWAYS SET (owner, 22 Nov 2026). With none (a fresh start, or a
+  // restored draft that had none) one of the bundled presets is picked at
+  // random, in an effect after mount and after the draft restore, never during
+  // render, so server and client HTML match. The organiser can still pick
+  // another preset or upload their own; nothing offers to leave it empty.
+  const draftReady = !draft.booting && draft.status === 'ready';
+  useEffect(() => {
+    if (!draftReady || bannerUrl) return;
+    let cancelled = false;
+    // A microtask later, so no state is set synchronously in the effect body.
+    void Promise.resolve().then(() => {
+      if (!cancelled) setBannerUrl(BANNER_PRESETS[Math.floor(Math.random() * BANNER_PRESETS.length)]);
+    });
+    return () => { cancelled = true; };
+  }, [draftReady, bannerUrl]);
 
   // Auth gate. Without drafts (the SQL not applied), unchanged from the old
   // form: signed-out visitors go to sign in.
@@ -841,7 +893,7 @@ export default function NewConferencePage() {
   // ── Logo + banner uploads (same recipe as Settings) ──────────────────────
   async function handleLogoUpload(file: File) {
     if (!session) {
-      setLogoError('Sign in to upload a logo, or skip it for now. Your answers are saved.');
+      setLogoError('Sign in to upload your logo. Your answers are saved.');
       if (draft.available) openAuth();
       return;
     }
@@ -871,17 +923,30 @@ export default function NewConferencePage() {
   }
 
   // ── Submit, preserved exactly from the old form ─────────────────────────
-  async function handleCreate() {
+  async function handleCreate(modeArg?: CreateMode) {
+    // The pending-create effect calls this with no argument: the choice made
+    // before the sign-in pop-up comes back from the ref (or sessionStorage).
+    const mode: CreateMode = modeArg ?? createModeRef.current ?? recallCreateMode();
+
+    // What a conference needs to be created (owner, 22 Nov 2026): a logo, a
+    // banner and a committee. Step 1 and step 6 refuse too; this is the net
+    // for a restored draft that got past them.
+    if (!logoUrl) { editFromReview(1); setStepError('Add your conference logo to continue.'); return; }
+    if (!bannerUrl) { editFromReview(1); setStepError('Pick a banner to continue.'); return; }
+    if (committees.length === 0) { editFromReview(6); setStepError('Add at least one committee to continue.'); return; }
+
     if (!user || !session) {
       // Signed out: save the answers (in this browser, or to their server
       // draft), ask them to sign in (or make an account) in the pop-up, and
       // create it the moment they are back (the pending-create effect below).
       // The insert needs auth.uid().
       if (draft.available) {
+        createModeRef.current = mode;
+        rememberCreateMode(mode);
         await draft.flush();
         draft.markPendingCreate();
         openAuth({
-          title: 'Sign In to Publish Your Conference',
+          title: mode === 'draft' ? 'Sign In to Save Your Conference' : 'Sign In to Publish Your Conference',
           notice: 'Your answers are saved. Log in or make a free account and we create your conference straight away.',
         });
         return;
@@ -890,7 +955,11 @@ export default function NewConferencePage() {
       return;
     }
     setSubmitting(true);
+    setSubmittingMode(mode);
     setError('');
+    // Consumed: from here the choice lives in `mode`.
+    createModeRef.current = null;
+    rememberCreateMode(null);
 
     try {
       const supabase = getAuthedClient();
@@ -1033,11 +1102,10 @@ export default function NewConferencePage() {
       // `committee_country_slots`, so a seatless committee cannot falsely tick
       // "Add committees with enough seats".
       //
-      // `.select('id, name')` because the seats below need the minted ids.
-      // No committees is allowed (optional step): skip the insert entirely.
-      const { data: createdCommittees, error: committeesError } = committees.length === 0
-        ? { data: [] as { id: string; name: string }[], error: null }
-        : await supabase
+      // `.select('id, name')` because the seats and the chair invites below need
+      // the minted ids. At least one committee is required (owner, 22 Nov
+      // 2026), so the insert always runs.
+      const { data: createdCommittees, error: committeesError } = await supabase
         .from('conference_committees')
         .insert(
           committees.map((c) => ({
@@ -1126,16 +1194,79 @@ export default function NewConferencePage() {
       // above (trigger zz_committee_room_on_insert, owner 10 Nov 2026), and adds
       // the seats below to it as they are saved. Nothing to do here.
 
-      // ── GOES LIVE IN 3 DAYS, NOT ON CREATE (owner, 20 Oct 2026) ─────────
+      // ── CHAIR INVITES (owner, 22 Nov 2026) ──────────────────────────────
       //
-      // Publish on create (7 Oct 2026) put conferences live before they were
-      // ready ("especially yesterday, there were like 2 that weren't ready to
-      // go live"). The database now stamps conferences.auto_publish_at =
-      // created + 3 days on insert, and publish_due_conferences (cron
-      // auto-publish-conferences, every 15 minutes) publishes it then, only
-      // once it has a logo. The manage header says when
-      // (PublishControls), and Publish there still goes live at once.
-      // Nothing is written here.
+      // The chairs the organiser listed in each committee's pop-up are invited
+      // now that the committees have ids, whether the conference is published
+      // or saved as a draft. Sequential, and a failed invite never blocks
+      // creation: the failures are counted and the dashboard is told through
+      // `invites_failed` (the committee's chairs section can resend them).
+      let invitesFailed = 0;
+      for (const c of committees) {
+        const invites = c.chairInvites ?? [];
+        if (invites.length === 0) continue;
+        const created = (createdCommittees ?? []).find((r) => committeeKey(r.name) === committeeKey(c.name));
+        if (!created) { invitesFailed += invites.length; continue; }
+        for (const inv of invites) {
+          try {
+            const res = await sendChairInvite(supabase, {
+              conferenceId,
+              committeeId: created.id,
+              committeeName: c.name,
+              email: inv.email,
+              name: inv.name,
+              title: inv.title ?? null,
+            });
+            if (!res.ok) invitesFailed += 1;
+          } catch {
+            invitesFailed += 1;
+          }
+        }
+      }
+
+      // ── PUBLISH OR SAVE AS DRAFT (owner, 22 Nov 2026) ───────────────────
+      //
+      // A conference needs a logo, a banner and a committee to be created, and
+      // the organiser chooses at the end. The row above is inserted private
+      // (is_public false, status 'private'); this is the final write, verified
+      // with .select('id') and a row count.
+      //   Publish: is_public true, status 'public' (a database trigger clears
+      //   auto_publish_at when is_public changes). If it is refused, for
+      //   example by the CHECK conferences_no_test_public on a test-style name,
+      //   the conference is NOT lost: it stays private and the dashboard is
+      //   told through `publish_failed`.
+      //   Save as draft: auto_publish_at is cleared so the old 3 day automatic
+      //   go-live (stamped by the insert trigger) never fires. The conference
+      //   stays private until it is published from the dashboard. A failure
+      //   here is non-fatal.
+      let publishFailed = false;
+      if (mode === 'publish') {
+        const { data: pubRows, error: pubError } = await supabase
+          .from('conferences')
+          .update({ is_public: true, status: 'public' })
+          .eq('id', conferenceId)
+          .select('id');
+        if (pubError || (pubRows ?? []).length !== 1) {
+          publishFailed = true;
+          console.error('Publish on create was refused:', pubError?.message ?? 'no row updated');
+        } else {
+          // Ping search engines (IndexNow) like Publish on the dashboard does.
+          void fetch('/api/indexnow', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ slug }),
+          }).catch(() => {});
+        }
+      } else {
+        const { data: draftRows, error: draftError } = await supabase
+          .from('conferences')
+          .update({ auto_publish_at: null })
+          .eq('id', conferenceId)
+          .select('id');
+        if (draftError || (draftRows ?? []).length !== 1) {
+          console.error('Could not clear the automatic go-live:', draftError?.message ?? 'no row updated');
+        }
+      }
 
       // The saved draft is done: it stops its reminders and leaves My
       // conferences. Never blocks the redirect.
@@ -1144,7 +1275,10 @@ export default function NewConferencePage() {
       // Created, intent and all. Straight to the dashboard — `submitting` stays
       // true through the navigation so the button cannot fire a second time
       // while the route loads.
-      router.push('/manage/' + slug + '?welcome=1');
+      const flags =
+        (invitesFailed > 0 ? `&invites_failed=${invitesFailed}` : '') +
+        (publishFailed ? '&publish_failed=1' : '');
+      router.push('/manage/' + slug + '?welcome=1' + flags);
     } catch (err) {
       setSubmitting(false);
       setError(friendlyError(err, 'Something went wrong. Please try again.'));
@@ -1171,6 +1305,10 @@ export default function NewConferencePage() {
     if (problem) { setStepError(problem); return; }
     if (!datesTbd && startDate && endDate && endDate < startDate) { setStepError('The end date cannot be before the start date.'); return; }
     if (logoUploading || bannerUploading) { setStepError('Wait for the upload to finish.'); return; }
+    // Required since 22 Nov 2026 (owner): a conference needs its logo, and a
+    // banner is always set (a random bundled one is picked until they choose).
+    if (!logoUrl) { setStepError('Add your conference logo to continue.'); return; }
+    if (!bannerUrl) { setStepError('Pick a banner to continue.'); return; }
     advance(1);
   }
 
@@ -1187,13 +1325,15 @@ export default function NewConferencePage() {
   }
 
   function continueCommittees() {
-    // Optional since 12 Oct 2026 (owner): committees can be added later in
-    // Manage → Committees, so an empty list simply moves on.
+    // At least one committee is required again (owner, 22 Nov 2026): delegates
+    // apply to a committee, so a conference without one cannot be applied to.
+    if (committees.length === 0) { setStepError('Add at least one committee to continue.'); return; }
     advance(6);
   }
 
   // Acronyms where there is one, so the row reads "UNSC, DISEC, WHO" rather
   // than three wrapped sentences. ReviewRow wraps a long list, never cuts it.
+  const chairsToInvite = committees.reduce((n, c) => n + (c.chairInvites?.length ?? 0), 0);
   const committeesSummary = committees.length
     ? committees.map((c) => committeeDisplayName(c.name, c.abbreviation)).join(', ')
     : 'None yet';
@@ -1548,17 +1688,11 @@ export default function NewConferencePage() {
                     textAlign: 'center', marginTop: 18, padding: '0 8px',
                   }}
                 >
-                  Chairs come later in Manage&nbsp;→&nbsp;Committees, in this
-                  same pop-up. Everything else is right here.
+                  Invite each committee&apos;s chairs by email in its pop-up. They get the invite as soon as your conference is created.
                 </p>
 
                 {stepError && <ErrorNote>{stepError}</ErrorNote>}
                 <ContinueButton onClick={continueCommittees} />
-                {committees.length === 0 && (
-                  <p style={{ fontFamily: OUTFIT, fontSize: 13, color: NEU.inkSoft, textAlign: 'center', marginTop: 10 }}>
-                    No committees yet? Continue and add them later in Manage&nbsp;→&nbsp;Committees.
-                  </p>
-                )}
               </WizardShell>
             )}
 
@@ -1731,14 +1865,14 @@ export default function NewConferencePage() {
             {step === REVIEW_STEP && (
               <WizardShell
                 step={REVIEW_STEP} total={TOTAL_STEPS}
-                title="Ready to create it?"
+                title="Ready to Publish?"
                 sub="Check everything over, tap any row to change it."
                 onBack={back}
               >
                 <div className="flex flex-col gap-2.5">
                   <ReviewRow label="Conference" value={`${fullName} (${acronym.trim()})`} onEdit={() => editFromReview(1)} />
-                  <ReviewRow label="Logo" value={logoUrl ? 'Added' : 'Skipped'} onEdit={() => editFromReview(1)} />
-                  <ReviewRow label="Banner" value={bannerUrl ? 'Added' : 'Skipped'} onEdit={() => editFromReview(1)} />
+                  <ReviewRow label="Logo" value={logoUrl ? 'Added' : 'Not added'} onEdit={() => editFromReview(1)} />
+                  <ReviewRow label="Banner" value={bannerUrl ? 'Added' : 'Not added'} onEdit={() => editFromReview(1)} />
                   <ReviewRow label="Dates" value={datesTbd ? 'To be decided' : (formatDateRange(startDate, endDate) || 'Not set')} onEdit={() => editFromReview(1)} />
                   <ReviewRow label="Format" value={format === 'in-person' ? 'In person' : format === 'online' ? 'Online' : 'Hybrid'} onEdit={() => editFromReview(2)} />
                   <ReviewRow label="Level" value={studentLevel === 'school' ? 'High school' : studentLevel === 'university' ? 'University' : 'Both'} onEdit={() => editFromReview(3)} />
@@ -1749,6 +1883,9 @@ export default function NewConferencePage() {
                     value={committeesSummary}
                     onEdit={() => editFromReview(6)}
                   />
+                  {chairsToInvite > 0 && (
+                    <ReviewRow label="Chairs to invite" value={String(chairsToInvite)} onEdit={() => editFromReview(6)} />
+                  )}
                   <ReviewRow label="Description" value={description.trim() ? 'Added' : 'Skipped'} onEdit={() => editFromReview(7)} />
                   <ReviewRow label="Social links" value={socialsSummary || 'Skipped'} onEdit={() => editFromReview(7)} />
                   <ReviewRow label="Delegate payments" value={paymentSummary} onEdit={() => editFromReview(8)} />
@@ -1778,21 +1915,24 @@ export default function NewConferencePage() {
                 </div>
                 )}
 
-                {/* What happens the moment they tap Create (owner, 7 Oct 2026).
-                    Two states: a conference with dates to be decided goes live
-                    too, listed in Explore's "Dates to Be Decided" section. */}
-                <p
+                {/* What each button does (owner, 22 Nov 2026). Publish goes live
+                    at once, a conference with dates to be decided is listed
+                    under Dates to be decided; Save as draft stays private
+                    until it is published from the dashboard. */}
+                <div
                   style={{
                     fontFamily: OUTFIT, fontSize: 12.5, color: NEU.muted, lineHeight: 1.6,
                     textAlign: 'center', marginTop: 22, padding: '0 12px',
                   }}
                 >
-                  {!user
-                    ? 'You sign in or make a free account next, then your conference goes live on gavelling.com. You can make it private any time in Settings'
-                    : datesTbd || !startDate.trim()
-                    ? 'Your conference goes live on gavelling.com as soon as you create it, listed under Dates to be decided until you add them'
-                    : 'Your conference goes live on gavelling.com as soon as you create it, and you can make it private any time in Settings'}
-                </p>
+                  {!user && <p style={{ margin: 0 }}>You sign in or make a free account next, then we create your conference.</p>}
+                  <p style={{ margin: 0 }}>
+                    {datesTbd || !startDate.trim()
+                      ? 'Publish puts your conference on gavelling.com straight away, listed under Dates to be decided until you add them.'
+                      : 'Publish puts your conference on gavelling.com straight away.'}
+                    {' '}Save as draft keeps it private until you publish it from your dashboard.
+                  </p>
+                </div>
 
                 {error && (
                   <div
@@ -1808,14 +1948,29 @@ export default function NewConferencePage() {
                   </div>
                 )}
 
-                <div className="flex justify-center" style={{ marginTop: 24 }}>
+                <div className="flex flex-col items-center" style={{ marginTop: 24, gap: 10 }}>
                   <PrimaryButton
-                    onClick={handleCreate}
+                    onClick={() => { void handleCreate('publish'); }}
                     disabled={submitting || (user ? !readyToCreate : !answersComplete)}
                     style={{ padding: '14px 38px' }}
                   >
-                    {submitting ? 'Creating' : user ? 'Create conference' : 'Sign in to publish'}
+                    {submitting && submittingMode === 'publish' ? 'Publishing' : user ? 'Publish' : 'Sign in to publish'}
                   </PrimaryButton>
+                  <button
+                    type="button"
+                    onClick={() => { void handleCreate('draft'); }}
+                    disabled={submitting || (user ? !readyToCreate : !answersComplete)}
+                    className="focus:outline-none focus-visible:shadow-[0_0_0_3px_#EED98A]"
+                    style={{
+                      fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 700, color: NEU.ink,
+                      textDecoration: 'underline', textDecorationThickness: 1.5, textUnderlineOffset: 3,
+                      background: 'none', border: 0, borderRadius: 8, padding: '6px 10px',
+                      cursor: submitting || (user ? !readyToCreate : !answersComplete) ? 'not-allowed' : 'pointer',
+                      opacity: submitting || (user ? !readyToCreate : !answersComplete) ? 0.45 : 1,
+                    }}
+                  >
+                    {submitting && submittingMode === 'draft' ? 'Saving' : user ? 'Save as draft' : 'Sign in to save as draft'}
+                  </button>
                 </div>
               </WizardShell>
             )}

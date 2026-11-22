@@ -46,6 +46,7 @@ import { type FormBlock, normalizeBlocks, unpublishableQuestions } from '@/lib/c
 import QuestionBuilder from '@/components/QuestionBuilder';
 import { conferencePaymentsReady } from '@/lib/payments';
 import { friendlyError, constraintMessage } from '@/lib/friendlyError';
+import { checkPublishReady } from '@/lib/publishReadiness';
 import { normaliseRoleTimeline, linkNeighbourPhase } from '@/lib/roleTimeline';
 import { useConferenceTimezone, timelineNotice } from './timelineUi';
 import ProfileLink from '@/components/ProfileLink';
@@ -1729,6 +1730,15 @@ export default function SettingsPage() {
         setPublicToggleSaving(false);
         notifyErr('Your session has expired, please refresh and sign in again.', 'settings-privacy');
         return;
+      }
+      // Going public needs a logo, a banner and a committee (owner, 22 Nov 2026).
+      if (next) {
+        const ready = await checkPublishReady(supabase, conference.id, conference);
+        if (ready.error || ready.sentence) {
+          setPublicToggleSaving(false);
+          notifyErr(ready.sentence ?? friendlyError(ready.error, 'Could not check your conference. Try again in a moment.'), 'settings-privacy');
+          return;
+        }
       }
       const { data, error } = await supabase.from('conferences').update({
         is_public: next,
