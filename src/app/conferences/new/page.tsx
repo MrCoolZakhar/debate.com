@@ -34,18 +34,19 @@ import Loader from '@/components/Loader';
 import { useAuth } from '@/components/AuthProvider';
 import { createClient } from '@supabase/supabase-js';
 import { realtimeFallback } from '@/lib/realtimeTransport';
-import { conferenceSlugAttempts, conferenceYear, isSlugTakenError } from '@/lib/conferenceSlug';
+import { conferenceSlugAttempts, conferenceSlugLadder, conferenceYear, isSlugTakenError } from '@/lib/conferenceSlug';
 import { UN_COUNTRIES, getCountryByName } from '@/lib/countries';
 import { FlagImg } from '@/components/FlagImg';
 import { WizardShell, TwoTabPick, CardSelect } from '@/components/wizard';
 import { NEU, OUTFIT, EASE, Emoji3D } from '@/components/neu';
 import { IdentityStep } from './IdentityStep';
 import IntentStep from './IntentStep';
+import ReviewStep from './ReviewStep';
 import { LogoCropModal } from '@/components/LogoCropModal';
 import { uploadConferenceAsset } from '@/lib/conferenceAssets';
 import { normalizeSocialUrl } from '@/lib/socialLinks';
 import { acronymProblem } from '@/lib/conferenceLabels';
-import { committeeDisplayName, deriveCommitteeAcronym } from '@/lib/presetNames';
+import { deriveCommitteeAcronym } from '@/lib/presetNames';
 import { INTENT_OPTIONS, intentPayload } from '@/lib/conferenceIntent';
 import { friendlyError } from '@/lib/friendlyError';
 import { sendChairInvite } from '@/lib/chairInvites';
@@ -1322,28 +1323,10 @@ export default function NewConferencePage() {
   // Acronyms where there is one, so the row reads "UNSC, DISEC, WHO" rather
   // than three wrapped sentences. ReviewRow wraps a long list, never cuts it.
   const chairsToInvite = committees.reduce((n, c) => n + (c.chairInvites?.length ?? 0), 0);
-  const committeesSummary = committees.length
-    ? committees.map((c) => committeeDisplayName(c.name, c.abbreviation)).join(', ')
-    : 'None yet';
-
   const paymentSummary =
     payChoice === 'free' ? 'Free'
     : payChoice === 'paid' ? 'Paid, set up in Financials'
     : 'Not answered';
-
-  // Titles rather than the admin's SHOUTING short codes: this row sits beside
-  // "Committees" and "Logo" in a sentence-case list.
-  const intentSummary = intentKeys.length
-    ? INTENT_OPTIONS.filter((o) => intentKeys.includes(o.key)).map((o) => o.label).join(', ')
-    : 'Not answered';
-
-  const socialsSummary = [
-    instagram.trim() && 'Instagram',
-    facebook.trim() && 'Facebook',
-    tiktok.trim() && 'TikTok',
-    whatsapp.trim() && 'WhatsApp',
-    website.trim() && 'Website',
-  ].filter(Boolean).join(', ');
 
   // The logo, banner, description and socials steps are skippable and none of
   // them gates creation. Everything else does: the head count is a real
@@ -1829,32 +1812,34 @@ export default function NewConferencePage() {
             {step === REVIEW_STEP && (
               <WizardShell
                 step={REVIEW_STEP} total={TOTAL_STEPS}
+                maxWidth={1180}
                 title="Ready to Publish?"
-                sub="Check everything over, tap any row to change it."
+                sub="Everything in one place, and how your page will look."
                 onBack={back}
               >
-                <div className="flex flex-col gap-2.5">
-                  <ReviewRow label="Conference" value={`${fullName} (${acronym.trim()})`} onEdit={() => editFromReview(1)} />
-                  <ReviewRow label="Logo" value={logoUrl ? 'Added' : 'Not added'} onEdit={() => editFromReview(1)} />
-                  <ReviewRow label="Banner" value={bannerUrl ? 'Added' : 'Not added'} onEdit={() => editFromReview(1)} />
-                  <ReviewRow label="Dates" value={datesTbd ? 'To be decided' : (formatDateRange(startDate, endDate) || 'Not set')} onEdit={() => editFromReview(1)} />
-                  <ReviewRow label="Format" value={format === 'in-person' ? 'In person' : format === 'online' ? 'Online' : 'Hybrid'} onEdit={() => editFromReview(2)} />
-                  <ReviewRow label="Level" value={studentLevel === 'school' ? 'High school' : studentLevel === 'university' ? 'University' : 'Both'} onEdit={() => editFromReview(3)} />
-                  <ReviewRow label="Location" value={`${city}, ${country}`} onEdit={() => editFromReview(4)} />
-                  <ReviewRow label="Expected delegates" value={expectedDelegates || 'Not set'} onEdit={() => editFromReview(5)} />
-                  <ReviewRow
-                    label={`Committees (${committees.length})`}
-                    value={committeesSummary}
-                    onEdit={() => editFromReview(6)}
-                  />
-                  {chairsToInvite > 0 && (
-                    <ReviewRow label="Chairs to invite" value={String(chairsToInvite)} onEdit={() => editFromReview(6)} />
-                  )}
-                  <ReviewRow label="Description" value={description.trim() ? 'Added' : 'Skipped'} onEdit={() => editFromReview(7)} />
-                  <ReviewRow label="Social links" value={socialsSummary || 'Skipped'} onEdit={() => editFromReview(7)} />
-                  <ReviewRow label="Delegate payments" value={paymentSummary} onEdit={() => editFromReview(8)} />
-                  <ReviewRow label="Using Gavelling for" value={intentSummary} onEdit={() => editFromReview(9)} />
-                </div>
+                <ReviewStep
+                  fullName={fullName}
+                  acronym={acronym}
+                  logoUrl={logoUrl}
+                  bannerUrl={bannerUrl}
+                  dateLabel={datesTbd ? '' : formatDateRange(startDate, endDate)}
+                  datesTbd={datesTbd}
+                  year={datesTbd ? '' : String(conferenceYear(startDate, endDate) ?? '')}
+                  slug={conferenceSlugLadder({ acronym, fullName, year: datesTbd ? null : conferenceYear(startDate, endDate) })[0] ?? acronym.trim().toLowerCase()}
+                  country={country}
+                  city={city}
+                  format={format}
+                  studentLevel={studentLevel}
+                  expectedDelegates={expectedDelegates}
+                  committees={committees}
+                  chairsToInvite={chairsToInvite}
+                  description={description}
+                  socials={{ instagram, facebook, tiktok, whatsapp, website }}
+                  paymentSummary={paymentSummary}
+                  intentKeys={intentKeys}
+                  renderEmblem={(c, size) => <CommitteeEmblem committee={c} size={size} />}
+                  onEdit={editFromReview}
+                  actions={<>
 
                 {/* Contact email, required by the directory, prefilled from your
                     profile. Signed out it is not asked: the account's address
@@ -1936,6 +1921,8 @@ export default function NewConferencePage() {
                     {submitting && submittingMode === 'draft' ? 'Saving' : user ? 'Save as draft' : 'Sign in to save as draft'}
                   </button>
                 </div>
+                  </>}
+                />
               </WizardShell>
             )}
 
@@ -1984,45 +1971,7 @@ export default function NewConferencePage() {
   );
 }
 
-// ── Review row ─────────────────────────────────────────────────────────────
-
-function ReviewRow({ label, value, onEdit }: { label: string; value: string; onEdit: () => void }) {
-  const [hovered, setHovered] = useState(false);
-  return (
-    <button
-      type="button"
-      onClick={onEdit}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      className="w-full flex items-center gap-3 text-left focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828]"
-      style={{
-        padding: '12px 16px',
-        borderRadius: 12,
-        border: 'none',
-        backgroundColor: '#FFFFFF',
-        boxShadow: hovered ? CARD_SHADOW_HOVER : CARD_SHADOW,
-        transition: `box-shadow 220ms ${EASE}`,
-        cursor: 'pointer',
-      }}
-    >
-      <span
-        style={{
-          fontFamily: OUTFIT, fontSize: 13, fontWeight: 600,
-          color: NEU.inkSoft, width: 140, flexShrink: 0,
-        }}
-      >
-        {label}
-      </span>
-      <span
-        className="flex-1 min-w-0"
-        style={{ fontFamily: OUTFIT, fontSize: 14.5, fontWeight: 700, color: NEU.ink, fontVariantNumeric: 'tabular-nums', overflowWrap: 'anywhere' }}
-      >
-        {value}
-      </span>
-      <Pencil size={14} style={{ color: hovered ? NEU.forest : NEU.muted, flexShrink: 0, transition: `color 220ms ${EASE}` }} />
-    </button>
-  );
-}
+// ── Dates on the review step ───────────────────────────────────────────────
 
 function formatDateRange(start: string, end: string): string {
   if (!start || !end) return '';

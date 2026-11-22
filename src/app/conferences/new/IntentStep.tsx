@@ -10,11 +10,13 @@
 // laptop with the delegate phone over its side (public/sessions/hero-*.webp), from 720 px; a phone
 // card is too narrow for it and keeps the 3D icon. Interactive: the cards rise in one after
 // another, lift on hover, press in, and a picked card fills, its picture pops and a check lands.
-// Real marks where they say more (owner, 22 Nov 2026): Applications is a Google Form crossed out,
+// Real marks where they say more (owner, 22 Nov 2026): Applications keeps its 3D ballot box with a
+// small Google Forms disc crossed out at its top right,
 // Payments carries the payment apps of Gavelling's biggest countries along its foot (India first:
 // UPI, Paytm, PhonePe, Google Pay; Brazil's Pix; then PayPal, Apple Pay, Revolut, Visa,
-// Mastercard; brandMarks.ts, Simple Icons, CC0), Marketing a stack of social apps; the stacks fan
-// out on hover. On a phone only the crossed-out form stays; the rest keep their 3D icons.
+// Mastercard; brandMarks.ts, Simple Icons, CC0), Marketing the Gavelling mark, bigger, + a stack of
+// social apps that fans out on hover. On a phone the crossed-out form stays; the rest keep their
+// 3D icons.
 // Everything is CSS on the cards; reduced motion keeps the colours and drops the movement.
 //
 // The choices themselves are unchanged: INTENT_OPTIONS (src/lib/conferenceIntent.ts) is still
@@ -60,8 +62,10 @@ const CSS = `
 .gv-int-devices .gv-int-phone{right:0;bottom:-8%;height:112%;width:auto}
 .gv-int-rich + .gv-int-ico{display:none}
 /* Applications: a Google Form, crossed out. */
-.gv-int-forms{position:relative;display:flex;width:100%;height:100%;align-items:center;justify-content:center}
-.gv-int-forms svg.gv-int-formglyph{width:78%;height:78%;filter:drop-shadow(0 3px 5px rgba(114,72,185,0.30))}
+.gv-int-forms{position:absolute;top:-10%;right:-26%;width:52%;height:52%;border-radius:999px;background:#FFFFFF;display:flex;align-items:center;justify-content:center;
+  box-shadow:0 0 0 2px #FFFFFF,0 2px 6px rgba(27,56,40,0.22)}
+.gv-int-card[aria-checked="true"] .gv-int-forms{box-shadow:0 0 0 2px #F7F1DF,0 2px 6px rgba(27,56,40,0.22)}
+.gv-int-forms svg.gv-int-formglyph{width:62%;height:62%}
 .gv-int-forms svg.gv-int-cross{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
 /* Stacks of brand discs: Marketing's socials up top, Payments' apps along the foot. */
 .gv-int-stack{display:flex;align-items:center}
@@ -70,16 +74,18 @@ const CSS = `
 .gv-int-card[aria-checked="true"] .gv-int-disc{box-shadow:0 0 0 2px #F7F1DF,0 2px 6px rgba(27,56,40,0.18)}
 .gv-int-disc svg{width:58%;height:58%}
 .gv-int-socials{height:clamp(38px,7vh,64px)}
-.gv-int-socials .gv-int-disc{width:clamp(32px,5.6vh,50px);height:clamp(32px,5.6vh,50px)}
-.gv-int-socials .gv-int-disc + .gv-int-disc{margin-left:calc(-1 * clamp(9px,1.6vh,14px))}
+.gv-int-socials .gv-int-disc{width:clamp(26px,4.4vh,40px);height:clamp(26px,4.4vh,40px)}
+.gv-int-socials .gv-int-disc + .gv-int-disc{margin-left:calc(-1 * clamp(7px,1.3vh,11px))}
+.gv-int-socials .gv-int-gv{width:clamp(38px,7vh,62px);height:clamp(38px,7vh,62px)}
+.gv-int-gv img{width:84%;height:84%;object-fit:contain}
+.gv-int-plus{margin:0 clamp(4px,0.8vh,8px);font-size:clamp(16px,2.6vh,24px);font-weight:800;color:#1B3828;line-height:1}
 .gv-int-logos{margin-top:auto;padding-top:clamp(2px,0.6vh,6px)}
 .gv-int-logos .gv-int-disc{width:clamp(22px,3.5vh,31px);height:clamp(22px,3.5vh,31px)}
 .gv-int-logos .gv-int-disc svg{width:66%;height:66%}
 .gv-int-logos .gv-int-disc + .gv-int-disc{margin-left:-6px}
 .gv-int-upi{font-size:clamp(7px,1.1vh,9.5px);font-weight:900;font-style:italic;letter-spacing:-0.02em;line-height:1}
 @media (hover:hover){
-  .gv-int-card:hover .gv-int-socials .gv-int-disc + .gv-int-disc{margin-left:4px}
-  .gv-int-card:hover .gv-int-logos .gv-int-disc + .gv-int-disc{margin-left:3px}
+  .gv-int-card:hover .gv-int-socials .gv-int-disc + .gv-int-disc{margin-left:3px}
   .gv-int-card:hover .gv-int-disc:hover{transform:translateY(-3px) scale(1.08)}
 }
 .gv-int-card[aria-checked="true"] .gv-int-socials{transform:scale(1.06)}
@@ -169,20 +175,25 @@ export default function IntentStep({ value, onToggle }: {
               )}
               {o.key === 'marketing' && (
                 <span className="gv-int-stack gv-int-socials gv-int-rich" aria-hidden>
+                  <span className="gv-int-disc gv-int-gv">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src="/gavel-mark.webp" alt="" draggable={false} />
+                  </span>
+                  <span className="gv-int-plus">+</span>
                   {SOCIALS.map((m) => <BrandDisc key={m.slug} {...m} />)}
                 </span>
               )}
               <span className="gv-int-ico" aria-hidden>
-                {o.key === 'applications' ? (
+                <Emoji3D name={o.emoji} size={64} fallback={FALLBACK_ICONS[o.key]} fallbackColor="#1B3828" style={{ width: '100%', height: '100%' }} />
+                {o.key === 'applications' && (
+                  // Google Forms, small and crossed out by one thin line so the mark still reads.
                   <span className="gv-int-forms">
                     <svg className="gv-int-formglyph" viewBox="0 0 24 24" fill={BRAND.googleforms.hex}><path d={BRAND.googleforms.path} /></svg>
                     <svg className="gv-int-cross" viewBox="0 0 24 24" fill="none" strokeLinecap="round">
-                      <path d="M4.5 4.5 19.5 19.5M19.5 4.5 4.5 19.5" stroke="#FFFFFF" strokeWidth="5" />
-                      <path d="M4.5 4.5 19.5 19.5M19.5 4.5 4.5 19.5" stroke="#D93025" strokeWidth="2.8" />
+                      <path d="M5 19 19 5" stroke="#FFFFFF" strokeWidth="3.6" />
+                      <path d="M5 19 19 5" stroke="#D93025" strokeWidth="1.9" />
                     </svg>
                   </span>
-                ) : (
-                  <Emoji3D name={o.emoji} size={64} fallback={FALLBACK_ICONS[o.key]} fallbackColor="#1B3828" style={{ width: '100%', height: '100%' }} />
                 )}
                 <span className="gv-int-badge"><Check size={10} strokeWidth={3.2} /></span>
               </span>
