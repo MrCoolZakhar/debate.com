@@ -934,9 +934,14 @@ export default function NewConferencePage() {
         rememberCreateMode(mode);
         await draft.flush();
         draft.markPendingCreate();
+        // The buttons read Publish / Save as draft signed out too (owner,
+        // 23 Nov 2026); the account is asked for only here, in the pop-up.
         openAuth({
-          title: mode === 'draft' ? 'Sign In to Save Your Conference' : 'Sign In to Publish Your Conference',
-          notice: 'Your answers are saved. Log in or make a free account and we create your conference straight away.',
+          step: 'signup',
+          title: mode === 'draft' ? 'Create an Account to Save Your Draft' : 'Create an Account to Publish',
+          notice: mode === 'draft'
+            ? 'Your answers are saved. Make a free account, or log in, and we save your conference as a private draft straight away.'
+            : 'Your answers are saved. Make a free account, or log in, and we publish your conference straight away.',
         });
         return;
       }
@@ -1365,7 +1370,7 @@ export default function NewConferencePage() {
     intentKeys.length > 0;
   const readyToCreate = answersComplete && contactEmail.trim();
 
-  // Signed in after "Sign in to publish": create it now, once the pop-up has
+  // Signed in after Publish / Save as draft opened the account pop-up: create it now, once the pop-up has
   // closed (a new account first answers its questions there) and the contact
   // email has been filled from the profile.
   const authBlocking = useBasicsGateBlocking();
@@ -1860,8 +1865,8 @@ export default function NewConferencePage() {
                   publish={{
                     onPublish: () => { void handleCreate('publish'); },
                     onDraft: () => { void handleCreate('draft'); },
-                    publishLabel: user ? 'Publish' : 'Sign in to publish',
-                    draftLabel: user ? 'Save as draft' : 'Sign in to save as draft',
+                    publishLabel: 'Publish',
+                    draftLabel: 'Save as draft',
                     disabled: submitting || (user ? !readyToCreate : !answersComplete),
                     busy: submitting ? submittingMode : null,
                   }}

@@ -49,7 +49,8 @@
  * Header (avatar, name, email); Live now; Needs your attention; then MY
  * PROFILE, MANAGE ACCOUNT (the credit count at its right edge and a + that
  * opens the buy-credits pop-up), PRICING (a Free / Unlimited badge, and on Free
- * an up arrow that opens the Unlimited pop-up); YOUR CONFERENCES (three rows,
+ * an up arrow that opens the Unlimited pop-up); YOUR CONFERENCES (up to two
+ * creation drafts marked DRAFT, owner 23 Nov 2026, then three rows,
  * then "All conferences" or "Create a conference"); ABOUT GAVELLING; SIGN OUT.
  * The MUN CV and calendar rows moved to the account area's own menu.
  */
@@ -72,6 +73,7 @@ import { CircleFlag } from '@/components/CircleFlag';
 import { deriveCommitteeAcronym } from '@/lib/presetNames';
 import { useUnlimitedStatus, isUnlimited } from '@/lib/unlimitedStatus';
 import { useClaimImportedOnLoad } from '@/lib/importClaim';
+import { myConferenceDrafts, conferenceDraftHref, readLocalDraft, readLocalDraftToken } from '@/lib/conferenceDrafts';
 
 /** One row in the dropdown's "YOUR CONFERENCES" section. */
 interface NavConference {
@@ -89,6 +91,10 @@ interface NavConference {
    *  vanish from this menu until somebody accepted you), and says APPLIED
    *  rather than claiming a role nobody has given yet. */
   pending?: boolean;
+  /** An organiser's conference that is not public yet (Save as draft, or
+   *  unpublished later). The row says DRAFT and still opens the dashboard,
+   *  where it is published. */
+  isDraft?: boolean;
   /** Something here is waiting on this person. One short phrase, shown as a
    *  quiet gold dot whose accessible name is this text. */
   attention?: string;
@@ -98,6 +104,18 @@ interface NavConference {
     | { kind: 'allocated'; countryCode: string | null; countryName: string | null; committee: string }
     | { kind: 'unpaid' }
     | { kind: 'approved' };
+}
+
+/** A creation-wizard draft (owner, 23 Nov 2026: "a draft of a conference
+ *  should be saved on the top right in their profile"): an unfinished
+ *  /conferences/new owned by this account (my_conference_drafts), or the copy
+ *  a signed-out visitor left in this browser. Opens the wizard where it was. */
+interface WizardDraftRow { key: string; href: string; label: string; logo: string | null }
+
+function wizardDraftLabel(acronym: unknown, fullName: unknown): string {
+  const a = typeof acronym === 'string' ? acronym.trim() : '';
+  const f = typeof fullName === 'string' ? fullName.trim() : '';
+  return a || f || 'Untitled conference';
 }
 
 /** Roles that get the standing line: everyone who attends as a participant
@@ -154,6 +172,9 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
   const [myConfs, setMyConfs] = useState<NavConference[] | null>(null);
   const [confsLoading, setConfsLoading] = useState(false);
   const confsFetched = useRef(false);
+  // Unfinished creation-wizard drafts, re-read on every open (a draft saved a
+  // minute ago must be there). A failed read just leaves them off.
+  const [wizardDrafts, setWizardDrafts] = useState<WizardDraftRow[]>([]);
 
   const { user, profile, session, signOut, loading: authLoading } = useAuth();
   // Unlimited is read from subscriptions (my_unlimited_status), never the dead
@@ -282,7 +303,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
     const userId = user.id;
     const supabase = getAuthedClient(session.access_token);
     // end_date is fetched only so finished conferences can be dropped below.
-  const CONF = 'id, slug, acronym, logo_url, start_date, end_date';
+  const CONF = 'id, slug, acronym, logo_url, start_date, end_date, is_public';
 
     (async () => {
       try {
@@ -302,10 +323,12 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
             .eq('organizer_id', userId),
         ]);
 
-        type ConfRow = { id: string; slug: string; acronym: string; logo_url: string | null; start_date: string; end_date: string | null };
+        type ConfRow = { id: string; slug: string; acronym: string; logo_url: string | null; start_date: string; end_date: string | null; is_public?: boolean | null };
+        const privateIds = new Set<string>();
         const byId = new Map<string, NavConference>();
         const add = (conf: ConfRow | null, role: NavConference['role'], pending = false) => {
           if (!conf) return;
+          if (conf.is_public === false) privateIds.add(conf.id);
           const existing = byId.get(conf.id);
           if (existing) {
             // Organizer trumps attendee roles (row links to /manage).
@@ -375,6 +398,10 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
             }
           }
         } catch { /* the rows still list without a standing line */ }
+
+        for (const c of byId.values()) {
+          if (c.role === 'ORGANIZER' && privateIds.has(c.id)) c.isDraft = true;
+        }
 
         const list = Array.from(byId.values())
           .filter(c => !hasConcluded(c))
@@ -447,6 +474,36 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
       }
     })();
   }, [open, user, session]);
+
+  useEffect(() => {
+    if (!open || !user) return;
+    let cancelled = false;
+    (async () => {
+      const rows: WizardDraftRow[] = [];
+      // The signed-out copy in this browser: shown only while it has not
+      // become a server draft yet (no token), so one draft is never two rows.
+      const local = readLocalDraft();
+      if (local && !readLocalDraftToken()) {
+        const d = local.data as Record<string, unknown>;
+        rows.push({
+          key: 'local',
+          href: '/conferences/new',
+          label: wizardDraftLabel(d.acronym, d.fullName),
+          logo: typeof d.logoUrl === 'string' && d.logoUrl.trim() ? d.logoUrl : null,
+        });
+      }
+      try {
+        const a = await myConferenceDrafts();
+        if (a.kind === 'ok') {
+          for (const d of a.data) {
+            rows.push({ key: d.token, href: conferenceDraftHref(d.token), label: wizardDraftLabel(d.acronym, d.full_name), logo: d.logo_url });
+          }
+        }
+      } catch { /* the menu still lists the conferences */ }
+      if (!cancelled) setWizardDrafts(rows.slice(0, 2));
+    })();
+    return () => { cancelled = true; };
+  }, [open, user]);
 
   /** The three rows the menu has room for (five until the account area grew
    *  its own conferences page). Order on screen is always soonest
@@ -672,8 +729,9 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
             </div>
           </div>
 
-          {/* Your conferences, lazily fetched. Invitations and drafts live in
-              Needs your attention above, see the file header. It renders once the fetch
+          {/* Your conferences, lazily fetched. Conference drafts (the creation
+              wizard's, and private conferences marked DRAFT) are listed here;
+              invitations and application drafts live in Needs your attention above, see the file header. It renders once the fetch
               has resolved even when the result is EMPTY, because the section header
               carries the + that starts a conference and somebody with none yet is
               exactly who needs it. Still hidden while the fetch is unresolved. */}
@@ -725,6 +783,54 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
                   </div>
                 ) : (
                   <>
+                    {/* Conferences still being created: back into the wizard
+                        exactly where they left off. */}
+                    {wizardDrafts.map((d) => (
+                      <Link
+                        key={`draft-${d.key}`}
+                        href={d.href}
+                        onClick={() => setOpen(false)}
+                        className="flex items-center gap-2.5 px-4 py-2 transition-colors"
+                        style={{ textDecoration: 'none' }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27, 56, 40, 0.05)'; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                      >
+                        <span
+                          style={{
+                            width: '24px', height: '24px', borderRadius: '50%',
+                            backgroundColor: '#FFFEFA', border: '0.5px dashed #CDBF9F',
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                            overflow: 'hidden', flexShrink: 0,
+                          }}
+                        >
+                          {d.logo ? (
+                            <img
+                              src={d.logo}
+                              alt=""
+                              style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '2px' }}
+                              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                            />
+                          ) : (
+                            <span style={{ fontSize: '9.5px', fontWeight: 900, color: '#1B3828', fontFamily: "var(--font-brand), sans-serif" }}>
+                              {d.label[0]?.toUpperCase() ?? '•'}
+                            </span>
+                          )}
+                        </span>
+                        <span
+                          className="flex-1 min-w-0 [overflow-wrap:anywhere] font-bold"
+                          style={{ color: '#1C1410', fontSize: '12px', letterSpacing: '0.03em', fontFamily: "var(--font-brand), sans-serif" }}
+                        >
+                          {d.label}
+                        </span>
+                        <span
+                          className="font-bold uppercase shrink-0"
+                          style={{ color: '#8A6614', fontSize: '9px', letterSpacing: '0.06em', fontFamily: "var(--font-brand), sans-serif" }}
+                        >
+                          DRAFT
+                        </span>
+                      </Link>
+                    ))}
+
                     {visibleConfs.map((conf) => (
                       <Link
                         key={conf.id}
@@ -795,13 +901,13 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
                           <span
                             className="font-bold uppercase shrink-0"
                             style={{
-                              color: conf.standing?.kind === 'unpaid' ? '#8B2020' : conf.standing?.kind === 'approved' ? '#2A5A3C' : conf.pending ? '#8A6614' : '#9A8A78',
+                              color: conf.standing?.kind === 'unpaid' ? '#8B2020' : conf.standing?.kind === 'approved' ? '#2A5A3C' : conf.pending || conf.isDraft ? '#8A6614' : '#9A8A78',
                               fontSize: '9px', letterSpacing: '0.06em', fontFamily: "var(--font-brand), sans-serif",
                             }}
                           >
                             {conf.standing?.kind === 'unpaid' ? 'UNPAID'
                               : conf.standing?.kind === 'approved' ? 'APPROVED'
-                              : conf.pending ? 'APPLIED' : conf.role}
+                              : conf.pending ? 'APPLIED' : conf.isDraft ? 'DRAFT' : conf.role}
                           </span>
                         )}
                       </Link>
@@ -809,7 +915,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
 
                     {/* With nothing to list, "All conferences" points at an empty
                         page. Send them where the + goes instead. */}
-                    {(myConfs ?? []).length === 0 && !hasOwnPending ? (
+                    {(myConfs ?? []).length === 0 && wizardDrafts.length === 0 && !hasOwnPending ? (
                       <Link
                         href="/conferences/new"
                         onClick={() => setOpen(false)}
