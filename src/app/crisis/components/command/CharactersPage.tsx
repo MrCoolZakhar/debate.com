@@ -17,6 +17,7 @@ import CharacterModal from '../character/CharacterModal';
 import NewCharacterDialog from '../character/NewCharacterDialog';
 import CrisisDialog from '../delegate/CrisisDialog';
 import { STATUS_WORD, StatusIcon, mayEditCharacters, statusColor } from '../character/characterStatus';
+import { delegateLabel } from '../character/delegateName';
 import { PageHeading } from './setupKit';
 
 const SWATCHES = [
@@ -347,7 +348,19 @@ function CharacterCard({ c, color, members, staff, onOpen }: { c: Character; col
           </span>
           <span className="flex items-start gap-1.5" style={{ overflowWrap: 'anywhere' }}>
             <UsersRound size={14} strokeWidth={1.5} aria-hidden style={{ flex: 'none', marginTop: 2, color: CK.forest2 }} />
-            <span>Delegate: {delegates.length ? <b style={{ color: CK.ink }}>{delegates.map((d) => d.display_name).join(', ')}</b> : <span style={{ color: CK.muted }}>None</span>}</span>
+            <span>
+              Delegate: {delegates.length
+                ? delegates.map((d, i) => {
+                  const who = delegateLabel(d, c);
+                  return (
+                    <span key={d.id}>
+                      {i > 0 && ', '}
+                      {who ? <b style={{ color: CK.ink }}>{who}</b> : <b style={{ color: CK.red }}>Name not set</b>}
+                    </span>
+                  );
+                })
+                : <b style={{ color: CK.red }}>Not assigned</b>}
+            </span>
           </span>
           </>
         )}

@@ -8,7 +8,7 @@ import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { answerDirective, crisisError, markDrafting, type AnswerEffects, type CrisisRef } from '@/lib/crisis/api';
 import type { Directive, DirectiveOutcome } from '@/lib/crisis/types';
 import { effectsToAnswer, type ReplyPowers } from './ReplyActions';
-import { addReplyMapToDraft, hasReplyMapParts } from './replyToDraft';
+import { addReplyMapToDraft, applyReplyCharMoves, hasReplyMapParts, stagedChars } from './replyToDraft';
 import { emptyEffects, readReplyDraft, writeReplyDraft, type EffectsDraft } from './replyDraft';
 
 export interface DirectiveReply {
@@ -117,6 +117,9 @@ export function useDirectiveReply(ref: CrisisRef, d: Directive, who: string, pow
       // The map parts go into the shared unsent map FIRST. If that fails the answer is not sent and the reply is kept.
       // Adding is idempotent, so a retry (or an answer that was lost on the way back) never duplicates anything.
       if (toDraft) await addReplyMapToDraft(ref, effects, powers);
+      // With map changes NOT waiting, character moves are made now, the same way (exact spots: a repeat changes nothing).
+      const liveMoves = !isEdit && !mapChangesWait ? stagedChars(effects, powers).length : 0;
+      if (liveMoves) await applyReplyCharMoves(ref, effects, powers);
       const staged: AnswerEffects = isEdit ? {} : effectsToAnswer(effects, powers, { mapToDraft: mapChangesWait });
       if (!requestId.current) requestId.current = newRequestId();
       const res = await answerDirective(ref, d.id, outcome, reply.trim(), { ...staged, request_id: requestId.current, ...(isEdit ? { edit: true } : {}) });
@@ -124,7 +127,7 @@ export function useDirectiveReply(ref: CrisisRef, d: Directive, who: string, pow
         // Not a failure of the network: the directive is not in the state this reply was written for. Keep the text, refresh the view.
         requestId.current = null;
         const why = res.reason === 'already_answered' ? 'Someone already answered this directive' : 'This directive is not open any more';
-        notifyErr(toDraft ? `${why}. The map changes you attached are already in the unsent map.` : why, 'crisis-directive');
+        notifyErr(toDraft ? `${why}. The map changes you attached are already in the unsent map.` : liveMoves ? `${why}. The character moves you attached were already made.` : why, 'crisis-directive');
         onSent();
         return;
       }
@@ -152,7 +155,7 @@ export function useDirectiveReply(ref: CrisisRef, d: Directive, who: string, pow
 }
 
 function hasStaged(e: EffectsDraft): boolean {
-  return Object.keys(e.resources).length + Object.keys(e.units).length + Object.keys(e.regions).length + Object.keys(e.characters).length > 0 || !!e.news || !!e.map || e.cards.length > 0;
+  return Object.keys(e.resources).length + Object.keys(e.units).length + Object.keys(e.regions).length + Object.keys(e.characters).length + Object.keys(e.chars).length > 0 || !!e.news || !!e.map || e.cards.length > 0;
 }
 
 function newRequestId(): string {

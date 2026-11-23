@@ -104,6 +104,26 @@ export function NumberBadge({ n, color = CK.red, style }: { n: number; color?: s
   );
 }
 
+/**
+ * The small badge that overlaps a directive card's top edge (the caller positions it): the CABINET's name in the cabinet's colour
+ * (HultMUN's director, 23 Nov 2026: the number is part of the title now, "97: Title", so the badge says whose cabinet it is).
+ * A directive with no cabinet says "Directive" in red. The name wraps, it is never cut.
+ */
+export function CabinetBadge({ cabinet, color, style }: { cabinet?: Pick<Cabinet, 'name' | 'color'> | null; color?: string; style?: CSSProperties }) {
+  const c = color ?? cabinet?.color ?? CK.red;
+  return (
+    <span
+      style={{
+        display: 'inline-flex', alignItems: 'center', minHeight: 20, maxWidth: 210, padding: '2px 10px', borderRadius: 11, background: c, color: '#FFF4E6',
+        fontSize: 11.5, fontWeight: 800, lineHeight: 1.2, letterSpacing: '0.01em', overflowWrap: 'anywhere',
+        boxShadow: '0 2px 6px rgba(27,56,40,0.25)', fontFamily: CK.font, ...style,
+      }}
+    >
+      {cabinet?.name ?? 'Directive'}
+    </span>
+  );
+}
+
 /** Themes as icons only, side by side on ONE line (never wraps). Each icon carries the theme's name as its title. */
 export function ThemeIcons({ themes, size = 'sm' }: { themes: string[]; size?: 'sm' | 'md' }) {
   return (

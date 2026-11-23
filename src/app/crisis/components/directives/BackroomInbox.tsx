@@ -11,7 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CircleCheck, Hourglass, Inbox, Landmark, ListChecks, Palette, Search, Tag, UserRound, UsersRound, type LucideIcon } from 'lucide-react';
 import GSelect from '@/components/GSelect';
 import { notifyErr } from '@/lib/appNotify';
-import { CLOSED_DIRECTIVE_STATUSES, countDirectives, crisisError, listClosedDirectivesPage, listDirectives, markDrafting } from '@/lib/crisis/api';
+import { CLOSED_DIRECTIVE_STATUSES, assignDirective, countDirectives, crisisError, listClosedDirectivesPage, listDirectives, markDrafting } from '@/lib/crisis/api';
 import { useCrisisLive, useSingleFlight } from '@/lib/crisis/live';
 import { KIND_LABEL, THEMES, type Directive } from '@/lib/crisis/types';
 import { Btn, Card, CK, Segmented, fieldStyle } from '../../crisisKit';
@@ -177,7 +177,8 @@ export default function BackroomInbox() {
   const openPopup = (d: Directive) => { setFocusId(d.id); setPopupId(d.id); setPopupOpen(true); };
   // "Take over" on a directive a teammate was writing: the database moves the writing mark to you, then it opens.
   const takeOver = (d: Directive) => {
-    void markDrafting(ref, d.id, true).then(() => load());
+    // Taking over also moves the directive into your Mine lane.
+    void markDrafting(ref, d.id, true).then(() => assignDirective(ref, d.id)).catch(() => { /* the pop-up still opens */ }).then(() => load());
     openPopup(d);
   };
 

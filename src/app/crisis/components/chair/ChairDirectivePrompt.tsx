@@ -17,7 +17,7 @@ import { ArrowLeft, Check, ChevronLeft, ChevronRight, Gavel, HelpCircle, PencilL
 import Portal from '@/components/Portal';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { crisisError, listDirectives, requestDirectiveChanges, reviewDirectiveAsChair, type CrisisRef } from '@/lib/crisis/api';
-import { dirNumber } from '@/lib/crisis/format';
+import { titleWithNo } from '../directives/directiveKit';
 import { useCrisisLive } from '@/lib/crisis/live';
 import { OUTCOME_LABEL, type Cabinet, type Directive } from '@/lib/crisis/types';
 import { Avatar, Btn, CK, fieldStyle, useScrollLock } from '../../crisisKit';
@@ -130,12 +130,12 @@ export function ChairDirectiveCard({ d, author, cabinet, cref, readOnly = false,
           boxShadow: cabinetRing(color, 3, `${CK.shadow}, 0 24px 60px rgba(58,14,15,0.4)`),
         }}
       >
-        <CabinetCrest cabinet={cabinet} n={dirNumber(d)} sealSize={SEAL_POP} left={20} stamp="pop" />
+        <CabinetCrest cabinet={cabinet} sealSize={SEAL_POP} left={20} stamp="pop" />
         {header}
 
         {!asking ? (
           <div key="view" className="cm-fade">
-            <h3 style={{ margin: '14px 0 0', fontSize: 25, lineHeight: 1.2, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{d.title}</h3>
+            <h3 style={{ margin: '14px 0 0', fontSize: 25, lineHeight: 1.2, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{titleWithNo(d)}</h3>
             {/* Who sent it is only a small fact (owner, 1 Nov 2026), beside when it was sent and the themes. */}
             <div className="flex flex-wrap items-center" style={{ gap: '4px 12px', marginTop: 8, fontSize: 13, fontWeight: 600, color: CK.muted }}>
               <span className="inline-flex items-center" style={{ gap: 6 }}>
@@ -179,7 +179,7 @@ export function ChairDirectiveCard({ d, author, cabinet, cref, readOnly = false,
             </button>
             <h3 style={{ margin: '6px 0 0', fontSize: 18, lineHeight: 1.28, fontWeight: 800, color: CK.ink }}>{asking.heading}</h3>
             <p style={{ margin: '2px 0 0', fontSize: 13, color: CK.inkSoft }}>{asking.line}</p>
-            <p style={{ margin: '8px 0 0', fontSize: 13, fontWeight: 700, color: CK.ink, overflowWrap: 'anywhere' }}>{d.title}</p>
+            <p style={{ margin: '8px 0 0', fontSize: 13, fontWeight: 700, color: CK.ink, overflowWrap: 'anywhere' }}>{titleWithNo(d)}</p>
             <label htmlFor={`chair-note-${d.id}`} style={{ display: 'block', margin: '10px 0 5px', fontSize: 13, fontWeight: 700, color: CK.ink }}>{asking.ask}</label>
             <textarea
               id={`chair-note-${d.id}`}

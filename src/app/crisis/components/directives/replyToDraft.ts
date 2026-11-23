@@ -8,7 +8,7 @@
 import { loadMap, loadMapDraftVersioned, saveMapDraftVersioned, type CrisisRef } from '@/lib/crisis/api';
 import { UserFacingError } from '@/lib/friendlyError';
 import type { RegionGeometry } from '@/lib/crisis/types';
-import { emptySet, isEmptySet, parseSet, type EditSet, type UnitChange } from '../map/mapEdits';
+import { emptySet, isEmptySet, parseSet, sendSet, type CharMove, type EditSet, type UnitChange } from '../map/mapEdits';
 import { mergeDrafts } from '../map/draftMerge';
 import type { EffectsDraft } from './replyDraft';
 import type { ReplyPowers } from './ReplyActions';
@@ -29,6 +29,12 @@ function stagedUnits(effects: EffectsDraft, powers: ReplyPowers): UnitChange[] {
   return out;
 }
 
+/** The staged character moves the staffer may send (characters power): a character moved to an exact spot. */
+export function stagedChars(effects: EffectsDraft, powers: ReplyPowers): CharMove[] {
+  if (!powers.characters) return [];
+  return Object.entries(effects.chars).map(([id, p]) => ({ id, lng: p.lng, lat: p.lat }));
+}
+
 /** The staged territory changes the staffer may send (map power): country holders and the map edit set. */
 function stagedRegions(effects: EffectsDraft, powers: ReplyPowers): Array<[string, string | null]> {
   return powers.map ? Object.entries(effects.regions) : [];
@@ -36,7 +42,7 @@ function stagedRegions(effects: EffectsDraft, powers: ReplyPowers): Array<[strin
 
 /** True when the reply holds anything that would go to the unsent map instead of running with the reply. */
 export function hasReplyMapParts(effects: EffectsDraft, powers: ReplyPowers): boolean {
-  return stagedUnits(effects, powers).length > 0 || stagedRegions(effects, powers).length > 0 || (powers.map && !isEmptySet(effects.map));
+  return stagedUnits(effects, powers).length > 0 || stagedRegions(effects, powers).length > 0 || stagedChars(effects, powers).length > 0 || (powers.map && !isEmptySet(effects.map));
 }
 
 /**
@@ -48,6 +54,7 @@ export function replyMapSet(effects: EffectsDraft, powers: ReplyPowers, geometry
   const plain = emptySet();
   for (const [key, owner] of stagedRegions(effects, powers)) plain.regions.push({ key, owner_cabinet_id: owner, geometry: geometryOf(key) });
   plain.units = stagedUnits(effects, powers);
+  plain.chars = stagedChars(effects, powers);
   const own = powers.map ? parseSet(effects.map) : null;
   const both = mergeDrafts(null, own, isEmptySet(plain) ? null : plain);
   return both && !isEmptySet(both) ? both : null;
@@ -90,4 +97,17 @@ export async function addReplyMapToDraft(ref: CrisisRef, effects: EffectsDraft, 
     cur = { payload: res.payload, version: res.version, updated_by: res.updated_by };
   }
   throw new UserFacingError('The team is changing the unsent map right now. Try sending again.');
+}
+
+/**
+ * When map changes do NOT wait (the setting is off), a reply's character moves are made here, BEFORE the answer is sent, in one database
+ * call (the same one the war map uses). A character moved to an exact spot is idempotent: sending the same spot again changes nothing, so a
+ * retried reply never moves anyone twice. Throws when it could not be saved: the caller must then NOT send the answer.
+ */
+export async function applyReplyCharMoves(ref: CrisisRef, effects: EffectsDraft, powers: ReplyPowers): Promise<number> {
+  const chars = stagedChars(effects, powers);
+  if (!chars.length) return 0;
+  const res = await sendSet(ref, { ...emptySet(), chars });
+  if (res.error) throw res.error;
+  return chars.length;
 }

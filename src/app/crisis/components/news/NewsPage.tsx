@@ -3,7 +3,7 @@
 // Staff write news, save drafts and publish. Everyone reads the published history (RLS decides what they see).
 
 import { useMemo, useState } from 'react';
-import { ExternalLink, FileText, Megaphone, Newspaper, Paperclip, Pencil, Radio, Send } from 'lucide-react';
+import { ExternalLink, FileText, Megaphone, Newspaper, Pencil, Radio, Send } from 'lucide-react';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { crisisError, publishNews, saveNews } from '@/lib/crisis/api';
 import type { News } from '@/lib/crisis/types';
@@ -15,6 +15,7 @@ import { audienceLabel, newsTime, newsTimeTitle, NewsHistory } from './NewsList'
 import { useCrisisNews } from './useCrisisNews';
 import { ALL_ROOMS, useNewsDraft } from './useNewsDraft';
 import { ZoomableImage } from './ImageLightbox';
+import AttachmentView from './AttachmentView';
 
 function roomsText(rooms: number): string {
   if (rooms <= 0) return 'Published. No committee room was open to show it in.';
@@ -131,11 +132,7 @@ export default function NewsPage() {
               {n.source_label ? `${n.source_label} · ` : ''}{audienceLabel(n, cabinets)} · <span title={newsTimeTitle(n.created_at)}>{newsTime(n.created_at)}</span>
             </span>
             <p style={{ margin: '4px 0 8px', fontSize: 13, color: CK.inkSoft, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', maxHeight: 180, overflowY: 'auto' }}>{n.body}</p>
-            {n.attachment_url && (
-              <p className="flex items-center gap-1.5" style={{ margin: '0 0 8px', fontSize: 12.5, color: CK.inkSoft, overflowWrap: 'anywhere' }}>
-                <Paperclip size={13} strokeWidth={1.5} aria-hidden style={{ flexShrink: 0 }} />{n.attachment_name || 'Attached file'}
-              </p>
-            )}
+            {n.attachment_url && <div style={{ margin: '0 0 8px' }}><AttachmentView url={n.attachment_url} name={n.attachment_name} /></div>}
             <div className="flex flex-wrap gap-2">
               <Btn size="sm" tone="ghost" icon={<Pencil size={13} strokeWidth={1.5} />} onClick={() => edit(n)}>Edit</Btn>
               {canPublish && <Btn size="sm" tone="green" icon={<Send size={13} strokeWidth={1.5} />} disabled={!!busy} onClick={() => publishDraft(n)}>Publish</Btn>}

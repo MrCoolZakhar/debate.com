@@ -11,6 +11,7 @@ import type { News } from '@/lib/crisis/types';
 import { crisisBase, useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { CK } from '../../crisisKit';
 import { NewsNumber, NewsPicture } from './NewsList';
+import { AttachmentTag } from './AttachmentView';
 import { useCrisisNews } from './useCrisisNews';
 
 const SHOW_MS = 30_000;
@@ -75,6 +76,7 @@ export default function NewsPopup() {
         <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.45, color: 'rgba(255,240,226,0.88)', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
           {card.body}
         </p>
+        {card.attachment_url && <div style={{ marginTop: 6 }}><AttachmentTag url={card.attachment_url} name={card.attachment_name} light /></div>}
         <div style={{ marginTop: 10 }}>
           <Link
             href={`${crisisBase(v.ref)}/news`}

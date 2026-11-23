@@ -74,7 +74,7 @@ import { PartyContext, type PartyApi } from './partyKit';
 import { loadProvinces, provinceAt, type Province } from './provinces';
 import {
   CharacterCard, KindPicker, NewTerritoryPanel, PlaceUnitPanel, TerritoryCard, UnitEditor, UnitViewer, ZoneEditor, ZoneInfoCard, ZonesPanel,
-  panelEditState, redoPanelEdit, subscribePanelEdits, undoPanelEdit, zoneColorOf, zoneFormOf, zoneVisibility, type PanelCabinet, type TerritoryInfo, type UnitDraft, type ZoneForm,
+  panelEditState, redoPanelEdit, subscribePanelEdits, undoPanelEdit, zoneColorOf, zoneFormOf, zoneVisibility, defaultKnownTo, type PanelCabinet, type TerritoryInfo, type UnitDraft, type ZoneForm,
 } from './MapPanels';
 import {
   addPhysicalSources, createNameLabels, fillRegions, fillWater, loadRegions, loadWater, setRegionsVisible, setWaterVisible,
@@ -3606,7 +3606,7 @@ export default function WarMap({ compact = false, title, actions, stage, focusRe
             key="new-unit" isNew busy={busy} cabinets={ownerChoices}
             customTypes={customTypes} onUploadPicture={(f) => uploadCrisisImage(ref, f)}
             initial={{
-              name: addCustom?.name ?? '', kind: addKind, strength: 1, owner: defaultOwner, note: '', revealed: [],
+              name: addCustom?.name ?? '', kind: addKind, strength: 1, owner: defaultOwner, note: '', revealed: defaultKnownTo(ownerChoices, defaultOwner, addKind),
               sight: typeof addCustom?.sight_km === 'number' ? addCustom.sight_km : null,
               customType: addCustom?.key ?? null, picture: null, details: '',
             }}

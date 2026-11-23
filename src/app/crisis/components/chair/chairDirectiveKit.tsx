@@ -7,11 +7,12 @@
 import { useSyncExternalStore, type ReactNode } from 'react';
 import { ChevronRight, XCircle } from 'lucide-react';
 import { OUTCOME_LABEL, type Cabinet, type Character, type Directive, type DirectiveStatus, type Member } from '@/lib/crisis/types';
-import { dirNumber, isChairSendBack } from '@/lib/crisis/format';
+import { isChairSendBack } from '@/lib/crisis/format';
+import { titleWithNo } from '../directives/directiveKit';
 import { Avatar, CK } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { outcomeColor, outcomeIcon, statusColor, statusIcon, whenLabel, whenTitle } from '../delegate/directiveUi';
-import { NumberBadge, ThemeIcons } from '../directives/directiveParts';
+import { ThemeIcons } from '../directives/directiveParts';
 import { CARD_GAP_BELOW, CabinetCrest, CabinetFoot, CabinetName, cabinetColorOf, cabinetRing, cabinetWash, crestIndent, isCabinetDirective } from '../directives/cabinetStamp';
 
 // ───────────── the store ─────────────
@@ -101,7 +102,7 @@ export function ChairDirectiveRow({ d, variant = 'list', muted = false }: { d: D
       <button
         type="button"
         onClick={() => openChairDirective(d)}
-        aria-label={`${d.title}, cabinet directive, ${v.word}, from ${a.name}`}
+        aria-label={`${titleWithNo(d)}, cabinet directive, ${v.word}, from ${a.name}`}
         className="cm-lift block text-left w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
         style={{
           position: 'relative', overflow: 'visible', border: 0, cursor: 'pointer', fontFamily: CK.font, color: CK.ink, background: cabinetWash(color), borderRadius: 16,
@@ -109,7 +110,7 @@ export function ChairDirectiveRow({ d, variant = 'list', muted = false }: { d: D
           boxShadow: cabinetRing(color, 2, CK.shadowSm), opacity: muted ? 0.72 : 1,
         }}
       >
-        <CabinetCrest cabinet={cabinet} n={dirNumber(d)} sealSize={seal} left={12} stamp={card ? 'row' : 'xs'} />
+        <CabinetCrest cabinet={cabinet} sealSize={seal} left={12} stamp={card ? 'row' : 'xs'} />
         <CabinetName cabinet={cabinet} size={13} indent={crestIndent(seal)} />
         {card && (
           <span className="flex items-center flex-wrap" style={{ gap: '2px 10px', marginTop: 5, fontSize: 12.5, fontWeight: 800 }}>
@@ -117,7 +118,7 @@ export function ChairDirectiveRow({ d, variant = 'list', muted = false }: { d: D
             {outcome && <span className="inline-flex items-center gap-1.5" style={{ color: outcomeColor(outcome) }}>{outcomeIcon(outcome, 14)}{OUTCOME_LABEL[outcome]}</span>}
           </span>
         )}
-        <b style={{ display: 'block', marginTop: 6, fontSize: card ? 17 : 16, lineHeight: 1.25, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{d.title}</b>
+        <b style={{ display: 'block', marginTop: 6, fontSize: card ? 17 : 16, lineHeight: 1.25, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{titleWithNo(d)}</b>
         <span className="block" title={whenTitle(d.created_at)}>
           <CabinetFoot marginTop={6}>
             {themes.length > 0 && <ThemeIcons themes={themes} />}
@@ -132,7 +133,7 @@ export function ChairDirectiveRow({ d, variant = 'list', muted = false }: { d: D
     <button
       type="button"
       onClick={() => openChairDirective(d)}
-      aria-label={`${d.title}, ${v.word}, from ${a.name}`}
+      aria-label={`${titleWithNo(d)}, ${v.word}, from ${a.name}`}
       className={`${card ? 'cm-lift ' : ''}block text-left w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]`}
       style={card
         ? { border: 0, cursor: 'pointer', fontFamily: CK.font, color: CK.ink, background: CK.card, borderRadius: 16, padding: '10px 12px', boxShadow: CK.shadowSm }
@@ -148,8 +149,7 @@ export function ChairDirectiveRow({ d, variant = 'list', muted = false }: { d: D
             </span>
           )}
           <span className="flex items-start gap-2 flex-wrap" style={{ marginTop: card ? 2 : 0 }}>
-            <b style={{ flex: '1 1 140px', minWidth: 0, fontSize: card ? 15 : 14, lineHeight: 1.28, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{d.title}</b>
-            <NumberBadge n={dirNumber(d)} style={{ marginTop: 1 }} />
+            <b style={{ flex: '1 1 140px', minWidth: 0, fontSize: card ? 15 : 14, lineHeight: 1.28, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{titleWithNo(d)}</b>
           </span>
           <span className="flex items-center flex-wrap" style={{ gap: '2px 8px', marginTop: 2, fontSize: 12.5, fontWeight: 600, color: CK.muted, overflowWrap: 'anywhere' }}>
             {card && <span>{a.name}</span>}

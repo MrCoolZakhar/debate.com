@@ -1,7 +1,7 @@
 'use client';
 // Gavelling Crisis: the main panel of an opened directive (the left side of DirectivePopup).
 // Top, fixed: a red band with the kind and the TITLE (the biggest text, wraps, never cut)
-// under the "No. 13" badge that overlaps the pop-up's top edge, then ONE white band: on the left the character
+// under the cabinet-name badge that overlaps the pop-up's top edge (the number is part of the title, "13: Title"), then ONE white band: on the left the character
 // (a portrait overhanging the red band, the name in two rows, their title and cabinet), on the right, in the
 // space beside them, the FACTS in a tidy grid (DirectiveFacts: wait, last heard back, words, to, themes, goals,
 // and who is responsible with a picker to hand it over). Middle, scrolls: the directive text at a normal reading
@@ -16,14 +16,13 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Clock, Package, SlidersHorizontal, Target, X, Zap } from 'lucide-react';
 import { listNotes } from '@/lib/crisis/api';
-import { dirNumber } from '@/lib/crisis/format';
 import { KIND_LABEL, type Directive, type DirectiveNote } from '@/lib/crisis/types';
 import { Avatar, Btn, CK } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { CharacterLink, CharacterName } from '../character/CharacterProfileHost';
-import { CabinetLogo, NameStack, NumberBadge } from './directiveParts';
+import { CabinetBadge, CabinetLogo, NameStack } from './directiveParts';
 import { CabinetCrest, SEAL_POP, cabinetWash, isCabinetDirective } from './cabinetStamp';
-import { KIND_ICON, authorName, buildNames, listDirectiveCoauthors } from './directiveKit';
+import { KIND_ICON, authorName, buildNames, listDirectiveCoauthors, titleWithNo } from './directiveKit';
 import DirectiveComposer from './DirectiveComposer';
 import DirectiveFacts, { SecretGoalsChip, useSecretGoals } from './DirectiveFacts';
 import DirectiveThread from './DirectiveThread';
@@ -89,7 +88,8 @@ export default function DirectiveMain({ directive: d, reply, notesVersion = 0, o
   const coChars = (d.kind === 'joint' ? coIds : []).map((id) => names.characters.get(id)).filter((c): c is NonNullable<typeof c> => !!c);
   const hasLegacy = !!(d.resources_used || d.goal || d.affects);
   const closeStyle = {
-    width: 32, height: 32, borderRadius: '50%', border: 0, background: 'rgba(255,244,230,0.18)', color: '#FFF4E6', flex: 'none', cursor: 'pointer',
+    height: 44, gap: 7, padding: '0 18px 0 13px', borderRadius: 22, border: 0, background: '#FFF4E6', color: CK.redDeep, flex: 'none', cursor: 'pointer',
+    fontFamily: CK.font, fontSize: 15, fontWeight: 800, boxShadow: '0 3px 10px rgba(58,14,15,0.28)',
   } as const;
 
   return (
@@ -97,8 +97,8 @@ export default function DirectiveMain({ directive: d, reply, notesVersion = 0, o
       {/* Top, fixed: the title, the character, then the facts and who is responsible */}
       <div style={{ flex: 'none', position: 'relative' }}>
         {isCab
-          ? <CabinetCrest cabinet={cabinet} n={dirNumber(d)} sealSize={SEAL} left={22} sealTop="var(--dp-seal-top)" badgeTop="var(--dp-badge-top)" stamp="pop" stampTop="calc(var(--dp-badge-top) + 9px)" />
-          : <div style={{ position: 'absolute', zIndex: 3, top: 'var(--dp-badge-top)', left: 22 }}><NumberBadge n={dirNumber(d)} /></div>}
+          ? <CabinetCrest cabinet={cabinet} sealSize={SEAL} left={22} sealTop="var(--dp-seal-top)" stamp="pop" stampTop="calc(var(--dp-badge-top) + 9px)" />
+          : <div style={{ position: 'absolute', zIndex: 3, top: 'calc(var(--dp-badge-top) - 1px)', left: 22 }}><CabinetBadge cabinet={cabinet} /></div>}
         <div style={{ background: CK.redGrad, color: '#FFF4E6', padding: isCab ? 'calc(var(--dp-pt) + var(--dp-crest-extra)) 18px 16px 22px' : 'var(--dp-pt) 18px 11px 22px', borderRadius: 'var(--dp-r) var(--dp-r) 0 0' }}>
           <div className="flex items-center justify-between" style={{ gap: 10 }}>
             <p className="inline-flex items-center flex-wrap" style={{ margin: 0, gap: '2px 12px', fontSize: 12.5, fontWeight: 700, color: 'rgba(255,232,214,0.88)' }}>
@@ -107,12 +107,13 @@ export default function DirectiveMain({ directive: d, reply, notesVersion = 0, o
             </p>
             <span className="inline-flex items-center" style={{ gap: 8 }}>
               {nav}
-              <button type="button" onClick={onClose} aria-label="Close" title="Close" className="grid place-items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-white" style={closeStyle}>
-                <X size={17} strokeWidth={1.6} />
+              {/* A big Close: a cream pill with the word, so it cannot be missed (HultMUN's director, 23 Nov 2026). */}
+              <button type="button" onClick={onClose} aria-label="Close" className="inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-white active:scale-[0.97] transition-transform" style={closeStyle}>
+                <X size={22} strokeWidth={2} aria-hidden />Close
               </button>
             </span>
           </div>
-          <h2 style={{ margin: '4px 0 0', fontSize: 24, lineHeight: 1.18, fontWeight: 800, overflowWrap: 'anywhere' }}>{d.title}</h2>
+          <h2 style={{ margin: '4px 0 0', fontSize: 24, lineHeight: 1.18, fontWeight: 800, overflowWrap: 'anywhere' }}>{titleWithNo(d)}</h2>
         </div>
         {/* One white band: the character on the left, the facts and who is responsible in the space beside them */}
         <div className="flex flex-wrap" style={{ gap: isCab ? '10px 18px' : '8px 20px', alignItems: isCab ? 'center' : undefined, padding: isCab ? '12px 22px' : '0 22px 12px', background: isCab ? cabinetWash(accent) : CK.card, boxShadow: `0 1px 0 ${CK.hair}` }}>

@@ -352,6 +352,15 @@ export function PlaceUnitPanel({ kind, custom, onBack, onClose }: { kind: UnitKi
   );
 }
 
+/**
+ * Who a NEW unit is shown to by default (HultMUN, 23 Nov 2026): every other cabinet, so the crisis director does not have to
+ * go round each new place ticking "Known to". The director can untick any of them. A spy starts hidden (spies are never spotted).
+ */
+export function defaultKnownTo(cabinets: PanelCabinet[], owner: string | null, kind: UnitKind): string[] {
+  if (kind === 'spy') return [];
+  return cabinets.filter((c) => !c.party && c.id !== owner).map((c) => c.id);
+}
+
 /** The unit form: the draft plus the amount as typed (so the 0 can be cleared while typing). */
 type UnitForm = UnitDraft & { amountText: string };
 const amountOk = (t: string): boolean => /^\d{1,7}$/.test(t.trim()) && Number(t) <= 1000000;
@@ -443,12 +452,28 @@ export function UnitEditor({
       )}
     </div>
   );
+  const knownField = others.length > 0 ? (
+    <Field label="Known to">
+      {others.map((c) => (
+        <CheckRow
+          key={c.id} label={c.name} color={c.color} checked={d.revealed.includes(c.id)}
+          onChange={(on) => form.set({ revealed: toggled(d.revealed, c.id, on) }, true)}
+        />
+      ))}
+    </Field>
+  ) : null;
   const ownerNow = d.owner ? cabinets.find((c) => c.id === d.owner) ?? null : null;
   const ownerField = (
     <Field label="Owner">
       <OwnerMenu
         value={d.owner ?? null} choices={cabinets} ariaLabel="Owner"
-        onChange={(v) => form.set({ owner: v, revealed: v ? d.revealed.filter((x) => x !== v) : d.revealed }, true)}
+        onChange={(v) => {
+          // A new unit that is shown to everyone else keeps following the owner: the old owner now counts as "someone else".
+          const oldOwner = d.owner;
+          const base = isNew && d.kind !== 'spy' && oldOwner && !d.revealed.includes(oldOwner) && d.revealed.length === defaultKnownTo(cabinets, oldOwner, d.kind).length
+            ? [...d.revealed, oldOwner] : d.revealed;
+          form.set({ owner: v, revealed: v ? base.filter((x) => x !== v) : base }, true);
+        }}
         triggerClassName="flex items-center w-full text-left"
         triggerStyle={{ gap: 8, minHeight: 30, padding: '3px 8px 3px 9px', borderRadius: 8, border: `1px solid ${CK.hair}`, background: '#fff', cursor: 'pointer', fontSize: 12.5, fontWeight: 500, color: CK.ink, fontFamily: CK.font }}
         trigger={(
@@ -484,6 +509,7 @@ export function UnitEditor({
           </div>
           {amountMsg}
           {more}
+          {knownField}
         </>
       ) : (
         <>
@@ -518,16 +544,7 @@ export function UnitEditor({
             </p>
           </Field>
           {more}
-          {others.length > 0 && (
-            <Field label="Known to">
-              {others.map((c) => (
-                <CheckRow
-                  key={c.id} label={c.name} color={c.color} checked={d.revealed.includes(c.id)}
-                  onChange={(on) => form.set({ revealed: toggled(d.revealed, c.id, on) }, true)}
-                />
-              ))}
-            </Field>
-          )}
+          {knownField}
           <Field label="Note for the crisis team">
             <textarea style={{ ...fieldStyle, minHeight: 56, resize: 'vertical' }} value={d.note} maxLength={600} onChange={(e) => form.set({ note: e.target.value })} onBlur={form.flush} />
           </Field>

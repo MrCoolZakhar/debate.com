@@ -8,6 +8,7 @@ import { useRef, useState } from 'react';
 import { ImagePlus, Paperclip, X } from 'lucide-react';
 import { notifyErr } from '@/lib/appNotify';
 import { crisisError, uploadCrisisBanner, uploadCrisisFile } from '@/lib/crisis/api';
+import { FILE_ACCEPT } from '@/lib/crisis/mediaTypes';
 import { Btn, CK } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { ZoomableImage } from '../news/ImageLightbox';
@@ -55,7 +56,7 @@ export default function NewsMediaPicker({ media, onChange }: { media: NewsMedia;
           {uploading === 'file' ? 'Uploading the file' : 'Attach a file'}
         </Btn>
         <input ref={bannerInput} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" aria-label="Choose a picture" onChange={(e) => { void pickBanner(e.target.files?.[0]); }} />
-        <input ref={fileInput} type="file" accept="application/pdf,text/plain,image/*,.doc,.docx,.ppt,.pptx,.xls,.xlsx" className="hidden" aria-label="Choose a file to attach" onChange={(e) => { void pickFile(e.target.files?.[0]); }} />
+        <input ref={fileInput} type="file" accept={FILE_ACCEPT} className="hidden" aria-label="Choose a file to attach" onChange={(e) => { void pickFile(e.target.files?.[0]); }} />
       </div>
       {media.fileUrl && (
         <div className="flex items-center" style={{ gap: 8, background: CK.card, boxShadow: `inset 0 0 0 1px ${CK.hair}`, borderRadius: 12, padding: '6px 10px' }}>

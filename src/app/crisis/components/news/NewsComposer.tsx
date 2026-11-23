@@ -8,12 +8,14 @@ import { Check, Eye, ImagePlus, Newspaper, Paperclip, Pencil, Save, Send, Trash2
 import GSelect from '@/components/GSelect';
 import { notifyErr } from '@/lib/appNotify';
 import { crisisError, uploadCrisisBanner, uploadCrisisFile } from '@/lib/crisis/api';
+import { FILE_ACCEPT } from '@/lib/crisis/mediaTypes';
 import type { News } from '@/lib/crisis/types';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { Btn, Card, CardTitle, CK, FieldLabel, fieldStyle } from '../../crisisKit';
 import { NewsDetailBody } from './NewsDetailDialog';
 import { ALL_ROOMS, type NewsForm } from './useNewsDraft';
 import { ZoomableImage } from './ImageLightbox';
+import AttachmentView from './AttachmentView';
 
 export default function NewsComposer({ form, setForm, discard, savedAt, hasContent, canPublish, busy, onSave, onPublish }: {
   form: NewsForm;
@@ -124,22 +126,12 @@ export default function NewsComposer({ form, setForm, discard, savedAt, hasConte
               {uploading === 'banner' ? 'Uploading the banner' : form.bannerUrl ? 'Change the banner' : 'Add a banner'}
             </Btn>
             <Btn tone="ghost" icon={<Paperclip size={15} strokeWidth={1.5} />} disabled={!!uploading || !!busy || !!form.fileUrl} onClick={() => fileInput.current?.click()}>
-              {uploading === 'file' ? 'Uploading the file' : 'Attach a file'}
+              {uploading === 'file' ? 'Uploading the file' : 'Attach audio, video or a file'}
             </Btn>
             <input ref={bannerInput} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={(e) => { void pickBanner(e.target.files?.[0]); }} />
-            <input ref={fileInput} type="file" accept="application/pdf,text/plain,image/*,.doc,.docx,.ppt,.pptx,.xls,.xlsx" className="hidden" onChange={(e) => { void pickFile(e.target.files?.[0]); }} />
+            <input ref={fileInput} type="file" accept={FILE_ACCEPT} className="hidden" onChange={(e) => { void pickFile(e.target.files?.[0]); }} />
           </div>
-          {form.fileUrl && (
-            <div className="flex items-center gap-2" style={{ background: CK.card, boxShadow: `inset 0 0 0 1px ${CK.hair}`, borderRadius: 12, padding: '8px 12px' }}>
-              <Paperclip size={16} strokeWidth={1.5} aria-hidden style={{ color: CK.inkSoft, flexShrink: 0 }} />
-              <span style={{ flex: 1, minWidth: 0, fontSize: 13.5, color: CK.ink, overflowWrap: 'anywhere' }}>{form.fileName || 'Attached file'}</span>
-              <button
-                type="button" aria-label="Remove the file" onClick={() => setForm({ fileUrl: null, fileName: null })}
-                className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
-                style={{ border: 0, background: 'transparent', cursor: 'pointer', lineHeight: 0, color: CK.muted, padding: 4 }}
-              ><X size={16} strokeWidth={1.5} aria-hidden /></button>
-            </div>
-          )}
+          {form.fileUrl && <AttachmentView url={form.fileUrl} name={form.fileName} onRemove={() => setForm({ fileUrl: null, fileName: null })} />}
         </div>
       )}
 

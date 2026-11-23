@@ -8,6 +8,7 @@ import { friendlyError, UserFacingError } from '@/lib/friendlyError';
 import { serverNowIso } from '@/lib/serverClock';
 import { getCrisisClient, saveCrisisToken, anonClient } from './client';
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
+import { maxBytesFor, resolveFileType } from './mediaTypes';
 import {
   MEMBER_COLUMNS,
   type Cabinet, type Character, type CharacterSecret, type Crisis, type Directive, type DirectiveNote,
@@ -852,15 +853,11 @@ export async function saveMapDraft(ref: CrisisRef, payload: Record<string, unkno
 // ─────────── Media (bucket crisis-media, public; see docs/crisis/sql/006) ───────────
 
 const BANNER_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-const FILE_TYPES = [...BANNER_TYPES, 'application/pdf', 'text/plain',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
 const MAX_MEDIA_BYTES = 20 * 1024 * 1024;
 
-async function upload(ref: CrisisRef, path: string, file: File): Promise<string> {
+async function upload(ref: CrisisRef, path: string, file: File, contentType: string = file.type): Promise<string> {
   const client = await c(ref);
-  const res = await client.storage.from('crisis-media').upload(path, file, { contentType: file.type, upsert: false });
+  const res = await client.storage.from('crisis-media').upload(path, file, { contentType, upsert: false });
   if (res.error) throw new UserFacingError(crisisError(res.error, 'Could not upload the file. Try again.'));
   return client.storage.from('crisis-media').getPublicUrl(path).data.publicUrl;
 }
@@ -882,12 +879,14 @@ export async function uploadCrisisImage(ref: CrisisRef, file: File): Promise<str
   return upload(ref, `${ref.id}/directives/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`, file);
 }
 
-/** Any attached file: PDF, Word, PowerPoint, Excel, text or an image, up to 20 MB. */
+/** Any attached file: audio (mp3, m4a, wav, ogg), video (mp4, webm, mov), PDF, Word, PowerPoint, Excel, text, csv, zip or an image.
+ *  Documents and images up to 20 MB, audio and video up to 50 MB (the bucket allows the same: docs/crisis/sql/hultmun-press-media.sql). */
 export async function uploadCrisisFile(ref: CrisisRef, file: File): Promise<{ url: string; name: string }> {
-  if (!FILE_TYPES.includes(file.type)) throw new UserFacingError('Use a PDF, Word, PowerPoint, Excel, text or image file.');
-  if (file.size > MAX_MEDIA_BYTES) throw new UserFacingError('The file is over 20 MB.');
+  const type = resolveFileType(file);
+  if (!type) throw new UserFacingError('Use an audio, video, PDF, Word, PowerPoint, Excel, text or image file.');
+  if (file.size > maxBytesFor(type)) throw new UserFacingError(`The file is over ${type.startsWith('audio/') || type.startsWith('video/') ? 50 : 20} MB.`);
   const safe = file.name.normalize('NFKD').replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(-80) || 'file';
-  const url = await upload(ref, `${ref.id}/files/${Date.now()}-${safe}`, file);
+  const url = await upload(ref, `${ref.id}/files/${Date.now()}-${safe}`, file, type);
   return { url, name: file.name };
 }
 
