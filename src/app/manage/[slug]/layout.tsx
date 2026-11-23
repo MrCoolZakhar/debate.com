@@ -1,12 +1,12 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { useRouter, usePathname, useParams } from 'next/navigation';
+import { useRouter, usePathname, useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import BrandLogo from '@/components/BrandLogo';
 import {
   LayoutDashboard, Building2, Users, MapPin, FileText,
-  Mail, CreditCard, Settings, Users2, Menu, X, Radio, Upload, Store, Clock,
+  Mail, CreditCard, Settings, Users2, Menu, X, Radio, Upload, Store, Clock, Inbox, Briefcase,
   type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
@@ -232,6 +232,22 @@ interface NavItem {
   fixes?: boolean;
   /** A small gold tag at the end of the row (e.g. COMING SOON). Uppercase, no full stop. */
   tag?: string;
+  /** A Team tab link: active on /manage/{slug}/team when this is the current tab (23 Nov 2026). */
+  teamTab?: TeamNavTab;
+}
+
+type TeamNavTab = 'applications' | 'jobs' | 'members';
+/** The Team page's current tab, read exactly as tabFrom in team/page.tsx reads it (no tab = Team Applications). */
+function teamTabOf(sp: URLSearchParams | null): TeamNavTab {
+  const all = sp?.getAll('tab') ?? [];
+  if (all.includes('jobs')) return 'jobs';
+  if (all.some(t => t === 'members' || t === 'team' || t === 'organizers') || sp?.get('highlight')) return 'members';
+  return 'applications';
+}
+/** Is this nav item the current page? A Team tab item follows ?tab= (useSearchParams follows the Team page's replaceUrlInPlace). */
+function navItemActive(item: NavItem, pathname: string, slug: string, sp: URLSearchParams | null): boolean {
+  if (item.teamTab) return pathname === `/manage/${slug}/team` && teamTabOf(sp) === item.teamTab;
+  return pathname === item.href;
 }
 
 interface NavSection {
@@ -252,8 +268,6 @@ const NAV_SECTIONS = (slug: string, badges: NavBadges = NO_BADGES): NavSection[]
     items: [
       { icon: Building2, label: 'Committees',   href: `/manage/${slug}/committees`,   external: false, badge: 0 },
       { icon: Users,     label: 'Applications', href: `/manage/${slug}/applications`, external: false, badge: badges.applications },
-      // Team (owner, 14 Nov 2026): chairs, secretariat and staff, the Job Board and the organizing team.
-      { icon: Users2,    label: 'Team',         href: `/manage/${slug}/team`,         external: false, badge: badges.team },
       { icon: MapPin,    label: 'Assignment',   href: `/manage/${slug}/assignment`,   external: false, badge: badges.assignment },
       { icon: FileText,  label: 'Documents',    href: `/manage/${slug}/documents`,    external: false, badge: 0 },
       // Scoreboard is deliberately NOT a nav item. Delegate performance is a
@@ -278,6 +292,15 @@ const NAV_SECTIONS = (slug: string, badges: NavBadges = NO_BADGES): NavSection[]
       // sits directly under Financials (owner, same day).
       { icon: CreditCard, label: 'Financials', href: `/manage/${slug}/financials`, external: false, badge: badges.financials + badges.financialAid },
       { icon: Store,      label: 'Store',      href: `/manage/${slug}/store`,      external: false, badge: 0 },
+    ],
+  },
+  // Team (owner, 23 Nov 2026): its own section under Financial, one link per tab.
+  {
+    header: 'TEAM',
+    items: [
+      { icon: Inbox,     label: 'Team Applications', href: `/manage/${slug}/team?tab=applications`, external: false, badge: badges.team, teamTab: 'applications' },
+      { icon: Briefcase, label: 'Job Board',         href: `/manage/${slug}/team?tab=jobs`,         external: false, badge: 0,           teamTab: 'jobs' },
+      { icon: Users2,    label: 'Team Members',      href: `/manage/${slug}/team?tab=members`,      external: false, badge: 0,           teamTab: 'members' },
     ],
   },
   // POST CONFERENCE / Awards used to sit here. Awards are now a tab inside
@@ -324,6 +347,7 @@ function SideRail({
   sealTitle: string;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const searchParams = useSearchParams();
   const sections = NAV_SECTIONS(slug, badges);
   const statusStyle = STATUS_STYLES[conference?.status ?? 'private'] ?? STATUS_STYLES.private;
   const year = conference?.start_date ? Number(conference.start_date.slice(0, 4)) : null;
@@ -435,7 +459,7 @@ function SideRail({
               </p>
             )}
             {section.items.map(item => {
-              const active = pathname === item.href;
+              const active = navItemActive(item, pathname, slug, searchParams);
               const Icon = item.icon;
               return (
                 <Link
@@ -588,6 +612,7 @@ function SidebarContent({
   badges?: NavBadges;
   sealTitle: string;
 }) {
+  const searchParams = useSearchParams();
   const sections = NAV_SECTIONS(slug, badges);
 
   const statusStyle = STATUS_STYLES[conference?.status ?? 'private'] ?? STATUS_STYLES.private;
@@ -644,7 +669,7 @@ function SidebarContent({
               </p>
             )}
             {section.items.map(item => {
-              const active = pathname === item.href;
+              const active = navItemActive(item, pathname, slug, searchParams);
               const Icon = item.icon;
               return (
                 <Link

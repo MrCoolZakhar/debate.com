@@ -19,8 +19,8 @@
  *                    Head delegates and Delegates are listed by default
  *                    (panelKit.listedRoles / roleIsSetUp).
  *   Accepting and Paying
- *                    accept everyone straight away (every listed role but the
- *                    secretariat, panelKit.inGeneralScope) and, when a listed
+ *                    accept everyone straight away (every listed role but chair,
+ *                    secretariat and staff, panelKit.inGeneralScope; 23 Nov 2026) and, when a listed
  *                    role charges anything, pay only after you accept them
  *                    (every listed role with a price; Owner Decisions: payment
  *                    settings that do not apply are hidden). Two switches side
@@ -60,6 +60,7 @@ import {
   FixBadge,
 } from './panelKit';
 import { roleSetupProblems } from '@/lib/roleSetupProblems';
+import { InfoHint } from '@/components/HoverHint';
 
 /** One line per role for the Add a role picker. */
 const ROLE_LINE: Record<string, string> = {
@@ -424,6 +425,7 @@ export function ApplicationsSection({
                   {auto.roles.length > 0 && (
                     <SwitchRow
                       label="Accept everyone straight away"
+                      hint={<InfoHint text="Delegates, head delegates, faculty advisors and observers are accepted the moment they apply. Chairs, secretariat and staff always wait for you to review them." label="What Accept everyone straight away does" />}
                       desc={auto.mixed ? splitLine(auto, 'auto_accept') : 'Off: you review each application.'}
                       checked={auto.value === true}
                       mixed={auto.mixed}
@@ -433,6 +435,7 @@ export function ApplicationsSection({
                   {showTiming && (
                     <SwitchRow
                       label="Pay only after you accept them"
+                      hint={<InfoHint text="Applicants can only pay once you accept them. It covers every role that has a price." label="What Pay only after you accept them does" />}
                       desc={timing.mixed ? splitLine(timing, 'payment_timing') : 'Off: they can pay as soon as they apply. Roles with a price only.'}
                       checked={timing.value === 'after_acceptance'}
                       mixed={timing.mixed}

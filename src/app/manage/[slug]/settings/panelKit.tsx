@@ -773,9 +773,10 @@ export function SwitchGrid({ children }: { children: ReactNode }) {
 //
 //   payment_timing      every listed role that has a price (never
 //                       secretariat, staff)
-//   auto_accept         every listed role but the secretariat (accepting one
-//                       makes them an organiser, so that stays a per-role
-//                       decision)
+//   auto_accept         every listed role but chair, secretariat and staff:
+//                       team roles are always reviewed by the organiser, and
+//                       the database refuses to auto-accept them (owner,
+//                       23 Nov 2026)
 //   preference_mode     delegates and head delegates (chairs keep their own
 //                       switch, the database allows them less)
 //
@@ -788,7 +789,7 @@ export const GENERAL_FIELDS: readonly GeneralField[] = ['auto_accept', 'payment_
 /** Does the rule for every role cover this field on this role? */
 export function inGeneralScope(field: GeneralField, role: string): boolean {
   if (field === 'payment_timing') return roleHasPrice(role);
-  if (field === 'auto_accept') return role !== 'secretariat' && role !== 'staff';
+  if (field === 'auto_accept') return role !== 'chair' && role !== 'secretariat' && role !== 'staff';
   return role === 'delegate' || role === 'head-delegate';
 }
 
