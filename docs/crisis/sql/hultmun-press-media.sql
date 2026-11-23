@@ -1,5 +1,5 @@
 -- Gavelling Crisis, HultMUN feedback (23 Nov 2026): crisis updates (news) can carry audio, video and more kinds of file.
--- NOT APPLIED. Applied from the crisis chat (Supabase work), never from a Claude Code run.
+-- APPLIED 23 Nov 2026 (Peter approved).
 --
 -- The crisis-media bucket (docs/crisis/sql/006) allowed only images, PDF, Word, PowerPoint, Excel and text, up to 20 MB.
 -- This lets it also take audio (mp3, m4a, wav, ogg, aac), video (mp4, webm, mov), csv, rtf, zip and the older Office formats,

@@ -37,7 +37,7 @@ export async function placeDelegate(ref: CrisisRef, member: Pick<Member, 'id'>, 
  * until Peter's chat has applied the SQL. While false, a character someone else plays cannot be picked in Staff and Access;
  * the director gives it to a free character instead (a delegate moves to ANY free character in any cabinet without it).
  */
-export const SWAP_DELEGATES_DB = false;
+export const SWAP_DELEGATES_DB = true;
 
 export type SwapResult = { ok: true } | { ok: false; reason: 'not_delegates' | 'changed' };
 

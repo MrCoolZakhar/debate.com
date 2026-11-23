@@ -1,4 +1,4 @@
--- Gavelling Crisis: HultMUN crisis director feedback (23 Nov 2026). NOT APPLIED. Applied from the crisis chat, never from a Claude Code run.
+-- Gavelling Crisis: HultMUN crisis director feedback (23 Nov 2026). APPLIED 23 Nov 2026 (Peter approved).
 --
 -- A. crisis_sync_roster: a delegate whose profile has no name was named after the SEAT (the character's own name), so the
 --    character looked "assigned to itself". Now such a delegate gets the local part of their email, else 'Delegate'.
