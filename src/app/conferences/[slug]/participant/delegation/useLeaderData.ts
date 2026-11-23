@@ -87,23 +87,26 @@ export function useLeaderData({ conferenceId, societyId, committeeIds, memberUse
 
   useEffect(() => { void Promise.resolve().then(reloadPay); }, [reloadPay]);
 
-  const reloadV2 = useCallback(async () => {
+  // The members' paper statuses, re-read in place. A failed read keeps what is
+  // on screen (null would hide every paper state).
+  const reloadPapers = useCallback(async () => {
     if (!DELEGATIONS_V2_DB) return;
-    const [seats, until] = await Promise.all([readOpenSeats(societyId), readReshuffleUntil(conferenceId)]);
-    setOpenSeats(seats);
-    setReshuffleUntil(until);
-  }, [societyId, conferenceId]);
-
-  useEffect(() => { void Promise.resolve().then(reloadV2); }, [reloadV2]);
-
-  useEffect(() => {
-    if (!DELEGATIONS_V2_DB) return;
-    let alive = true;
     const users = userKey ? userKey.split(',') : [];
     const ids = committeeKey ? committeeKey.split(',') : [];
-    void readPaperStatuses(users, ids).then(m => { if (alive) setPapers(m); });
-    return () => { alive = false; };
+    const m = await readPaperStatuses(users, ids);
+    if (m) setPapers(m);
   }, [userKey, committeeKey]);
+
+  // Also re-reads the papers: an upload for a member changes nothing in userKey
+  // or committeeKey, so without this the row went back to "Upload" after it landed.
+  const reloadV2 = useCallback(async () => {
+    if (!DELEGATIONS_V2_DB) return;
+    const [seats, until] = await Promise.all([readOpenSeats(societyId), readReshuffleUntil(conferenceId), reloadPapers()]);
+    setOpenSeats(seats);
+    setReshuffleUntil(until);
+  }, [societyId, conferenceId, reloadPapers]);
+
+  useEffect(() => { void Promise.resolve().then(reloadV2); }, [reloadV2]);
 
   return { society, committees, pay, payError, openSeats, reshuffleUntil, papers, reloadPay, reloadV2 };
 }
