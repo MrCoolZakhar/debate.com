@@ -9,6 +9,7 @@ import SetupReminderGate from '@/components/SetupReminderGate';
 import CompleteBasicsGate from '@/components/CompleteBasicsGate';
 import NameGate from '@/components/NameGate';
 import LiveRoomsGate from '@/components/liveRooms/LiveRoomsGate';
+import CrisisGiftGate from '@/components/CrisisGiftGate';
 import AuthModalHost from '@/components/auth/AuthModal';
 import PurchasePopupHost from '@/components/purchase/PurchasePopupHost';
 import SiteViewBeacon from '@/components/SiteViewBeacon';
@@ -196,6 +197,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             {/* Your conference room is live: organiser, chair, delegate, faculty advisor
                 (src/components/liveRooms). Waits for every gate above. */}
             <LiveRoomsGate />
+            <CrisisGiftGate />
           </LanguageProvider>
         </AuthProvider>
       </body>

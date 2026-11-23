@@ -1066,3 +1066,21 @@ export async function markBackroomRead(ref: CrisisRef, characterId: string): Pro
   const res = await client.rpc('crisis_mark_backroom_read', { p_crisis: ref.id, p_character: characterId });
   if (res.error) throw new UserFacingError(crisisError(res.error, 'Could not mark it read.'));
 }
+
+// ── The thank-you gift (docs/crisis/sql/055): one personal Unlimited voucher per delegate ──
+export interface CrisisGift { code: string; saved: boolean; activated: boolean; expires_at: string | null }
+export async function myGift(ref: CrisisRef): Promise<CrisisGift | null> {
+  const client = await c(ref);
+  const res = await client.rpc('crisis_my_gift', { p_crisis: ref.id });
+  if (res.error) return null;
+  return (res.data as CrisisGift | null) ?? null;
+}
+export async function saveGift(ref: CrisisRef): Promise<void> {
+  const client = await c(ref);
+  await client.rpc('crisis_save_gift', { p_crisis: ref.id });
+}
+export async function activateGift(ref: CrisisRef): Promise<{ ok: boolean; until?: string; already?: boolean; message?: string }> {
+  const client = await c(ref);
+  const res = await client.rpc('crisis_activate_gift', { p_crisis: ref.id });
+  return must(res, 'Could not activate your voucher. Try again.') as { ok: boolean; until?: string; already?: boolean; message?: string };
+}

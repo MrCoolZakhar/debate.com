@@ -1,0 +1,1 @@
+-- Applied 22 Nov 2026 as migration crisis_part56_gift_sitewide: my_open_crisis_gift, activate_my_crisis_gift, save_my_crisis_gift (signed-in, any page), _crisis_gift_activate shared by crisis_activate_gift; 8 Carrera staff vouchers seeded (Gavelling's own accounts excluded).

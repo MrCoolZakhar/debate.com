@@ -6,7 +6,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { MessagesSquare, Send } from 'lucide-react';
+import { Eye, MessagesSquare, Send } from 'lucide-react';
 import GSelect from '@/components/GSelect';
 import { notifyErr } from '@/lib/appNotify';
 import { backroomContacts, crisisError, markBackroomRead, sendBackroomMessage, type BackroomContact, type BackroomMessage } from '@/lib/crisis/api';
@@ -16,6 +16,7 @@ import { Avatar, Btn, Card, CK, agoLabel, fieldStyle } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { PageHeading } from '../command/setupKit';
 import { useBackroomMessages, type BackroomThread } from './useBackroomMessages';
+import DelegateChatsViewer from './DelegateChatsViewer';
 
 const MAX = 2000;
 const PANE_H = 'calc(100dvh - 170px)';
@@ -28,6 +29,13 @@ export default function MessagesPage() {
 // ─────────── The crisis team ───────────
 
 function StaffMessages() {
+  // The view-only reader of delegates' chats with each other (DelegateChatsViewer) replaces the page while it is open.
+  const [delegateChats, setDelegateChats] = useState(false);
+  if (delegateChats) return <DelegateChatsViewer onBack={() => setDelegateChats(false)} />;
+  return <StaffInbox onDelegateChats={() => setDelegateChats(true)} />;
+}
+
+function StaffInbox({ onDelegateChats }: { onDelegateChats: () => void }) {
   const { ref, core, memberId } = useCrisis();
   const box = useBackroomMessages(ref, { enabled: true, staff: true, memberId });
   const router = useRouter();
@@ -65,6 +73,8 @@ function StaffMessages() {
         eyebrow="RUN"
         title="Messages"
         right={(
+          <span className="flex items-center flex-wrap" style={{ gap: 8 }}>
+          <Btn tone="ghost" size="sm" onClick={onDelegateChats} icon={<Eye size={14} strokeWidth={1.6} />}>Delegate chats</Btn>
           <GSelect
             value=""
             onChange={(id) => select(id)}
@@ -75,6 +85,7 @@ function StaffMessages() {
             style={{ minWidth: 220 }}
             align="end"
           />
+          </span>
         )}
       />
       <div className="grid gap-3.5 md:grid-cols-[minmax(260px,340px)_1fr]">
