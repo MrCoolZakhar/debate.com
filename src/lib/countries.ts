@@ -123,6 +123,9 @@ export const UN_COUNTRIES: Country[] = [
   { name: 'Haiti', code: 'HT' },
   { name: 'Holy See', code: 'VA' },
   { name: 'Honduras', code: 'HN' },
+  // Not UN members, listed like Taiwan and Kosovo so people from there can
+  // pick them (owner, 23 Nov 2026: nationality at sign-up, conference country).
+  { name: 'Hong Kong', code: 'HK' },
   { name: 'Hungary', code: 'HU' },
   { name: 'Iceland', code: 'IS' },
   { name: 'India', code: 'IN' },
@@ -150,6 +153,7 @@ export const UN_COUNTRIES: Country[] = [
   { name: 'Liechtenstein', code: 'LI' },
   { name: 'Lithuania', code: 'LT' },
   { name: 'Luxembourg', code: 'LU' },
+  { name: 'Macau', code: 'MO' },
   { name: 'Madagascar', code: 'MG' },
   { name: 'Malawi', code: 'MW' },
   { name: 'Malaysia', code: 'MY' },
@@ -387,6 +391,16 @@ export const COUNTRY_NAME_ALIASES: Record<string, string> = {
   fra: 'France',
   roc: 'Taiwan',
   'chinese taipei': 'Taiwan',
+  'hong kong sar': 'Hong Kong',
+  'hong kong, china': 'Hong Kong',
+  'hong kong sar china': 'Hong Kong',
+  hksar: 'Hong Kong',
+  hongkong: 'Hong Kong',
+  macao: 'Macau',
+  'macao sar': 'Macau',
+  'macau sar': 'Macau',
+  'macao, china': 'Macau',
+  'macao sar china': 'Macau',
   car: 'Central African Republic',
   png: 'Papua New Guinea',
   // Formal and non-English names seen in real rosters.
@@ -878,6 +892,7 @@ export const COUNTRY_CONTINENTS: Record<string, Continent> = {
   TZ: 'Africa', TG: 'Africa', TN: 'Africa', UG: 'Africa', ZM: 'Africa', ZW: 'Africa',
 
   // Asia
+  HK: 'Asia', MO: 'Asia',
   AF: 'Asia', AM: 'Asia', AZ: 'Asia', BH: 'Asia', BD: 'Asia', BT: 'Asia', BN: 'Asia',
   KH: 'Asia', CN: 'Asia', CY: 'Asia', GE: 'Asia', IN: 'Asia', ID: 'Asia', IR: 'Asia',
   IQ: 'Asia', IL: 'Asia', JP: 'Asia', JO: 'Asia', KZ: 'Asia', KW: 'Asia', KG: 'Asia',

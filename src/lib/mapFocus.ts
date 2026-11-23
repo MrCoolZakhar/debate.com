@@ -321,7 +321,7 @@ export function cityCoordinates(name: string | null | undefined): { lat: number;
   return null;
 }
 
-/** ISO code for a country name or code, including Hong Kong and Macau, which are not in UN_COUNTRIES. */
+/** ISO code for a country name or code (Hong Kong and Macau are in UN_COUNTRIES since 23 Nov 2026; a city typed as the country still resolves). */
 function countryCode(country: string | null | undefined): string | null {
   const c = country?.trim();
   if (!c) return null;
