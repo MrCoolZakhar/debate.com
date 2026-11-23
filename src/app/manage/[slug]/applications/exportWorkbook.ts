@@ -27,6 +27,13 @@
 // so it never loads with the page. The community build writes column widths
 // but not wrapping or frozen panes, so those are left out.
 //
+// Team Applications (owner, 23 Nov 2026): the same page with scope 'team'
+// passes `team`. Then the rows are chairs, secretariat and staff, the file is
+// "<ACRONYM> team applications.xlsx", and three columns follow Assigned
+// Committee on both sheets: Job Board picks (in order, joined with ", "),
+// Seated committee, Public title (secretariat and staff). Without `team`
+// nothing changes.
+//
 // buildApplicationsSheets is pure (no SheetJS, no browser) so the same logic
 // can be run from a script.
 
@@ -78,11 +85,19 @@ export interface ExportLabels {
   age: (dob: string | null | undefined) => number | null;
 }
 
+/** Team Applications' three extra columns, each read from what the page holds. */
+export interface ExportTeamColumns {
+  jobPicks: (app: ExportApplication) => string;
+  seatedCommittee: (app: ExportApplication) => string;
+  publicTitle: (app: ExportApplication) => string;
+}
+
 export const OVERVIEW_SHEET = 'Overview';
 export const FULL_SHEET = 'Full information';
 
 const ROLE_ORDER = ['delegate', 'head-delegate', 'faculty-advisor', 'chair', 'observer'];
 const EXCLUDED_ROLES = new Set(['secretariat', 'staff']);
+const TEAM_ROLE_ORDER = ['chair', 'secretariat', 'staff'];
 
 export type Cell = string | number;
 
@@ -169,10 +184,12 @@ export function buildApplicationsSheets(opts: {
   /** conferences.aid_questions (raw JSON blocks). */
   aidQuestions?: unknown;
   labels: ExportLabels;
+  /** Team Applications: team roles and the three extra columns. */
+  team?: ExportTeamColumns;
 }): { overview: SheetData; full: SheetData } {
-  const { roleConfigs, labels } = opts;
+  const { roleConfigs, labels, team } = opts;
   const applications = opts.applications
-    .filter((a) => !EXCLUDED_ROLES.has(a.role))
+    .filter((a) => (team ? TEAM_ROLE_ORDER.includes(a.role) : !EXCLUDED_ROLES.has(a.role)))
     .sort((x, y) => (x.submitted_at ?? '').localeCompare(y.submitted_at ?? ''));
 
   const nameOf = (a: ExportApplication) => a.profiles?.display_name ?? a.invited_name ?? '';
@@ -183,7 +200,9 @@ export function buildApplicationsSheets(opts: {
   // ── Overview ──
   const overviewHeader: Cell[] = [
     'Name', 'Email', 'Date of birth', 'Age', 'Nationality', 'Role', 'Status', 'Payment', 'Society',
-    'Submitted', 'Assigned Committee', 'Assigned Country',
+    'Submitted', 'Assigned Committee',
+    ...(team ? ['Job Board picks', 'Seated committee', 'Public title'] : []),
+    'Assigned Country',
   ];
   const overviewRow = (a: ExportApplication): Cell[] => [
     nameOf(a),
@@ -197,6 +216,7 @@ export function buildApplicationsSheets(opts: {
     a.societies?.name ?? '',
     submitted(a),
     a.assigned_committee?.name ?? '',
+    ...(team ? [team.jobPicks(a), team.seatedCommittee(a), team.publicTitle(a)] : []),
     a.assigned_country_name ?? '',
   ];
   const overview: SheetData = {
@@ -207,7 +227,8 @@ export function buildApplicationsSheets(opts: {
 
   // ── Application question columns, role by role ──
   const rolesPresent = new Set(applications.map((a) => a.role));
-  const roleOrder = [...ROLE_ORDER, ...[...rolesPresent].filter((r) => !ROLE_ORDER.includes(r))];
+  const baseOrder = team ? TEAM_ROLE_ORDER : ROLE_ORDER;
+  const roleOrder = [...baseOrder, ...[...rolesPresent].filter((r) => !baseOrder.includes(r))];
   const cols: Col[] = [];
   const colIds = new Set<string>();
   const archivedFor = new Map<string, { label: string; role: string; file: boolean }>();
@@ -331,10 +352,12 @@ export async function downloadApplicationsWorkbook(opts: {
   roleConfigs: ExportRoleConfig[];
   aidQuestions?: unknown;
   labels: ExportLabels;
+  team?: ExportTeamColumns;
 }): Promise<void> {
   const XLSX = await import('xlsx');
   const { overview, full } = buildApplicationsSheets(opts);
   const wb = sheetsToWorkbook(XLSX, [overview, full]);
   const base = (opts.acronym ?? '').trim();
-  XLSX.writeFile(wb, base ? `${base} applications.xlsx` : 'applications.xlsx', { compression: true });
+  const file = opts.team ? 'team applications.xlsx' : 'applications.xlsx';
+  XLSX.writeFile(wb, base ? `${base} ${file}` : file, { compression: true });
 }
