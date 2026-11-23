@@ -44,7 +44,7 @@ export interface TeamDecisions {
 }
 
 export function useTeamDecisions({
-  enabled, conferenceId, roleConfigs, pushDraftNotice, onChanged, optimistic,
+  enabled, conferenceId: conferenceIdOrNull, roleConfigs, pushDraftNotice, onChanged, optimistic,
 }: {
   enabled: boolean;
   conferenceId: string | null;
@@ -56,6 +56,9 @@ export function useTeamDecisions({
   optimistic?: (appId: string, status: string) => () => void;
 }): TeamDecisions {
   const { user } = useAuth();
+  // The decisions run only from the pop-up, which opens only after the list
+  // loaded for a conference, so '' is never written.
+  const conferenceId = conferenceIdOrNull ?? '';
   const [applicants, setApplicants] = useState<TeamApplicant[] | null>(null);
   const [committees, setCommittees] = useState<TeamCommittee[]>([]);
   const [canAccept, setCanAccept] = useState(false);
@@ -66,16 +69,16 @@ export function useTeamDecisions({
   // Read once when Team Applications opens: the read also records that an
   // organiser reviewed applicants. After a decision it is read again.
   const load = useCallback(async () => {
-    if (!enabled || !conferenceId) return;
+    if (!enabled || !conferenceIdOrNull) return;
     try {
-      const res = await loadTeamApplicantsV2(conferenceId);
+      const res = await loadTeamApplicantsV2(conferenceIdOrNull);
       setApplicants(res.applicants);
       setCommittees(res.committees);
       setCanAccept(res.canAccept);
     } catch (e) {
       notifyErr(friendlyError(e, 'Could not load the applicants. Please try again.'));
     }
-  }, [enabled, conferenceId]);
+  }, [enabled, conferenceIdOrNull]);
   useEffect(() => { void load(); }, [load]);
 
   const patch = useCallback((id: string, p: Partial<TeamApplicant>) => {
