@@ -4101,15 +4101,12 @@ export default function ApplicationsView({ scope }: { scope: 'participants' | 't
   ];
 
   return (
-    <div className={scope === 'team' ? 'pt-6' : 'px-6 md:px-10 py-8'}>
+    <div className={scope === 'team' ? '' : 'px-6 md:px-10 py-8'}>
       {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap mb-5">
         {scope === 'team' ? (
-          // Team Applications: the Team page already has its title and tabs above.
-          <p className="min-w-0" style={{ fontFamily: OUTFIT, fontSize: 13.5, color: NEU.inkSoft, margin: 0, lineHeight: 1.5, flex: '1 1 320px', alignSelf: 'center' }}>
-            Team Applications is for chairs, secretariat and staff. Delegates, head delegates, faculty advisors and observers are in{' '}
-            <Link href={`/manage/${conference.slug}/applications`} style={{ fontWeight: 700, color: NEU.ink, textDecoration: 'underline', textUnderlineOffset: 3 }}>Applications</Link>.
-          </p>
+          // Team Applications: the Team page draws the header (24 Nov 2026); this keeps the toolbar on the right.
+          <div />
         ) : (
         <div className="flex items-center gap-3.5">
           {/* Gavel emblem moved off the header (#4) — it now marks chair rows.

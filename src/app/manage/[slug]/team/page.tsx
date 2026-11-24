@@ -4,31 +4,24 @@
 //
 // Chairs, secretariat and staff are the people who RUN the conference, so they
 // have their own place, never Applications (which is for delegates, head
-// delegates, faculty advisors and observers). Three tabs, kept in ?tab=:
+// delegates, faculty advisors and observers). Three tabs, kept in ?tab= and picked
+// from the left menu's TEAM section (24 Nov 2026: the top tab cards are gone):
 //   applications  Team Applications: decide chairs, secretariat and staff. It is the
 //                 Applications page itself (applications/ApplicationsView.tsx with scope
 //                 'team', owner 23 Nov 2026), its decisions in team/useTeamDecisions.tsx
 //   jobs          the Job Board (jobs/JobBoardPanel.tsx, moved here)
 //   members       Team Members: the organizing team (moved from Settings)
 
-import { useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Briefcase, Inbox, Users2 } from 'lucide-react';
+import { Briefcase, Inbox, Users2, type LucideIcon } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
-import { OUTFIT } from '@/components/neu';
-import { replaceUrlInPlace } from '@/lib/replaceUrlInPlace';
-import { BigSectionTabs, type BigSectionTab } from '../BigSectionTabs';
+import { NEU, NEU_GRADIENTS, NeuIconDisc, OUTFIT } from '@/components/neu';
 import JobBoardPanel from '../jobs/JobBoardPanel';
 import ApplicationsView from '../applications/ApplicationsView';
 import TeamMembers from './TeamMembers';
 
 type TeamTab = 'applications' | 'jobs' | 'members';
-
-const TABS: BigSectionTab<TeamTab>[] = [
-  { key: 'applications', label: 'Team Applications', sub: 'Chairs, secretariat and staff', emoji: 'Inbox tray', lucide: Inbox, tone: 'gold' },
-  { key: 'jobs', label: 'Job Board', sub: 'Roles you post for your team', emoji: 'Briefcase', lucide: Briefcase, tone: 'gold' },
-  { key: 'members', label: 'Team Members', sub: 'Who runs it with you', emoji: 'Busts in silhouette', lucide: Users2, tone: 'green' },
-];
 
 /** The tab from the URL; the old Settings links (team, organizers, highlight) open Team Members. */
 function tabFrom(sp: URLSearchParams): TeamTab {
@@ -38,32 +31,47 @@ function tabFrom(sp: URLSearchParams): TeamTab {
   return 'applications';
 }
 
+// The header of each tab, in the Applications page's look (24 Nov 2026).
+const HEADS: Record<TeamTab, { icon: LucideIcon; emoji: string; title: string }> = {
+  applications: { icon: Inbox, emoji: 'Inbox tray', title: 'Team Applications' },
+  jobs: { icon: Briefcase, emoji: 'Briefcase', title: 'Job Board' },
+  members: { icon: Users2, emoji: 'Busts in silhouette', title: 'Team Members' },
+};
+
 export default function TeamPage() {
   const { conference } = useManage();
   const searchParams = useSearchParams();
-  const [tab, setTab] = useState<TeamTab>(() => tabFrom(new URLSearchParams(searchParams.toString())));
+  // The left menu's Team links (layout.tsx) drive the tab through ?tab=; read on every render,
+  // so a menu click, back and forward all switch it (24 Nov 2026).
+  const tab = tabFrom(new URLSearchParams(searchParams.toString()));
 
-  const open = (next: TeamTab) => {
-    setTab(next);
-    const params = new URLSearchParams(window.location.search);
-    params.delete('tab');
-    if (next !== 'members') params.delete('highlight');
-    params.set('tab', next);
-    replaceUrlInPlace(`${window.location.pathname}?${params.toString()}`);
-  };
-
-  const tabs = useMemo(() => TABS, []);
   if (!conference) return null;
+  const head = HEADS[tab];
 
   return (
     // Team Applications fills the page like Applications does (no reading-width cap); the other tabs keep 1500.
-    <div className="px-4 sm:px-6 md:px-10 pt-6 pb-10" style={{ maxWidth: tab === 'applications' ? undefined : 1500 }}>
-      <h1 style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 'clamp(32px, 3.4vw, 42px)', letterSpacing: '-0.025em', lineHeight: 1.05, color: '#1C1410', margin: 0 }}>
-        Team
-      </h1>
-      <p style={{ fontFamily: OUTFIT, fontSize: 15, color: '#5C5140', margin: '6px 0 0', overflowWrap: 'anywhere' }}>{conference.full_name}</p>
-
-      <BigSectionTabs tabs={tabs} value={tab} onChange={open} label="Team sections" compact scroll />
+    <div className="px-6 md:px-10 py-8" style={{ maxWidth: tab === 'applications' ? undefined : 1500 }}>
+      <div className="flex items-center gap-3.5 mb-5">
+        <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={head.icon} emoji={head.emoji} size={46} />
+        <div className="min-w-0">
+          <p className="mb-1" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', color: NEU.deepGold, textTransform: 'uppercase' }}>
+            {conference.acronym} · Team
+          </p>
+          <h1 style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 26, color: NEU.ink, letterSpacing: '-0.01em' }}>{head.title}</h1>
+          <p style={{ fontFamily: OUTFIT, fontSize: 13.5, color: NEU.inkSoft, margin: '4px 0 0', lineHeight: 1.5 }}>
+            {tab === 'applications' ? (
+              <>
+                Team Applications is for chairs, secretariat and staff. Delegates, head delegates, faculty advisors and observers are in{' '}
+                <Link href={`/manage/${conference.slug}/applications`} style={{ fontWeight: 700, color: NEU.ink, textDecoration: 'underline', textUnderlineOffset: 3 }}>Applications</Link>.
+              </>
+            ) : tab === 'jobs' ? (
+              'Post the chair, secretariat and staff roles you are hiring for'
+            ) : (
+              'Who runs the conference with you and the pages they can open'
+            )}
+          </p>
+        </div>
+      </div>
 
       {tab === 'applications' && (
         <ApplicationsView scope="team" />

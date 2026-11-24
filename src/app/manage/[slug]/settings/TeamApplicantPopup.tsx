@@ -124,6 +124,10 @@ export default function TeamApplicantPopup({
   useScrollLock(true);
 
   const waiting = a.status === 'submitted';
+  // The Seat button on an accepted chair's card (24 Nov 2026): only seating is left to do.
+  const seatOnly = isChair && a.status === 'accepted';
+  const stepTitle = step === 'access' ? `Assign ${a.name ?? 'them'} their role and permissions`
+    : step === 'seat' ? `Assign ${a.name ?? 'them'} to a committee` : null;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !busy) onClose(); };
@@ -170,7 +174,7 @@ export default function TeamApplicantPopup({
         <div
           role="dialog"
           aria-modal="true"
-          aria-label={step === 'access' ? 'Add to the team' : step === 'seat' ? `Accept ${a.name ?? 'them'} as a chair` : `Application from ${a.name ?? 'an applicant'}`}
+          aria-label={stepTitle ?? `Application from ${a.name ?? 'an applicant'}`}
           className="w-full flex flex-col"
           style={{
             maxWidth: 640, maxHeight: '88vh', backgroundColor: '#FAF8F3', border: '1.5px solid #D8CDB6', borderRadius: 24,
@@ -190,13 +194,13 @@ export default function TeamApplicantPopup({
             )}
             <div className="min-w-0 flex-1">
               <p className="flex flex-wrap items-center gap-x-2 gap-y-1" style={{ margin: 0, fontSize: 19, fontWeight: 800, color: INK, overflowWrap: 'anywhere', lineHeight: 1.25 }}>
-                <span style={{ overflowWrap: 'anywhere' }}>{step === 'access' ? `Add ${a.name ?? 'them'} to the team` : step === 'seat' ? `Accept ${a.name ?? 'them'} as a chair` : (a.name ?? 'No name')}</span>
+                <span style={{ overflowWrap: 'anywhere' }}>{stepTitle ?? (a.name ?? 'No name')}</span>
               </p>
               <p style={{ margin: '3px 0 0', fontSize: 13.5, color: NEU.inkSoft, overflowWrap: 'anywhere' }}>
                 {step === 'access'
                   ? 'Pick the pages they can open. Nothing is ticked until you tick it'
                   : step === 'seat'
-                  ? 'Pick the committee to seat them in, or seat them later from Committees'
+                  ? (seatOnly ? 'Pick the committee to seat them in' : 'Pick the committee to seat them in, or seat them later from Committees')
                   : [teamRoleLabel(a.role) + (forTitle ? ` for ${forTitle}` : ''), a.submitted_at ? `Applied ${fmtDay(a.submitted_at)}` : null].filter(Boolean).join(' · ')}
               </p>
               {step === 'review' && a.email && (
@@ -402,6 +406,14 @@ export default function TeamApplicantPopup({
                   <ArrowLeft size={14} /> Back
                 </button>
                 <div className="flex-1" />
+                {seatOnly ? (
+                  // Already accepted: one button, the same seat call.
+                  <button type="button" className="focus:outline-none" style={primaryBtn(busy || !canAccept || !seatPick || !a.user_id)} disabled={busy || !canAccept || !seatPick || !a.user_id}
+                    onClick={() => { void runChair(seatPick); }}>
+                    {busy ? 'Assigning' : 'Assign to committee'}
+                  </button>
+                ) : (
+                <>
                 <button type="button" className="focus:outline-none" style={quietBtn(busy || !canAccept)} disabled={busy || !canAccept}
                   onClick={() => { void runChair(null); }}>
                   Accept, seat later
@@ -411,6 +423,8 @@ export default function TeamApplicantPopup({
                     onClick={() => { void runChair(seatPick); }}>
                     {busy ? 'Accepting' : 'Accept and seat'}
                   </button>
+                )}
+                </>
                 )}
               </div>
             ) : (

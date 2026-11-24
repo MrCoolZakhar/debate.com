@@ -184,7 +184,9 @@ export function useTeamDecisions({
       const res = await acceptChair({ conferenceId, appId: a.application_id, committeeId, pushDraftNotice });
       if (!res.ok) return res.message;
       const c = res.committeeId ? committeeById.get(res.committeeId) : undefined;
-      notifyOk(c ? `${a.name ?? 'They'} accepted and seated in ${committeeShort(c)}` : `${a.name ?? 'They'} accepted`);
+      // An already accepted chair was only seated (the Seat button, 24 Nov 2026).
+      const wasAccepted = a.status === 'accepted';
+      notifyOk(c ? (wasAccepted ? `${a.name ?? 'They'} seated in ${committeeShort(c)}` : `${a.name ?? 'They'} accepted and seated in ${committeeShort(c)}`) : `${a.name ?? 'They'} accepted`);
       if (res.followUpFailed) notifyErr('Accepted, but the acceptance email could not be queued. Refresh to verify.');
       setOpen(null);
       await load();
