@@ -1,0 +1,5846 @@
+'use client';
+
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
+import {
+  ArrowRight, BadgeCheck, Ban, CheckCircle2, MinusCircle, XCircle, Building2, CalendarDays, Check, ChevronDown, ChevronLeft, CircleCheck, Clock,
+  Download, Eye, Filter, Gavel, GraduationCap, HandCoins, Inbox, Info, Landmark, LogOut,
+  Loader2, Mail, MoreHorizontal, PencilLine, Plus, RotateCcw, Search, Send, SlidersHorizontal, Trash2, Undo2, User, UserRoundCheck,
+  UserX, Users, Wallet, X, UsersRound, FileSearch, StickyNote, ExternalLink,
+} from 'lucide-react';
+import Link from 'next/link';
+import { useTeamDecisions } from '../team/useTeamDecisions';
+import { useManage } from '@/app/manage/[slug]/layout';
+import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
+import { fetchAllRows, chunk } from '@/lib/fetchAllRows';
+import { useAuth } from '@/components/AuthProvider';
+import { queueEventEmail, notifyIfNeeded, turnOnDefaultEmail } from '@/lib/emailEvents';
+import { applicationFileHref } from '@/lib/applicationUploads';
+import { queueAdHocEmail } from '@/lib/adHocEmail';
+import { readEmailAllowance, emailsShort, emailsShortSentence, isEmailAllowanceMessage } from '@/lib/emailAllowance';
+import GetMoreEmails from '../store/GetMoreEmails';
+import { summarizeUnresolved, recipientFieldsContext, unresolvedFieldLabel } from '@/lib/emailUnresolved';
+import type { EmailBlock } from '@/lib/emailBlocks';
+import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
+import { notifyErr, notifyOk, clearErr, clearOk } from '@/lib/appNotify';
+import { useConfirmModal } from '@/components/ConfirmModal';
+import { FlagImg } from '@/components/FlagImg';
+import { DatePicker } from '@/components/DatePicker';
+import { LogoDisc } from '@/components/LogoDisc';
+import Portal from '@/components/Portal';
+import ProfileLink from '@/components/ProfileLink';
+import { getCountryByName, UN_COUNTRIES } from '@/lib/countries';
+import { ageAt } from '@/lib/age';
+import { checkInApplication, undoCheckIn } from '@/lib/checkIn';
+import {
+  NEU, NEU_GRADIENTS, OUTFIT, NeuCard, NeuStatTile, NeuIconDisc, Emoji3D,
+} from '@/components/neu';
+import { matchPresetEmblem } from '@/lib/presetNames';
+import {
+  poolForRole, releasePoolSpot, MemberAvatar, markNotAttending, undoNotAttending,
+} from '@/app/manage/[slug]/assignment/delegationShared';
+import { LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
+import { type CustomQuestion, type CustomAnswers, normalizeBlocks, questionsOf, displayAnswer } from '@/lib/customQuestions';
+import { useScrollLock } from '@/hooks/useScrollLock';
+import { PeopleDelegationsSwitch } from './DelegationsBoard';
+import DelegationsTab from './delegations/DelegationsTab';
+import DelegationPopupLink from '@/app/manage/[slug]/DelegationPopupLink';
+import { useDelegationSummaries } from './DelegationAvatar';
+import { RowDelegation, ROW_DELEGATION_PILL, rowDelegationTitle, type RowDelegationProps } from './RowDelegation';
+import { countryShortName } from '../assignment/displayNames';
+import OpenDelegateApplications from './OpenDelegateApplications';
+import { rejectUpdates, writeReject, rejectFollowUps, acceptFollowUps } from './teamDecisions';
+import { useConferenceMoney, moneyState, moneyLabel, moneyOwing, type MoneyRow, type MoneyState, type LivePay } from '@/lib/applicationMoney';
+import { formatCents } from '../financials/shared';
+import { checkRoleSwap, askFor, runRoleSwap, goneAfterSwap, type SwapAsk } from './roleSwap';
+import RoleSwapPanel from './RoleSwapPanel';
+import { useJobBoardApplicantExtras } from './useJobBoardApplicantExtras';
+import { useNoteCounts } from './useNoteCounts';
+import TeamApplicantsLine from './TeamApplicantsLine';
+// The applicant pop-up (hero, action bar, five tabs) and its ?app= URL state.
+import ApplicantDetailDialog, { useApplicantUrlSync } from './ApplicantDetail/ApplicantDetailDialog';
+import ApplicationSourceMark, { ApplicationSourceChip } from '@/components/conferences/ApplicationSourceMark';
+// Same role-label vocabulary the MUN CV timeline uses (Delegate/Chair/Faculty
+// Advisor/Secretariat/Other), so a chair/secretariat application's listed
+// conferences read consistently with how the applicant's own CV describes them.
+import { ENTRY_TYPE_MAP, type EntryType } from '@/components/CVEntryModal';
+import { friendlyError, UserFacingError } from '@/lib/friendlyError';
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+interface AppPreference {
+  preference_order: number;
+  conference_committee_id: string;
+  country_code: string;
+  country_name: string;
+  conference_committees: { name: string; abbreviation: string | null; logo_url: string | null } | null;
+}
+
+interface RoleConfigLite {
+  role: string;
+  payment_timing: 'after_acceptance' | 'anytime' | string; // 'after_application' merged into 'anytime', 29 Sep 2026
+  custom_questions: unknown[];
+  fee_amount: number | null;
+  fee_currency: string | null;
+  fee_phases: { amount?: number }[] | null;
+  allow_resubmission: boolean;
+  is_enabled: boolean;
+  applications_open_at: string | null;
+  applications_close_at: string | null;
+}
+
+/** A role config actually charges something, the flat fee or any phase's
+ *  amount. Chairs default to feeless, but a conference can configure a
+ *  chair fee (e.g. Bilkent charges TRY 1550) — when it does, chair
+ *  applications get the exact same payment treatment as any other role. */
+function roleHasFee(rc: RoleConfigLite | undefined): boolean {
+  if (!rc) return false;
+  if ((rc.fee_amount ?? 0) > 0) return true;
+  return (rc.fee_phases ?? []).some(p => (Number(p?.amount) || 0) > 0);
+}
+
+interface Application {
+  id: string;
+  user_id: string | null;
+  invited_email: string | null;
+  invited_name: string | null;
+  role: string;
+  status: string;
+  is_head_delegate: boolean;
+  experience_level: string | null;
+  payment_status: string | null;
+  submitted_at: string;
+  checked_in_at: string | null;
+  organizer_note: string | null;
+  resubmitted_at: string | null;
+  custom_answers: CustomAnswers | null;
+  // The financial aid form's answers (a separate form from custom_answers);
+  // read only by the Excel export.
+  aid_custom_answers: CustomAnswers | null;
+  assigned_committee_id: string | null;
+  assigned_country_code: string | null;
+  assigned_country_name: string | null;
+  assigned_committee: { name: string; abbreviation: string | null; topics: string[] | null; logo_url: string | null } | null;
+  profiles: { display_name: string; email: string; avatar_url: string | null; nationality: string | null; date_of_birth: string | null; mun_experience_level: string | null } | null;
+  societies: { name: string; city: string | null; country_code: string | null; logo_url: string | null } | null;
+  application_preferences: AppPreference[];
+  self_paid: boolean;
+  attending: boolean;
+  pledge_type: 'delegation' | null;
+  spots_pledged: number | null;
+  pledge_confirmed_at: string | null;
+  society_id: string | null;
+  // Denormalized aid snapshot on the application row itself — checked as a
+  // fallback alongside the linked financial_aid_requests row (see previewAid)
+  // so a request is never missed regardless of which one is populated.
+  aid_requested: boolean;
+  aid_statement: string | null;
+  aid_status: string | null;
+  aid_requested_amount: number | null;
+  // Set server-side to 'chair_invite' when this chair was brought in by the
+  // organizing team (payment_status arrives 'waived' alongside it) — drives
+  // the INVITED badge and, when this role has no configured fee at all, the
+  // standalone WAIVED chip that stands in for the payment menu.
+  fee_waiver_source: string | null;
+  // Where the applicant came from (ApplicationSourceMark). Null on rows an
+  // organiser added and on applications from before 18 Sep 2026.
+  traffic_source: string | null;
+  traffic_detail: string | null;
+  // Chair/secretariat only: the conferences the applicant listed on this
+  // application (a snapshot taken at application time — never re-derived
+  // from their MUN CV after the fact). Every other role's array is empty.
+  experience_entries: {
+    id: string;
+    source_cv_entry_id: string | null;
+    entry_type: string;
+    conference_name: string;
+    committee: string;
+    allocation: string;
+    event_date: string | null;
+    awards: string[];
+    description: string | null;
+  }[];
+}
+
+// The applicant's financial_aid_requests row, fetched on demand when the
+// review modal opens (mirrors previewCv) — the source of truth for the
+// statement/amount/status in the vast majority of cases, since aid is filed
+// via a separate request rather than always mirrored onto applications.
+interface PreviewAidRequest {
+  id: string;
+  statement: string | null;
+  requested_amount: number | null;
+  status: 'pending' | 'approved' | 'denied';
+  granted_amount: number | null;
+  created_at: string;
+}
+
+// Lightweight committee shape for the inline quick-allocate picker (#7). Loaded
+// lazily the first time an organiser opens the Plus popover on an unassigned
+// delegate. `slots` are the committee's country seats; `takenCodes` are the
+// country_codes already allocated, so open seats = slots minus takenCodes.
+interface QuickCommittee {
+  id: string;
+  name: string;
+  abbreviation: string | null;
+  logo_url: string | null;
+  topics: string[] | null;
+  slots: { country_code: string; country_name: string }[];
+  takenCodes: string[];
+}
+
+// Pool accounting (poolForRole, fillFreeSpots, releasePoolSpot, POOL_SPOTS_COLUMN)
+// is imported from delegationShared.tsx, the canonical location (F: fillFreeSpots
+// consolidation). This page no longer keeps its own copy.
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+// Real ISO 3166-1 alpha-2 codes, so a committee "country" that is actually a
+// crisis/JCC character name (country_code stores the character, e.g. "Indira
+// Gandhi") is never mistaken for a flag and never renders a broken flag image.
+const REAL_COUNTRY_CODES = new Set(UN_COUNTRIES.map(c => c.code));
+
+/** The genuine ISO code for a name/code pair, or null when it does not resolve
+ *  to a real country (crisis characters, custom seats, blanks). */
+function resolveRealCountryCode(name: string | null | undefined, code?: string | null): string | null {
+  if (code && REAL_COUNTRY_CODES.has(code.toUpperCase())) return code.toUpperCase();
+  if (name) {
+    const c = getCountryByName(name);
+    if (c) return c.code;
+  }
+  return null;
+}
+
+/** Whole-years age for a row: profiles.date_of_birth first, then any DOB the
+ *  applicant typed into a date-style / "date of birth" custom answer (#12). */
+function ageForApp(app: Application, questions: CustomQuestion[]): number | null {
+  const fromProfile = ageAt(app.profiles?.date_of_birth);
+  if (fromProfile !== null) return fromProfile;
+  const answers = app.custom_answers ?? {};
+  const dobQ = questions.find(q =>
+    q.type === 'date' && /\b(birth|dob|born)\b/i.test(q.label)
+  ) ?? questions.find(q => /date of birth|birth date|\bdob\b/i.test(q.label));
+  const dobVal = dobQ ? answers[dobQ.id] : undefined;
+  const raw = typeof dobVal === 'string' ? dobVal.trim() : '';
+  return raw ? ageAt(raw) : null;
+}
+
+function formatDate(d: string) {
+  return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function roleLabel(role: string) {
+  const map: Record<string, string> = {
+    delegate: 'Delegate', chair: 'Chair', 'head-delegate': 'Head Delegate',
+    'faculty-advisor': 'Faculty Advisor', observer: 'Observer',
+    // Team Applications (scope 'team', 23 Nov 2026).
+    secretariat: 'Secretariat', staff: 'Staff',
+  };
+  return map[role] ?? role;
+}
+
+function RoleIcon({ role, size = 10 }: { role: string; size?: number }) {
+  const Icon = role === 'chair' ? Gavel
+    : role === 'head-delegate' ? Users
+    : role === 'faculty-advisor' ? GraduationCap
+    : role === 'observer' ? Eye
+    : User;
+  return <Icon size={size} strokeWidth={2.5} />;
+}
+
+/** A state shown as an icon plus a plain word: no pill, no capitals. The
+ *  colour carries the meaning through the icon and the word. `onDark` swaps to
+ *  the light tints used on the forest hero of the applicant pop-up. */
+const MARK_LIGHT = { done: '#2A5A3C', pending: '#8A6614', danger: '#8B2020', neutral: NEU.inkSoft };
+const MARK_DARK = { done: '#A8D8B5', pending: '#EED98A', danger: '#F2A7A7', neutral: '#E4DCCA' };
+type MarkTone = keyof typeof MARK_LIGHT;
+
+function StateMark({ icon: Icon, label, tone, onDark = false, size = 'md' }: {
+  icon: LucideGlyph;
+  label: string; tone: MarkTone; onDark?: boolean; size?: 'sm' | 'md';
+}) {
+  return (
+    <span
+      className="inline-flex items-center gap-1 flex-shrink-0"
+      style={{
+        fontFamily: OUTFIT, fontSize: size === 'sm' ? 12 : 13, fontWeight: 700,
+        color: (onDark ? MARK_DARK : MARK_LIGHT)[tone], whiteSpace: 'nowrap',
+      }}
+    >
+      <span aria-hidden="true" className="inline-flex"><Icon size={size === 'sm' ? 14 : 15} strokeWidth={2.4} /></span>
+      {label}
+    </span>
+  );
+}
+
+/** Applications with no linked profile (user_id null), imported, unclaimed. */
+function NotRegisteredChip({ onDark = false }: { onDark?: boolean }) {
+  return <StateMark icon={UserX} label="Not registered" tone="neutral" onDark={onDark} size="sm" />;
+}
+
+/** A chair brought in by the organizing team rather than applying, shown
+ *  next to the role regardless of whether this conference charges a
+ *  chair fee. */
+function InvitedChip({ onDark = false }: { onDark?: boolean }) {
+  return <StateMark icon={Mail} label="Invited" tone="pending" onDark={onDark} size="sm" />;
+}
+
+/** Static stand-in for the payment menu: an invited chair whose role has no
+ *  configured fee at all gets no PaymentMenu, so this is the only visible
+ *  confirmation of their money. It reads the invoices like the menu does
+ *  ("Nothing owed" when moneyState is 'none'). */
+function WaivedChip({ label }: { label: string }) {
+  return <StateMark icon={MinusCircle} label={label} tone="done" />;
+}
+
+type LucideGlyph = React.ComponentType<{ size?: number; strokeWidth?: number; style?: React.CSSProperties }>;
+
+/** Application status as an icon plus a plain word. The four
+ *  checkmark-family states keep distinct glyphs so they read apart
+ *  (accept = plain tick, assigned = badge tick, checked-in = person tick). */
+const STATUS_PILL: Record<string, { tone: MarkTone; label: string; icon: LucideGlyph }> = {
+  submitted:    { tone: 'pending', label: 'Submitted',  icon: Clock },
+  accepted:     { tone: 'done',    label: 'Accepted',   icon: CheckCircle2 },
+  assigned:     { tone: 'done',    label: 'Assigned',   icon: BadgeCheck },
+  'checked-in': { tone: 'done',    label: 'Checked in', icon: UserRoundCheck },
+  rejected:     { tone: 'danger',  label: 'Rejected',   icon: XCircle },
+  withdrawn:    { tone: 'neutral', label: 'Withdrawn',  icon: LogOut },
+};
+
+function StatusPill({ status, size = 'md', awaitingResubmission = false, onDark = false }: { status: string; size?: 'sm' | 'md'; awaitingResubmission?: boolean; onDark?: boolean }) {
+  // A rejected application whose role allows resubmission reads as "Awaiting
+  // resubmission" (amber/pending) instead of the final-sounding "Rejected",
+  // same underlying status, display only.
+  const t = (status === 'rejected' && awaitingResubmission)
+    ? { tone: 'pending' as MarkTone, label: 'Awaiting resubmission', icon: RotateCcw }
+    : STATUS_PILL[status] ?? { tone: 'neutral' as MarkTone, label: status.replace('-', ' '), icon: Clock };
+  return <StateMark icon={t.icon} label={t.label} tone={t.tone} onDark={onDark} size={size} />;
+}
+
+/** `attending === false`, layered independently of status (an
+ *  accepted/assigned/checked-in applicant can still be marked not
+ *  attending). Distinct icon so it never looks like Withdrawn. */
+function NotAttendingBadge({ size = 'md', onDark = false }: { size?: 'sm' | 'md'; onDark?: boolean }) {
+  return <StateMark icon={UserX} label="Not attending" tone="neutral" onDark={onDark} size={size} />;
+}
+
+/** Reserved width of the row's role/level slot (#4). Wide enough for the
+ *  longest label the RolePill can render at size="sm" — "FACULTY ADVISOR",
+ *  ~143px with its glyph, gap and pill padding — so every value occupies the
+ *  same position and the same width, and none of them is ever truncated. */
+const LEVEL_SLOT_W = 152;
+
+/** Height of the row's MIDDLE pane content, pinned identically across all
+ *  three states it can be in so a row never changes height when its status
+ *  changes underneath the organiser.
+ *
+ *  Measured, not guessed, from the two states that already had an intrinsic
+ *  height:
+ *    · ALLOCATED — a 92px LogoDisc beside the committee/country text, which is
+ *      shorter than the disc. Block height = 92.
+ *    · PREFERENCES — a 72px LogoDisc beside the preference stack, which is the
+ *      taller of the two: the "PREFERENCES" label (9.5px type ≈ 11.4px line +
+ *      4px margin) over three pills (15px flag + 4px padding top and bottom =
+ *      23px each) with two 4px gaps → 15.4 + 69 + 8 ≈ 92.4. Block height ≈ 92.
+ *  Both land on 92, so that is the number the decision pane matches, and the
+ *  number the preferences/allocate pane is now pinned to rather than left to
+ *  drift with however many preferences a delegate happened to list.
+ *
+ *  It is a MINIMUM, never a fixed height: the reject flow expands a textarea
+ *  in place inside this pane and must be free to grow. */
+const MID_BLOCK_H = 92;
+
+/** The ALLOCATE rail that sits BESIDE the preferences (not under them). Wide
+ *  enough for the button's label at its 12.5px/900 weight plus its glyph and
+ *  18px side padding, and narrow enough to leave the preference pills their
+ *  full three-line stack on a desktop row. Collapses to full width below the
+ *  `sm` breakpoint, where the pane stacks. */
+const ALLOCATE_RAIL_W = 152;
+
+/** Bottom padding the list reserves for the sticky bulk-action bar while a
+ *  selection is live, so the last row is never trapped under it. Below 640px
+ *  the bar is one sideways-scrolling row of 44px buttons (44 + 20px padding +
+ *  its 20px offset = 84px); from 640px it may wrap to two or three lines. */
+const BULK_BAR_CLEARANCE = 140;
+
+/** Role as its icon plus the plain word. Chairs read gold, delegates forest,
+ *  staff slate. */
+function RolePill({ role, size = 'md', onDark = false }: { role: string; size?: 'sm' | 'md'; onDark?: boolean }) {
+  const color = onDark
+    ? (role === 'chair' ? '#EED98A' : role === 'delegate' || role === 'head-delegate' ? '#A8D8B5' : '#C9D3EE')
+    : (role === 'chair' ? '#8A6614' : role === 'delegate' || role === 'head-delegate' ? '#2A5A3C' : '#45568A');
+  return (
+    <span
+      className="inline-flex items-center gap-1 flex-shrink-0"
+      style={{ fontFamily: OUTFIT, fontSize: size === 'sm' ? 12 : 13, fontWeight: 700, color, whiteSpace: 'nowrap' }}
+    >
+      <RoleIcon role={role} size={size === 'sm' ? 14 : 15} />
+      {roleLabel(role)}
+    </span>
+  );
+}
+
+/** Experience as a stacked circular badge for the row's top-right corner: a big
+ *  level insignia in a tinted disc, the tier name beneath it, and the conference
+ *  count as a caption. Mirrors the delegate-profile insignia at a larger size. */
+function LevelBadge({ level, count }: { level: string; count?: number }) {
+  const key = (level ?? '').toLowerCase();
+  const accent = LEVEL_ACCENT[key] ?? '#9A8A78';
+  const label = key ? key.charAt(0).toUpperCase() + key.slice(1) : 'Unranked';
+  return (
+    <div
+      className="flex items-center flex-shrink-0"
+      style={{ gap: 7 }}
+      title={count !== undefined ? `${count} conference${count === 1 ? '' : 's'} on their MUN CV` : label}
+    >
+      <span
+        className="inline-flex items-center justify-center flex-shrink-0"
+        style={{ width: 36, height: 36, borderRadius: 9999, background: `linear-gradient(150deg, ${accent}2E, ${accent}17)`, border: `1.5px solid ${accent}66`, boxShadow: NEU.outSm }}
+      >
+        <LevelInsignia level={key} size={22} />
+      </span>
+      <span className="flex flex-col leading-tight">
+        <span style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 12, color: NEU.ink }}>
+          {label}
+        </span>
+        {count !== undefined && (
+          <span style={{ fontFamily: OUTFIT, fontWeight: 600, fontSize: 11.5, color: NEU.inkSoft, fontVariantNumeric: 'tabular-nums' }}>
+            {count} conf{count === 1 ? '' : 's'}
+          </span>
+        )}
+      </span>
+    </div>
+  );
+}
+
+/** Payment control. The button shows the invoices' state (moneyState, src/lib/
+ *  applicationMoney.ts) and turns GREEN once paid (#9). Its menu changes no
+ *  money (owner, 15 Nov 2026): what they owe, "Review proof", "Remind to pay"
+ *  (re-sends the pay-now email, #8) and "Open in Financials", where money is
+ *  marked. Portaled so the clipping row card never cuts the menu off. */
+// Status inks for the review dialog's actions. These two carry meaning that no
+// `neu.tsx` token expresses (rejection, a blocking warning), so
+// they stay literal — but each one is contrast-checked against the surface it
+// actually sits on. Everything else in the dialog comes from NEU.
+const REVIEW_DANGER = '#8B2020';        // 8.51:1 on NEU.surface
+const REVIEW_WARN_INK = '#7A5320';      // replaces #9A6B2F, which measured 4.38:1
+
+/** Overflow menu for the review dialog's rarely-used, mostly destructive
+ *  actions (remove from conference, attendance toggle). Keeps them reachable
+ *  without letting them compete with the primary decision, and uses the same
+ *  portal + clamp placement as PaymentMenu so no ancestor overflow can clip
+ *  it. Purely presentational: every item calls a handler it was handed. */
+function ReviewMoreMenu({ items, disabled }: {
+  items: { icon: LucideGlyph; label: string; onClick: () => void; tone?: 'ink' | 'danger'; disabled?: boolean; title?: string }[];
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+
+  const place = useCallback(() => {
+    const b = btnRef.current;
+    if (!b) return;
+    const r = b.getBoundingClientRect();
+    const menuW = 248;
+    const menuH = 52 + items.length * 44;
+    // Clamp to the viewport and flip above the trigger when the dialog's
+    // footer sits too close to the bottom edge to open downwards.
+    const left = Math.max(8, Math.min(r.right - menuW, window.innerWidth - menuW - 8));
+    const openUp = r.bottom + menuH + 8 > window.innerHeight;
+    setPos({ top: openUp ? Math.max(8, r.top - menuH - 6) : r.bottom + 6, left });
+  }, [items.length]);
+
+  useEffect(() => {
+    if (!open) return;
+    place();
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (btnRef.current?.contains(t) || menuRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    const onScroll = () => setOpen(false);
+    document.addEventListener('mousedown', onDoc);
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', onScroll, true);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', onScroll, true);
+    };
+  }, [open, place]);
+
+  if (items.length === 0) return null;
+
+  return (
+    <div style={{ display: 'inline-block' }}>
+      <button
+        ref={btnRef}
+        onClick={() => { if (open) { setOpen(false); return; } place(); setOpen(true); }}
+        disabled={disabled}
+        aria-label="More actions"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className="inline-flex items-center justify-center focus:outline-none"
+        style={{
+          width: 44, height: 44, borderRadius: 999, border: 'none',
+          backgroundColor: NEU.surface, boxShadow: open ? NEU.inSm : NEU.outSm,
+          color: NEU.inkSoft, cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.5 : 1,
+          transition: `box-shadow 200ms ${EASE_LOCAL}`,
+        }}
+      >
+        <MoreHorizontal size={18} strokeWidth={2.4} />
+      </button>
+      {open && pos && (
+        <Portal>
+          <div
+            ref={menuRef}
+            role="menu"
+            className="appRevMenu"
+            style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999, width: 248, backgroundColor: NEU.surface, borderRadius: 14, boxShadow: NEU.out, padding: 6, animation: `neuFadeIn 160ms ${EASE_LOCAL}` }}
+          >
+            <style>{`@keyframes neuFadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }`}</style>
+            {items.map(it => {
+              const Icon = it.icon;
+              return (
+                <button
+                  key={it.label}
+                  role="menuitem"
+                  onClick={() => { if (it.disabled) return; setOpen(false); it.onClick(); }}
+                  disabled={it.disabled}
+                  title={it.title}
+                  className="inline-flex items-center gap-2.5 w-full focus:outline-none"
+                  style={{
+                    padding: '11px 12px', borderRadius: 10, background: 'transparent', border: 'none',
+                    cursor: it.disabled ? 'not-allowed' : 'pointer', textAlign: 'left',
+                    fontFamily: OUTFIT, fontSize: 13, fontWeight: 700,
+                    color: it.disabled ? NEU.inkSoft : (it.tone === 'danger' ? REVIEW_DANGER : NEU.ink),
+                    opacity: it.disabled ? 0.5 : 1,
+                  }}
+                  onMouseEnter={e => { if (!it.disabled) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                >
+                  <Icon size={15} strokeWidth={2.4} style={{ color: it.disabled ? NEU.inkSoft : (it.tone === 'danger' ? REVIEW_DANGER : NEU.deepGold) }} />
+                  {it.label}
+                </button>
+              );
+            })}
+          </div>
+        </Portal>
+      )}
+    </div>
+  );
+}
+
+function PaymentMenu({
+  disabled, onRemind, align = 'left', live = null, onReviewProof, money, financialsHref,
+}: {
+  /** A proof waiting or a payment started with no proof (prompt 138). */
+  live?: LivePay | null;
+  /** Opens Things to Do in Financials. */
+  onReviewProof?: () => void;
+  disabled?: boolean;
+  onRemind: () => void;
+  align?: 'left' | 'right';
+  /** This application's row of money_for_conference (src/lib/applicationMoney.ts). */
+  money: MoneyRow | undefined;
+  /** This person on the Financials Invoices page. */
+  financialsHref: string;
+}) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+
+  // The row card sets overflow:hidden to clip its rounded corners, which would
+  // clip an in-card absolute menu. Render the menu in a Portal at fixed
+  // viewport coordinates computed from the trigger so it can never be clipped.
+  const place = useCallback(() => {
+    const b = btnRef.current;
+    if (!b) return;
+    const r = b.getBoundingClientRect();
+    const menuW = 240;
+    const left = align === 'right' ? r.right - menuW : r.left;
+    setPos({ top: r.bottom + 6, left: Math.max(8, Math.min(left, window.innerWidth - menuW - 8)) });
+  }, [align]);
+
+  useEffect(() => {
+    if (!open) return;
+    place();
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (btnRef.current?.contains(t) || menuRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    const onScroll = () => setOpen(false);
+    document.addEventListener('mousedown', onDoc);
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', onScroll, true);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', onScroll, true);
+    };
+  }, [open, place]);
+
+  // The invoices decide (owner, 15 Nov 2026): never applications.payment_status.
+  const state = moneyState(money, live);
+  const paid = state === 'paid';
+  const proofWaiting = state === 'review';
+  const started = state === 'started';
+  const owing = moneyOwing(state);
+  const label = moneyLabel(state);
+
+  const item = (
+    icon: LucideGlyph, text: string, onClick: () => void, tone: 'ink' | 'danger' = 'ink',
+    opts?: { disabled?: boolean; title?: string },
+  ) => {
+    const Icon = icon;
+    const itemDisabled = !!opts?.disabled;
+    return (
+      <button
+        onClick={() => { if (itemDisabled) return; setOpen(false); onClick(); }}
+        disabled={itemDisabled}
+        title={opts?.title}
+        className="inline-flex items-center gap-2 w-full focus:outline-none"
+        style={{
+          padding: '9px 12px', borderRadius: 10, background: 'transparent', border: 'none',
+          cursor: itemDisabled ? 'not-allowed' : 'pointer', textAlign: 'left', fontFamily: OUTFIT, fontSize: 12, fontWeight: 700,
+          color: itemDisabled ? NEU.muted : (tone === 'danger' ? '#8B2020' : NEU.ink), opacity: itemDisabled ? 0.55 : 1,
+        }}
+        onMouseEnter={e => { if (!itemDisabled) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
+        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+      >
+        <Icon size={14} strokeWidth={2.4} style={{ flexShrink: 0, color: itemDisabled ? NEU.muted : (tone === 'danger' ? '#8B2020' : NEU.deepGold) }} />
+        {text}
+      </button>
+    );
+  };
+
+  return (
+    <div style={{ display: 'inline-block' }}>
+      <button
+        ref={btnRef}
+        onClick={() => setOpen(o => !o)}
+        disabled={disabled}
+        className="inline-flex items-center gap-1.5 focus:outline-none"
+        style={{
+          padding: '7px 13px', borderRadius: 999,
+          fontFamily: OUTFIT, fontSize: 11, fontWeight: 800,
+          // Paid → green filled (no separate PAID badge, #9). A proof to review
+          // → the gold attention accent; a started payment → quiet. Else calm cream.
+          color: paid ? '#FFFFFF' : proofWaiting ? '#7A5A10' : started ? NEU.inkSoft : NEU.ink,
+          background: paid ? 'linear-gradient(135deg, #3D7A52, #2A5A3C)' : proofWaiting ? 'rgba(238,217,138,0.55)' : NEU.surface,
+          boxShadow: paid ? '0 3px 8px #3D7A5255, ' + NEU.outSm : proofWaiting ? '0 0 0 1.5px rgba(182,135,31,0.55), ' + NEU.outSm : NEU.outSm,
+          border: 'none', whiteSpace: 'nowrap', flexShrink: 0,
+          cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.5 : 1,
+        }}
+      >
+        {paid
+          ? <CircleCheck size={13} strokeWidth={2.7} style={{ color: '#FFFFFF' }} />
+          : proofWaiting
+            ? <FileSearch size={13} strokeWidth={2.5} style={{ color: '#7A5A10' }} />
+            : started
+              ? <Clock size={13} strokeWidth={2.5} style={{ color: NEU.inkSoft }} />
+              : <Wallet size={13} strokeWidth={2.5} style={{ color: NEU.deepGold }} />}
+        {label}
+        <ChevronDown size={12} strokeWidth={2.6} style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 160ms' }} />
+      </button>
+      {open && pos && (
+        <Portal>
+          <div
+            ref={menuRef}
+            style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999, width: 240, maxWidth: 'calc(100vw - 16px)', backgroundColor: NEU.surface, borderRadius: 14, boxShadow: NEU.out, padding: 6, animation: `neuFadeIn 160ms ${EASE_LOCAL}` }}
+          >
+            <style>{`@keyframes neuFadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }`}</style>
+            {(state === 'part' || state === 'owes') && money && (
+              <p className="[overflow-wrap:anywhere]" style={{ margin: 0, padding: '8px 12px 6px', fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, lineHeight: 1.45, color: NEU.ink }}>
+                Owes {formatCents(money.owedCents, money.currency)}
+              </p>
+            )}
+            {proofWaiting && onReviewProof && item(FileSearch, 'Review proof', onReviewProof)}
+            {started && live && (
+              <p style={{ margin: 0, padding: '8px 12px 6px', fontFamily: OUTFIT, fontSize: 11.5, lineHeight: 1.45, color: NEU.inkSoft }}>
+                {live.createdAt ? `Started ${formatDate(live.createdAt)}, no proof yet.` : 'Started, no proof yet.'}
+                {live.expiresAt ? ` Held until ${formatDate(live.expiresAt)}` : ''}
+              </p>
+            )}
+            {owing && item(Send, 'Remind to pay', onRemind)}
+            {item(ExternalLink, 'Open in Financials', () => router.push(financialsHref))}
+          </div>
+        </Portal>
+      )}
+    </div>
+  );
+}
+
+/** Inline quick-allocate (#7). A small neumorphic Plus beside "Not yet
+ *  assigned" opens a portaled, edge-flipped two-step picker (committee, then an
+ *  open country) that allocates this specific delegate without leaving the page,
+ *  reusing the same conference_allocations write the assignment board uses. The
+ *  popover is portaled + clamped/flipped so the clipping row card never cuts it
+ *  off (mirrors PaymentMenu's portal pattern). */
+function QuickAllocate({
+  committees, loading, onOpen, onAllocate, big = false,
+}: {
+  committees: QuickCommittee[] | null;
+  loading: boolean;
+  onOpen: () => void;
+  onAllocate: (committee: QuickCommittee, slot: { country_code: string; country_name: string }) => void;
+  /** Renders the trigger as a full-width prominent CTA (the stacked allocation
+   *  area, #4) rather than the compact 28px "+" disc used inline. */
+  big?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [picked, setPicked] = useState<QuickCommittee | null>(null);
+  const [query, setQuery] = useState('');
+  const btnRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+
+  const MENU_W = 300;
+  const MENU_H = 380;
+
+  const place = useCallback(() => {
+    const b = btnRef.current;
+    if (!b) return;
+    const r = b.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - r.bottom;
+    const flip = spaceBelow < MENU_H + 16 && r.top > spaceBelow;
+    let left = r.left;
+    if (left + MENU_W > window.innerWidth - 8) left = window.innerWidth - MENU_W - 8;
+    left = Math.max(8, left);
+    const top = flip ? Math.max(8, r.top - MENU_H - 6) : r.bottom + 6;
+    setPos({ top, left });
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (btnRef.current?.contains(t) || menuRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    const onScroll = () => setOpen(false);
+    document.addEventListener('mousedown', onDoc);
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', onScroll, true);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', onScroll, true);
+    };
+  }, [open, place]);
+
+  // Measure + position on click (the button rect is available immediately),
+  // so the effect never calls setState synchronously on open.
+  const toggle = (e?: React.MouseEvent) => {
+    // The whole row card opens the preview on click (#3); the allocate trigger
+    // must never bubble up to it.
+    e?.stopPropagation();
+    if (open) { setOpen(false); return; }
+    onOpen();
+    setPicked(null);
+    setQuery('');
+    place();
+    setOpen(true);
+  };
+
+  const q = query.trim().toLowerCase();
+  const listed = (committees ?? []).filter(c =>
+    !q || c.name.toLowerCase().includes(q) || (c.abbreviation ?? '').toLowerCase().includes(q)
+  );
+  const openSeats = (c: QuickCommittee) => c.slots.filter(s => !c.takenCodes.includes(s.country_code));
+
+  return (
+    <div style={{ display: big ? 'block' : 'inline-block', width: big ? '100%' : undefined }}>
+      {big ? (
+        <button
+          ref={btnRef}
+          onClick={toggle}
+          title="Allocate to a committee"
+          aria-label="Allocate to a committee"
+          className="inline-flex items-center justify-center gap-2 w-full focus:outline-none"
+          style={{
+            // minHeight 44: this is a primary action and now sits BESIDE the
+            // preferences rather than as a full-width bar under them, so the
+            // 11px padding alone (38px tall) no longer clears the touch floor.
+            minHeight: 44, padding: '11px 18px', borderRadius: 999,
+            fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 900,
+            color: '#FFFFFF', background: `linear-gradient(135deg, ${NEU_GRADIENTS.gold[0]}, ${NEU_GRADIENTS.gold[1]})`,
+            boxShadow: open ? NEU.inSm : `0 3px 8px color-mix(in srgb, ${NEU_GRADIENTS.gold[0]} 27%, transparent), ${NEU.outSm}`,
+            border: 'none', cursor: 'pointer', transition: `box-shadow 160ms ${EASE_LOCAL}`,
+          }}
+        >
+          <BadgeCheck size={16} strokeWidth={2.6} />
+          {/* "ALLOCATE" alone in the narrow rail beside the preferences — the
+              full phrase stays on title/aria-label, which is what a screen
+              reader and a hover both get. */}
+          Allocate
+        </button>
+      ) : (
+        <button
+          ref={btnRef}
+          onClick={toggle}
+          title="Allocate to a committee"
+          aria-label="Allocate to a committee"
+          className="inline-flex items-center justify-center flex-shrink-0 focus:outline-none"
+          style={{
+            width: 28, height: 28, borderRadius: 999,
+            color: NEU.forest, backgroundColor: NEU.surface,
+            boxShadow: open ? NEU.inSm : NEU.outSm, border: 'none', cursor: 'pointer',
+            transition: `box-shadow 160ms ${EASE_LOCAL}`,
+          }}
+        >
+          <Plus size={15} strokeWidth={2.8} style={{ color: NEU.deepGold, transform: open ? 'rotate(45deg)' : 'none', transition: `transform 200ms ${EASE_LOCAL}` }} />
+        </button>
+      )}
+      {open && pos && (
+        <Portal>
+          <div
+            ref={menuRef}
+            style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999, width: MENU_W, maxHeight: MENU_H, display: 'flex', flexDirection: 'column', backgroundColor: NEU.surface, borderRadius: 16, boxShadow: NEU.out, padding: 10, animation: `neuFadeIn 160ms ${EASE_LOCAL}` }}
+          >
+            <style>{`@keyframes neuFadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }`}</style>
+
+            {/* Header */}
+            <div className="flex items-center gap-2 mb-2.5 px-0.5">
+              {picked ? (
+                <button
+                  onClick={() => setPicked(null)}
+                  className="inline-flex items-center justify-center flex-shrink-0 focus:outline-none"
+                  style={{ width: 24, height: 24, borderRadius: 999, backgroundColor: NEU.base, boxShadow: NEU.inSm, border: 'none', cursor: 'pointer', color: NEU.ink }}
+                  aria-label="Back to committees"
+                >
+                  <ChevronLeft size={14} strokeWidth={2.6} />
+                </button>
+              ) : (
+                <NeuIconDisc gradient={NEU_GRADIENTS.gold} icon={BadgeCheck} size={24} />
+              )}
+              <p className="min-w-0 [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 900, color: NEU.ink }}>
+                {picked ? committeeFull(picked) : 'Allocate to committee'}
+              </p>
+            </div>
+
+            {/* Committee search (only when there are enough to warrant it) */}
+            {!picked && (committees?.length ?? 0) > 6 && (
+              <div className="flex items-center gap-2 mb-2" style={{ padding: '6px 10px', borderRadius: 999, backgroundColor: NEU.base, boxShadow: NEU.inSm }}>
+                <Search size={13} strokeWidth={2.4} style={{ color: NEU.muted, flexShrink: 0 }} />
+                <input
+                  value={query}
+                  onChange={e => setQuery(e.target.value)}
+                  placeholder="Search committees..."
+                  className="flex-1 outline-none"
+                  style={{ backgroundColor: 'transparent', color: NEU.ink, fontFamily: OUTFIT, fontSize: 12 }}
+                />
+              </div>
+            )}
+
+            <div style={{ overflowY: 'auto', flex: 1, minHeight: 0 }}>
+              {loading && !committees ? (
+                <div className="flex justify-center py-6">
+                  <div className="w-5 h-5 rounded-full border-2 animate-spin" style={{ borderColor: NEU.forest, borderTopColor: 'transparent' }} />
+                </div>
+              ) : !picked ? (
+                listed.length === 0 ? (
+                  <p className="text-center py-5" style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.muted }}>
+                    {(committees?.length ?? 0) === 0 ? 'No committees set up yet.' : 'No committees match.'}
+                  </p>
+                ) : (
+                  <div className="flex flex-col gap-1">
+                    {listed.map(c => {
+                      const seats = openSeats(c).length;
+                      const full = seats === 0;
+                      return (
+                        <button
+                          key={c.id}
+                          onClick={() => { if (!full) setPicked(c); }}
+                          disabled={full}
+                          className="inline-flex items-center gap-2.5 w-full focus:outline-none text-left"
+                          style={{ padding: '7px 8px', borderRadius: 11, background: 'transparent', border: 'none', cursor: full ? 'default' : 'pointer', opacity: full ? 0.5 : 1 }}
+                          onMouseEnter={e => { if (!full) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
+                          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                        >
+                          <LogoDisc src={c.logo_url} size={30} fallbackText={committeeAbbr(c)} alt={c.name} />
+                          <span className="flex-1 min-w-0">
+                            <span className="block [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: NEU.ink }}>{c.name}</span>
+                            <span className="block" style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: full ? NEU.muted : NEU.green, fontVariantNumeric: 'tabular-nums' }}>
+                              {full ? 'Full' : `${seats} open seat${seats === 1 ? '' : 's'}`}
+                            </span>
+                          </span>
+                          {!full && <ChevronDown size={13} strokeWidth={2.6} style={{ color: NEU.muted, transform: 'rotate(-90deg)', flexShrink: 0 }} />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )
+              ) : (
+                (() => {
+                  const seats = openSeats(picked);
+                  if (seats.length === 0) {
+                    return <p className="text-center py-5" style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.muted }}>No open countries in this committee.</p>;
+                  }
+                  return (
+                    <div className="flex flex-col gap-1">
+                      {[...seats].sort((a, b) => a.country_name.localeCompare(b.country_name)).map(s => (
+                        <button
+                          key={s.country_code}
+                          onClick={() => { onAllocate(picked, s); setOpen(false); }}
+                          className="inline-flex items-center gap-2.5 w-full focus:outline-none text-left"
+                          style={{ padding: '7px 9px', borderRadius: 11, background: 'transparent', border: 'none', cursor: 'pointer' }}
+                          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
+                          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                        >
+                          <CountryFlag name={s.country_name} code={s.country_code} size={20} />
+                          <span className="flex-1 min-w-0 [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: NEU.ink }}>{s.country_name}</span>
+                          <Plus size={13} strokeWidth={2.6} style={{ color: NEU.deepGold, flexShrink: 0 }} />
+                        </button>
+                      ))}
+                    </div>
+                  );
+                })()
+              )}
+            </div>
+          </div>
+        </Portal>
+      )}
+    </div>
+  );
+}
+
+/** Neumorphic select checkbox, used per-row and for select-all. Pressed-in
+ *  when unchecked, forest-filled with a white tick when checked. */
+function SelectBox({ checked, indeterminate, onClick, title }: { checked: boolean; indeterminate?: boolean; onClick: () => void; title?: string }) {
+  return (
+    <button
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      title={title}
+      aria-pressed={checked}
+      className="inline-flex items-center justify-center flex-shrink-0 focus:outline-none"
+      style={{
+        width: 20, height: 20, borderRadius: 7,
+        background: checked || indeterminate ? `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})` : NEU.base,
+        boxShadow: checked || indeterminate ? `0 2px 5px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 33%, transparent)` : NEU.inSm,
+        border: 'none', cursor: 'pointer', transition: `box-shadow 160ms ${EASE_LOCAL}`,
+      }}
+    >
+      {checked && <Check size={13} strokeWidth={3.5} style={{ color: '#FFFFFF' }} />}
+      {!checked && indeterminate && <span style={{ width: 9, height: 2.5, borderRadius: 2, background: '#FFFFFF' }} />}
+    </button>
+  );
+}
+
+/** Full committee label, "Full Name - ACRONYM" when an abbreviation is set and
+ *  differs from the name, else just the name. Used in the row's allocation cell
+ *  alongside the LogoDisc emblem. */
+function committeeFull(c: { name: string; abbreviation: string | null } | null | undefined): string {
+  if (!c) return '';
+  if (c.abbreviation && c.abbreviation.toUpperCase() !== c.name.toUpperCase()) {
+    return `${c.name} - ${c.abbreviation}`;
+  }
+  return c.name;
+}
+
+/** Committee naming rule (#6): a long committee name collapses to its ACRONYM
+ *  as the big primary label with the full name in small letters beneath, e.g.
+ *  "Disarmament and International Security Committee" → "DISEC" + full name.
+ *  Short names (or ones with no distinct abbreviation) stay as-is, name only. */
+function committeeDisplay(c: { name: string; abbreviation: string | null } | null | undefined): { primary: string; secondary: string | null } {
+  if (!c) return { primary: 'No committee', secondary: null };
+  const hasAbbr = !!c.abbreviation && c.abbreviation.toUpperCase() !== c.name.toUpperCase();
+  const isLong = c.name.length > 16 || c.name.trim().split(/\s+/).length >= 3;
+  if (hasAbbr && isLong) return { primary: c.abbreviation!, secondary: c.name };
+  return { primary: c.name, secondary: null };
+}
+
+/** Short relative-ish timestamp for the "Checked in …" line. */
+function formatDateTime(d: string) {
+  return new Date(d).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
+// ── In-progress drafts (public.application_drafts) ───────────────────────────
+//
+// A draft is an application somebody STARTED and never submitted. The owner's
+// requirement was explicit: show them, "but not as part of the total".
+//
+// That is enforced structurally, not by discipline: drafts live in their own
+// `drafts` state fed by its own query, and are NEVER merged into the
+// `applications` array. Every count on this page — statScope, all seven stats,
+// defaultScopeCount, filtered, "Showing X of Y", Select all, the selected pill,
+// the five bulk counts, and handleExportExcel (which maps the RAW applications
+// array, not `filtered`, and would otherwise leak drafts to a registration
+// desk) — derives from `applications`. Keeping the two arrays apart is what
+// makes "not part of the total" true by construction.
+//
+// WHAT AN ORGANISER MAY SEE OF A DRAFT — the owner's ruling, verbatim: show
+// "that they are working on them, but nothing else — only being able to access
+// their contact, MUN CV profile and country where they are from."
+//
+// So this surface carries the FACT of an unfinished application and the three
+// permitted identifiers: contact (email), a link to the public MUN CV, and
+// nationality. It carries NOTHING the applicant typed — no custom answers, no
+// committee/country preferences, no society, no pledges, no experience level,
+// and no "step n of N" progress read either. An unsubmitted application is a
+// draft, and a draft is the author's until they press submit.
+//
+// That is enforced at the DATABASE, not here. The blanket "Organizers read
+// drafts" policy on public.application_drafts is DROPPED; organisers read
+// `public.application_draft_status`, a security-barrier definer view whose
+// column list IS this type. `answers`, `step` and `discard_token` are not
+// selectable from it, so narrowing the UI is not the control — the projection
+// is, and no crafted request can widen it. Do not restore a raw-table read
+// here, and do not add a column to that view without the same ruling.
+//
+// The one write path left is `send_draft_reminder` (SECURITY DEFINER, its own
+// organiser check, its own 72h cooldown). It never needed the caller to read
+// the row, so the reminder button survives the policy drop untouched.
+
+/** One unsubmitted application as the organiser sees it — one row of
+ *  `public.application_draft_status`, flat, because the view inlines the
+ *  author's profile rather than leaving it to a PostgREST embed.
+ *
+ *  Deliberately its own type: a DraftRow must never be structurally assignable
+ *  to `Application`, because the moment it is, somebody merges the arrays and
+ *  the totals lie. */
+interface DraftRow {
+  id: string;
+  user_id: string;
+  role: string;
+  updated_at: string;
+  /** Reminder bookkeeping. Read-only here: the organiser's button calls the
+   *  `send_draft_reminder` RPC, which owns every one of these columns. The
+   *  page holds them only so the button can MIRROR the server's 72h cooldown
+   *  instead of inventing its own. */
+  reminders_sent: number;
+  last_reminder_at: string | null;
+  reminder_opt_out: boolean;
+  /** Contact, MUN CV identity, country. The permitted set, and all of it. */
+  display_name: string | null;
+  email: string | null;
+  avatar_url: string | null;
+  nationality: string | null;
+  /** The delegation the draft names, when it names one. `society_id` is set
+   *  only when the applicant picked a delegation that really exists on this
+   *  conference; `society_name` falls back to the name they typed, which is
+   *  why the row marks an unmatched name as typed rather than confirmed.
+   *  Added to `application_draft_status` in
+   *  `application_draft_status_add_delegation` — the rest of `answers` is
+   *  still unreachable to an organiser at the database. */
+  society_id: string | null;
+  society_name: string | null;
+}
+
+/** Ink for the drafts surface. `NEU.muted` measures 3.15:1 on `NEU.surface` and
+ *  is documented in neu.tsx as decoration-only, so readable draft copy uses
+ *  `NEU.inkSoft` (6.8:1) and `muted` is kept for rules, dashes and glyphs. The
+ *  section is quieter than the list above it by weight, size and a dashed edge
+ *  — never by putting real words below the contrast floor. */
+const DRAFT_DASH = 'rgba(154,138,120,0.55)';
+
+/** Hover-revealed explainer. AGENTS.md UI RULE: informational "i" affordances
+ *  open on HOVER, never on click — click-to-toggle is reserved for menus and
+ *  actions. Focus reveals it too, so it is reachable from the keyboard.
+ *
+ *  Portaled at fixed viewport coordinates measured from the trigger, and
+ *  edge-flipped, per the anti-clipping rule: this sits inside the page's
+ *  scroller and would otherwise be cut by an ancestor's overflow or run off a
+ *  narrow viewport. The panel is never un-clipped by loosening a card's
+ *  overflow — it is fixed here, at the popover. */
+function InfoHint({ label, text }: { label: string; text: string }) {
+  const ref = useRef<HTMLSpanElement | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
+
+  const place = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const width = Math.min(280, window.innerWidth - 20);
+    // Clamp horizontally so the panel always stays on screen…
+    const left = Math.max(10, Math.min(r.left + r.width / 2 - width / 2, window.innerWidth - width - 10));
+    // …and flip above the trigger when there is not enough room below it.
+    const below = window.innerHeight - r.bottom;
+    const top = below < 130 ? Math.max(10, r.top - 122) : r.bottom + 8;
+    setPos({ top, left, width });
+  }, []);
+
+  useEffect(() => {
+    if (!pos) return;
+    const onMove = () => place();
+    window.addEventListener('scroll', onMove, true);
+    window.addEventListener('resize', onMove);
+    return () => {
+      window.removeEventListener('scroll', onMove, true);
+      window.removeEventListener('resize', onMove);
+    };
+  }, [pos, place]);
+
+  const open = () => place();
+  const close = () => setPos(null);
+
+  return (
+    <>
+      <span
+        ref={ref}
+        tabIndex={0}
+        role="img"
+        aria-label={label}
+        title={text}
+        onMouseEnter={open}
+        onMouseLeave={close}
+        onFocus={open}
+        onBlur={close}
+        className="inline-flex items-center justify-center rounded-full flex-shrink-0"
+        style={{
+          width: 17, height: 17, backgroundColor: NEU.surface, boxShadow: NEU.inSm,
+          color: NEU.inkSoft, cursor: 'help',
+        }}
+      >
+        <Info size={10.5} strokeWidth={2.8} />
+      </span>
+      {pos && (
+        <Portal>
+          <div
+            role="tooltip"
+            className="fixed z-50"
+            style={{
+              top: pos.top, left: pos.left, width: pos.width,
+              padding: '11px 13px', borderRadius: 13,
+              backgroundColor: NEU.surface, boxShadow: NEU.out,
+              fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 500, lineHeight: 1.5,
+              color: NEU.inkSoft, pointerEvents: 'none',
+            }}
+          >
+            {text}
+          </div>
+        </Portal>
+      )}
+    </>
+  );
+}
+
+/** Committee shorthand, abbreviation when set, else a monogram of the name. */
+function committeeAbbr(c: { name: string; abbreviation: string | null } | null | undefined): string {
+  if (!c) return '?';
+  if (c.abbreviation) return c.abbreviation;
+  const mono = c.name
+    .split(/\s+/)
+    .filter(w => /^[A-Za-z0-9]/.test(w))
+    .map(w => w[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 4);
+  return mono || c.name.slice(0, 4).toUpperCase();
+}
+
+/** Country rendered as a flag with the name kept as a tooltip. When the seat is
+ *  not a real country (crisis/JCC character, custom seat) it renders a person
+ *  glyph in a soft disc instead of a broken flag image, so allocations NEVER
+ *  show a broken picture (#7). */
+function CountryFlag({ name, code, size = 14 }: { name: string | null | undefined; code?: string | null; size?: number }) {
+  const resolved = resolveRealCountryCode(name, code);
+  if (resolved) {
+    return (
+      <span title={name ?? resolved} className="inline-flex items-center" style={{ lineHeight: 0 }}>
+        <FlagImg code={resolved} size={size} />
+      </span>
+    );
+  }
+  if (!name) return null;
+  // Character / custom seat: a user glyph on a tinted disc, never a broken flag.
+  return (
+    <span
+      title={name}
+      className="inline-flex items-center justify-center flex-shrink-0"
+      style={{ width: size, height: size, borderRadius: 9999, background: 'linear-gradient(150deg, rgba(27,56,40,0.14), rgba(27,56,40,0.07))', border: '1px solid rgba(27,56,40,0.18)' }}
+    >
+      <User size={Math.round(size * 0.62)} strokeWidth={2.4} style={{ color: NEU.forest }} />
+    </span>
+  );
+}
+
+const STATUS_OPTIONS = [
+  { label: 'Submitted', value: 'submitted' },
+  { label: 'Accepted', value: 'accepted' },
+  { label: 'Assigned', value: 'assigned' },
+  { label: 'Checked In', value: 'checked-in' },
+  { label: 'Rejected', value: 'rejected' },
+  { label: 'Withdrawn', value: 'withdrawn' },
+];
+
+const ROLE_OPTIONS = [
+  { label: 'Delegates', value: 'delegate' },
+  { label: 'Head Delegates', value: 'head-delegate' },
+  { label: 'Faculty Advisors', value: 'faculty-advisor' },
+  { label: 'Observers', value: 'observer' },
+];
+
+// Team Applications (scope 'team', owner 23 Nov 2026): the roles it lists and filters.
+const TEAM_ROLE_OPTIONS = [
+  { label: 'Chairs', value: 'chair' },
+  { label: 'Secretariat', value: 'secretariat' },
+  { label: 'Staff', value: 'staff' },
+];
+const TEAM_ROLE_SET = new Set(TEAM_ROLE_OPTIONS.map(o => o.value));
+
+// Default participants filter is EMPTY = no constraint, every role (including
+// chair) is visible on a fresh page load. Used to seed the participants filter
+// and to detect the "default scope" for the Total stat tile — an empty role
+// set here doubles as "no active filter" for activeFilterCount below.
+const DEFAULT_ROLES: string[] = [];
+
+/** Set equality for the small filter sets. */
+function sameSet(a: Set<string>, b: string[]): boolean {
+  return a.size === b.length && b.every(v => a.has(v));
+}
+
+// The payment filter reads moneyState (src/lib/applicationMoney.ts), never
+// payment_status. Unpaid matches 'owes', 'part' and 'started'; every other
+// option its own state. The values are the URL's (?payment=); an old
+// ?payment=waived link reads as Nothing owed.
+const PAYMENT_OPTIONS = [
+  { label: 'Paid', value: 'paid' },
+  { label: 'Unpaid', value: 'unpaid' },
+  { label: 'Part paid', value: 'part' },
+  { label: 'Proof to review', value: 'proof' },
+  { label: 'Payment started', value: 'started' },
+  { label: 'Nothing owed', value: 'none' },
+];
+const PAYMENT_URL_ALIASES: Record<string, string> = { waived: 'none' };
+
+/** Does a money state match one payment filter value? */
+function paymentFilterMatches(value: string, state: MoneyState): boolean {
+  switch (value) {
+    case 'paid': return state === 'paid';
+    case 'unpaid': return moneyOwing(state);
+    case 'part': return state === 'part';
+    case 'proof': return state === 'review';
+    case 'started': return state === 'started';
+    case 'none': return state === 'none';
+    default: return false;
+  }
+}
+
+
+// Status GROUPS, module scope so the stat tiles and the ?status= deep link can
+// never drift apart. "Accepted" means accepted-or-beyond and "Allocated" means
+// allocated-or-beyond, exactly as the stat tiles count them.
+const ACCEPTED_GROUP = ['accepted', 'assigned', 'checked-in'];
+const ALLOCATED_GROUP = ['assigned', 'checked-in'];
+
+// The allocated view (the "Allocated" stat tile, and the ?status=assigned deep
+// link that resolves to the same group) is a DELEGATE view: it answers "who has
+// a committee and a country". Chairs and faculty advisors sit on a dais or
+// travel with a school, they are never allocated a seat, so they are dropped
+// from that list only. Every other tab/filter combination still shows them, and
+// explicitly ticking Chairs / Faculty Advisors in the Participants filter brings
+// them back even inside the allocated view.
+const NON_DELEGATE_ROLES = new Set(['chair', 'faculty-advisor']);
+
+/**
+ * The list's primary order (owner, 11 Oct 2026: "sort by to-be accepted, then
+ * accepted, then rejected"). 0 = still to decide, 1 = accepted or beyond,
+ * 2 = rejected, 3 = withdrawn. A rejected application that is resubmitted goes
+ * back to 'submitted' (resubmit_application), so it rejoins group 0 by itself.
+ * Any status not named here is treated as undecided, so nothing unknown can be
+ * buried at the bottom.
+ */
+function statusSortGroup(status: string): number {
+  if (ACCEPTED_GROUP.includes(status)) return 1;
+  if (status === 'rejected') return 2;
+  if (status === 'withdrawn') return 3;
+  return 0;
+}
+
+/**
+ * Query params this page understands, so other surfaces (the dashboard's
+ * applicants dial) can deep-link straight into a pre-filtered view:
+ *   ?status=accepted | assigned | checked-in | submitted | rejected | withdrawn
+ *   ?payment=paid | unpaid | waived
+ * `accepted` and `assigned` expand to their groups above, so a link lands on
+ * exactly the rows the linking surface counted. Unrecognised values are
+ * ignored and the page opens on its normal unfiltered default.
+ */
+const URL_STATUS_GROUPS: Record<string, string[]> = {
+  accepted: ACCEPTED_GROUP,
+  assigned: ALLOCATED_GROUP,
+  'checked-in': ['checked-in'],
+  submitted: ['submitted'],
+  rejected: ['rejected'],
+  withdrawn: ['withdrawn'],
+};
+
+function filtersFromUrl(status: string | null, payment: string | null): FilterState {
+  const seeded: FilterState = {
+    status: new Set(), role: new Set(DEFAULT_ROLES), payment: new Set(),
+    dateFrom: '', dateTo: '', notAttending: false, committee: '',
+  };
+  const group = status ? URL_STATUS_GROUPS[status] : undefined;
+  if (group) seeded.status = new Set(group);
+  const pay = payment ? (PAYMENT_URL_ALIASES[payment] ?? payment) : null;
+  if (pay && PAYMENT_OPTIONS.some(o => o.value === pay)) seeded.payment = new Set([pay]);
+  return seeded;
+}
+
+// ── Filter panel ──────────────────────────────────────────────────────────────
+// Peter: "the filters could be more of a hover and they appear". A single
+// neumorphic FILTERS control reveals the whole rich set on hover (and can be
+// pinned open with a click); empty selections mean "no constraint" so a fresh
+// page shows everything.
+
+interface FilterState {
+  status: Set<string>;
+  role: Set<string>;
+  payment: Set<string>;
+  dateFrom: string;
+  dateTo: string;
+  // Independent of `status` (an accepted/assigned/checked-in applicant can
+  // still be not-attending) — same baked-in default exclusion as withdrawn,
+  // only reachable by explicitly turning this chip on.
+  notAttending: boolean;
+  // Allocated committee id, '' = "All committees" (no constraint). Sits on the
+  // header bar next to FILTERS as its own dropdown rather than inside the
+  // filter popover, because it is a single-choice control, not a chip set.
+  committee: string;
+}
+
+function toggleIn(set: Set<string>, value: string): Set<string> {
+  const next = new Set(set);
+  if (next.has(value)) next.delete(value); else next.add(value);
+  return next;
+}
+
+/** A small pressed-in checkbox chip inside the filter panel. */
+function CheckChip({ label, checked, onClick }: { label: string; checked: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="inline-flex items-center gap-1.5 focus:outline-none"
+      style={{
+        padding: '5px 11px',
+        borderRadius: 999,
+        fontFamily: OUTFIT,
+        fontSize: 11,
+        fontWeight: 700,
+        letterSpacing: '0.02em',
+        color: checked ? '#FFFFFF' : NEU.ink,
+        background: checked ? `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})` : NEU.surface,
+        boxShadow: checked ? `0 3px 8px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 27%, transparent), ${NEU.outSm}` : NEU.outSm,
+        border: 'none',
+        cursor: 'pointer',
+        transition: `box-shadow 180ms ${EASE_LOCAL}`,
+      }}
+    >
+      <span
+        className="inline-flex items-center justify-center flex-shrink-0"
+        style={{
+          width: 13, height: 13, borderRadius: 4,
+          background: checked ? 'rgba(255,255,255,0.9)' : NEU.base,
+          boxShadow: checked ? 'none' : NEU.inSm,
+        }}
+      >
+        {checked && <Check size={10} strokeWidth={3.5} style={{ color: NEU.forest }} />}
+      </span>
+      {label}
+    </button>
+  );
+}
+
+const EASE_LOCAL = 'cubic-bezier(0.22,1,0.36,1)';
+
+/** Emphasised group heading for the filter popover: a small leading lucide icon
+ *  plus a slightly larger, bolder, inked label so each section reads as a proper
+ *  heading rather than a faint caption. */
+function FilterHeading({ icon, children }: { icon: LucideGlyph; children: React.ReactNode }) {
+  const Icon = icon;
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <Icon size={13} strokeWidth={2.6} style={{ color: NEU.deepGold }} />
+      <span style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 900, letterSpacing: '0.09em', color: NEU.ink, textTransform: 'uppercase' }}>
+        {children}
+      </span>
+    </span>
+  );
+}
+
+function FilterGroup({
+  title, icon, options, selected, onToggle, onAll, onNone,
+}: {
+  title: string;
+  icon: LucideGlyph;
+  options: { label: string; value: string }[];
+  selected: Set<string>;
+  onToggle: (v: string) => void;
+  onAll: () => void;
+  onNone: () => void;
+}) {
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <FilterHeading icon={icon}>{title}</FilterHeading>
+        <div className="flex items-center gap-2">
+          <button onClick={onAll} className="focus:outline-none" style={{ fontFamily: OUTFIT, display: 'inline-flex', alignItems: 'center', minHeight: 36, padding: '0 6px', margin: '-9px 0', fontSize: 13, fontWeight: 800, color: NEU.forest, background: 'none', border: 'none', cursor: 'pointer' }}>All</button>
+          <span style={{ color: NEU.muted, opacity: 0.5 }}>·</span>
+          <button onClick={onNone} className="focus:outline-none" style={{ fontFamily: OUTFIT, display: 'inline-flex', alignItems: 'center', minHeight: 36, padding: '0 6px', margin: '-9px 0', fontSize: 13, fontWeight: 800, color: NEU.muted, background: 'none', border: 'none', cursor: 'pointer' }}>None</button>
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {options.map(o => (
+          <CheckChip key={o.value} label={o.label} checked={selected.has(o.value)} onClick={() => onToggle(o.value)} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function FilterPanel({
+  filters, setFilters, activeCount, roleOptions = ROLE_OPTIONS,
+}: {
+  filters: FilterState;
+  setFilters: React.Dispatch<React.SetStateAction<FilterState>>;
+  activeCount: number;
+  /** The role choices: ROLE_OPTIONS, or TEAM_ROLE_OPTIONS in Team Applications. */
+  roleOptions?: { label: string; value: string }[];
+}) {
+  const [open, setOpen] = useState(false);
+  const [pinned, setPinned] = useState(false);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const show = open || pinned;
+  const clearTimer = () => { if (closeTimer.current) { clearTimeout(closeTimer.current); closeTimer.current = null; } };
+  const scheduleClose = () => { clearTimer(); closeTimer.current = setTimeout(() => setOpen(false), 160); };
+
+  return (
+    <div
+      className="relative"
+      onMouseEnter={() => { clearTimer(); setOpen(true); }}
+      onMouseLeave={scheduleClose}
+    >
+      <button
+        onClick={() => setPinned(p => !p)}
+        className="inline-flex items-center gap-2 focus:outline-none"
+        style={{
+          padding: '9px 16px',
+          borderRadius: 999,
+          fontFamily: OUTFIT, fontSize: 12, fontWeight: 800,
+          color: show ? '#FFFFFF' : NEU.ink,
+          background: show ? `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})` : NEU.surface,
+          boxShadow: show ? `0 4px 10px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 27%, transparent), ${NEU.outSm}` : NEU.outSm,
+          border: 'none', cursor: 'pointer',
+          transition: `box-shadow 200ms ${EASE_LOCAL}`,
+        }}
+      >
+        <SlidersHorizontal size={14} strokeWidth={2.5} />
+        Filters
+        {activeCount > 0 && (
+          <span
+            aria-label={`${activeCount} active`}
+            style={{
+              fontFamily: OUTFIT, fontSize: 13, fontWeight: 900, fontVariantNumeric: 'tabular-nums',
+              color: show ? NEU.gold : NEU.forest,
+            }}
+          >
+            {activeCount}
+          </span>
+        )}
+      </button>
+
+      {show && (
+        <div
+          className="absolute z-40"
+          style={{
+            top: 'calc(100% + 10px)', right: 0, left: 'auto',
+            width: 'min(340px, calc(100vw - 40px))',
+            maxHeight: 'calc(100vh - 150px)', overflowY: 'auto',
+            backgroundColor: NEU.surface, borderRadius: 20, boxShadow: NEU.out,
+            padding: 18,
+            animation: `neuFadeIn 200ms ${EASE_LOCAL}`,
+          }}
+        >
+          <style>{`@keyframes neuFadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }`}</style>
+          <div className="flex items-center justify-between mb-3.5">
+            <div className="flex items-center gap-2">
+              <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={Filter} size={26} />
+              <p style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 900, color: NEU.ink }}>Filter applications</p>
+            </div>
+            {activeCount > 0 && (
+              <button
+                onClick={() => setFilters({ status: new Set(), role: new Set(DEFAULT_ROLES), payment: new Set(), dateFrom: '', dateTo: '', notAttending: false, committee: '' })}
+                className="focus:outline-none"
+                style={{ fontFamily: OUTFIT, display: 'inline-flex', alignItems: 'center', minHeight: 36, padding: '0 6px', margin: '-9px 0', fontSize: 13, fontWeight: 800, color: '#8B2020', background: 'none', border: 'none', cursor: 'pointer' }}
+              >
+                Clear all
+              </button>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-4">
+            <FilterGroup
+              title="Status" icon={BadgeCheck} options={STATUS_OPTIONS} selected={filters.status}
+              onToggle={v => setFilters(f => ({ ...f, status: toggleIn(f.status, v) }))}
+              onAll={() => setFilters(f => ({ ...f, status: new Set(STATUS_OPTIONS.map(o => o.value)) }))}
+              onNone={() => setFilters(f => ({ ...f, status: new Set() }))}
+            />
+            {/* Not attending: a separate boolean dimension from status (an
+                accepted/assigned/checked-in applicant can still be not
+                attending), so it sits alongside the Status group as its own
+                chip rather than inside filters.status. */}
+            <div className="flex flex-wrap gap-1.5">
+              <CheckChip
+                label="Not Attending"
+                checked={filters.notAttending}
+                onClick={() => setFilters(f => ({ ...f, notAttending: !f.notAttending }))}
+              />
+            </div>
+            <FilterGroup
+              title={roleOptions === ROLE_OPTIONS ? 'Participants' : 'Roles'} icon={Users} options={roleOptions} selected={filters.role}
+              onToggle={v => setFilters(f => ({ ...f, role: toggleIn(f.role, v) }))}
+              onAll={() => setFilters(f => ({ ...f, role: new Set(roleOptions.map(o => o.value)) }))}
+              onNone={() => setFilters(f => ({ ...f, role: new Set() }))}
+            />
+            <FilterGroup
+              title="Payment" icon={Wallet} options={PAYMENT_OPTIONS} selected={filters.payment}
+              onToggle={v => setFilters(f => ({ ...f, payment: toggleIn(f.payment, v) }))}
+              onAll={() => setFilters(f => ({ ...f, payment: new Set(PAYMENT_OPTIONS.map(o => o.value)) }))}
+              onNone={() => setFilters(f => ({ ...f, payment: new Set() }))}
+            />
+            <div>
+              <div className="mb-2">
+                <FilterHeading icon={CalendarDays}>Submitted between</FilterHeading>
+              </div>
+              <div className="flex items-center gap-2">
+                <div style={{ flex: 1 }}>
+                  <DatePicker
+                    value={filters.dateFrom}
+                    max={filters.dateTo || undefined}
+                    onChange={iso => setFilters(f => ({ ...f, dateFrom: iso }))}
+                    placeholder="From"
+                  />
+                </div>
+                <ArrowRight size={13} style={{ color: NEU.muted, flexShrink: 0 }} />
+                <div style={{ flex: 1 }}>
+                  <DatePicker
+                    value={filters.dateTo}
+                    min={filters.dateFrom || undefined}
+                    onChange={iso => setFilters(f => ({ ...f, dateTo: iso }))}
+                    placeholder="To"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Per-committee filter ──────────────────────────────────────────────────────
+// Narrows the list to one ALLOCATED committee. Sits on the header bar beside
+// FILTERS and wears the same neumorphic pill as FILTERS / EXPORT CSV; the
+// dropdown itself is portaled at fixed viewport coordinates taken from the
+// trigger, repositioned on scroll/resize and flipped near the viewport edge, so
+// it can never be clipped by an ancestor's overflow (same pattern as
+// PaymentMenu / QuickAllocate). '' = "All committees".
+
+/** `logo` is already resolved down the emblem chain (own logo, preset emblem,
+ *  conference logo, the UN emblem), so the filter only draws it. */
+interface CommitteeOption { id: string; primary: string; secondary: string | null; logo: string }
+
+function CommitteeFilter({
+  options, value, onChange,
+}: {
+  options: CommitteeOption[];
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+
+  const MENU_W = 300;
+  const MENU_H = 380;
+
+  const place = useCallback(() => {
+    const b = btnRef.current;
+    if (!b) return;
+    const r = b.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - r.bottom;
+    const flip = spaceBelow < MENU_H + 16 && r.top > spaceBelow;
+    // Right-align to the trigger, then clamp so it always stays on screen.
+    let left = r.right - MENU_W;
+    if (left + MENU_W > window.innerWidth - 8) left = window.innerWidth - MENU_W - 8;
+    left = Math.max(8, left);
+    setPos({ top: flip ? Math.max(8, r.top - MENU_H - 6) : r.bottom + 6, left });
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (btnRef.current?.contains(t) || menuRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [open, place]);
+
+  // Nothing has been allocated yet → no dimension to filter on, no control.
+  if (options.length === 0) return null;
+
+  const active = !!value;
+  const current = options.find(o => o.id === value) ?? null;
+  const label = current ? current.primary : 'All committees';
+
+  const row = (id: string, primary: string, secondary: string | null, logo: string | null) => {
+    const isCurrent = id === value;
+    return (
+      <button
+        key={id || '__all'}
+        role="option"
+        aria-selected={isCurrent}
+        onClick={() => { setOpen(false); onChange(id); }}
+        className="inline-flex items-center gap-2.5 w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+        style={{
+          padding: '8px 10px', borderRadius: 11, background: isCurrent ? 'rgba(27,56,40,0.07)' : 'transparent',
+          border: 'none', cursor: 'pointer', textAlign: 'start',
+        }}
+        onMouseEnter={e => { if (!isCurrent) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
+        onMouseLeave={e => { if (!isCurrent) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+      >
+        {logo ? (
+          <LogoDisc src={logo} size={34} fallbackText={primary.slice(0, 3)} alt="" style={{ flexShrink: 0 }} />
+        ) : (
+          <span aria-hidden className="inline-flex items-center justify-center flex-shrink-0" style={{ width: 34, height: 34 }}>
+            <Emoji3D name="Classical building" size={26} />
+          </span>
+        )}
+        <span className="flex-1 min-w-0">
+          <span className="block [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 800, color: NEU.ink, lineHeight: 1.2 }}>{primary}</span>
+          {secondary && (
+            <span className="block [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 500, color: NEU.inkSoft, lineHeight: 1.3, marginTop: 1 }}>{secondary}</span>
+          )}
+        </span>
+        {isCurrent && <Check size={13} strokeWidth={3} style={{ color: NEU.deepGold, flexShrink: 0 }} />}
+      </button>
+    );
+  };
+
+  return (
+    <div style={{ display: 'inline-block' }}>
+      <button
+        ref={btnRef}
+        onClick={() => { if (open) { setOpen(false); return; } place(); setOpen(true); }}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        title="Filter by allocated committee"
+        className="inline-flex items-center gap-2 focus:outline-none"
+        style={{
+          padding: '9px 16px', borderRadius: 999,
+          fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, letterSpacing: '0.03em',
+          color: active || open ? '#FFFFFF' : NEU.ink,
+          background: active || open ? `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})` : NEU.surface,
+          boxShadow: active || open ? `0 4px 10px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 27%, transparent), ${NEU.outSm}` : NEU.outSm,
+          border: 'none', cursor: 'pointer',
+          transition: `box-shadow 200ms ${EASE_LOCAL}`,
+        }}
+      >
+        {current
+          ? <LogoDisc src={current.logo} size={20} fallbackText={current.primary.slice(0, 3)} alt="" style={{ flexShrink: 0 }} />
+          : <Landmark size={14} strokeWidth={2.5} />}
+        <span className="text-start [overflow-wrap:anywhere]" style={{ maxWidth: 150 }}>{label}</span>
+        <ChevronDown size={12} strokeWidth={2.6} style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 160ms' }} />
+      </button>
+      {open && pos && (
+        <Portal>
+          <div
+            ref={menuRef}
+            role="listbox"
+            style={{
+              position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999,
+              width: MENU_W, maxHeight: MENU_H, overflowY: 'auto',
+              backgroundColor: NEU.surface, borderRadius: 16, boxShadow: NEU.out, padding: 6,
+              animation: `neuFadeIn 160ms ${EASE_LOCAL}`,
+            }}
+          >
+            <style>{`@keyframes neuFadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }`}</style>
+            <div className="flex flex-col gap-0.5">
+              {row('', 'All committees', null, null)}
+              {options.map(o => row(o.id, o.primary, o.secondary, o.logo))}
+            </div>
+          </div>
+        </Portal>
+      )}
+    </div>
+  );
+}
+
+// ── Optimistic-patch ledger types + pure helpers ──────────────────────────────
+// See the `pendingPatches` comment inside ApplicationsPage for why this exists.
+// Kept at module scope so the reconcile is a pure function of its arguments and
+// nothing here is rebuilt on every render.
+
+/** One row's local truth. `patch: null` means the row was deleted locally. */
+type PendingPatch = { seq: number; at: number; patch: Partial<Application> | null };
+
+/** A patch older than this is dropped even if the server never confirmed it,
+ *  so the ledger can never diverge from the database permanently. It can only
+ *  do that if some load actually runs once the patch is that old, which is
+ *  what the retry pass below exists to guarantee — see RECONCILE_MAX_RETRIES. */
+const PATCH_MAX_AGE_MS = 30_000;
+
+/** How long a reconcile waits for more actions before it runs. Long enough to
+ *  collapse a burst of clicks (and a whole bulk loop) into ONE load. */
+const RECONCILE_DELAY_MS = 700;
+
+/** Follow-up reconciles allowed after a load that left the ledger non-empty.
+ *
+ *  Nothing else ever revisits a held patch: this page has no polling, no
+ *  visibilitychange listener, and a load never schedules another load, so the
+ *  last load of a burst used to be a patch's final chance to retire. A write
+ *  that silently no-opped (an RLS-rejected 0-row update) therefore pinned its
+ *  row to a value the database does not have, with no indicator, because the
+ *  SAVING state had already cleared, and PATCH_MAX_AGE_MS could never fire.
+ *
+ *  So a load that leaves the ledger non-empty arms another one, backing off
+ *  RECONCILE_DELAY_MS * 2^n. Six retries put the LAST pass at 63x the delay
+ *  (~44s) after the burst, which is past PATCH_MAX_AGE_MS — so if the server
+ *  still disagrees by then, that pass expires the entry through the ordinary
+ *  age check in reconcileLoaded and the server value finally shows. Six is
+ *  the smallest bound that clears the max age; more would just be idle polls. */
+const RECONCILE_MAX_RETRIES = 6;
+
+/** How many bulk rows write at once. The old code fanned out every row in
+ *  parallel, so fifty accepts meant fifty sync RPCs plus fifty five-query
+ *  loads. Four at a time keeps the UI responsive without flooding PostgREST. */
+const BULK_CHUNK_SIZE = 4;
+
+/** Structural equality, key-order independent, for comparing a patched field
+ *  against what the server returned. Joined objects (assigned_committee) and
+ *  arrays both need this; `===` alone would never match them. */
+function sameValue(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (a === null || b === null || typeof a !== 'object' || typeof b !== 'object') return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  const ka = Object.keys(a as object);
+  const kb = Object.keys(b as object);
+  if (ka.length !== kb.length) return false;
+  return ka.every(k => sameValue((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]));
+}
+
+/** Fields the client only approximates. checked_in_at is set to a local clock
+ *  reading for the instant "Checked in ..." line while the database computes
+ *  its own; comparing it would mean the check-in patch NEVER matched and every
+ *  check-in sat pinned to local truth until it timed out. The value is still
+ *  displayed and still re-applied, it just does not get a vote on whether the
+ *  write landed. */
+const UNCONFIRMABLE_PATCH_KEYS = new Set<string>(['checked_in_at']);
+
+/** True when the server row already carries every field the patch set. */
+function patchLanded(row: Application, patch: Partial<Application>): boolean {
+  return (Object.keys(patch) as (keyof Application)[])
+    .filter(k => !UNCONFIRMABLE_PATCH_KEYS.has(k as string))
+    .every(k => sameValue(patch[k], row[k]));
+}
+
+/**
+ * Merge a freshly loaded list with local optimistic truth.
+ *
+ * `startStamp` is the patch counter as it stood when the load STARTED. A patch
+ * newer than that cannot possibly be in this snapshot, so it is re-applied. A
+ * patch older than it should be in the snapshot: confirmed patches are dropped,
+ * unconfirmed ones are held (the write is still settling) until they age out.
+ *
+ * Mutates the ledger, which is the point: this is where patches retire.
+ */
+function reconcileLoaded(
+  rows: Application[],
+  ledger: Map<string, PendingPatch>,
+  startStamp: number,
+  now: number,
+): Application[] {
+  if (ledger.size === 0) return rows;
+  const loadedIds = new Set(rows.map(r => r.id));
+  const out: Application[] = [];
+
+  for (const row of rows) {
+    const entry = ledger.get(row.id);
+    if (!entry) { out.push(row); continue; }
+    const stale = entry.seq <= startStamp;
+    const expired = stale && now - entry.at > PATCH_MAX_AGE_MS;
+    if (expired) { ledger.delete(row.id); out.push(row); continue; }
+    if (entry.patch === null) {
+      // Deleted locally. The delete has not shown up in this snapshot yet, so
+      // keep the row hidden rather than resurrecting it under the cursor.
+      continue;
+    }
+    if (stale && patchLanded(row, entry.patch)) {
+      // The server agrees. Local truth has served its purpose.
+      ledger.delete(row.id);
+      out.push(row);
+      continue;
+    }
+    out.push({ ...row, ...entry.patch });
+  }
+
+  // A row the server no longer returns is genuinely gone (deleted here, or by
+  // a co-organizer). Retire its ledger entry rather than leaking it.
+  for (const [id, entry] of ledger) {
+    if (!loadedIds.has(id) && (entry.seq <= startStamp || now - entry.at > PATCH_MAX_AGE_MS)) {
+      ledger.delete(id);
+    }
+  }
+  return out;
+}
+
+// ── ApplicationsSearchPill ────────────────────────────────────────────────────
+// A big white pill in the Explore / Store look, at the top of the page in the
+// header's toolbar beside the filters, so the list starts as high as it did
+// (owner, 11 Oct 2026: "the search bar moves the apps lower"). Presentational only: the parent owns the value, the debounce and the filter.
+// "/" focuses it from anywhere on the page, except while typing in a field or
+// while a dialog is open.
+
+function ApplicationsSearchPill({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [focused, setFocused] = useState(false);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== '/' || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      if (document.querySelector('[aria-modal="true"], [role="dialog"], [role="alertdialog"]')) return;
+      e.preventDefault();
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  return (
+    <div
+      className="flex items-center gap-2.5 w-full sm:w-[400px]"
+      onClick={() => inputRef.current?.focus()}
+      style={{
+        minHeight: 48, padding: '0 8px 0 6px', borderRadius: 999,
+        backgroundColor: '#FFFFFF', cursor: 'text',
+        boxShadow: focused
+          ? '0 0 0 2px #1B3828, 0 2px 6px rgba(27,56,40,0.08), 0 22px 48px rgba(27,56,40,0.18)'
+          : '0 1px 0 rgba(27,56,40,0.08), 0 2px 6px rgba(27,56,40,0.08), 0 18px 40px -26px rgba(27,56,40,0.45)',
+        transition: 'box-shadow 160ms ease',
+      }}
+    >
+      <span
+        aria-hidden
+        className="inline-flex items-center justify-center flex-shrink-0"
+        style={{ width: 36, height: 36, borderRadius: 999, backgroundColor: '#EEF3EC' }}
+      >
+        <Search size={18} strokeWidth={2.6} style={{ color: '#1B3828' }} />
+      </span>
+      <input
+        ref={inputRef}
+        type="search"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        onKeyDown={e => {
+          if (e.key === 'Escape') {
+            if (value) { e.preventDefault(); onChange(''); } else inputRef.current?.blur();
+          }
+        }}
+        placeholder="Search name, email, delegation, country"
+        aria-label="Search applications by name, email, delegation, country or committee"
+        aria-keyshortcuts="/"
+        enterKeyHint="search"
+        autoComplete="off"
+        spellCheck={false}
+        className="flex-1 outline-none [&::-webkit-search-cancel-button]:appearance-none"
+        style={{ backgroundColor: 'transparent', border: 'none', color: NEU.ink, fontFamily: OUTFIT, fontSize: 16, fontWeight: 500, minWidth: 0, height: 44 }}
+      />
+      {value ? (
+        <button
+          type="button"
+          onClick={e => { e.stopPropagation(); onChange(''); inputRef.current?.focus(); }}
+          aria-label="Clear search"
+          title="Clear search"
+          className="inline-flex items-center justify-center flex-shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+          style={{ width: 32, height: 32, borderRadius: 999, backgroundColor: 'rgba(28,20,16,0.06)', border: 'none', cursor: 'pointer', color: NEU.ink }}
+        >
+          <X size={16} strokeWidth={2.6} />
+        </button>
+      ) : !focused && (
+        <kbd
+          aria-hidden
+          className="hidden sm:inline-flex items-center justify-center flex-shrink-0"
+          title="Press / to search"
+          style={{ minWidth: 26, height: 26, padding: '0 8px', borderRadius: 7, fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, color: NEU.inkSoft, backgroundColor: '#F6F3EA', boxShadow: 'inset 0 0 0 1px rgba(28,20,16,0.12)' }}
+        >
+          /
+        </kbd>
+      )}
+    </div>
+  );
+}
+
+// ── ApplicationsView ──────────────────────────────────────────────────────────
+// One page, two scopes (owner, 23 Nov 2026): 'participants' is the Applications
+// page (applications/page.tsx), exactly as before; 'team' is Team Applications
+// on the Team page (team/page.tsx): the same tiles, search, filters, cards,
+// drawer and export for chairs, secretariat and staff. Every difference is a
+// branch on scope === 'team'; the team accepts and rejects run the moved Team
+// decisions (team/useTeamDecisions.tsx).
+
+export default function ApplicationsView({ scope }: { scope: 'participants' | 'team' }) {
+  const { conference } = useManage();
+  const { session } = useAuth();
+  /** The stable half of `session`. AuthProvider replaces the session OBJECT on
+   *  every auth event (token refresh, tab focus), so any loader that depends on
+   *  `session` refetches on each of those; the token is a string and only
+   *  changes when it really changes. Use this in loader guards and deps, and
+   *  keep using `session` for anything that needs the rest of it. */
+  const accessToken = session?.access_token;
+  // The silent first-in-group order, chair Job Board picks, the team applicant count, and
+  // job_mark_reviewed once (useJobBoardApplicantExtras.ts).
+  // The Export Excel button's busy guard.
+  const [exportBusy, setExportBusy] = useState(false);
+  const jobExtras = useJobBoardApplicantExtras(conference?.id, session?.user?.id);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const urlStatus = searchParams.get('status');
+  const urlPayment = searchParams.get('payment');
+  const [applications, setApplications] = useState<Application[]>([]);
+  // application_id → the delegation whose leader imported it
+  // (conference_leader_imports). Keyed on the id, never on invited_email,
+  // because claiming clears invited_email and the mark must stay.
+  const [leaderImports, setLeaderImports] = useState<Map<string, string>>(() => new Map());
+  // Live manual payments per application (prompt 138), read beside the list.
+  const [livePays, setLivePays] = useState<Map<string, LivePay>>(() => new Map());
+  // What each person owes and paid, from the invoices (owner, 15 Nov 2026):
+  // every payment label, filter, tile and the export read this, never
+  // payment_status. Re-read with every load of the list below.
+  const { money, reload: reloadMoney } = useConferenceMoney(conference?.id);
+  // Unpaid gating invoices (gates_acceptance=true, status not settled/waived/
+  // void). Only app_fee rows ever carry the flag, since it comes from
+  // application_surcharges.gates_acceptance. Fetched with the applications list.
+  const [gatingInvoices, setGatingInvoices] = useState<{ application_id: string | null; society_id: string | null }[]>([]);
+  const [loading, setLoading] = useState(true);
+  // A page of the paged load failed: the list on screen is incomplete, and
+  // the organiser must be told so rather than shown a partial list as whole.
+  const [loadIncomplete, setLoadIncomplete] = useState(false);
+  // Empty role set = no constraint, so a fresh page shows every role
+  // (including chairs) in both the row list and the stat scope.
+  // Seeded from the URL on first render (?status=…, ?payment=…) so a deep link
+  // from the dashboard opens on the matching rows with no unfiltered flash.
+  // Lazy initialiser, not an effect: after mount this is ordinary local state
+  // and the filter panel owns it.
+  const [filters, setFilters] = useState<FilterState>(
+    () => filtersFromUrl(urlStatus, urlPayment),
+  );
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
+  const [rejectNote, setRejectNote] = useState('');
+  const [roleConfigs, setRoleConfigs] = useState<RoleConfigLite[]>([]);
+  // Seeded from ?app=<id> so the applicant pop-up is linkable and survives a
+  // reload; useApplicantUrlSync (below) keeps the URL in step afterwards.
+  const [reviewId, setReviewId] = useState<string | null>(() => searchParams.get('app'));
+  // Team notes per applicant (useNoteCounts.ts), read again when the pop-up closes.
+  const noteCounts = useNoteCounts(conference?.id, session?.user?.id, !!reviewId);
+  // The review dialog card, for the focus trap in the effect below.
+  const reviewCardRef = useRef<HTMLDivElement | null>(null);
+  // Conferences done in any capacity, per user, count of their mun_cv_entries
+  // rows (the same source profiles.mun_experience_level is derived from).
+  const [cvCounts, setCvCounts] = useState<Record<string, number>>({});
+  // Members, main nationality and lead per delegation, for the rows and the pop-up.
+  const delegationSummaries = useDelegationSummaries(applications);
+  /* Action outcomes go to the corner notification stack — the same cards the
+     live committee session raises — instead of two thin lines above the stat
+     tiles that the organiser had already scrolled past by the time they landed.
+     Both keep their old call shape (`setActionError('')` still clears), so no
+     call site changed. The stack is z-index 900, above the z-50 review drawer,
+     so a failure raised from inside that drawer is still seen. */
+  const setActionError = useCallback((msg: string) => {
+    if (msg) notifyErr(msg, 'applications'); else clearErr('applications');
+  }, []);
+  const setFlashMsg = useCallback((msg: string) => {
+    if (msg) notifyOk(msg, 'applications'); else clearOk('applications');
+  }, []);
+  // The applicant's financial_aid_requests row (if any), fetched on demand
+  // when the review modal opens. (Their MUN CV and payments ledger are read
+  // and cached by the pop-up itself, ApplicantDetail/data.ts.)
+  const [previewAid, setPreviewAid] = useState<PreviewAidRequest | null>(null);
+  // App ids with a write in flight, double-click guard for row actions.
+  const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
+  // Multi-select for bulk actions. Ids are pruned to what's visible whenever
+  // the filtered list changes, so a hidden row is never silently acted on.
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // Bulk progress. The loop is chunked now, so it takes visible time and has
+  // to say where it is instead of just freezing the bar's buttons.
+  const [bulkRunning, setBulkRunning] = useState<{ done: number; total: number } | null>(null);
+  const { draftNotices, pushDraftNotice, dismissDraftNotice } = useDraftNotices();
+  const { confirm, modal: confirmModal } = useConfirmModal();
+  // This page never changes money (owner, 15 Nov 2026): Mark paid, Mark
+  // unpaid and Remove waiver live only in Financials (mark_invoices_paid /
+  // mark_invoices_unpaid / remove_fee_waiver).
+  // Stale-response guard for background refetches.
+  const loadSeq = useRef(0);
+  /* ── The optimistic-patch ledger ────────────────────────────────────────
+     `loadSeq` guards load against load. It does NOT guard a local write
+     against a load that was already in flight when that write happened, and
+     that is the race an organiser hits when they decide two applicants in
+     quick succession.
+
+     loadApplications opens with an AWAITED sync_conference_invoices RPC and
+     then four more queries, so a "silent" reconcile takes a while. Accept row
+     A (fires a reconcile), then reject row B a second later: the reconcile's
+     snapshot was taken before B's write landed, it comes back with B still
+     'submitted', and `setApplications(apps)` used to overwrite B's optimistic
+     'rejected' wholesale. Nothing was scheduled to correct that, so B sat
+     there wrong until the organiser reloaded the page.
+
+     So every optimistic patch is recorded here with a monotonic stamp. A load
+     records the stamp it STARTED at; on return it re-applies any patch newer
+     than that stamp. A patch older than the start stamp should already be in
+     the snapshot: if it is, the patch is dropped (the server agrees, local
+     truth is no longer needed); if it is not, the write is still settling and
+     the patch is held for one more round.
+
+     `patch: null` means the row was deleted locally, so a stale snapshot must
+     not resurrect it.
+
+     PATCH_MAX_AGE_MS is the escape hatch. A patch the server never confirms
+     (a trigger rewrote the value, a write silently no-opped) would otherwise
+     pin the row to a wrong value forever. After the timeout it is dropped and
+     the server wins, which is the correct end state for a disagreement — but
+     only a load can drop it, so a load that leaves the ledger non-empty arms
+     another one (RECONCILE_MAX_RETRIES) until the escape hatch can fire. */
+  const patchSeq = useRef(0);
+  const pendingPatches = useRef<Map<string, PendingPatch>>(new Map());
+  // Committees for the inline quick-allocate picker (#7), loaded lazily the
+  // first time a Plus popover opens. null = not yet fetched.
+  const [allocCommittees, setAllocCommittees] = useState<QuickCommittee[] | null>(null);
+  const [allocLoading, setAllocLoading] = useState(false);
+  const allocLoadedRef = useRef(false);
+  // Quick-filter search (#2). `searchInput` is the raw field value; `search`
+  // is the debounced, lower-cased term the list actually filters on.
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput.trim().toLowerCase()), 180);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+  // People | Delegations (docs/delegations-redesign.md). Delegations are their
+  // own list with their own counts and filters (DelegationsBoard.tsx); they
+  // never share rows with people. Seeded from ?view=delegations and
+  // ?delegation=<id> so other pages can deep link. The read-only delegation
+  // popup that used to live here is gone: the delegation name on a person row
+  // opens the delegation pop-up in place (DelegationPopupLink).
+  const [listView, setListView] = useState<'people' | 'delegations'>(
+    // Team Applications has no Delegations view.
+    () => (scope !== 'team' && searchParams.get('view') === 'delegations' ? 'delegations' : 'people'),
+  );
+  const [delegationFocus, setDelegationFocus] = useState<string | null>(() => searchParams.get('delegation'));
+  // ── In-progress drafts. Its OWN state, fed by its OWN query, never merged
+  // into `applications` — see the DraftRow comment block. Collapsed by default
+  // so the submitted list stays the page's subject.
+  const [drafts, setDrafts] = useState<DraftRow[]>([]);
+  const [draftsOpen, setDraftsOpen] = useState(false);
+  /** Drafts as a VIEW, driven by the stat tile, rather than only as a
+   *  collapsed panel at the bottom of the page. Mutually exclusive with the
+   *  application list: switching to it hides the list entirely, the same way
+   *  the Allocated tile narrows it. */
+  const [draftsView, setDraftsView] = useState(false);
+  // No draft drawer, by ruling: there is nothing inside a draft an organiser
+  // may open. A row is the whole surface. (There used to be a read-only
+  // drawer rendering the partial answers, preferences and pledges — removed.)
+  // Per-draft reminder UI state. `remindingId` is an in-flight lock and NOTHING
+  // more — the real rate limit is the 72h cooldown inside send_draft_reminder,
+  // and the button is only its mirror. (handleRemindPay elsewhere in this file
+  // has the in-flight lock and no server-side guard at all; that pattern is
+  // deliberately not repeated here.)
+  const [remindingId, setRemindingId] = useState<string | null>(null);
+  // ── Bulk email (remind-to-pay + custom one-off). One in-flight lock covers
+  // both, because both end in an email_outbox insert and neither should ever
+  // be re-entered while the other is mid-queue.
+  const [bulkEmailBusy, setBulkEmailBusy] = useState(false);
+  const [composeOpen, setComposeOpen] = useState(false);
+  // Frozen at open — see openComposeEmail.
+  const [composeIds, setComposeIds] = useState<string[]>([]);
+  const [composeSubject, setComposeSubject] = useState('');
+  const [composeBody, setComposeBody] = useState('');
+  const [composeError, setComposeError] = useState('');
+  // The bulk email allowance stopped this send (src/lib/emailAllowance.ts).
+  const [composeEmailsBlocked, setComposeEmailsBlocked] = useState(false);
+  useScrollLock(composeOpen);
+
+  function markBusy(id: string, busy: boolean) {
+    setBusyIds(prev => {
+      const next = new Set(prev);
+      if (busy) next.add(id); else next.delete(id);
+      return next;
+    });
+  }
+
+  // `silent` refetches never touch the page-level loading flag, they
+  // reconcile local optimistic state with what the server actually computed
+  // (fillFreeSpots promotions, etc) without wiping the list.
+  /* Each application's status GROUP when this page was OPENED
+     (statusSortGroup: to decide, accepted, rejected, withdrawn). Rows sort by
+     this frozen snapshot rather than by live status, so accepting or rejecting
+     someone does not yank their row out from under the cursor mid-triage. They
+     stay put, and the list only reshuffles the next time the page is opened,
+     which is a fresh mount and a fresh snapshot. Deliberately NOT refreshed by
+     the silent reloads that follow an accept or reject, for exactly that
+     reason. Its keys are
+     also every id present at open, so an application that ARRIVES while the
+     page is sitting there is grouped by its live status instead (a new
+     submission is undecided and belongs at the top; burying it at the bottom
+     because it missed the snapshot would be the wrong kind of stable). */
+  const groupAtOpen = useRef<Map<string, number> | null>(null);
+
+  const loadApplications = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!conference) return;
+    if (!accessToken) return;
+    const seq = ++loadSeq.current;
+    // The ledger stamp as it stands right now. Anything patched after this
+    // line cannot be in the snapshot below, so the merge re-applies it.
+    const startStamp = patchSeq.current;
+    if (!opts?.silent) setLoading(true);
+    const supabase = getAuthedClient(accessToken);
+    // Materialize this conference's invoices first, so the gating query right
+    // below is guaranteed to see any app-fee invoice a submitted application
+    // now owes (same sync-before-read pattern as financials/invoices and
+    // useInvoiceTotals).
+    await supabase.rpc('sync_conference_invoices', { p_conference_id: conference.id });
+    // Paged (fetchAllRows): a single request stops at 1,000 rows without a
+    // word, so a big conference silently lost its oldest applications.
+    // Leader imports are read beside the applications; a failed read only
+    // leaves the marks off, it never blocks the list.
+    void (async () => {
+      const { data, error } = await supabase.rpc('conference_leader_imports', { p_conference: conference.id });
+      if (seq !== loadSeq.current || error) return;
+      const next = new Map<string, string>();
+      for (const row of (data ?? []) as { application_id: string | null; delegation_name: string | null }[]) {
+        if (row.application_id) next.set(row.application_id, row.delegation_name?.trim() || 'a delegation leader');
+      }
+      setLeaderImports(next);
+    })();
+    // The money map re-reads with every load (every action that refreshes
+    // rows, and the same cadence as livePays below).
+    void reloadMoney();
+    // Live manual payments: a proof waiting ('pending') or a payment started
+    // with no proof ('awaiting_proof'), per application. A failed read only
+    // leaves the chips as "Payment"; it never blocks the list.
+    void (async () => {
+      const { data, error } = await supabase
+        .from('payment_batches')
+        .select('id, status, proof_path, created_at, expires_at, payments!payments_batch_id_fkey (status, invoices (application_id))')
+        .eq('conference_id', conference.id)
+        .in('status', ['pending', 'awaiting_proof']);
+      if (seq !== loadSeq.current || error) return;
+      type Row = { status: string; proof_path: string | null; created_at: string | null; expires_at: string | null;
+        payments: { status: string; invoices: { application_id: string | null } | { application_id: string | null }[] | null }[] | null };
+      const next = new Map<string, LivePay>();
+      for (const b of (data ?? []) as unknown as Row[]) {
+        const kind: LivePay['kind'] = b.status === 'pending' ? 'proof' : 'started';
+        for (const p of b.payments ?? []) {
+          if (p.status !== 'pending') continue;
+          const inv = Array.isArray(p.invoices) ? p.invoices[0] : p.invoices;
+          const appId = inv?.application_id;
+          if (!appId) continue;
+          const had = next.get(appId);
+          if (had?.kind === 'proof') continue;
+          if (kind === 'proof' || !had) next.set(appId, { kind, createdAt: b.created_at, expiresAt: b.expires_at });
+        }
+      }
+      setLivePays(next);
+    })();
+    const [appRes, cfgRes, gatingRes] = await Promise.all([
+      fetchAllRows((from, to) => supabase
+        .from('applications')
+        .select(`
+          id, user_id, invited_email, invited_name, role, status, is_head_delegate, experience_level,
+          experience_entries,
+          payment_status, submitted_at, checked_in_at, organizer_note, resubmitted_at, custom_answers, aid_custom_answers,
+          assigned_committee_id, assigned_country_code, assigned_country_name,
+          self_paid, attending, pledge_type, spots_pledged, pledge_confirmed_at, society_id,
+          aid_requested, aid_statement, aid_status, aid_requested_amount, fee_waiver_source,
+          traffic_source, traffic_detail,
+          assigned_committee:conference_committees!assigned_committee_id (name, abbreviation, topics, logo_url),
+          profiles (display_name, email, avatar_url, nationality, date_of_birth, mun_experience_level),
+          societies (name, city, country_code, logo_url),
+          application_preferences (
+            preference_order, conference_committee_id, country_code, country_name,
+            conference_committees (name, abbreviation, logo_url)
+          )
+        `)
+        .eq('conference_id', conference.id)
+        // Chairs, secretariat and staff live only in Team > Team Applications,
+        // which is this page with scope 'team' (the same filter, turned round).
+        .filter('role', scope === 'team' ? 'in' : 'not.in', '(chair,secretariat,staff)')
+        .order('submitted_at', { ascending: false, nullsFirst: true })
+        .order('id', { ascending: true })
+        .range(from, to)),
+      supabase
+        .from('application_role_configs')
+        .select('role, payment_timing, custom_questions, fee_amount, fee_currency, fee_phases, allow_resubmission, is_enabled, applications_open_at, applications_close_at')
+        .eq('conference_id', conference.id),
+      // Unpaid gating invoices block Accept until paid. The only source of
+      // gates_acceptance=true is application_surcharges.gates_acceptance, the
+      // Conference Registration Fee in Financials, copied onto the app_fee
+      // invoice by sync_participant_invoices. The old role-level gate
+      // (application_role_configs.fee_gates_acceptance) was removed from
+      // Settings > Applications and dropped from the database.
+      fetchAllRows((from, to) => supabase
+        .from('invoices')
+        .select('application_id, society_id')
+        .eq('conference_id', conference.id)
+        .eq('gates_acceptance', true)
+        .not('status', 'in', '(settled,waived,void)')
+        .order('id', { ascending: true })
+        .range(from, to)),
+    ]);
+
+    if (seq !== loadSeq.current) return; // stale response, a newer load superseded this one
+
+    const incomplete = !!appRes.error || !!gatingRes.error;
+    setLoadIncomplete(incomplete);
+    if (appRes.error && opts?.silent) {
+      // A background reconcile that could not read every page must not
+      // replace the complete list already on screen with a shorter one.
+      setLoading(false);
+      return;
+    }
+    const raw = (appRes.data ?? []) as unknown as Application[];
+    // NEVER `setApplications(raw)`. A snapshot taken before a local write must
+    // not be allowed to revert that write on screen — see the pendingPatches
+    // comment. The merge re-applies newer local truth and retires patches the
+    // server has now confirmed.
+    const apps = reconcileLoaded(raw, pendingPatches.current, startStamp, Date.now());
+    setApplications(apps);
+    // Seed once per mount. `opts.silent` reloads (post-accept, post-reject)
+    // must not re-seed, or the row just acted on would jump away.
+    if (groupAtOpen.current === null && !opts?.silent) {
+      groupAtOpen.current = new Map(apps.map(a => [a.id, statusSortGroup(a.status)]));
+    }
+    setRoleConfigs((cfgRes.data ?? []) as unknown as RoleConfigLite[]);
+    setGatingInvoices((gatingRes.data ?? []) as { application_id: string | null; society_id: string | null }[]);
+    setLoading(false);
+
+    // Batched MUN-history counts, ONE query for every visible applicant.
+    const userIds = Array.from(new Set(apps.map(a => a.user_id).filter((id): id is string => !!id)));
+    if (userIds.length > 0) {
+      // Chunked (URL length) and paged (1,000-row cap) for big conferences.
+      const cvPages = await Promise.all(chunk(userIds, 150).map(ids => fetchAllRows((from, to) => supabase
+        .from('mun_cv_entries')
+        .select('id, user_id')
+        .in('user_id', ids)
+        .order('id', { ascending: true })
+        .range(from, to))));
+      if (seq !== loadSeq.current) return;
+      const cvRows = cvPages.flatMap(p => p.data);
+      const counts: Record<string, number> = {};
+      for (const row of (cvRows ?? []) as { user_id: string }[]) {
+        counts[row.user_id] = (counts[row.user_id] ?? 0) + 1;
+      }
+      setCvCounts(counts);
+    } else {
+      setCvCounts({});
+    }
+    // Keyed on the TOKEN, not the session object: with `[conference]` alone
+    // this callback is built once against whatever session existed when the
+    // conference resolved, and if auth had not landed the guard above returns
+    // early with nothing left to re-trigger the effect. `session` itself is
+    // the wrong dep — its identity changes on every auth event — so the string
+    // token is what belongs here.
+  }, [conference, accessToken, reloadMoney, scope]);
+
+  useEffect(() => { loadApplications(); }, [loadApplications]);
+
+  /* ── The single, coalesced reconcile ──────────────────────────────────────
+     Every mutating handler ends here instead of running its own full load.
+     Accept and mark-paid used to `await loadApplications({ silent: true })`
+     each, and nothing else reconciled at all — so a reject or a check-in left
+     no scheduled correction behind it, which is exactly why a stale accept
+     load could revert a reject permanently.
+
+     Trailing debounce, deliberately. Deciding five applicants in five seconds
+     produces ONE load after the last of them, not five overlapping ones; a
+     bulk loop produces one after the whole loop. The optimistic ledger above
+     is what keeps the screen correct in the meantime, so there is no reason
+     to rush the network.
+
+     One extra rule on top of the debounce: a load that comes back still
+     holding patches arms another load, up to RECONCILE_MAX_RETRIES with an
+     exponential back-off. Without it the last load of a burst was the last
+     load, full stop, and a patch the server never confirmed had no later pass
+     to be dropped by. */
+  const reconcileTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Follow-up passes already spent on the current disagreement. Reset by any
+   *  new action, so a fresh patch always gets the full budget. */
+  const reconcileRetries = useRef(0);
+  /** Cleared on unmount, so a load that resolves after the page is gone cannot
+   *  arm a timer nothing is left to clear. Set (not just cleared) by the effect
+   *  below, because StrictMode's mount/unmount/mount would otherwise leave this
+   *  ref stuck false for the real mount. */
+  const reconcileAlive = useRef(true);
+  useEffect(() => {
+    reconcileAlive.current = true;
+    return () => {
+      reconcileAlive.current = false;
+      if (reconcileTimer.current) clearTimeout(reconcileTimer.current);
+      reconcileTimer.current = null;
+    };
+  }, []);
+
+  /** Arm one silent load `delay` ms from now, replacing any pending one. */
+  const armReconcile = useCallback((delay: number) => {
+    if (!reconcileAlive.current) return;
+    if (reconcileTimer.current) clearTimeout(reconcileTimer.current);
+    reconcileTimer.current = setTimeout(() => {
+      reconcileTimer.current = null;
+      void loadApplications({ silent: true }).then(() => {
+        // Unmounted while the load was in flight: arming here would leak a
+        // timer past the cleanup above.
+        if (!reconcileAlive.current) return;
+        // Everything retired, or the budget is spent and reconcileLoaded has
+        // aged the survivors out. Either way the screen matches the server.
+        if (pendingPatches.current.size === 0 || reconcileRetries.current >= RECONCILE_MAX_RETRIES) {
+          reconcileRetries.current = 0;
+          return;
+        }
+        const attempt = reconcileRetries.current++;
+        armReconcileRef.current(RECONCILE_DELAY_MS * 2 ** attempt);
+      });
+    }, delay);
+  }, [loadApplications]);
+  // Indirection so the timer callback can re-arm without armReconcile having to
+  // close over itself.
+  const armReconcileRef = useRef(armReconcile);
+  useEffect(() => { armReconcileRef.current = armReconcile; }, [armReconcile]);
+
+  const scheduleReconcile = useCallback(() => {
+    reconcileRetries.current = 0;
+    armReconcile(RECONCILE_DELAY_MS);
+  }, [armReconcile]);
+
+  // ── Drafts loader ─────────────────────────────────────────────────────────
+  // A SEPARATE query into a SEPARATE state atom. It deliberately shares nothing
+  // with loadApplications: no shared array, no shared loading flag, no merge
+  // step that a later edit could turn into one. If this query fails the drafts
+  // section simply stays empty — the submitted list is unaffected either way.
+  //
+  // SOURCE: `public.application_draft_status`, NOT application_drafts. The raw
+  // table's organiser SELECT policy is dropped — the answers blob is
+  // unreachable to an organiser now, at the database, not just off-screen. The
+  // view is a security-barrier definer projection that emits only the columns
+  // below; it inlines the author's profile, so there is no PostgREST embed and
+  // therefore no select string a future edit could widen.
+  //
+  // If this query fails the drafts section simply stays empty.
+  const loadDrafts = useCallback(async () => {
+    if (!conference || !accessToken) return;
+    const supabase = getAuthedClient(accessToken);
+    const { data } = await supabase
+      .from('application_draft_status')
+      .select('id, user_id, role, updated_at, reminders_sent, last_reminder_at, reminder_opt_out, display_name, email, avatar_url, nationality, society_id, society_name')
+      .eq('conference_id', conference.id)
+      .order('updated_at', { ascending: false });
+
+    // One draft per person (owner, 19 Oct 2026): someone who started more
+    // than one role shows once, with their newest draft (the list is newest first).
+    const seen = new Set<string>();
+    const rows = ((data ?? []) as unknown as DraftRow[]).filter((d) => {
+      // Secretariat and staff are Team's, never this page's; Team Applications keeps only the team roles.
+      if (scope === 'team' ? !TEAM_ROLE_SET.has(d.role) : (d.role === 'secretariat' || d.role === 'staff')) return false;
+      if (seen.has(d.user_id)) return false;
+      seen.add(d.user_id);
+      return true;
+    });
+    setDrafts(rows);
+  }, [conference, accessToken, scope]);
+
+  useEffect(() => { loadDrafts(); }, [loadDrafts]);
+
+  // ── Draft reminder ────────────────────────────────────────────────────────
+  // One draft, one nudge. `send_draft_reminder` is SECURITY DEFINER and owns
+  // every guard that matters: organiser-only, opted-out, a hard ceiling, and a
+  // 72-HOUR COOLDOWN. The button below renders disabled inside that window, but
+  // that is a courtesy, not the limit — clicking a stale button ten times still
+  // produces exactly one email, because the tenth click gets 'cooldown' back
+  // from the database. This is the whole reason not to copy handleRemindPay,
+  // whose only guard is the in-flight lock.
+  //
+  // The RPC also stamps last_reminder_at, so the honest way to refresh the
+  // button is to re-read the row: loadDrafts() rather than a local guess.
+  async function handleSendDraftReminder(d: DraftRow) {
+    if (remindingId) return;
+    setRemindingId(d.id);
+    clearErr('drafts');
+    const supabase = await getFreshAuthedClient();
+    if (!supabase) {
+      setRemindingId(null);
+      notifyErr('Your session has expired. Please reload the page.', 'drafts');
+      return;
+    }
+    const { data, error } = await supabase.rpc('send_draft_reminder', { p_draft_id: d.id });
+    const res = (data ?? null) as { ok?: boolean; reason?: string } | null;
+    setRemindingId(null);
+
+    if (error || !res) {
+      notifyErr('Could not send that reminder. Please try again.', 'drafts');
+      return;
+    }
+    if (res.ok) {
+      setFlashMsg(`Reminder sent to ${d.display_name ?? 'the applicant'}.`);
+      loadDrafts();
+      return;
+    }
+    // Every refusal is stated in the applicant's terms, not the RPC's.
+    const why =
+      res.reason === 'cooldown'        ? 'They were reminded in the last three days. Give it a little longer.'
+      : res.reason === 'opted_out'     ? 'They asked not to be reminded about this application.'
+      : res.reason === 'limit_reached' ? 'They have had as many reminders as we will send.'
+      : res.reason === 'notifications_off' ? 'They have application emails turned off in their account.'
+      : res.reason === 'off'           ? 'Your Unfinished application reminder email is switched off in the Email Builder.'
+      : res.reason === 'no_recipient'  ? 'There is no email address on their account.'
+      : res.reason === 'forbidden'     ? 'You do not have permission to send this.'
+      : 'Could not send that reminder.';
+    notifyErr(why, 'drafts');
+    // A cooldown answer is fresher than what this page is holding, so re-read.
+    if (res.reason === 'cooldown' || res.reason === 'opted_out') loadDrafts();
+  }
+
+  // Review dialog behaviour: Escape closes, the list behind is scroll-locked,
+  // and Tab is trapped inside the card. Presentation only — closing goes
+  // through the same setReviewId(null) the X and the backdrop already used.
+  // There is no draft counterpart any more — an in-progress application has no
+  // openable detail view, so `reviewId` is the only dialog this trap serves.
+  const openDialogId = reviewId;
+  // Background scroll lock now comes from the shared hook (src/hooks/useScrollLock.ts),
+  // which is the same technique this effect used to hand-roll — plus scrollbar-gutter
+  // compensation and reference counting so a stacked dialog can't release this one.
+  useScrollLock(!!openDialogId);
+  useEffect(() => {
+    if (!openDialogId) return;
+    const prevFocus = document.activeElement as HTMLElement | null;
+
+    const focusables = () => {
+      const card = reviewCardRef.current;
+      if (!card) return [] as HTMLElement[];
+      return [...card.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      )].filter(el => el.offsetParent !== null || el === document.activeElement);
+    };
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        setReviewId(null);
+        setRejectingId(null);
+        setRejectNote('');
+        return;
+      }
+      if (e.key !== 'Tab') return;
+      const list = focusables();
+      if (list.length === 0) return;
+      const first = list[0];
+      const last = list[list.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+      if (!reviewCardRef.current?.contains(active)) {
+        e.preventDefault();
+        first.focus();
+        return;
+      }
+      if (e.shiftKey && active === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && active === last) { e.preventDefault(); first.focus(); }
+    };
+
+    document.addEventListener('keydown', onKey, true);
+    // Seat focus inside the dialog so the trap has somewhere to start.
+    const seat = setTimeout(() => { focusables()[0]?.focus(); }, 0);
+    return () => {
+      clearTimeout(seat);
+      document.removeEventListener('keydown', onKey, true);
+      prevFocus?.focus?.();
+    };
+  }, [openDialogId]);
+
+  // ?app=<id> follows the open pop-up; an id that matches no application is
+  // dropped from the address bar once the list has loaded.
+  useApplicantUrlSync(reviewId, !!reviewId && applications.some(a => a.id === reviewId), !loading);
+
+  // Fetch the applicant's financial_aid_requests row on demand — surfaces aid
+  // in the review modal so an organiser doesn't have to switch to the
+  // Financial Aid tab. Read-only here; approve/deny still lives there.
+  useEffect(() => {
+    if (!reviewId || !accessToken) { setPreviewAid(null); return; }
+    let cancelled = false;
+    setPreviewAid(null);
+    (async () => {
+      const supabase = getAuthedClient(accessToken);
+      const { data } = await supabase
+        .from('financial_aid_requests')
+        .select('id, statement, requested_amount, status, granted_amount, created_at')
+        .eq('application_id', reviewId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (cancelled) return;
+      setPreviewAid((data as PreviewAidRequest | null) ?? null);
+    })();
+    return () => { cancelled = true; };
+  }, [reviewId, accessToken]);
+
+  // ── Quick-allocate committee load (#7) ──────────────────────────────────────
+  // Lazy, once: fetched the first time an organiser opens a Plus popover. Pulls
+  // each committee's country seats plus the country_codes already allocated, so
+  // the picker only ever offers genuinely open seats.
+  const loadAllocCommittees = useCallback(async () => {
+    if (!conference || !accessToken || allocLoadedRef.current) return;
+    allocLoadedRef.current = true;
+    setAllocLoading(true);
+    const supabase = getAuthedClient(accessToken);
+    const { data } = await supabase
+      .from('conference_committees')
+      .select(`
+        id, name, abbreviation, logo_url, topics,
+        committee_country_slots (country_code, country_name),
+        conference_allocations (country_code)
+      `)
+      .eq('conference_id', conference.id)
+      .order('name', { ascending: true });
+    const mapped: QuickCommittee[] = ((data ?? []) as unknown as {
+      id: string; name: string; abbreviation: string | null; logo_url: string | null; topics: string[] | null;
+      committee_country_slots: { country_code: string; country_name: string }[] | null;
+      conference_allocations: { country_code: string }[] | null;
+    }[]).map(c => ({
+      id: c.id,
+      name: c.name,
+      abbreviation: c.abbreviation,
+      logo_url: c.logo_url,
+      topics: c.topics,
+      slots: c.committee_country_slots ?? [],
+      takenCodes: (c.conference_allocations ?? []).map(a => a.country_code),
+    }));
+    setAllocCommittees(mapped);
+    setAllocLoading(false);
+  }, [conference, accessToken]);
+
+  // Optimistic inline allocation: flip the row to 'assigned' with the chosen
+  // committee/country immediately, mark that seat taken locally so a second
+  // allocation this session can't reuse it, then write to
+  // conference_allocations + applications. Exact rollback on any failure.
+  function handleQuickAllocate(app: Application, committee: QuickCommittee, slot: { country_code: string; country_name: string }) {
+    if (!session || !conference) return;
+    if (busyIds.has(app.id)) { noteBusyClick(); return; }
+    const prevRow = applications.find(a => a.id === app.id) ?? app;
+    if (!app.user_id) {
+      setActionError('This applicant has not registered yet. Allocate them from the assignment board once they sign up.');
+      return;
+    }
+
+    setActionError('');
+    markBusy(app.id, true);
+    applyRow(app.id, {
+      status: 'assigned',
+      assigned_committee_id: committee.id,
+      assigned_country_code: slot.country_code,
+      assigned_country_name: slot.country_name,
+      assigned_committee: { name: committee.name, abbreviation: committee.abbreviation, topics: committee.topics, logo_url: committee.logo_url },
+    });
+    // Reserve the seat locally so it drops out of any picker opened next.
+    setAllocCommittees(prev => prev
+      ? prev.map(c => (c.id === committee.id ? { ...c, takenCodes: [...c.takenCodes, slot.country_code] } : c))
+      : prev);
+
+    (async () => {
+      const supabase = getAuthedClient(session.access_token);
+      // Single write path mirrors the assignment board's insertAllocation.
+      const { error: insErr } = await supabase.from('conference_allocations').insert({
+        conference_id: conference.id,
+        conference_committee_id: committee.id,
+        user_id: app.user_id,
+        country_code: slot.country_code,
+        country_name: slot.country_name,
+        application_id: app.id,
+        allocation_sent: false,
+        assigned_by: session.user.id,
+      });
+      if (insErr) throw insErr;
+      const { error } = await supabase.from('applications').update({
+        status: 'assigned',
+        assigned_committee_id: committee.id,
+        assigned_country_code: slot.country_code,
+        assigned_country_name: slot.country_name,
+        decided_by: session.user.id, decided_at: new Date().toISOString(),
+      }).eq('id', app.id);
+      if (error) throw error;
+    })()
+      .catch(() => {
+        restoreRow(prevRow);
+        setAllocCommittees(prev => prev
+          ? prev.map(c => (c.id === committee.id ? { ...c, takenCodes: c.takenCodes.filter(code => code !== slot.country_code) } : c))
+          : prev);
+        setActionError('Could not allocate this delegate. The change was reverted. Please try again.');
+      })
+      .finally(() => { markBusy(app.id, false); scheduleReconcile(); });
+  }
+
+  // ── Optimistic row helpers ──────────────────────────────────────────────────
+  // Patch one application in place (the UI updates instantly), and restore the
+  // exact prior row on rollback, never the whole list, so concurrent actions
+  // on other rows are untouched.
+  //
+  // Both also write the ledger, so a refetch whose snapshot predates the
+  // change cannot undo it on screen. Anything that mutates a row optimistically
+  // MUST go through these two (or recordPatch below) — a bare setApplications
+  // call is invisible to the guard and gets clobbered.
+  function recordPatch(appId: string, patch: Partial<Application> | null) {
+    const prev = pendingPatches.current.get(appId);
+    pendingPatches.current.set(appId, {
+      seq: ++patchSeq.current,
+      at: Date.now(),
+      // Merge onto whatever is still pending for this row, so a second field
+      // set by a later action does not drop the first one's field.
+      patch: patch === null || prev?.patch == null ? patch : { ...prev.patch, ...patch },
+    });
+  }
+  function applyRow(appId: string, patch: Partial<Application>) {
+    recordPatch(appId, patch);
+    setApplications(cur => cur.map(a => (a.id === appId ? { ...a, ...patch } : a)));
+  }
+  function restoreRow(row: Application) {
+    setApplications(cur => cur.map(a => (a.id === row.id ? row : a)));
+    // A rollback is local truth too. Re-stamp the ledger with the REVERTED
+    // values for exactly the fields the failed write touched, otherwise a load
+    // that started before the rollback would re-apply the values we just undid.
+    const entry = pendingPatches.current.get(row.id);
+    if (entry?.patch) {
+      const reverted: Record<string, unknown> = {};
+      for (const k of Object.keys(entry.patch)) reverted[k] = (row as unknown as Record<string, unknown>)[k];
+      pendingPatches.current.set(row.id, { seq: ++patchSeq.current, at: Date.now(), patch: reverted as Partial<Application> });
+    }
+  }
+
+  // ── Team Applications (scope 'team'): the moved Team decisions ──────────
+  // Accept opens the Team pop-up's seat (chair) or access (secretariat, staff)
+  // step; the pop-up's own reject, the role swap and the seat step run there.
+  // A decision patches this list at once (rolled back on a failure) and the
+  // list and money are re-read when it lands.
+  const teamDecisions = useTeamDecisions({
+    enabled: scope === 'team',
+    conferenceId: conference?.id ?? null,
+    roleConfigs: roleConfigs as { role: string; payment_timing: string | null; custom_questions: unknown }[],
+    pushDraftNotice,
+    onChanged: () => { scheduleReconcile(); void loadApplications({ silent: true }); },
+    optimistic: (appId, status) => {
+      const prev = applications.find(a => a.id === appId);
+      if (!prev) return () => {};
+      applyRow(appId, { status });
+      return () => restoreRow(prev);
+    },
+  });
+  /** Team scope: Accept opens the pop-up's next step (the review drawer closes first: never a pop-up on a pop-up). */
+  function openTeamAccept(app: Application) {
+    setReviewId(null);
+    teamDecisions.openFor(app.id, app.role === 'chair' ? 'seat' : 'access');
+  }
+
+  /* A click on a row that already has a write in flight. It is genuinely
+     dropped, so the row says so rather than doing nothing: the SAVING pill is
+     already up next to the status badge, and this adds a line naming what is
+     happening. Silence here was the other half of the reported bug — the row
+     showed a reverted status AND swallowed the retry. */
+  function noteBusyClick() {
+    setFlashMsg('');
+    setActionError('That row is still saving. Give it a moment, then try again.');
+  }
+
+  /** A SINGLE accept (the row button and the review drawer) asks first (owner,
+   *  14 Nov 2026: at WorldMUN the next chair slid under the button and each press
+   *  accepted the next one). Bulk accept keeps its one confirm and calls
+   *  handleAccept directly. */
+  async function confirmAccept(appId: string) {
+    const app = applications.find(a => a.id === appId);
+    if (!app) return;
+    const name = app.profiles?.display_name?.trim() || app.invited_name?.trim() || 'this applicant';
+    const { confirmed } = await confirm({
+      title: `Accept ${name}?`,
+      body: 'They get the acceptance email straight away.',
+      confirmLabel: 'Accept',
+    });
+    if (!confirmed) return;
+    await handleAccept(appId);
+  }
+
+  // ── One accepted role per person (16 Nov 2026): the role swap ──────────
+  // Every single accept asks accept_role_swap_check first (roleSwap.ts). No
+  // conflicting role: confirmAccept, then handleAccept exactly as before.
+  // Otherwise the decision pane turns into RoleSwapPanel in place: the server's sentence with Close,
+  // or the confirm whose "Accept and remove" runs accept_role_swap and then
+  // the same post-accept steps for the application that now holds the role.
+  const [swapAsk, setSwapAsk] = useState<{ appId: string; ask: SwapAsk; busy: boolean; error: string } | null>(null);
+  const swapBusyRef = useRef(false);
+
+  async function openRoleSwap(appId: string, race = false): Promise<void> {
+    if (!session) return;
+    if (busyIds.has(appId) || swapBusyRef.current) { noteBusyClick(); return; }
+    swapBusyRef.current = true;
+    setActionError('');
+    setSwapAsk({ appId, ask: { phase: 'checking' }, busy: false, error: '' });
+    try {
+      const check = await checkRoleSwap(getAuthedClient(session.access_token), appId);
+      const ask = askFor(check);
+      if (ask) { setSwapAsk({ appId, ask, busy: false, error: '' }); return; }
+      if (race) {
+        // The accept was refused for a role the check no longer sees: say so, never loop.
+        setSwapAsk({ appId, ask: { phase: 'blocked', message: 'Could not accept the application. Please try again.' }, busy: false, error: '' });
+        return;
+      }
+      setSwapAsk(null);
+      swapBusyRef.current = false;
+      // Nothing held: the plain "Accept {name}?" confirm (prompt 43), then the normal accept.
+      void confirmAccept(appId);
+    } catch (e) {
+      setSwapAsk({ appId, ask: { phase: 'blocked', message: friendlyError(e, 'Could not check this application. Please try again.') }, busy: false, error: '' });
+    } finally {
+      swapBusyRef.current = false;
+    }
+  }
+
+  async function confirmRoleSwap(appId: string): Promise<void> {
+    if (!session || !conference || !swapAsk || swapAsk.appId !== appId || swapAsk.ask.phase !== 'confirm') return;
+    if (swapBusyRef.current || busyIds.has(appId)) return;
+    const prevRow = applications.find(a => a.id === appId);
+    if (!prevRow) return;
+    const check = swapAsk.ask.check;
+    swapBusyRef.current = true;
+    markBusy(appId, true);
+    setSwapAsk(prev => prev && prev.appId === appId ? { ...prev, busy: true, error: '' } : prev);
+    const supabase = getAuthedClient(session.access_token);
+    try {
+      const res = await runRoleSwap(supabase, appId);
+      if (!res.ok) {
+        setSwapAsk(prev => prev && prev.appId === appId ? { ...prev, busy: false, error: res.message } : prev);
+        return;
+      }
+      setSwapAsk(null);
+      notifyOk(res.message);
+      // The old application (and, when the paid one was kept, this one) no longer exists.
+      const gone = new Set(goneAfterSwap(appId, check, res.application_id));
+      setApplications(prev => prev
+        .filter(a => !gone.has(a.id))
+        .map(a => (a.id === res.application_id ? { ...a, status: 'accepted' } : a)));
+      const followUpFailed = await acceptFollowUps(supabase, {
+        conferenceId: conference.id, appId: res.application_id, role: prevRow.role,
+        societyId: prevRow.society_id ?? null, pushDraftNotice,
+      });
+      if (followUpFailed) setActionError('Accepted, but a follow-up step (email / auto-cover) failed. Refresh to verify.');
+      scheduleReconcile();
+      void loadApplications({ silent: true });
+    } catch (e) {
+      setSwapAsk(prev => prev && prev.appId === appId ? { ...prev, busy: false, error: friendlyError(e, 'Could not accept the application. Please try again.') } : prev);
+    } finally {
+      swapBusyRef.current = false;
+      markBusy(appId, false);
+    }
+  }
+
+  function renderRoleSwap(app: Application) {
+    if (!swapAsk || swapAsk.appId !== app.id) return null;
+    return (
+      <RoleSwapPanel
+        ask={swapAsk.ask}
+        busy={swapAsk.busy}
+        error={swapAsk.error}
+        onConfirm={() => { void confirmRoleSwap(app.id); }}
+        onCancel={() => { if (!swapAsk.busy) setSwapAsk(null); }}
+      />
+    );
+  }
+
+  // Bulk accept (16 Nov 2026): anyone who holds a role that does not combine,
+  // or whose check refuses, is left out and accepted one by one instead.
+  const bulkCheckRef = useRef(false);
+  async function bulkAccept(apps: Application[]): Promise<void> {
+    if (!session || apps.length === 0 || bulkCheckRef.current) return;
+    bulkCheckRef.current = true;
+    try {
+      const supabase = getAuthedClient(session.access_token);
+      const held = new Set<string>();
+      for (let i = 0; i < apps.length; i += BULK_CHUNK_SIZE) {
+        const part = apps.slice(i, i + BULK_CHUNK_SIZE);
+        await Promise.all(part.map(async a => {
+          try {
+            const check = await checkRoleSwap(supabase, a.id);
+            if (askFor(check)) held.add(a.id);
+          } catch {
+            // No answer: left in. The database still refuses a conflicting accept.
+          }
+        }));
+      }
+      const clear = apps.filter(a => !held.has(a.id));
+      if (held.size > 0) {
+        setActionError(`${held.size} not accepted because they hold another role here. Accept them one by one.`);
+      }
+      if (clear.length === 0) return;
+      await runBulk(clear, { title: `Accept ${clear.length} application${clear.length === 1 ? '' : 's'}?`, body: 'Each one is accepted on its own. Acceptance emails and delegation spot cover run per person.', confirmLabel: 'Accept all' }, a => handleAccept(a.id, { bulk: true }));
+    } finally {
+      bulkCheckRef.current = false;
+    }
+  }
+
+  // Returns the settled promise so runBulk can chunk instead of fanning out.
+  function handleAccept(appId: string, opts?: { bulk?: boolean }): Promise<void> {
+    if (!session || !conference) return Promise.resolve();
+    if (busyIds.has(appId)) { noteBusyClick(); return Promise.resolve(); }
+    const prevRow = applications.find(a => a.id === appId);
+    if (!prevRow) return Promise.resolve();
+
+    setActionError('');
+    markBusy(appId, true);
+    // Optimistic: the card flips to ACCEPTED immediately.
+    applyRow(appId, { status: 'accepted' });
+
+    const supabase = getAuthedClient(session.access_token);
+    // The PRIMARY write, and only that. The row unlocks the moment this
+    // commits — emails and auto-cover are consequences of the accept, not part
+    // of it, and holding the button disabled through a couple of round trips of
+    // email queueing is what made rapid decisions feel broken.
+    const primary = (async () => {
+      const { error } = await supabase.from('applications').update({ status: 'accepted', decided_by: session.user.id, decided_at: new Date().toISOString() }).eq('id', appId);
+      if (error) throw error;
+    })();
+
+    primary.catch(() => {}).then(() => markBusy(appId, false));
+
+    return primary
+      .then(async () => {
+        // Secondary effects, a failure here must NOT roll back the accept.
+        // The same steps the team accept and the role swap run (teamDecisions.ts).
+        const followUpFailed = await acceptFollowUps(supabase, {
+          conferenceId: conference.id, appId, role: prevRow.role,
+          societyId: prevRow.society_id ?? null, pushDraftNotice,
+        });
+        if (followUpFailed) setActionError('Accepted, but a follow-up step (email / auto-cover) failed. Refresh to verify.');
+
+        // Auto-cover may have promoted OTHER members to paid, reconcile.
+        scheduleReconcile();
+        // Several roles per person (9 Nov 2026): the database may have deleted
+        // or withdrawn this person's other applications under review.
+        void loadApplications({ silent: true });
+      })
+      .catch((err: unknown) => {
+        restoreRow(prevRow);
+        // The database refuses a role this person cannot combine with one they hold.
+        const hint = (err as { hint?: unknown } | null)?.hint;
+        if (hint === 'holds_role') {
+          // A race: they took a role since the check. Single accept: the same
+          // in-place swap. Bulk: the server's sentence, accepted one by one.
+          if (opts?.bulk) notifyErr(friendlyError(err, 'Could not accept the application. The change was reverted. Please try again.'));
+          else void openRoleSwap(appId, true);
+          return;
+        }
+        setActionError('Could not accept the application. The change was reverted. Please try again.');
+      });
+  }
+
+  // Returns the settled promise so runBulk can chunk instead of fanning out.
+  function handleReject(appId: string): Promise<void> {
+    if (!session || !conference) return Promise.resolve();
+    if (busyIds.has(appId)) { noteBusyClick(); return Promise.resolve(); }
+    const prevRow = applications.find(a => a.id === appId);
+    if (!prevRow) return Promise.resolve();
+    // The row patch, the primary write and the follow-ups (rejection email,
+    // credit refund) are shared with Settings > Team (teamDecisions.ts).
+    const updates = rejectUpdates(prevRow, rejectNote);
+
+    setActionError('');
+    markBusy(appId, true);
+    // Optimistic: badge flips to REJECTED, reject UI closes instantly.
+    applyRow(appId, updates as Partial<Application>);
+    setRejectingId(null);
+    setRejectNote('');
+
+    const supabase = getAuthedClient(session.access_token);
+    // The PRIMARY write, and only that. decided_by is DB-only (never part of
+    // the optimistic row patch).
+    const primary = writeReject(supabase, appId, updates, session.user.id);
+
+    // The row is live again as soon as the status lands; the email and the
+    // refund run afterwards.
+    primary.catch(() => {}).then(() => markBusy(appId, false));
+
+    return primary
+      .then(async () => {
+        // Team Applications: writeReject throws only on an error and a refused
+        // update returns none, so read the row back before calling it done
+        // (moved from team/TeamApplications.tsx).
+        if (scope === 'team') {
+          const { data: check, error: checkError } = await supabase.from('applications').select('status').eq('id', appId).maybeSingle();
+          if (checkError) throw checkError;
+          if (!check || (check as { status: string }).status !== 'rejected') {
+            throw new UserFacingError('Could not reject the application. Please try again.');
+          }
+        }
+        const problem = await rejectFollowUps(supabase, conference.id, appId, pushDraftNotice);
+        if (problem) setActionError(problem);
+        scheduleReconcile();
+      })
+      .catch(() => {
+        restoreRow(prevRow);
+        setActionError('Could not reject the application. The change was reverted. Please try again.');
+      });
+  }
+
+  // Single reject control, used everywhere a REJECT action appears (the
+  // compact card's quick actions AND the review modal's action bar) so
+  // there is exactly one reject UI and one behavior: idle REJECT button →
+  // expands in place into a feedback textarea + CONFIRM/CANCEL. CONFIRM
+  // calls handleReject directly — no second native confirm dialog on top.
+  // `locked` (the review modal's not-attending guard) takes priority over
+  // busy — a not-attending row's REJECT is hard-disabled regardless of any
+  // in-flight write. The row-card caller never passes it (that caller wraps
+  // ACCEPT+REJECT together in its own outer lock instead), so this stays a
+  // no-op there.
+  // `variant` only changes presentation: 'compact' is the original small chip,
+  // 'big' is the full-width pre-decision button (#5) and its narrow-column
+  // expanded form. Both run the exact same setRejectingId → handleReject flow.
+  function renderRejectControls(app: Application, locked = false, variant: 'compact' | 'big' = 'compact') {
+    const isRejecting = rejectingId === app.id;
+    const roleConfig = roleConfigs.find(rc => rc.role === app.role);
+    const rowBusy = busyIds.has(app.id);
+    const disabledNow = rowBusy || locked;
+    const busyStyle: React.CSSProperties = locked
+      ? { opacity: 0.45, pointerEvents: 'none' }
+      : rowBusy ? { opacity: 0.5, pointerEvents: 'none' } : {};
+    const pool = poolForRole(app.role);
+    const releasesSpot = app.payment_status === 'paid' && !app.self_paid && !!app.society_id && !!pool;
+    const big = variant === 'big';
+
+    if (!isRejecting) {
+      return big ? (
+        <button
+          onClick={() => setRejectingId(app.id)}
+          disabled={disabledNow}
+          className="inline-flex items-center justify-center gap-2 w-full focus:outline-none"
+          style={{
+            // 10px side padding, not 18: in the row layout this button is one
+            // fifth-pair of a 295px pane on a 375px phone (~112px), and 18px
+            // would push "REJECT" past its own edge. Full-width in the stacked
+            // layout, where the label is centred and the padding is invisible.
+            minHeight: 44, padding: '13px 10px', borderRadius: 14,
+            fontFamily: OUTFIT, fontSize: 13, fontWeight: 900,
+            color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.09)', border: '1.5px solid rgba(139,32,32,0.3)',
+            cursor: 'pointer', transition: `background-color 160ms ${EASE_LOCAL}`, ...busyStyle,
+          }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.16)'; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.09)'; }}
+        >
+          <X size={16} strokeWidth={2.8} />
+          Reject
+        </button>
+      ) : (
+        <button
+          onClick={() => setRejectingId(app.id)}
+          disabled={disabledNow}
+          className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
+          style={{ backgroundColor: 'rgba(139,32,32,0.08)', color: '#8B2020', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "var(--font-brand), sans-serif", ...busyStyle }}
+        >
+          <X size={13} />
+          Reject
+        </button>
+      );
+    }
+
+    const noteField = (
+      <textarea
+        value={rejectNote}
+        onChange={e => setRejectNote(e.target.value)}
+        disabled={disabledNow}
+        rows={2}
+        placeholder={roleConfig?.allow_resubmission ? 'What should they fix before resubmitting?' : 'Optional note to delegate...'}
+        className={`${big ? 'w-full' : 'flex-1'} rounded-lg px-3 py-2 text-xs outline-none resize-none`}
+        style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: '#FAF8F3', fontFamily: "var(--font-brand), sans-serif", ...busyStyle }}
+      />
+    );
+    const confirmBtn = (
+      <button
+        onClick={() => handleReject(app.id)}
+        disabled={disabledNow}
+        className={`inline-flex items-center justify-center gap-1.5 rounded-lg py-1.5 px-3 text-xs font-bold focus:outline-none${big ? ' flex-1' : ''}`}
+        style={{ backgroundColor: 'rgba(139,32,32,0.1)', color: '#8B2020', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "var(--font-brand), sans-serif", ...busyStyle }}
+      >
+        <Check size={13} />
+        Confirm
+      </button>
+    );
+    const cancelBtn = (
+      <button
+        onClick={() => { setRejectingId(null); setRejectNote(''); }}
+        className={`gv-lift rounded-lg py-1.5 px-3 text-xs font-bold focus:outline-none${big ? ' flex-1' : ''}`}
+        style={{ border: '1px solid #DDD4C0', color: '#9A8A78', backgroundColor: 'transparent', fontFamily: "var(--font-brand), sans-serif" }}
+      >
+        Cancel
+      </button>
+    );
+
+    return (
+      // The big variant lives inside a narrow fixed-width rail, so it stacks
+      // (and carries no minWidth that would overflow and get clipped).
+      <div className={`flex flex-col gap-2${big ? ' w-full' : ' flex-1'}`} style={{ minWidth: big ? 0 : 260 }}>
+        {releasesSpot && (
+          <p className="text-[11px]" style={{ color: '#B8844A', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.5 }}>
+            Their payment used a delegation-purchased spot. Rejecting will release that spot back to the delegation as open.
+          </p>
+        )}
+        {big ? (
+          <>
+            {noteField}
+            <div className="flex items-center gap-2">
+              {confirmBtn}
+              {cancelBtn}
+            </div>
+          </>
+        ) : (
+          <div className="flex items-start gap-2">
+            {noteField}
+            {confirmBtn}
+            {cancelBtn}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  /** Large ACCEPT + REJECT pair shown while an application is still undecided
+   *  (#5). Wired to the EXISTING handleAccept / reject flow (which set
+   *  decided_by / decided_at) — no new DB logic. Once decided, callers fall
+   *  back to their compact controls.
+   *
+   *  Two layouts, same controls and same guards:
+   *    · 'stack' — the original full-width column. Used by the review dialog's
+   *      footer, which is a narrow rail.
+   *    · 'row'   — the row card's MIDDLE pane. ACCEPT and REJECT are the only
+   *      two decisions available before acceptance, so they take the pane the
+   *      preferences would otherwise occupy (2fr each), with a much smaller
+   *      grey REVIEW at 1fr — one fifth of the width, the same full height —
+   *      opening the SAME review drawer (setReviewId), not a second one.
+   *  While the reject flow is expanded, the pane belongs entirely to it in
+   *  both layouts: ACCEPT (and REVIEW) step aside so the note field and its
+   *  CONFIRM/CANCEL are unambiguous. */
+  function renderBigDecisionControls(app: Application, locked: boolean, layout: 'stack' | 'row' = 'stack') {
+    const rowBusy = busyIds.has(app.id);
+    const blocked = isAcceptBlockedByFee(app);
+    const isRejecting = rejectingId === app.id;
+    const busyStyle: React.CSSProperties = rowBusy ? { opacity: 0.5, pointerEvents: 'none' } : {};
+    const lockStyle: React.CSSProperties = locked ? { opacity: 0.45, pointerEvents: 'none' } : {};
+    const row = layout === 'row';
+
+    const acceptBtn = (
+      <button
+        onClick={() => { if (scope === 'team') openTeamAccept(app); else void openRoleSwap(app.id); }}
+        disabled={rowBusy || blocked || locked || (scope === 'team' && !teamDecisions.canAccept)}
+        title={blocked ? ACCEPT_BLOCKED_MESSAGE : undefined}
+        className="inline-flex items-center justify-center gap-2 w-full focus:outline-none"
+        style={{
+          // See the REJECT twin below for why this is 10px and not 18px.
+          // minHeight 44 is the touch floor for a primary action; in the row
+          // layout it stretches to MID_BLOCK_H, in the stacked layout 13px
+          // padding around a 16px glyph would otherwise land at 42.
+          minHeight: 44, padding: '13px 10px', borderRadius: 14,
+          fontFamily: OUTFIT, fontSize: 13, fontWeight: 900,
+          color: '#FFFFFF', background: `linear-gradient(135deg, ${NEU_GRADIENTS.green[0]}, ${NEU_GRADIENTS.green[1]})`,
+          boxShadow: `0 4px 12px -2px color-mix(in srgb, ${NEU_GRADIENTS.green[0]} 40%, transparent), inset 0 1px 0 rgba(255,255,255,0.22)`, border: 'none',
+          cursor: blocked ? 'not-allowed' : 'pointer',
+          opacity: blocked ? 0.5 : 1,
+          ...busyStyle,
+        }}
+      >
+        <Check size={16} strokeWidth={3} />
+        Accept
+      </button>
+    );
+
+    const swapPanel = renderRoleSwap(app);
+    if (swapPanel) {
+      return (
+        <div className="flex w-full" style={{ minWidth: 0, minHeight: row ? MID_BLOCK_H : undefined, ...lockStyle }}>
+          {swapPanel}
+        </div>
+      );
+    }
+
+    if (!row) {
+      return (
+        <div className="flex flex-col gap-2.5 w-full" style={{ minWidth: 0, ...lockStyle }}>
+          {!isRejecting && acceptBtn}
+          {renderRejectControls(app, locked, 'big')}
+        </div>
+      );
+    }
+
+    if (isRejecting) {
+      return (
+        <div className="flex w-full" style={{ minWidth: 0, minHeight: MID_BLOCK_H, ...lockStyle }}>
+          {renderRejectControls(app, locked, 'big')}
+        </div>
+      );
+    }
+
+    return (
+      // items-stretch (flex default) is what makes all three the SAME height:
+      // each child is a flex box of its own, and each button inside is w-full
+      // and stretches to the pane's minHeight. 2fr / 2fr / 1fr = the REVIEW
+      // button at one fifth of the row.
+      <div className="flex gap-2 w-full" style={{ minWidth: 0, minHeight: MID_BLOCK_H, ...lockStyle }}>
+        <div className="flex" style={{ flex: 2, minWidth: 0 }}>{acceptBtn}</div>
+        <div className="flex" style={{ flex: 2, minWidth: 0 }}>{renderRejectControls(app, locked, 'big')}</div>
+        <div className="flex" style={{ flex: 1, minWidth: 0 }}>
+          <button
+            onClick={() => setReviewId(app.id)}
+            title="Open the full application"
+            aria-label="Review this application"
+            className="inline-flex flex-col items-center justify-center gap-1 w-full focus:outline-none"
+            style={{
+              padding: '13px 8px', borderRadius: 14,
+              // Grey, deliberately quiet against the two decisions — but
+              // NEU.inkSoft (6.8:1 on NEU.surface), never NEU.muted, which is
+              // decoration-only at 3.15:1.
+              fontFamily: OUTFIT, fontSize: 13, fontWeight: 800,
+              color: NEU.inkSoft, backgroundColor: NEU.surface, boxShadow: NEU.outSm,
+              border: 'none', cursor: 'pointer', transition: `box-shadow 200ms ${EASE_LOCAL}`,
+              ...busyStyle,
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSmHover; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSm; }}
+          >
+            <Eye size={16} strokeWidth={2.5} />
+            {/* Below 640px one fifth of a 375px card is ~65px — too narrow for
+                the word. The glyph carries it there; title/aria-label always do. */}
+            <span className="hidden sm:inline">Review</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  function handleReinstate(appId: string) {
+    if (!session) return;
+    if (busyIds.has(appId)) { noteBusyClick(); return; }
+    const prevRow = applications.find(a => a.id === appId);
+    if (!prevRow) return;
+
+    setActionError('');
+    markBusy(appId, true);
+    applyRow(appId, { status: 'submitted', organizer_note: null });
+
+    (async () => {
+      const supabase = getAuthedClient(session.access_token);
+      const { error } = await supabase.from('applications').update({ status: 'submitted', organizer_note: null, decided_by: session.user.id, decided_at: new Date().toISOString() }).eq('id', appId);
+      if (error) throw error;
+    })()
+      .then(scheduleReconcile)
+      .catch(() => {
+        restoreRow(prevRow);
+        setActionError('Could not reinstate the application. The change was reverted. Please try again.');
+      })
+      .finally(() => markBusy(appId, false));
+  }
+
+  async function openReinstateConfirm(app: Application) {
+    const { confirmed } = await confirm({
+      title: 'Reinstate This Application?',
+      body: 'This returns the application to Submitted so you can review it again. Any rejection note will be cleared.',
+      confirmLabel: 'Reinstate',
+    });
+    if (!confirmed) return;
+    handleReinstate(app.id);
+  }
+
+  // ── Withdraw from conference (accepted/assigned, unpaid or waived only) ────
+  // Paid applications render this action disabled: refunds come with
+  // finances, so payment must be handled first (Danger ConfirmModal spells
+  // this out; the button itself is also disabled, see the review modal JSX).
+
+  async function openWithdrawConfirm(app: Application) {
+    const pool = poolForRole(app.role);
+    const hasAllocation = !!app.assigned_committee_id;
+    const inDelegation = !!app.society_id;
+    const selfFundedPaidSpot = app.payment_status === 'paid' && !!app.self_paid;
+    const parts: string[] = [];
+    if (hasAllocation) parts.push('Their committee allocation will be removed.');
+    if (inDelegation && pool) {
+      parts.push(
+        selfFundedPaidSpot
+          ? "Their paid spot was self-funded, so it leaves with them: the delegation's purchased-spots count goes down by one."
+          : app.payment_status === 'paid'
+          ? "Their spot was covered by the delegation's purchased spots, so it stays behind: it will show as open."
+          : 'They will leave their delegation.'
+      );
+    }
+    if (app.role === 'chair') parts.push('If they chair a committee, they will be removed from its dais.');
+    parts.push('This cannot be undone from here. Reinstating only restores their application to Accepted, nothing else.');
+
+    const { confirmed } = await confirm({
+      title: 'Remove from the Conference?',
+      body: parts.join(' '),
+      confirmLabel: 'Withdraw',
+      danger: true,
+    });
+    if (!confirmed) return;
+    handleWithdraw(app.id);
+  }
+
+  function handleWithdraw(appId: string): Promise<void> {
+    if (!session || !conference) return Promise.resolve();
+    if (busyIds.has(appId)) { noteBusyClick(); return Promise.resolve(); }
+    const prevRow = applications.find(a => a.id === appId);
+    if (!prevRow) return Promise.resolve();
+
+    setActionError('');
+    markBusy(appId, true);
+    // Optimistic: the card flips to WITHDRAWN immediately.
+    applyRow(appId, {
+      status: 'withdrawn',
+      assigned_committee_id: null,
+      assigned_country_code: null,
+      assigned_country_name: null,
+      society_id: null,
+    });
+
+    const supabase = getAuthedClient(session.access_token);
+    // PRIMARY: release the pool spot, then flip the status. Everything after
+    // it (allocation delete, dais removal, credit refund) is cleanup and runs
+    // with the row already unlocked.
+    const primary = (async () => {
+      const { dropToUnpaid, error: releaseError } = await releasePoolSpot(supabase, prevRow);
+      if (releaseError) throw new Error(releaseError);
+
+      const updates: Record<string, unknown> = {
+        status: 'withdrawn',
+        assigned_committee_id: null,
+        assigned_country_code: null,
+        assigned_country_name: null,
+        society_id: null,
+        decided_by: session.user.id, decided_at: new Date().toISOString(),
+      };
+      if (dropToUnpaid) updates.payment_status = 'unpaid';
+
+      const { error } = await supabase.from('applications').update(updates).eq('id', appId);
+      if (error) throw error;
+    })();
+
+    primary.catch(() => {}).then(() => markBusy(appId, false));
+
+    return primary
+      .then(async () => {
+        if (prevRow.assigned_committee_id) {
+          await supabase.from('conference_allocations').delete().eq('application_id', appId);
+        }
+
+        // If they chair any committee, drop them from its dais: mirrors
+        // committees/page.tsx & assignment/page.tsx's handleRemoveChair.
+        if (prevRow.role === 'chair' && prevRow.user_id) {
+          const { data: chaired } = await supabase
+            .from('conference_committees')
+            .select('id, chair_user_ids')
+            .eq('conference_id', conference.id)
+            .contains('chair_user_ids', [prevRow.user_id]);
+          for (const c of (chaired ?? []) as { id: string; chair_user_ids: string[] | null }[]) {
+            const nextIds = (c.chair_user_ids ?? []).filter(id => id !== prevRow.user_id);
+            await supabase.from('conference_committees').update({ chair_user_ids: nextIds }).eq('id', c.id);
+          }
+        }
+
+        // Refund whatever credit the applicant spent, if any — same benign
+        // {refunded:false} handling as reject, and the same reason the RPC's
+        // own `error` has to be read: a PostgREST failure resolves, so the
+        // catch below never sees it.
+        try {
+          const freshSupabase = await getFreshAuthedClient();
+          if (!freshSupabase) {
+            setActionError('Withdrawn, but the credit refund could not be confirmed. Refresh to verify.');
+          } else {
+            const { error: refundError } = await freshSupabase.rpc('refund_credit_for_application', { p_application_id: appId });
+            if (refundError) {
+              console.error('[applications]', refundError);
+              setActionError('Withdrawn, but the credit refund could not be confirmed. Refresh to verify.');
+            }
+          }
+        } catch {
+          setActionError('Withdrawn, but the credit refund could not be confirmed. Refresh to verify.');
+        }
+        scheduleReconcile();
+      })
+      .catch(() => {
+        restoreRow(prevRow);
+        setActionError('Could not withdraw the application. The change was reverted. Please try again.');
+      });
+  }
+
+  function handleReinstateFromWithdrawn(appId: string) {
+    if (!session) return;
+    if (busyIds.has(appId)) { noteBusyClick(); return; }
+    const prevRow = applications.find(a => a.id === appId);
+    if (!prevRow) return;
+
+    setActionError('');
+    markBusy(appId, true);
+    // Only the status is restored: nothing else (allocation, delegation,
+    // dais seat) comes back automatically.
+    applyRow(appId, { status: 'accepted' });
+
+    (async () => {
+      const supabase = getAuthedClient(session.access_token);
+      const { error } = await supabase.from('applications').update({ status: 'accepted', decided_by: session.user.id, decided_at: new Date().toISOString() }).eq('id', appId);
+      if (error) throw error;
+    })()
+      .then(scheduleReconcile)
+      .catch((err: unknown) => {
+        restoreRow(prevRow);
+        // One accepted role per person (16 Nov 2026): they hold another role
+        // now. The server's sentence says which; nothing else is offered here.
+        if ((err as { hint?: unknown } | null)?.hint === 'holds_role') {
+          setActionError(friendlyError(err, 'Could not reinstate the application. The change was reverted. Please try again.'));
+          return;
+        }
+        setActionError('Could not reinstate the application. The change was reverted. Please try again.');
+      })
+      .finally(() => markBusy(appId, false));
+  }
+
+  // ── Attendance ───────────────────────────────────────────────────────────
+  // Reuses the exact canonical write from delegationShared.tsx (coverage
+  // release, the not_attending/attendance_restored emails, spot handling) so
+  // a flip from here is byte-identical to one from the Delegations view —
+  // not reimplemented here.
+  async function openNotAttendingConfirm(app: Application) {
+    const name = app.profiles?.display_name ?? app.invited_name ?? 'this applicant';
+    const hasAllocation = !!app.assigned_committee_id;
+    const { confirmed } = await confirm({
+      title: `Mark ${name} as Not Attending?`,
+      body: hasAllocation
+        ? 'Their committee assignment will be removed. Their delegation spot, if any, stays with the delegation.'
+        : 'Their delegation spot, if any, stays with the delegation.',
+      confirmLabel: 'Mark not attending',
+      danger: true,
+    });
+    if (!confirmed) return;
+    handleNotAttending(app);
+  }
+
+  function handleNotAttending(app: Application) {
+    if (!session || !conference) return;
+    if (busyIds.has(app.id)) { noteBusyClick(); return; }
+    const prevRow = applications.find(a => a.id === app.id) ?? app;
+    const name = prevRow.profiles?.display_name ?? prevRow.invited_name ?? 'this applicant';
+
+    setActionError('');
+    markBusy(app.id, true);
+    // Optimistic: exactly what markNotAttending writes for this row.
+    applyRow(app.id, {
+      attending: false,
+      assigned_committee_id: null,
+      assigned_country_code: null,
+      assigned_country_name: null,
+      assigned_committee: null,
+      status: prevRow.status === 'assigned' ? 'accepted' : prevRow.status,
+    });
+
+    (async () => {
+      const supabase = getAuthedClient(session.access_token);
+      const result = await markNotAttending(supabase, conference.id, prevRow, session.user.id);
+      if (result.error) throw new Error(result.error);
+      notifyIfNeeded(result.result, pushDraftNotice);
+    })()
+      .then(scheduleReconcile)
+      .catch(() => {
+        restoreRow(prevRow);
+        setActionError(`Could not mark ${name} as not attending. Please try again.`);
+      })
+      .finally(() => markBusy(app.id, false));
+  }
+
+  function handleMarkAttending(app: Application) {
+    if (!session || !conference) return;
+    if (busyIds.has(app.id)) { noteBusyClick(); return; }
+    const prevRow = applications.find(a => a.id === app.id) ?? app;
+
+    setActionError('');
+    markBusy(app.id, true);
+    // Optimistic: exactly what undoNotAttending writes for this row.
+    applyRow(app.id, { attending: true });
+
+    (async () => {
+      const supabase = getAuthedClient(session.access_token);
+      const result = await undoNotAttending(supabase, conference.id, prevRow);
+      if (result.error) throw new Error(result.error);
+      notifyIfNeeded(result.result, pushDraftNotice);
+    })()
+      .then(scheduleReconcile)
+      .catch(() => {
+        restoreRow(prevRow);
+        setActionError('Could not restore attendance. Please try again.');
+      })
+      .finally(() => markBusy(app.id, false));
+  }
+
+  // ── Delete row (imported/unregistered applicants only) ─────────────────────
+  // No account exists for these rows (user_id null, invited_* carries the
+  // data), so a hard delete is safe: nothing else references them. Distinct
+  // from withdraw, which is for real users and preserves their history.
+  async function openDeleteRowConfirm(app: Application) {
+    const { confirmed } = await confirm({
+      title: 'Delete This Application?',
+      body: "This applicant never created a Gavelling account, so nothing else is affected. Their application and any committee allocation are permanently deleted. This can't be undone.",
+      confirmLabel: 'Delete',
+      danger: true,
+    });
+    if (!confirmed) return;
+    handleDeleteRow(app.id);
+  }
+
+  function handleDeleteRow(appId: string) {
+    if (!session) return;
+    if (busyIds.has(appId)) { noteBusyClick(); return; }
+    const prevIndex = applications.findIndex(a => a.id === appId);
+    const prevRow = applications[prevIndex];
+    if (!prevRow) return;
+
+    setActionError('');
+    markBusy(appId, true);
+    // Optimistic: the row disappears immediately. `null` in the ledger is
+    // "deleted locally", so a snapshot taken before the delete cannot put the
+    // row back on screen.
+    recordPatch(appId, null);
+    setApplications(cur => cur.filter(a => a.id !== appId));
+    setReviewId(cur => (cur === appId ? null : cur));
+
+    (async () => {
+      const supabase = getAuthedClient(session.access_token);
+      // `applications` has RLS enabled with INSERT, SELECT and UPDATE policies
+      // ONLY. There is no DELETE policy, so a direct .delete() matched zero rows
+      // and returned NO ERROR: the row vanished optimistically and reappeared on
+      // the next reconcile, every single time. The applicant side already knew
+      // this and goes through withdraw_application instead.
+      //
+      // delete_application is a SECURITY DEFINER RPC that checks the caller is
+      // an organiser of the conference, refuses an application with a linked
+      // account (those belong in 'rejected' / 'withdrawn', not deleted), and
+      // removes the allocation in the SAME transaction as the row.
+      const { data, error } = await supabase.rpc('delete_application', { p_application_id: appId });
+      if (error) throw error;
+      const res = (data ?? {}) as { ok?: boolean; error?: string };
+      if (!res.ok) throw new UserFacingError(res.error || 'the delete was rejected');
+    })()
+      .then(scheduleReconcile)
+      .catch((e: unknown) => {
+        const reason = friendlyError(e, 'the delete was rejected');
+        // The row is back, so the ledger must stop claiming it is deleted.
+        pendingPatches.current.delete(appId);
+        setApplications(cur => {
+          if (cur.some(a => a.id === appId)) return cur;
+          const next = [...cur];
+          next.splice(Math.min(prevIndex, next.length), 0, prevRow);
+          return next;
+        });
+        setActionError(`Could not delete the application: ${reason}`);
+      })
+      .finally(() => markBusy(appId, false));
+  }
+
+  // Re-send the pay-now email as a reminder (#8). payment_available IS the
+  // "you can pay now" email, so re-queuing it reads to the applicant as a
+  // reminder. Optimistic feedback via the green flash; no row state changes.
+  function handleRemindPay(app: Application) {
+    if (!session || !conference) return;
+    if (busyIds.has(app.id)) { noteBusyClick(); return; }
+    const name = app.profiles?.display_name ?? app.invited_name ?? 'the applicant';
+    setActionError('');
+    markBusy(app.id, true);
+    setFlashMsg(`Payment reminder sent to ${name}.`);
+
+    (async () => {
+      const supabase = getAuthedClient(session.access_token);
+      const result = await queueEventEmail(supabase, conference.id, 'payment_available', [app.id]);
+      notifyIfNeeded(result, pushDraftNotice);
+    })()
+      .catch(() => {
+        setFlashMsg('');
+        setActionError('Could not send the payment reminder. Please try again.');
+      })
+      .finally(() => markBusy(app.id, false));
+  }
+
+  // ── Check-in (on-site attendance) ──────────────────────────────────────────
+  // Optimistic like every other row action: flip to 'checked-in' immediately,
+  // write via the shared checkIn helper, exact rollback on error. checked_in_at
+  // is set to a client timestamp for the instant "Checked in …" line; the
+  // helper computes its own server-side value, close enough for display.
+  // Returns the settled promise so runBulk can chunk instead of fanning out.
+  function handleCheckIn(app: Application): Promise<void> {
+    if (!session) return Promise.resolve();
+    if (busyIds.has(app.id)) { noteBusyClick(); return Promise.resolve(); }
+    const prevRow = applications.find(a => a.id === app.id) ?? app;
+
+    setActionError('');
+    markBusy(app.id, true);
+    applyRow(app.id, { status: 'checked-in', checked_in_at: new Date().toISOString() });
+
+    return (async () => {
+      const supabase = getAuthedClient(session.access_token);
+      const { error } = await checkInApplication(supabase, app.id, session.user.id);
+      if (error) throw new Error(error);
+    })()
+      .then(scheduleReconcile)
+      .catch(() => {
+        restoreRow(prevRow);
+        setActionError('Could not check in that attendee. The change was reverted. Please try again.');
+      })
+      .finally(() => markBusy(app.id, false));
+  }
+
+  function handleUndoCheckIn(app: Application) {
+    if (!session) return;
+    if (busyIds.has(app.id)) { noteBusyClick(); return; }
+    const prevRow = applications.find(a => a.id === app.id) ?? app;
+    // Restore whichever state they were in before arriving: assigned when they
+    // hold a committee allocation, otherwise accepted.
+    const revertTo: 'assigned' | 'accepted' = app.assigned_committee_id ? 'assigned' : 'accepted';
+
+    setActionError('');
+    markBusy(app.id, true);
+    applyRow(app.id, { status: revertTo, checked_in_at: null });
+
+    (async () => {
+      const supabase = getAuthedClient(session.access_token);
+      const { error } = await undoCheckIn(supabase, app.id, revertTo, session.user.id);
+      if (error) throw new Error(error);
+    })()
+      .then(scheduleReconcile)
+      .catch(() => {
+        restoreRow(prevRow);
+        setActionError('Could not undo that check-in. The change was reverted. Please try again.');
+      })
+      .finally(() => markBusy(app.id, false));
+  }
+
+  // ── Multi-select + bulk actions ───────────────────────────────────────────
+  function toggleSelected(id: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+  function clearSelection() { setSelectedIds(new Set()); }
+
+  // Bulk actions loop the single-row optimistic handlers, so every row keeps
+  // its own optimistic patch + rollback + busy guard. We confirm once up front
+  // (count spelled out) then run the eligible rows only.
+  //
+  // CHUNKED, not fanned out. `apps.forEach(run)` started every row's write at
+  // once, and because accept and mark-paid each ended in their own full reload,
+  // fifty selected rows meant fifty sync_conference_invoices RPCs and fifty
+  // five-query loads racing each other — the exact conditions under which a
+  // stale snapshot lands on top of a newer decision. Now BULK_CHUNK_SIZE rows
+  // write at a time, each row keeping its own optimistic patch, rollback and
+  // busy guard, and the whole loop ends in ONE coalesced reconcile.
+  async function runBulk(
+    apps: Application[],
+    opts: { title: string; body: string; confirmLabel: string; danger?: boolean },
+    run: (app: Application) => void | Promise<unknown>,
+  ) {
+    if (apps.length === 0) return;
+    const { confirmed } = await confirm(opts);
+    if (!confirmed) return;
+    clearSelection();
+    setBulkRunning({ done: 0, total: apps.length });
+    try {
+      for (let i = 0; i < apps.length; i += BULK_CHUNK_SIZE) {
+        const chunk = apps.slice(i, i + BULK_CHUNK_SIZE);
+        await Promise.all(chunk.map(a => Promise.resolve(run(a)).catch(() => {})));
+        setBulkRunning({ done: Math.min(i + chunk.length, apps.length), total: apps.length });
+      }
+    } finally {
+      setBulkRunning(null);
+      scheduleReconcile();
+    }
+  }
+
+  // ── Bulk: remind to pay ───────────────────────────────────────────────────
+  // The single-row handleRemindPay re-queues 'payment_available', which IS the
+  // "you can pay now" email and so reads as a reminder. Bulk uses the SAME
+  // queueEventEmail path and the same event key — one call with the whole id
+  // list rather than N calls, so it is one template lookup, one outbox insert
+  // and one delivery kick, and the recipientAllowsEvent opt-out gate inside
+  // queueEventEmail still runs per recipient.
+  //
+  // RATE LIMIT. There is NO server-side cooldown for this event — verified: no
+  // RPC (send_draft_reminder's 72h cooldown covers drafts only, nothing else),
+  // no unique constraint, no trigger. handleRemindPay's only guard is its
+  // in-flight busy lock, which is fine for one row and is not fine for fifty.
+  // So this path enforces a 24-hour PER-RECIPIENT cooldown by reading what has
+  // actually been queued: any application that already has a 'payment_available'
+  // outbox row created in the last 24h is dropped from the send and reported as
+  // skipped. Because it reads email_outbox rather than localStorage, the
+  // cooldown holds across devices, browsers and co-organizers. It is still
+  // CLIENT-side — an organizer with the anon key could insert outbox rows
+  // directly — so it is a courtesy limit, not a security control. A real one
+  // belongs in a queue_payment_reminders RPC with the check in SQL.
+  const REMIND_PAY_COOLDOWN_HOURS = 24;
+
+  /** Ids among `ids` that already got a payment reminder inside the cooldown. */
+  async function remindedWithinCooldown(
+    supabase: ReturnType<typeof getAuthedClient>,
+    conferenceId: string,
+    ids: string[],
+  ): Promise<Set<string>> {
+    // Outbox rows carry the template id, not the event key, so the
+    // conference's payment_available template is the handle. No template row
+    // at all means nothing has ever been queued for it — nobody is cooling.
+    const { data: tpl } = await supabase
+      .from('email_templates')
+      .select('id')
+      .eq('conference_id', conferenceId)
+      .eq('event_key', 'payment_available')
+      .maybeSingle();
+    const templateId = (tpl as { id: string } | null)?.id;
+    if (!templateId) return new Set();
+    const since = new Date(Date.now() - REMIND_PAY_COOLDOWN_HOURS * 3_600_000).toISOString();
+    const { data } = await supabase
+      .from('email_outbox')
+      .select('recipient_application_id')
+      .eq('template_id', templateId)
+      .gte('created_at', since)
+      .in('recipient_application_id', ids);
+    return new Set(
+      ((data ?? []) as { recipient_application_id: string | null }[])
+        .map(r => r.recipient_application_id)
+        .filter((id): id is string => !!id),
+    );
+  }
+
+  async function handleBulkRemindPay(apps: Application[]) {
+    if (!session || !conference || apps.length === 0 || bulkEmailBusy) return;
+    setActionError('');
+    setFlashMsg('');
+    setBulkEmailBusy(true);
+    try {
+      const supabase = getAuthedClient(session.access_token);
+      const ids = apps.map(a => a.id);
+      const cooling = await remindedWithinCooldown(supabase, conference.id, ids);
+      const fresh = ids.filter(id => !cooling.has(id));
+      if (fresh.length === 0) {
+        setActionError(`Everyone selected was already reminded in the last ${REMIND_PAY_COOLDOWN_HOURS} hours. Nothing was sent.`);
+        return;
+      }
+      const skipped = ids.length - fresh.length;
+      const { confirmed } = await confirm({
+        title: `Send a Payment Reminder to ${fresh.length}?`,
+        body: skipped > 0
+          ? `${skipped} of the ${ids.length} selected were reminded in the last ${REMIND_PAY_COOLDOWN_HOURS} hours and will be skipped. Anyone who has turned off payment emails is skipped too.`
+          : 'They will each be re-sent the "you can pay now" email. Anyone who has turned off payment emails is skipped.',
+        confirmLabel: `Send ${fresh.length}`,
+      });
+      if (!confirmed) return;
+
+      const result = await queueEventEmail(supabase, conference.id, 'payment_available', fresh);
+      notifyIfNeeded(result, pushDraftNotice);
+      const skipNote = skipped > 0 ? ` ${skipped} skipped (reminded in the last ${REMIND_PAY_COOLDOWN_HOURS}h).` : '';
+      if (result.outcome === 'off') {
+        setActionError(`Payment emails are turned off for this conference, so nothing was sent.${skipNote}`);
+      } else if ((result.queued ?? 0) === 0) {
+        setActionError(`No reminder was queued. Everyone left has turned payment emails off.${skipNote}`);
+      } else {
+        setFlashMsg(`Payment reminder queued for ${result.queued}.${skipNote}`);
+        clearSelection();
+      }
+    } catch {
+      setActionError('Could not send the payment reminders. Please try again.');
+    } finally {
+      setBulkEmailBusy(false);
+    }
+  }
+
+  // ── Bulk: custom one-off email ────────────────────────────────────────────
+  // Opens on a SNAPSHOT of the ids, not on live `selectedApps`: a background
+  // refetch (or a filter change behind the modal) must never quietly re-point
+  // a composed message at a different set of people than the one the count
+  // in front of the organiser names.
+  function openComposeEmail(apps: Application[]) {
+    if (apps.length === 0) return;
+    setComposeIds(apps.map(a => a.id));
+    setComposeSubject('');
+    setComposeBody('');
+    setComposeError('');
+    setComposeEmailsBlocked(false);
+    setComposeOpen(true);
+  }
+
+  async function handleSendCustomEmail() {
+    if (!session || !conference || bulkEmailBusy) return;
+    const subject = composeSubject.trim();
+    const body = composeBody.trim();
+    if (!subject) { setComposeError('Give the email a subject.'); return; }
+    if (!body) { setComposeError('Write a message.'); return; }
+    if (composeIds.length === 0) { setComposeError('No recipients.'); return; }
+
+    // Blank-line-separated paragraphs become the composer's own paragraph
+    // blocks, so this renders through exactly the same branded shell
+    // (renderEmailHtml) as anything sent from Communications.
+    const blocks: EmailBlock[] = body
+      .split(/\n{2,}/)
+      .map(s => s.trim())
+      .filter(Boolean)
+      .map(content => ({ type: 'paragraph', content }));
+
+    setComposeError('');
+    setComposeEmailsBlocked(false);
+    setBulkEmailBusy(true);
+    try {
+      const supabase = getAuthedClient(session.access_token);
+      // Does this send fit the bulk allowance? Only while the cap is enforced.
+      const allowance = await readEmailAllowance(supabase, conference.id);
+      if (allowance && emailsShort(allowance, composeIds.length)) {
+        setComposeError(emailsShortSentence(composeIds.length, allowance));
+        setComposeEmailsBlocked(true);
+        return;
+      }
+      const result = await queueAdHocEmail(supabase, {
+        conferenceId: conference.id,
+        sentBy: session.user.id,
+        subject,
+        blocks,
+        applicationIds: composeIds,
+        recipientFilter: { source: 'applications', selection: 'manual', applicationIds: composeIds },
+      });
+      if (result.error) { setComposeError(result.error); setComposeEmailsBlocked(isEmailAllowanceMessage(result.error)); return; }
+      const missingNote = result.skippedUnresolved > 0
+        ? ` ${result.skippedUnresolved} not sent, missing ${result.unresolvedFields.map(unresolvedFieldLabel).join(', ')}.`
+        : '';
+      const optNote = (result.optedOut > 0
+        ? ` ${result.optedOut} skipped (opted out of these emails).`
+        : '') + missingNote;
+      if (result.queued === 0) {
+        setComposeError(result.skippedUnresolved > 0
+          ? `Nothing was queued.${missingNote} Assign them first, or take those placeholders out of the message.`
+          : `Nothing was queued. Everyone selected has opted out of these emails.`);
+        return;
+      }
+      setComposeOpen(false);
+      setActionError('');
+      setFlashMsg(`Queued ${result.queued} email${result.queued === 1 ? '' : 's'}, sending now.${optNote}`);
+      clearSelection();
+    } catch {
+      setComposeError('Could not queue that email. Please try again.');
+    } finally {
+      setBulkEmailBusy(false);
+    }
+  }
+
+  // The export is an Excel workbook (exportWorkbook.ts): an Overview sheet and a
+  // Full information sheet with every answer in its own column. Built from what the page already loaded; SheetJS
+  // loads inside the click.
+  async function handleExportExcel() {
+    if (exportBusy || loading) return;
+    // Never hand over a file built from a list that did not load in full: an export
+    // clicked before the list arrived came out with headers only (CISEMUN, 16 Nov 2026).
+    if (loadIncomplete) {
+      setActionError('Some applications could not be loaded, so the file would be missing people. Reload the page and try again.');
+      return;
+    }
+    if (applications.length === 0) {
+      setActionError('There are no applications to export yet.');
+      return;
+    }
+    setExportBusy(true);
+    try {
+      const { downloadApplicationsWorkbook } = await import('./exportWorkbook');
+      // Team Applications: three more columns (Job Board picks, Seated committee,
+      // Public title). Public titles are the team's conference_organizers rows,
+      // read here inside the click.
+      let team: import('./exportWorkbook').ExportTeamColumns | undefined;
+      if (scope === 'team' && conference) {
+        const titles = new Map<string, string>();
+        const sb = await getFreshAuthedClient();
+        if (sb) {
+          const { data, error } = await sb.from('conference_organizers').select('user_id, public_title').eq('conference_id', conference.id);
+          if (error) throw error;
+          for (const r of (data ?? []) as { user_id: string | null; public_title: string | null }[]) {
+            if (r.user_id && r.public_title?.trim()) titles.set(r.user_id, r.public_title.trim());
+          }
+        }
+        const asApp = (row: unknown) => row as Application;
+        team = {
+          jobPicks: (row) => {
+            const id = asApp(row).id;
+            return [...(jobExtras.picksByApp.get(id) ?? [])]
+              .sort((x, y) => (x.rank ?? 99) - (y.rank ?? 99))
+              .map(p => p.title?.trim()).filter(Boolean).join(', ');
+          },
+          seatedCommittee: (row) => {
+            const a = asApp(row);
+            return a.role === 'chair' && a.assigned_committee_id ? (a.assigned_committee?.name ?? '') : '';
+          },
+          publicTitle: (row) => {
+            const a = asApp(row);
+            return a.role !== 'chair' && a.user_id ? (titles.get(a.user_id) ?? '') : '';
+          },
+        };
+      }
+      await downloadApplicationsWorkbook({
+        team,
+        acronym: conference?.acronym,
+        applications,
+        roleConfigs,
+        aidQuestions: conference?.aid_questions,
+        labels: {
+          role: roleLabel,
+          status: (st) => STATUS_PILL[st]?.label ?? st,
+          payment: (row) => moneyLabel(moneyState(row.id ? money.get(row.id) : undefined, row.id ? livePays.get(row.id) : null)),
+          date: formatDate,
+          age: (dob) => ageAt(dob) ?? null,
+        },
+      });
+    } catch (e) {
+      setActionError(friendlyError(e, 'Could not build the Excel file. Please try again.'));
+    } finally {
+      setExportBusy(false);
+    }
+  }
+
+  if (!conference) return null;
+
+  // The default-view size (withdrawn/removed and not-attending applicants
+  // excluded), used both to gate the "filters active" reminder and as its
+  // denominator — so the baked-in exclusions are never mistaken for a
+  // user-applied filter.
+  const defaultScopeCount = applications.filter(a => a.status !== 'withdrawn' && a.attending).length;
+
+  // Committee options for the per-committee filter, derived from the
+  // applications ALREADY fetched (each row carries assigned_committee_id plus
+  // the joined conference_committees name/abbreviation) — no extra round trip.
+  // A committee with no allocations yet simply has nothing to filter to.
+  const committeeOptions: CommitteeOption[] = (() => {
+    const seen = new Map<string, { name: string; abbreviation: string | null; logo_url: string | null }>();
+    for (const a of applications) {
+      if (a.assigned_committee_id && a.assigned_committee && !seen.has(a.assigned_committee_id)) {
+        seen.set(a.assigned_committee_id, { name: a.assigned_committee.name, abbreviation: a.assigned_committee.abbreviation, logo_url: a.assigned_committee.logo_url });
+      }
+    }
+    return Array.from(seen.entries())
+      .map(([id, c]) => {
+        // Same naming rule as the row cards: long name → ACRONYM with the full
+        // name small beneath it.
+        const disp = committeeDisplay(c);
+        // Emblem chain: the committee's own logo, its preset emblem, the
+        // conference logo, then the UN emblem.
+        const logo = c.logo_url || matchPresetEmblem(c.name, c.abbreviation) || conference?.logo_url || '/logos/un.svg';
+        return { id, primary: disp.primary, secondary: disp.secondary, logo, sort: c.name };
+      })
+      .sort((a, b) => a.sort.localeCompare(b.sort))
+      .map(({ id, primary, secondary, logo }) => ({ id, primary, secondary, logo }));
+  })();
+
+  // Empty selection = no constraint on that dimension (fresh page shows all)
+  // — EXCEPT withdrawn/removed applicants, who stay out of the default view
+  // even with no status filter active; they're only reachable by explicitly
+  // adding the Withdrawn status filter. Not-attending applicants follow the
+  // exact same rule via its own independent chip, since `attending` is a
+  // separate dimension from `status` (an accepted/assigned/checked-in
+  // applicant can still be not attending).
+  // The allocated view = the list narrowed to the ALLOCATED_GROUP statuses,
+  // whether that came from the "Allocated" stat tile or the ?status=assigned
+  // deep link (both resolve to the same array). Only this combination hides
+  // chairs / faculty advisors — see NON_DELEGATE_ROLES.
+  const isAllocatedView = sameSet(filters.status, ALLOCATED_GROUP);
+
+  const filtered = applications.filter(a => {
+    if (filters.status.size > 0) {
+      if (!filters.status.has(a.status)) return false;
+    } else if (a.status === 'withdrawn') {
+      return false;
+    }
+    // Allocated view lists DELEGATES only. An explicit Participants selection
+    // still wins, so an organiser who ticks "Chairs" gets them back here.
+    if (scope !== 'team' && isAllocatedView && NON_DELEGATE_ROLES.has(a.role) && !filters.role.has(a.role)) return false;
+    // Team Applications: the Seated view is the chairs with a committee.
+    if (scope === 'team' && isAllocatedView && !(a.role === 'chair' && a.assigned_committee_id)) return false;
+    if (filters.committee && a.assigned_committee_id !== filters.committee) return false;
+    if (filters.notAttending) {
+      if (a.attending) return false;
+    } else if (!a.attending) {
+      return false;
+    }
+    if (filters.role.size > 0 && !filters.role.has(a.role)) return false;
+    if (filters.payment.size > 0) {
+      // The invoices decide (src/lib/applicationMoney.ts), never payment_status.
+      const st = moneyState(money.get(a.id), livePays.get(a.id));
+      const match = [...filters.payment].some(v => paymentFilterMatches(v, st));
+      if (!match) return false;
+    }
+    if (filters.dateFrom && a.submitted_at && a.submitted_at.slice(0, 10) < filters.dateFrom) return false;
+    if (filters.dateTo && a.submitted_at && a.submitted_at.slice(0, 10) > filters.dateTo) return false;
+    // Quick-filter search (#2): matches ANY of the applicant's details —
+    // name, email, nationality/country, delegation/society, and every
+    // committee/country they preferenced or were allocated to.
+    if (search) {
+      const hay = [
+        a.profiles?.display_name, a.invited_name,
+        a.profiles?.email, a.invited_email,
+        a.profiles?.nationality,
+        a.societies?.name,
+        a.assigned_committee?.name, a.assigned_committee?.abbreviation, a.assigned_country_name,
+        ...(a.application_preferences ?? []).flatMap(p => [
+          p.conference_committees?.name, p.conference_committees?.abbreviation, p.country_name,
+        ]),
+      ].filter(Boolean).join('  ').toLowerCase();
+      if (!hay.includes(search)) return false;
+    }
+    return true;
+  })
+    // Default order = status group first (still to decide, then accepted /
+    // assigned / checked in, then rejected, then withdrawn; statusSortGroup),
+    // then latest applications first inside each group. The DB fetch already
+    // orders by submitted_at desc; this keeps that guarantee after any
+    // optimistic in-place patching.
+    //
+    // The group is keyed on `groupAtOpen`, the snapshot taken when the page
+    // was opened — not on live status. Accepting or rejecting someone therefore
+    // leaves their row exactly where it is instead of flinging it down the list
+    // while the organiser is still looking at it; the reshuffle happens on the
+    // next visit. Rows that arrived since are grouped by their live status.
+    // Before the snapshot exists (first paint) everything is treated as one
+    // group, so the order never flickers as it arrives.
+    //
+    // Inside each group the ids from conference_applicant_priority come first,
+    // silently (owner, 20 Oct 2026: organizers never see who holds Unlimited,
+    // so nothing on screen marks them). Priority never depends on status, so a
+    // decision still leaves the row where it is.
+    //
+    // The priority applies ONLY to the to-decide group (owner, 31 Oct 2026: older
+    // accepted applications sitting above newer ones looked like a broken sort).
+    // The perk is being reviewed first; once decided, a row sorts newest first
+    // like everyone else, which also stops the order hinting who holds Unlimited.
+    .sort((a, b) => {
+      const atOpen = groupAtOpen.current;
+      const group = (x: Application) => atOpen?.get(x.id) ?? statusSortGroup(x.status);
+      if (atOpen) {
+        const aG = group(a);
+        const bG = group(b);
+        if (aG !== bG) return aG - bG;
+      }
+      const aP = group(a) === 0 && jobExtras.priorityIds.has(a.id) ? 0 : 1;
+      const bP = group(b) === 0 && jobExtras.priorityIds.has(b.id) ? 0 : 1;
+      if (aP !== bP) return aP - bP;
+      return (b.submitted_at ?? '').localeCompare(a.submitted_at ?? '');
+    });
+
+  const activeFilterCount =
+    (filters.status.size > 0 ? 1 : 0) +
+    // DEFAULT_ROLES is empty, so any non-empty role selection counts as active.
+    (!sameSet(filters.role, DEFAULT_ROLES) ? 1 : 0) +
+    (filters.payment.size > 0 ? 1 : 0) +
+    (filters.dateFrom || filters.dateTo ? 1 : 0) +
+    (filters.notAttending ? 1 : 0) +
+    (filters.committee ? 1 : 0);
+
+  // ── Selection-derived values for the bulk-action bar ──────────────────────
+  // Act only on rows that are both selected AND currently visible, so a filter
+  // change can never cause a hidden row to be swept up in a bulk action.
+  const selectedApps = filtered.filter(a => selectedIds.has(a.id));
+  const allVisibleSelected = filtered.length > 0 && filtered.every(a => selectedIds.has(a.id));
+  // Not-attending rows never enter a bulk status/payment operation — every
+  // bulkXxxable derivation and the suggestion below is computed off this
+  // eligible-only set, not selectedApps directly. The skipped count drives
+  // the inline note in the bulk bar rather than silently dropping them.
+  const notAttendingSelectedCount = selectedApps.filter(a => !a.attending).length;
+  const bulkEligibleApps = selectedApps.filter(a => a.attending);
+  // Chairs are feeless by default, so bulk mark-paid / waive skip them —
+  // unless this conference has actually configured a chair fee, in which
+  // case a chair application owes money exactly like any other role.
+  // When Stripe checkout is live for this conference, manual mark-paid is not
+  // offered at all (bulk or single) — checkout + webhook own that state.
+  // Chairs were only ever the most common feeless role, never the only one: a
+  // conference can charge nothing for observers, or nothing at all. Asking the
+  // role config directly is the same question, asked of every role — so a free
+  // conference stops being offered mark-paid, "Remind to pay" and an Unpaid
+  // tile for money it does not charge. Still "ever charges", not "charges
+  // today", so the controls do not blink out between fee phases.
+  const roleChargesFee = (role: string) => roleHasFee(roleConfigs.find(rc => rc.role === role));
+  /** The ONE money state of a row (src/lib/applicationMoney.ts). */
+  const stateOf = (a: Application) => moneyState(money.get(a.id), livePays.get(a.id));
+  /** This person on the Financials Invoices page: its search filter (?q=), by email, else name. */
+  const financialsHrefFor = (a: Application) => {
+    const q = (a.profiles?.email || a.invited_email || a.profiles?.display_name || a.invited_name || '').trim();
+    return `/manage/${conference?.slug ?? ''}/financials/invoices${q ? `?q=${encodeURIComponent(q)}` : ''}`;
+  };
+  // Accept is blocked while a gating app_fee invoice is unpaid, matched by
+  // this application's own id, or its society's (per-delegation surcharges
+  // are tied to whichever application first triggered them, not necessarily
+  // this one; see sync_participant_invoices).
+  const gatingAppIds = new Set(gatingInvoices.map(i => i.application_id).filter((id): id is string => !!id));
+  const gatingSocietyIds = new Set(gatingInvoices.map(i => i.society_id).filter((id): id is string => !!id));
+  const isAcceptBlockedByFee = (a: Application) =>
+    gatingAppIds.has(a.id) || (!!a.society_id && gatingSocietyIds.has(a.society_id));
+  const ACCEPT_BLOCKED_MESSAGE = "A required fee is unpaid. They can be accepted once it's paid.";
+  // Secretariat and staff are never on this page (Settings > Team decides them).
+  const bulkAcceptable = bulkEligibleApps.filter(a => a.status === 'submitted' && !isAcceptBlockedByFee(a));
+  const bulkRejectable = bulkEligibleApps.filter(a => a.status === 'submitted' || a.status === 'accepted');
+  const bulkCheckInable = bulkEligibleApps.filter(a => a.status === 'accepted' || a.status === 'assigned');
+  // Mirrors exactly when the single-row PaymentMenu offers "Remind to pay":
+  // the menu is shown at all (fee-bearing role, a status that can owe money)
+  // and the person still owes (moneyOwing, from the invoices). Stripe being
+  // live does not matter: a reminder is the nudge to go and pay.
+  const bulkRemindable = bulkEligibleApps.filter(a =>
+    roleChargesFee(a.role)
+    && (a.status === 'accepted' || a.status === 'assigned' || a.status === 'submitted' || a.status === 'checked-in')
+    && moneyOwing(stateOf(a))
+  );
+  // Suggested action from the selection composition. Starts pulsing the moment a
+  // selection is made, nudging the organiser toward the obvious next step.
+  const suggestion: 'accept' | 'checkin' | null =
+    bulkEligibleApps.length === 0 ? null
+    : bulkEligibleApps.every(a => a.status === 'submitted') ? 'accept'
+    : bulkEligibleApps.every(a => a.status === 'accepted' || a.status === 'assigned') ? 'checkin'
+    : null;
+
+  // Stat tiles count over the SAME population the list shows by role/date/aid
+  // (all roles by default, #10) but ignore the status / payment dimensions —
+  // those are exactly what the tiles let you click into.
+  const statScope = applications.filter(a => {
+    // Withdrawn/removed and not-attending applicants never count toward the stat tiles.
+    if (a.status === 'withdrawn') return false;
+    if (!a.attending) return false;
+    if (filters.role.size > 0 && !filters.role.has(a.role)) return false;
+    // Committee is a scoping dimension like role/date (not something the tiles
+    // let you click into), so the tiles count within it.
+    if (filters.committee && a.assigned_committee_id !== filters.committee) return false;
+    if (filters.dateFrom && a.submitted_at && a.submitted_at.slice(0, 10) < filters.dateFrom) return false;
+    if (filters.dateTo && a.submitted_at && a.submitted_at.slice(0, 10) > filters.dateTo) return false;
+    return true;
+  });
+  const stats = {
+    total: statScope.length,
+    // "Accepted" means accepted-or-BEYOND: once a delegate is allocated their
+    // status flips to 'assigned' (and to 'checked-in' on arrival), but they are
+    // still, by definition, accepted. Counting only status==='accepted' would
+    // undercount and make "allocated" look larger than "accepted" (impossible).
+    // So Accepted = accepted + assigned + checked-in, and Allocated (below) is
+    // always a strict subset of it.
+    accepted: statScope.filter(a => a.status === 'accepted' || a.status === 'assigned' || a.status === 'checked-in').length,
+    // Delegates only, matching the rows the Allocated view actually renders.
+    // Chairs get status 'assigned' when they are put on a dais
+    // (assignment/page.tsx), so counting every 'assigned' row made the tile
+    // read higher than the list beneath it — the tile said 12, the view showed
+    // 9, and nothing on screen explained the missing three.
+    // Team Applications: Seated = chairs whose application has a committee.
+    assigned: scope === 'team'
+      ? statScope.filter(a => (a.status === 'assigned' || a.status === 'checked-in') && a.role === 'chair' && !!a.assigned_committee_id).length
+      : statScope.filter(a =>
+      (a.status === 'assigned' || a.status === 'checked-in')
+      // Mirrors the row predicate at :2506 exactly, so the tile can never
+      // disagree with the list beneath it in either direction. Chairs get
+      // status 'assigned' when put on a dais (assignment/page.tsx), which made
+      // the tile read 12 over a 9-row list; ticking Chairs in Participants
+      // brings them back to both at once.
+      && !(NON_DELEGATE_ROLES.has(a.role) && !filters.role.has(a.role))
+    ).length,
+    checkedIn: statScope.filter(a => a.status === 'checked-in').length,
+    paid: statScope.filter(a => roleChargesFee(a.role) && stateOf(a) === 'paid').length,
+    // Unpaid only counts roles this conference actually charges for — a free
+    // role can never be in arrears.
+    unpaid: statScope.filter(a => { const st = stateOf(a); return roleChargesFee(a.role) && (moneyOwing(st) || st === 'review'); }).length,
+  };
+
+  // Clickable stat-tile filters (#10). Status tiles clear payment and vice
+  // versa; clicking the active tile again clears it. Total resets to default.
+  // The Accepted / Allocated tiles now count status GROUPS (accepted-or-beyond
+  // and allocated-or-beyond), so their filters select the whole matching group
+  // rather than a single status — keeping the visible list in step with the
+  // number on the tile.
+  // ACCEPTED_GROUP / ALLOCATED_GROUP live at module scope — the ?status= deep
+  // link resolves to the same arrays, so tile and link can never disagree.
+  const statusTileActive = (v: string) => filters.status.size === 1 && filters.status.has(v) && filters.payment.size === 0;
+  const statusGroupTileActive = (group: string[]) => sameSet(filters.status, group) && filters.payment.size === 0;
+  const paymentTileActive = (v: string) => filters.payment.size === 1 && filters.payment.has(v) && filters.status.size === 0;
+  const totalTileActive =
+    filters.status.size === 0 && filters.payment.size === 0 && !filters.notAttending &&
+    !filters.dateFrom && !filters.dateTo && !filters.committee && sameSet(filters.role, DEFAULT_ROLES);
+  const clearToDefault = () => setFilters({ status: new Set(), role: new Set(DEFAULT_ROLES), payment: new Set(), dateFrom: '', dateTo: '', notAttending: false, committee: '' });
+  const toggleStatusTile = (v: string) => setFilters(f => ({ ...f, payment: new Set(), status: (f.status.size === 1 && f.status.has(v)) ? new Set() : new Set([v]) }));
+  const toggleStatusGroupTile = (group: string[]) => setFilters(f => ({ ...f, payment: new Set(), status: sameSet(f.status, group) ? new Set() : new Set(group) }));
+  const togglePaymentTile = (v: string) => setFilters(f => ({ ...f, status: new Set(), payment: (f.payment.size === 1 && f.payment.has(v)) ? new Set() : new Set([v]) }));
+
+  // Order: Total, Accepted, Allocated, Paid, Unpaid, Checked in, then Drafts.
+  // Every tile applies its matching filter on click.
+  //
+  // Allocated is a PLAIN COUNT. It used to read "29 / 32" — a fraction of
+  // Accepted — which was defensive (it could never look larger than the pool
+  // it comes from) but made the one tile in the row that answers "how many are
+  // seated?" the only one you had to do arithmetic on. Every other tile is a
+  // number; this one is now too.
+  const statItems: { label: string; value: number | string; emoji: string; icon: typeof Inbox; gradient: [string, string]; active: boolean; onClick: () => void }[] = [
+    { label: 'Total',      value: stats.total,     emoji: 'Card index',          icon: Users,          gradient: NEU_GRADIENTS.forest, active: totalTileActive,           onClick: clearToDefault },
+    { label: 'Accepted',   value: stats.accepted,  emoji: 'Check mark button',   icon: Check,          gradient: NEU_GRADIENTS.green,  active: statusGroupTileActive(ACCEPTED_GROUP),  onClick: () => toggleStatusGroupTile(ACCEPTED_GROUP) },
+    { label: scope === 'team' ? 'Seated' : 'Allocated', value: stats.assigned,  emoji: 'Round pushpin',       icon: BadgeCheck,     gradient: NEU_GRADIENTS.gold,   active: statusGroupTileActive(ALLOCATED_GROUP), onClick: () => toggleStatusGroupTile(ALLOCATED_GROUP) },
+    { label: 'Paid',       value: stats.paid,      emoji: 'Money bag',           icon: CircleCheck,    gradient: NEU_GRADIENTS.green,  active: paymentTileActive('paid'),      onClick: () => togglePaymentTile('paid') },
+    { label: 'Unpaid',     value: stats.unpaid,    emoji: 'Hourglass not done',  icon: Clock,          gradient: NEU_GRADIENTS.amber,  active: paymentTileActive('unpaid'),    onClick: () => togglePaymentTile('unpaid') },
+    { label: 'Checked in', value: stats.checkedIn, emoji: 'Busts in silhouette', icon: UserRoundCheck, gradient: NEU_GRADIENTS.sage,   active: statusTileActive('checked-in'), onClick: () => toggleStatusTile('checked-in') },
+  ];
+
+  return (
+    <div className={scope === 'team' ? 'pt-6' : 'px-6 md:px-10 py-8'}>
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4 flex-wrap mb-5">
+        {scope === 'team' ? (
+          // Team Applications: the Team page already has its title and tabs above.
+          <p className="min-w-0" style={{ fontFamily: OUTFIT, fontSize: 13.5, color: NEU.inkSoft, margin: 0, lineHeight: 1.5, flex: '1 1 320px', alignSelf: 'center' }}>
+            Team Applications is for chairs, secretariat and staff. Delegates, head delegates, faculty advisors and observers are in{' '}
+            <Link href={`/manage/${conference.slug}/applications`} style={{ fontWeight: 700, color: NEU.ink, textDecoration: 'underline', textUnderlineOffset: 3 }}>Applications</Link>.
+          </p>
+        ) : (
+        <div className="flex items-center gap-3.5">
+          {/* Gavel emblem moved off the header (#4) — it now marks chair rows.
+              A neutral applications icon disc anchors the title instead. */}
+          <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={Inbox} emoji="Card index" size={46} />
+          <div>
+            <p className="mb-1" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', color: NEU.deepGold, textTransform: 'uppercase' }}>
+              {conference.acronym} · Applications
+            </p>
+            <h1 style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 26, color: NEU.ink, letterSpacing: '-0.01em' }}>Applications</h1>
+            {/* Team roles live in Team (owner, 14 Nov 2026). */}
+            <p style={{ fontFamily: OUTFIT, fontSize: 13.5, color: NEU.inkSoft, margin: '4px 0 0', lineHeight: 1.5 }}>
+              Applications is for delegates, head delegates, faculty advisors and observers. Chairs, secretariat and staff are in{' '}
+              <Link href={`/manage/${conference.slug}/team`} style={{ fontWeight: 700, color: NEU.ink, textDecoration: 'underline', textUnderlineOffset: 3 }}>Team</Link>.
+            </p>
+          </div>
+        </div>
+        )}
+        <div className="flex items-center gap-2.5 flex-wrap">
+          {/* Quick-filter search (#2): first in the toolbar, at the top again.
+              Debounced, case-insensitive, matches any applicant detail. */}
+          <ApplicationsSearchPill value={searchInput} onChange={setSearchInput} />
+          {/* Per-committee filter, alongside the existing filters. */}
+          <CommitteeFilter
+            options={committeeOptions}
+            value={filters.committee}
+            onChange={id => setFilters(f => ({ ...f, committee: id }))}
+          />
+          <FilterPanel filters={filters} setFilters={setFilters} activeCount={activeFilterCount} roleOptions={scope === 'team' ? TEAM_ROLE_OPTIONS : ROLE_OPTIONS} />
+          <button
+            onClick={() => { void handleExportExcel(); }}
+            disabled={exportBusy || loading}
+            aria-busy={exportBusy || loading || undefined}
+            className="inline-flex items-center gap-2 focus:outline-none"
+            style={{
+              padding: '9px 16px', borderRadius: 999,
+              fontFamily: OUTFIT, fontSize: 12, fontWeight: 800,
+              color: NEU.ink, backgroundColor: NEU.surface, boxShadow: NEU.outSm, border: 'none', cursor: exportBusy || loading ? 'default' : 'pointer',
+              opacity: exportBusy || loading ? 0.7 : 1,
+            }}
+          >
+            <Download size={14} strokeWidth={2.5} />
+            {exportBusy ? 'Exporting...' : loading ? 'Loading...' : 'Export Excel'}
+          </button>
+        </div>
+      </div>
+
+      {loadIncomplete && (
+        <div role="alert" className="mb-4 flex items-center gap-3 flex-wrap" style={{ padding: '10px 14px', borderRadius: 12, backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.35)' }}>
+          <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: '#8B2020' }}>
+            Some applications could not load. Refresh to try again.
+          </span>
+          <button
+            onClick={() => { void loadApplications(); }}
+            className="focus:outline-none"
+            style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, color: '#8B2020', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px' }}
+          >
+            Refresh
+          </button>
+        </div>
+      )}
+
+      <DraftNoticeList
+        notices={draftNotices}
+        conferenceSlug={conference.slug}
+        onDismiss={dismissDraftNotice}
+        onTurnOn={async (eventKey) => {
+          if (!session) return;
+          const supabase = getAuthedClient(session.access_token);
+          await turnOnDefaultEmail(supabase, conference.id, eventKey);
+        }}
+      />
+
+      {/* Team Applications has no Delegations view. */}
+      {scope !== 'team' && (
+      <PeopleDelegationsSwitch
+        view={listView}
+        onChange={v => { clearSelection(); if (v === 'delegations') setDraftsView(false); setListView(v); }}
+        applications={applications}
+      />
+      )}
+
+      {/* Stat tiles, plus Drafts.
+          Drafts used to live in a collapsed panel further down the page, which
+          is the wrong place for the only group of people here who have not
+          finished applying — they are the most recoverable and the easiest to
+          forget. It now sits in the same row and switches the list the same
+          way the other tiles do.
+          A 20-column grid rather than 7 equal ones: the six counts take three
+          columns each and Drafts takes two, so it reads as a smaller, separate
+          thing without the other tiles having to shrink much to make room. */}
+      {listView === 'people' && (
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-[repeat(20,minmax(0,1fr))] gap-3 mb-6">
+        {statItems.map(s => (
+          <div key={s.label} className="lg:col-span-3">
+            <NeuStatTile emoji={s.emoji} icon={s.icon} gradient={s.gradient} value={s.value} label={s.label} compact onClick={s.onClick} active={s.active} />
+          </div>
+        ))}
+        <div className="lg:col-span-2">
+          <NeuStatTile
+            emoji="Memo"
+            icon={PencilLine}
+            gradient={NEU_GRADIENTS.amber}
+            value={drafts.length}
+            label="Drafts"
+            compact
+            onClick={() => setDraftsView(v => !v)}
+            active={draftsView}
+          />
+        </div>
+      </div>
+      )}
+
+      {/* Delegations: the table with seat meters and the delegation pop-up (delegations/DelegationsTab.tsx). */}
+      {listView === 'delegations' && !loading && (
+        <DelegationsTab
+          conference={conference}
+          applications={applications}
+          drafts={drafts}
+          search={search}
+          focusId={delegationFocus}
+          onChanged={() => { void loadApplications({ silent: true }); }}
+        />
+      )}
+
+      {/* Visible reminder that a filter is narrowing the list — a role/status/
+          payment/date filter can never silently hide rows again. Withdrawn/
+          removed applicants are excluded from the default view on purpose
+          (not a user-applied filter), so they're left out of this count too. */}
+      {scope !== 'team' && listView === 'people' && !draftsView && conference && <TeamApplicantsLine count={jobExtras.teamCount} slug={conference.slug} />}
+
+      {listView === 'people' && !draftsView && !loading && filtered.length < defaultScopeCount && (
+        <p className="mb-3" style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: NEU.muted }}>
+          Showing {filtered.length} of {defaultScopeCount}, filters active
+        </p>
+      )}
+
+      {/* Loading */}
+      {loading && (
+        <div className="flex justify-center py-16">
+          <div className="w-6 h-6 rounded-full border-2 animate-spin" style={{ borderColor: NEU.forest, borderTopColor: 'transparent' }} />
+        </div>
+      )}
+
+      {/* Empty state */}
+      {listView === 'people' && !draftsView && !loading && filtered.length === 0 && (() => {
+        const emptyCard = (
+          <NeuCard style={{ padding: '48px 24px' }}>
+            <div className="flex flex-col items-center text-center">
+              <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={Inbox} emoji="Inbox tray" size={48} />
+              <p className="mt-4" style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 15, color: NEU.ink }}>
+                {applications.length === 0 ? 'No applications yet' : 'No applications match these filters'}
+              </p>
+              <p className="mt-1" style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.muted }}>
+                {applications.length === 0
+                  ? (scope === 'team' ? 'Applications will appear here once chairs, secretariat or staff apply.' : 'Applications will appear here once delegates apply.')
+                  : 'Try adjusting your filters.'}
+              </p>
+            </div>
+          </NeuCard>
+        );
+        // A conference with no applications yet: offer to open delegate
+        // applications right here (OpenDelegateApplications draws emptyCard
+        // when they are already open). Not after a partial load, where zero
+        // could be wrong.
+        if (applications.length > 0 || loadIncomplete || scope === 'team') return emptyCard;
+        const delegateCfg = roleConfigs.find(rc => rc.role === 'delegate') ?? null;
+        return (
+          <OpenDelegateApplications
+            conference={conference}
+            delegate={delegateCfg}
+            fallback={emptyCard}
+            onOpened={row => setRoleConfigs(prev => prev.map(rc => (rc.role === 'delegate' ? { ...rc, ...row } : rc)))}
+          />
+        );
+      })()}
+
+      {/* Select-all bar */}
+      {listView === 'people' && !draftsView && !loading && filtered.length > 0 && (
+        <div className="flex items-center gap-2.5 mb-3 px-1">
+          <SelectBox
+            checked={allVisibleSelected}
+            indeterminate={!allVisibleSelected && selectedApps.length > 0}
+            title={allVisibleSelected ? 'Deselect all' : 'Select all'}
+            onClick={() => setSelectedIds(prev => {
+              const next = new Set(prev);
+              if (allVisibleSelected) filtered.forEach(a => next.delete(a.id));
+              else filtered.forEach(a => next.add(a.id));
+              return next;
+            })}
+          />
+          <span style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: NEU.muted, fontVariantNumeric: 'tabular-nums' }}>
+            {selectedApps.length > 0 ? `${selectedApps.length} selected` : `Select all (${filtered.length})`}
+          </span>
+        </div>
+      )}
+
+      {/* Application list */}
+      {listView === 'people' && !draftsView && !loading && filtered.length > 0 && (
+        <div className="flex flex-col gap-3" style={{ paddingBottom: selectedApps.length > 0 ? BULK_BAR_CLEARANCE : 0 }}>
+          {/* The whole card is the preview affordance (#1) — the separate
+              PREVIEW button is gone, so it can never be clipped by the card's
+              own overflow again. A tint on hover and an inset ring on
+              keyboard focus make it read as clickable in both modalities. */}
+          <style>{`
+            .appRowOpen { cursor: pointer; outline: none; transition: background-color 180ms ${EASE_LOCAL}; }
+            .appRowOpen:hover { background-color: rgba(27,56,40,0.022); }
+            .appRowOpen:focus-visible { box-shadow: inset 0 0 0 2.5px ${NEU.forest}; background-color: rgba(27,56,40,0.03); }
+            .appDelegTag { transition: background-color 160ms ${EASE_LOCAL}; }
+            .appDelegTag:hover { background-color: rgba(27,56,40,0.05) !important; }
+            .appDelegTag:focus-visible { box-shadow: 0 0 0 2.5px ${NEU.forest}; }
+            @keyframes gvSpin { to { transform: rotate(360deg); } }
+            @media (prefers-reduced-motion: reduce) { @keyframes gvSpin { to { transform: none; } } }
+          `}</style>
+          {filtered.map(app => {
+            const name = app.profiles?.display_name ?? app.invited_name ?? 'Unknown';
+            const email = app.profiles?.email ?? app.invited_email ?? '';
+            const isDelegate = app.role === 'delegate' || app.role === 'head-delegate';
+            // A chair may rank committees (preference_mode 'committees_only'),
+            // never a country — allocation stays isDelegate-only below.
+            const showsPreferences = isDelegate || app.role === 'chair';
+            const prefs = [...(app.application_preferences ?? [])].sort((a, b) => a.preference_order - b.preference_order);
+
+            // No recorded level → treat as the lowest tier "beginner" (#11).
+            const expLabel = app.profiles?.mun_experience_level ?? app.experience_level ?? 'beginner';
+            const confCount = app.user_id ? cvCounts[app.user_id] : undefined;
+            const rowQuestions = questionsOf(normalizeBlocks(roleConfigs.find(rc => rc.role === app.role)?.custom_questions ?? []), { includeArchived: true });
+            const age = ageForApp(app, rowQuestions);
+            const nationality = app.profiles?.nationality ?? null;
+            const selected = selectedIds.has(app.id);
+
+            const pledgeLine = app.pledge_type === 'delegation'
+              ? `Expected size ${app.spots_pledged ?? 0}`
+              : null;
+            const rowBusy = busyIds.has(app.id);
+            const busyStyle: React.CSSProperties = rowBusy ? { opacity: 0.5, pointerEvents: 'none' } : {};
+            // Not attending reads as inactive: everything but the NOT
+            // ATTENDING badge fades to ~45% AND is hard-locked (no pointer
+            // events, no handlers firing) — not just dimmed, genuinely
+            // disabled, restored the moment they're marked attending again.
+            // The card click itself is never locked: opening the preview is
+            // how an organiser flips attendance back on.
+            const notAttendingFade: React.CSSProperties = !app.attending ? { opacity: 0.45 } : {};
+            const notAttendingLock: React.CSSProperties = !app.attending ? { opacity: 0.45, pointerEvents: 'none' } : {};
+            const hasAllocation = !!app.assigned_committee && (app.status === 'assigned' || app.status === 'checked-in');
+            const canCheckIn = app.status === 'accepted' || app.status === 'assigned';
+            const isSubmitted = app.status === 'submitted';
+            // ALLOCATE is offered only once the applicant is actually accepted.
+            // Before that the row has exactly two decisions (accept / reject);
+            // after a rejection or a withdrawal there is nothing to allocate
+            // to. 'assigned' / 'checked-in' keep it so a delegate whose
+            // allocation was removed can be re-allocated from the row.
+            const canAllocate = isDelegate
+              && (app.status === 'accepted' || app.status === 'assigned' || app.status === 'checked-in');
+            // No payment affordance for a role this conference charges nothing
+            // for. Chairs are the usual such role, not a special case (#5).
+            const isChair = app.role === 'chair';
+            // Team Applications: an accepted chair with no committee gets Seat (the pop-up's seat step).
+            const teamSeatable = scope === 'team' && isChair && app.status === 'accepted' && !app.assigned_committee_id;
+            const seatButton = teamSeatable ? (
+              <button
+                type="button"
+                onClick={() => teamDecisions.openFor(app.id, 'seat')}
+                disabled={rowBusy || !teamDecisions.canAccept}
+                className="inline-flex items-center justify-center gap-2 w-full focus:outline-none"
+                style={{
+                  minHeight: 44, padding: '13px 10px', borderRadius: 14,
+                  fontFamily: OUTFIT, fontSize: 13, fontWeight: 900,
+                  color: '#FFFFFF', background: `linear-gradient(135deg, ${NEU_GRADIENTS.green[0]}, ${NEU_GRADIENTS.green[1]})`,
+                  boxShadow: `0 4px 12px -2px color-mix(in srgb, ${NEU_GRADIENTS.green[0]} 40%, transparent), inset 0 1px 0 rgba(255,255,255,0.22)`, border: 'none',
+                  cursor: teamDecisions.canAccept ? 'pointer' : 'not-allowed', opacity: teamDecisions.canAccept ? 1 : 0.5,
+                }}
+              >
+                <Gavel size={16} strokeWidth={2.5} aria-hidden />
+                Seat
+              </button>
+            ) : null;
+            const isInvitedChair = isChair && app.fee_waiver_source === 'chair_invite';
+            const showPayControl = roleChargesFee(app.role) && (app.status === 'accepted' || app.status === 'assigned' || app.status === 'submitted' || app.status === 'checked-in');
+
+            // A state line: icon plus a plain word, no pill (CLAUDE.md §8).
+            const chip = (color: string): React.CSSProperties => ({
+              fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color, whiteSpace: 'nowrap',
+            });
+
+            // Anything that is itself interactive keeps its own behaviour and
+            // must NOT also open the preview. Checked by ancestry rather than
+            // by hoping every control remembers to stopPropagation.
+            const openPreviewFromRow = (e: React.MouseEvent<HTMLElement>) => {
+              const hit = (e.target as HTMLElement | null)?.closest(
+                'button, a, input, textarea, select, label, [role="menu"], [role="listbox"], [data-no-row-open]',
+              );
+              if (hit && hit !== e.currentTarget) return;
+              setReviewId(app.id);
+            };
+
+            return (
+              <NeuCard
+                key={app.id}
+                hover
+                style={{ padding: 0, overflow: 'hidden', position: 'relative', outline: selected ? `2px solid ${NEU.forest}` : 'none', outlineOffset: -2 }}
+              >
+                <div
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Open ${name}'s application`}
+                  onClick={openPreviewFromRow}
+                  onKeyDown={e => {
+                    if (e.target !== e.currentTarget) return;
+                    if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+                      e.preventDefault();
+                      setReviewId(app.id);
+                    }
+                  }}
+                  className="appRowOpen flex flex-col lg:flex-row lg:items-stretch"
+                >
+
+                  {/* LEFT · select + identity + facts. Four lines at most
+                      (owner, 21 Oct 2026): the name big; one small line of
+                      email, nationality, notes and importer; then the
+                      delegation as one pill, slightly indented (RowDelegation,
+                      owner 22 Oct 2026). Wider than the middle
+                      pane on desktop, since it carries the most text. */}
+                  <div className="flex items-start gap-3 p-4 lg:p-5 flex-[1_1_0] lg:flex-[1.3_1_0]" style={{ minWidth: 0, ...notAttendingFade }}>
+                    <div className="pt-1"><SelectBox checked={selected} onClick={() => toggleSelected(app.id)} title={selected ? 'Deselect' : 'Select'} /></div>
+                    {/* Avatar → the applicant's public MUN CV. Unregistered
+                        invitees (user_id NULL) render bare — ProfileLink owns
+                        that case, hence no conditional here. */}
+                    <ProfileLink userId={app.user_id} name={name} nested style={{ display: 'block', flexShrink: 0 }}>
+                      <div style={{ position: 'relative', flexShrink: 0 }}>
+                        <MemberAvatar name={name} url={app.profiles?.avatar_url ?? null} size={52} />
+                      </div>
+                    </ProfileLink>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {/* Age reads as part of the name: "Ada Lovelace, 23".
+                            No age on file → the name alone, never a trailing comma. */}
+                        <ProfileLink userId={app.user_id} name={name} nested style={{ display: 'block', minWidth: 0, maxWidth: '100%' }}>
+                          <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 18, fontWeight: 800, color: NEU.ink, maxWidth: '100%', letterSpacing: '-0.01em', lineHeight: 1.2 }}>
+                            {name}{age !== null ? `, ${age}` : ''}
+                          </p>
+                        </ProfileLink>
+                        {!app.user_id && <NotRegisteredChip />}
+                      </div>
+                      {/* One quiet line: email · nationality · notes · importer.
+                          The importer is keyed on the application id
+                          (conference_leader_imports returns claimed rows too),
+                          never on invited_email, so it stays after the claim. */}
+                      {(email || nationality || (noteCounts.get(app.id) ?? 0) > 0 || leaderImports.get(app.id)) && (
+                        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 min-w-0" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 500, color: NEU.inkSoft, marginTop: 2, lineHeight: 1.35 }}>
+                          {[
+                            email ? <span key="e" className="[overflow-wrap:anywhere] min-w-0">{email}</span> : null,
+                            nationality ? (
+                              <span key="n" className="inline-flex items-center gap-1" title={nationality}>
+                                <CountryFlag name={nationality} size={13} />
+                                <span style={{ fontWeight: 600 }}>{countryShortName(nationality)}</span>
+                              </span>
+                            ) : null,
+                            (noteCounts.get(app.id) ?? 0) > 0 ? (
+                              <span key="t" className="inline-flex items-center gap-1" style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }} title={`${noteCounts.get(app.id)} ${noteCounts.get(app.id) === 1 ? 'note' : 'notes'} from your team`}>
+                                <StickyNote size={12} strokeWidth={1.75} aria-hidden="true" />
+                                {noteCounts.get(app.id)}
+                              </span>
+                            ) : null,
+                            leaderImports.get(app.id) ? (
+                              <span key="i" className="inline-flex items-center gap-1 [overflow-wrap:anywhere]" style={{ fontWeight: 600, color: NEU.forest }} title={`Imported by ${leaderImports.get(app.id)}`}>
+                                <UsersRound size={12} strokeWidth={1.75} aria-hidden style={{ flexShrink: 0 }} />
+                                Imported by {leaderImports.get(app.id)}
+                              </span>
+                            ) : null,
+                          ].filter(Boolean).map((node, i) => (
+                            <span key={i} className="inline-flex items-center gap-1.5 min-w-0">
+                              {i > 0 && <span aria-hidden style={{ opacity: 0.55 }}>·</span>}
+                              {node}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Team Applications: nothing delegation-only on a card. */}
+                      {scope === 'team' ? null : app.societies?.name ? (() => {
+                        // The delegation as one longer pill under the person
+                        // (owner, 22 Oct 2026): crest, name, place, members and
+                        // expected size. A click opens the delegation pop-up in
+                        // place (DelegationPopupLink).
+                        const d = app.society_id ? delegationSummaries.get(app.society_id) : undefined;
+                        const rd: RowDelegationProps = {
+                          name: app.societies.name,
+                          logoUrl: app.societies.logo_url,
+                          city: app.societies.city,
+                          countryCode: app.societies.country_code,
+                          members: d?.members ?? null,
+                          expected: d?.expected ?? null,
+                          lead: d?.lead ?? null,
+                          leadRole: d?.leadRole ?? null,
+                          leads: !!d?.leadAppIds.includes(app.id),
+                          pledge: app.pledge_type === 'delegation' ? { spots: app.spots_pledged ?? 0, received: !!app.pledge_confirmed_at } : null,
+                        };
+                        return app.society_id ? (
+                          <DelegationPopupLink
+                            societyId={app.society_id}
+                            tab="people"
+                            title={`Open the ${app.societies.name} delegation\n${rowDelegationTitle(rd)}`}
+                            className="appDelegTag max-w-full"
+                            style={ROW_DELEGATION_PILL}
+                            onChanged={() => { void loadApplications({ silent: true }); }}
+                          >
+                            <RowDelegation {...rd} />
+                          </DelegationPopupLink>
+                        ) : (
+                          <div style={ROW_DELEGATION_PILL} title={rowDelegationTitle(rd)}><RowDelegation {...rd} /></div>
+                        );
+                      })() : pledgeLine && (
+                        <div className="flex flex-wrap gap-2 mt-1.5 items-center">
+                          <span className="inline-flex items-center gap-1.5" style={{ ...chip(NEU.forest), fontVariantNumeric: 'tabular-nums' }}>
+                            <HandCoins size={13} strokeWidth={1.75} aria-hidden="true" />
+                            {pledgeLine}{app.pledge_confirmed_at ? ' · received' : ''}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Identity stack: ROLE on top, MUN level beneath it (#5).
+                        The chair gavel now lives inside the CHAIR pill itself
+                        (#1), so no separate emblem sits here.
+
+                        FIXED SLOT (#4): the level pill is laid out inside a
+                        reserved, constant-width column, so "Delegate",
+                        "Head Delegate", "Faculty Advisor" and "Chair" all sit
+                        at the same x on every row and none of them reflows the
+                        rest of the card. The width is sized to the longest
+                        label so nothing is ever truncated; longer combinations
+                        (chair + INVITED) wrap inside the slot rather than
+                        widening it. */}
+                    <div
+                      className="flex flex-col items-center gap-2 flex-shrink-0"
+                      style={{ width: LEVEL_SLOT_W, minWidth: LEVEL_SLOT_W, maxWidth: LEVEL_SLOT_W }}
+                    >
+                      <div className="flex items-center justify-center gap-1.5 flex-wrap" style={{ width: '100%' }}>
+                        <RolePill role={app.role} size="sm" />
+                        {isInvitedChair && <InvitedChip />}
+                      </div>
+                      <LevelBadge level={expLabel} count={confCount} />
+                    </div>
+                  </div>
+
+                  {/* MIDDLE · decision, then allocation / preferences — the
+                      focal point of the row now the role has moved to the
+                      identity column (#6).
+
+                      ORDER MATTERS. While an application is undecided this
+                      pane is the DECISION: big ACCEPT + REJECT filling the
+                      space the preferences would occupy, plus a one-fifth-width
+                      grey REVIEW. Preferences and the ALLOCATE control appear
+                      only AFTER acceptance — allocating someone you have not
+                      accepted was never a real step, and offering it made the
+                      undecided row read as three competing choices instead of
+                      two. Every state is pinned to MID_BLOCK_H so the row does
+                      not jump when a status changes. */}
+                  <div
+                    className="p-4 lg:p-5 flex flex-col justify-center gap-3 border-t lg:border-t-0 lg:border-l"
+                    style={{ flex: '1 1 0', minWidth: 0, borderColor: 'rgba(221,212,192,0.6)' }}
+                  >
+                    {isSubmitted ? (
+                      renderBigDecisionControls(app, !app.attending, 'row')
+                    ) : hasAllocation ? (() => {
+                      // Naming rule (#6): long committee name → big ACRONYM with
+                      // the full name small beneath it.
+                      const disp = committeeDisplay(app.assigned_committee);
+                      return (
+                      <div className="flex items-center gap-4 min-w-0" style={{ minHeight: MID_BLOCK_H }}>
+                        <LogoDisc src={app.assigned_committee!.logo_url} size={80} fallbackText={committeeAbbr(app.assigned_committee)} alt={app.assigned_committee!.name} />
+                        <div className="min-w-0">
+                          <p className="[overflow-wrap:anywhere]" title={committeeFull(app.assigned_committee)} style={{ fontFamily: OUTFIT, fontSize: 27, fontWeight: 900, color: NEU.ink, letterSpacing: '-0.01em', lineHeight: 1.05 }}>
+                            {disp.primary}
+                          </p>
+                          {disp.secondary && (
+                            <p className="[overflow-wrap:anywhere]" title={disp.secondary} style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: NEU.muted, marginTop: 2, lineHeight: 1.3 }}>
+                              {disp.secondary}
+                            </p>
+                          )}
+                          {app.assigned_country_name && (
+                            <span className="inline-flex items-center gap-2.5 mt-1.5 [overflow-wrap:anywhere]" title={app.assigned_country_name} style={{ fontFamily: OUTFIT, fontSize: 20, fontWeight: 800, color: NEU.ink, lineHeight: 1.15 }}>
+                              <CountryFlag name={app.assigned_country_name} code={app.assigned_country_code} size={32} />
+                              {countryShortName(app.assigned_country_name, app.assigned_country_code)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      );
+                    })() : showsPreferences && prefs.length > 0 ? (
+                      // Preferences and the allocate control now sit SIDE BY
+                      // SIDE, not stacked: the emblem + the three ranked
+                      // preferences take the pane, and ALLOCATE is the rail
+                      // immediately to their right, so the choice and the act
+                      // of making it are read together. Below `sm` (a 375px
+                      // phone) there is no room for a rail, so it wraps
+                      // underneath at full width. All existing allocation
+                      // logic/handlers unchanged. canAllocate is isDelegate-only,
+                      // so a chair here never gets an ALLOCATE control, only a
+                      // read-only look at their ranked committees.
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-3" style={{ minHeight: MID_BLOCK_H }}>
+                        <div className="flex items-center gap-4 min-w-0 flex-1">
+                          <LogoDisc
+                            src={prefs[0].conference_committees?.logo_url ?? null}
+                            size={72}
+                            fallbackText={committeeAbbr(prefs[0].conference_committees)}
+                            alt={prefs[0].conference_committees?.name ?? 'Top preference'}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, letterSpacing: '0.1em', color: NEU.muted, textTransform: 'uppercase', marginBottom: 4 }}>
+                              {app.role === 'chair' ? 'Committee preferences' : 'Preferences'}
+                            </p>
+                            <div className="flex flex-col gap-1">
+                              {prefs.slice(0, 3).map(p => (
+                                <span
+                                  key={p.preference_order}
+                                  className="inline-flex items-center gap-1.5 w-fit max-w-full"
+                                  title={app.role === 'chair' ? (p.conference_committees?.name ?? 'Unknown') : `${p.conference_committees?.name ?? 'Unknown'} · ${p.country_name}`}
+                                  style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: NEU.ink, backgroundColor: NEU.base, boxShadow: NEU.inSm, borderRadius: 999, padding: '4px 10px', fontVariantNumeric: 'tabular-nums' }}
+                                >
+                                  <span style={{ color: NEU.deepGold, fontWeight: 900 }}>{p.preference_order}.</span>
+                                  <span className="[overflow-wrap:anywhere]" style={p.conference_committees ? undefined : { color: NEU.inkSoft, fontWeight: 600 }}>{p.conference_committees ? committeeAbbr(p.conference_committees) : 'No committee'}</span>
+                                  {app.role !== 'chair' && <CountryFlag name={p.country_name} code={p.country_code} size={15} />}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                        {teamSeatable && (
+                          <span style={{ display: 'block', width: ALLOCATE_RAIL_W, maxWidth: '100%', flexShrink: 0, ...notAttendingLock }}>
+                            {seatButton}
+                          </span>
+                        )}
+                        {canAllocate && (
+                          <span
+                            style={{ display: 'block', width: ALLOCATE_RAIL_W, maxWidth: '100%', flexShrink: 0, ...notAttendingLock }}
+                          >
+                            <QuickAllocate big committees={allocCommittees} loading={allocLoading} onOpen={loadAllocCommittees} onAllocate={(c, s) => handleQuickAllocate(app, c, s)} />
+                          </span>
+                        )}
+                      </div>
+                    ) : isDelegate ? (
+                      <span className="inline-flex items-center gap-2" style={{ minHeight: MID_BLOCK_H }}>
+                        <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontStyle: 'italic', color: NEU.inkSoft }}>Not yet assigned</span>
+                        {canAllocate && (
+                          <span style={notAttendingLock}>
+                            <QuickAllocate committees={allocCommittees} loading={allocLoading} onOpen={loadAllocCommittees} onAllocate={(c, s) => handleQuickAllocate(app, c, s)} />
+                          </span>
+                        )}
+                      </span>
+                    ) : scope === 'team' ? (
+                      // Team Applications: Seat for an accepted chair with no committee; nothing for secretariat and staff.
+                      <span className="flex items-center" style={{ minHeight: MID_BLOCK_H, ...notAttendingLock }}>
+                        {teamSeatable && <span style={{ display: 'block', width: ALLOCATE_RAIL_W, maxWidth: '100%' }}>{seatButton}</span>}
+                      </span>
+                    ) : (
+                      <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontStyle: 'italic', color: NEU.inkSoft, minHeight: MID_BLOCK_H, display: 'flex', alignItems: 'center' }}>No allocation</span>
+                    )}
+
+                    {app.status === 'rejected' && app.organizer_note && (
+                      <span className="truncate" title={app.organizer_note} style={{ fontFamily: OUTFIT, fontSize: 12, fontStyle: 'italic', color: NEU.muted }}>
+                        &ldquo;{app.organizer_note}&rdquo;
+                      </span>
+                    )}
+                  </div>
+
+                  {/* RIGHT · status/payment + actions. Fixed-width rail so the
+                      divider between the middle and this column lands at the
+                      same point on every card, and the left/middle columns
+                      split the remaining space evenly (their shared divider is
+                      always centered). Every control in here is a real button,
+                      so the card-level closest() guard (#1) already keeps them
+                      from opening the preview — the column no longer swallows
+                      clicks wholesale, which would have made its empty space
+                      the one dead zone on an otherwise clickable card. */}
+                  <div
+                    className="p-4 lg:p-5 flex flex-col lg:items-end gap-2.5 justify-center border-t lg:border-t-0 lg:border-l lg:flex-[0_0_248px] lg:min-w-[248px]"
+                    style={{ borderColor: 'rgba(221,212,192,0.6)' }}
+                  >
+                    {/* NOT ATTENDING stays full-strength while everything else
+                        in this column fades, so it never gets lost in the dim. */}
+                    {!app.attending && (
+                      <div className="flex items-center gap-1.5 flex-wrap lg:justify-end">
+                        <NotAttendingBadge />
+                      </div>
+                    )}
+                    <div className="flex flex-col lg:items-end gap-2.5" style={{ width: '100%' }}>
+                    <div
+                      className="flex items-center gap-1.5 flex-wrap lg:justify-end"
+                      style={notAttendingFade}
+                      title={app.status === 'checked-in' && app.checked_in_at ? `Checked in ${formatDateTime(app.checked_in_at)}` : undefined}
+                    >
+                      <StatusPill
+                        status={app.status}
+                        awaitingResubmission={app.status === 'rejected' && (roleConfigs.find(rc => rc.role === app.role)?.allow_resubmission ?? false)}
+                      />
+                      {/* The row's controls are hard-locked while a write is in
+                          flight, and a lock with no explanation reads as a
+                          disabled row rather than a busy one. This says which
+                          it is, so a click that lands on nothing is accounted
+                          for. It sits OUTSIDE notAttendingFade's dimming on
+                          purpose, next to the status it is about to change. */}
+                      {rowBusy && (
+                        <span className="inline-flex items-center gap-1" style={chip(NEU.forest)}>
+                          <Loader2 size={14} strokeWidth={2.6} style={{ animation: 'gvSpin 900ms linear infinite' }} />
+                          Saving
+                        </span>
+                      )}
+                      {app.resubmitted_at && (
+                        <span
+                          className="inline-flex items-center gap-1"
+                          title="The applicant edited and resubmitted this application"
+                          style={chip('#8A6614')}
+                        >
+                          <RotateCcw size={14} strokeWidth={2.4} aria-hidden="true" />
+                          Resubmitted {formatDate(app.resubmitted_at)}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* The check-in time is the status line's title and the
+                        Undo check-in button's title: one line fewer per row. */}
+
+                    {/* The undecided ACCEPT/REJECT pair used to live HERE, in
+                        the 248px rail. It has moved to the MIDDLE pane, where
+                        it gets the width the preferences would have had, and
+                        where it cannot be mistaken for one of the small
+                        housekeeping controls below (check in / payment /
+                        reinstate). Same handlers, same guards — see
+                        renderBigDecisionControls('row'). Rendering it in both
+                        places would give a submitted row two ACCEPT buttons. */}
+
+                    {/* Reinstate for rejected / awaiting-resubmission applicants —
+                        undo a rejection in one click, right where REJECT sits
+                        for submitted applicants. Also a status control, locked
+                        while not attending. */}
+                    {app.status === 'rejected' && (
+                      <div className="flex items-center gap-1.5 flex-wrap lg:justify-end" style={notAttendingLock}>
+                        <button
+                          onClick={() => openReinstateConfirm(app)}
+                          disabled={rowBusy || !app.attending}
+                          className="gv-lift inline-flex items-center gap-1.5 focus:outline-none transition-colors"
+                          style={{
+                            padding: '7px 14px', borderRadius: 999,
+                            fontFamily: OUTFIT, fontSize: 11, fontWeight: 800,
+                            color: '#1C1410', backgroundColor: 'transparent', border: '1px solid #DDD4C0', cursor: 'pointer', ...busyStyle,
+                          }}
+                          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
+                          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                        >
+                          <RotateCcw size={13} strokeWidth={2.6} />
+                          Reinstate
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Check-in stacked above the payment control. CHECK IN /
+                        UNDO CHECK-IN / PAYMENT / DELETE all lock while not
+                        attending; the preview is reached by clicking the card
+                        itself (#1), which never locks — it's how an organizer
+                        flips them back. */}
+                    <div className="flex flex-col items-stretch gap-1.5" style={{ minWidth: 176, width: '100%' }}>
+                      {canCheckIn && (
+                        /* Cream / neutral until checked in — it turns green only
+                           once they have actually checked in (#9). */
+                        <button
+                          onClick={() => handleCheckIn(app)}
+                          disabled={rowBusy || !app.attending}
+                          className="inline-flex items-center justify-center gap-1.5 focus:outline-none"
+                          style={{
+                            padding: '8px 14px', borderRadius: 999,
+                            fontFamily: OUTFIT, fontSize: 11, fontWeight: 800,
+                            color: NEU.ink,
+                            backgroundColor: NEU.surface,
+                            boxShadow: NEU.outSm,
+                            border: 'none', cursor: 'pointer', ...busyStyle, ...notAttendingLock,
+                          }}
+                        >
+                          <UserRoundCheck size={13} strokeWidth={2.6} style={{ color: NEU.green }} />
+                          Check in
+                        </button>
+                      )}
+                      {app.status === 'checked-in' && (
+                        <button
+                          onClick={() => handleUndoCheckIn(app)}
+                          disabled={rowBusy || !app.attending}
+                          title={app.checked_in_at ? `Checked in ${formatDateTime(app.checked_in_at)}` : undefined}
+                          className="inline-flex items-center justify-center gap-1.5 focus:outline-none"
+                          style={{
+                            padding: '8px 14px', borderRadius: 999,
+                            fontFamily: OUTFIT, fontSize: 11, fontWeight: 800,
+                            color: NEU.ink, backgroundColor: NEU.surface, boxShadow: NEU.outSm, border: 'none', cursor: 'pointer', ...busyStyle, ...notAttendingLock,
+                          }}
+                        >
+                          <Undo2 size={12} strokeWidth={2.5} />
+                          Undo check-in
+                        </button>
+                      )}
+                      <div className="flex items-center gap-1.5 lg:justify-end">
+                        {showPayControl ? (
+                          <span style={notAttendingLock}>
+                            <PaymentMenu
+                              disabled={rowBusy || !app.attending}
+                              align="right"
+                              onRemind={() => handleRemindPay(app)}
+                              live={livePays.get(app.id) ?? null}
+                              money={money.get(app.id)}
+                              financialsHref={financialsHrefFor(app)}
+                              onReviewProof={() => router.push(`/manage/${conference.slug}/financials?open=todo`)}
+                            />
+                          </span>
+                        ) : isInvitedChair ? (
+                          <WaivedChip label={moneyLabel(moneyState(money.get(app.id), livePays.get(app.id)))} />
+                        ) : null}
+                        {!app.user_id && (
+                          <span style={notAttendingLock}>
+                            <button
+                              onClick={() => openDeleteRowConfirm(app)}
+                              disabled={rowBusy || !app.attending}
+                              title="Delete this unregistered applicant's row"
+                              className="inline-flex items-center justify-center focus:outline-none flex-shrink-0"
+                              style={{
+                                width: 34, height: 34, borderRadius: 999,
+                                color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.2)',
+                                cursor: rowBusy ? 'default' : 'pointer', ...busyStyle,
+                              }}
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Submitted date, bottom-left corner (subtle) — kept clear of the
+                    action buttons that occupy the row's bottom-right. */}
+                {app.submitted_at && (
+                  <span
+                    className="hidden lg:inline-flex items-center gap-1"
+                    style={{ position: 'absolute', bottom: 8, left: 20, fontFamily: OUTFIT, fontSize: 11, fontWeight: 600, color: NEU.muted, fontVariantNumeric: 'tabular-nums', opacity: 0.8, pointerEvents: 'none' }}
+                  >
+                    <CalendarDays size={11} strokeWidth={2.2} />
+                    {formatDate(app.submitted_at)}
+                    <ApplicationSourceMark source={app.traffic_source} detail={app.traffic_detail} invited={!!app.invited_email} importedBy={leaderImports.get(app.id) ?? null} size={14} style={{ marginLeft: 6, pointerEvents: 'auto' }} />
+                  </span>
+                )}
+              </NeuCard>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── IN PROGRESS ──────────────────────────────────────────────────────
+          Unsubmitted drafts, BELOW the list and outside it. Collapsed by
+          default. Everything about it is deliberately quieter than a real row:
+          a dashed edge instead of the neu extrusion, smaller type, no status
+          pill, no checkbox, no selection, no action menu. It must be
+          impossible to mistake for a row that can be acted on.
+
+          And there is nothing to open. A row states that this person is
+          working on an application and gives the three permitted handles:
+          their name and avatar (linked to their public MUN CV), their email,
+          and their country. Nothing they typed appears anywhere on this page,
+          and the database no longer lets an organiser fetch it either — see
+          the DraftRow comment block.
+
+          Counts: this section reads `drafts`. Nothing above it does. */}
+      {listView === 'people' && !loading && (draftsView || drafts.length > 0) && (
+        <div style={{ marginTop: 26, paddingBottom: selectedApps.length > 0 ? BULK_BAR_CLEARANCE : 0 }}>
+          <div
+            style={{
+              borderRadius: 18,
+              border: `1.5px dashed ${DRAFT_DASH}`,
+              backgroundColor: 'rgba(154,138,120,0.035)',
+              padding: draftsOpen ? '4px 4px 14px' : 4,
+            }}
+          >
+            <button
+              onClick={() => setDraftsOpen(o => !o)}
+              aria-expanded={draftsOpen}
+              className="w-full flex items-center gap-2.5 focus:outline-none"
+              style={{
+                padding: '13px 15px', background: 'transparent', border: 'none',
+                cursor: 'pointer', borderRadius: 15, textAlign: 'left',
+              }}
+            >
+              <ChevronDown
+                size={15}
+                strokeWidth={2.8}
+                style={{
+                  color: NEU.muted, flexShrink: 0,
+                  transform: draftsOpen ? 'none' : 'rotate(-90deg)',
+                  transition: `transform 200ms ${EASE_LOCAL}`,
+                }}
+              />
+              <PencilLine size={13.5} strokeWidth={2.5} style={{ color: NEU.muted, flexShrink: 0 }} />
+              <span
+                style={{
+                  fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.13em',
+                  color: NEU.inkSoft, textTransform: 'uppercase',
+                }}
+              >
+                In progress
+              </span>
+              <span style={{ color: NEU.muted, opacity: 0.6 }}>·</span>
+              <span
+                style={{
+                  fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 800, color: NEU.inkSoft,
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                {drafts.length}
+              </span>
+              {/* Hover-only, per the AGENTS.md informational-popup rule. */}
+              <span onClick={e => e.stopPropagation()}>
+                <InfoHint
+                  label="About in-progress applications"
+                  text="Started but not submitted. You can see who is working on one and nudge them, but not what they have written. An unsubmitted application stays private until they send it. Not counted in your totals."
+                />
+              </span>
+            </button>
+
+            {(draftsOpen || draftsView) && (
+              <div className="flex flex-col gap-2.5" style={{ padding: '0 11px' }}>
+                {drafts.map(d => {
+                  const name = d.display_name ?? 'Unknown applicant';
+                  const email = d.email ?? '';
+                  // 72h cooldown, mirrored from the row the RPC stamps. Ceil,
+                  // so "1h" never means "any second now" — it means under an
+                  // hour left, which is the honest reading of a countdown.
+                  const cooldownMs = d.last_reminder_at
+                    ? new Date(d.last_reminder_at).getTime() + 72 * 3600_000 - Date.now()
+                    : 0;
+                  const cooldownH = cooldownMs > 0 ? Math.ceil(cooldownMs / 3600_000) : 0;
+                  const remindDisabled =
+                    d.reminder_opt_out || cooldownH > 0 || d.reminders_sent >= 10 || remindingId === d.id;
+                  const remindLabel =
+                    remindingId === d.id ? 'Sending…'
+                    : d.reminder_opt_out ? 'Reminders off'
+                    : d.reminders_sent >= 10 ? 'No more reminders'
+                    : cooldownH > 0 ? `Available in ${cooldownH}h`
+                    : 'Remind';
+                  return (
+                    <div
+                      key={d.id}
+                      className="draftRow w-full flex items-center gap-3 flex-wrap"
+                      style={{
+                        padding: '11px 13px', borderRadius: 14,
+                        border: `1.5px dashed ${DRAFT_DASH}`,
+                        backgroundColor: 'transparent',
+                      }}
+                    >
+                      {/* Identity only, and the ONE link an organiser is
+                          allowed: the person's public MUN CV. New tab, so a
+                          half-reviewed applications list is not lost. The row
+                          itself is inert — there is no drawer to open. */}
+                      <ProfileLink
+                        userId={d.user_id}
+                        name={d.display_name}
+                        newTab
+                        className="draftRowOpen flex items-center gap-3 min-w-0 flex-1"
+                        title={`View ${name}'s MUN CV`}
+                      >
+                        {/* The person's actual profile picture when they have
+                            one — `avatar_url` was already selected by
+                            loadDrafts and typed on DraftRow; only the render
+                            ignored it, so every draft showed a letter even for
+                            an account with a photo.
+                            The dashed ring stays either way: it is what says
+                            "this application is unfinished", and it belongs to
+                            the row's state, not to whether we have a face. */}
+                        <div
+                          className="flex-shrink-0 flex items-center justify-center rounded-xl overflow-hidden"
+                          style={{
+                            width: 34, height: 34,
+                            border: `1.5px dashed ${DRAFT_DASH}`,
+                            color: NEU.muted, fontFamily: OUTFIT, fontWeight: 800, fontSize: 14,
+                          }}
+                        >
+                          {d.avatar_url
+                            /* eslint-disable-next-line @next/next/no-img-element */
+                            ? <img src={d.avatar_url} alt="" className="w-full h-full object-cover" />
+                            : (name.trim().charAt(0).toUpperCase() || '?')}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 700, color: NEU.inkSoft }}>
+                            {name}
+                          </p>
+                          {/* Role, country, contact. The whole permitted set,
+                              on one line. Nothing from the draft itself. */}
+                          <span className="flex items-center gap-1.5 flex-wrap" style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 500, color: NEU.inkSoft, opacity: 0.82, marginTop: 1 }}>
+                            <span>{roleLabel(d.role)}</span>
+                            {d.nationality && (
+                              <>
+                                <span aria-hidden>·</span>
+                                <span className="inline-flex items-center gap-1.5">
+                                  <CountryFlag name={d.nationality} size={13} />
+                                  {d.nationality}
+                                </span>
+                              </>
+                            )}
+                            {/* The delegation, when the draft names one. An
+                                organiser running delegation conferences reads
+                                this list by school, and a half-finished
+                                application with no school attached to it is
+                                the one they cannot chase. A picked delegation
+                                (society_id) is stated plainly; a name they
+                                only typed says so, because nothing has matched
+                                it to a delegation yet. */}
+                            {d.society_name && (
+                              <>
+                                <span aria-hidden>·</span>
+                                <span
+                                  className="inline-flex items-center gap-1 min-w-0"
+                                  style={{ fontWeight: d.society_id ? 700 : 500 }}
+                                  title={d.society_id
+                                    ? `Delegation: ${d.society_name}`
+                                    : `Delegation typed as "${d.society_name}". Not matched to a delegation at this conference yet.`}
+                                >
+                                  <Building2
+                                    size={12}
+                                    strokeWidth={2.4}
+                                    style={{ flexShrink: 0, color: d.society_id ? NEU.deepGold : NEU.muted }}
+                                    aria-hidden
+                                  />
+                                  <span className="[overflow-wrap:anywhere]">{d.society_name}</span>
+                                  {!d.society_id && <span style={{ opacity: 0.7 }}>(typed)</span>}
+                                </span>
+                              </>
+                            )}
+                            {email && (
+                              <>
+                                <span aria-hidden>·</span>
+                                <span className="[overflow-wrap:anywhere]">{email}</span>
+                              </>
+                            )}
+                          </span>
+                        </div>
+                      </ProfileLink>
+                      {/* When they last touched it — the "are they still at
+                          it?" signal the reminder decision turns on. It says
+                          nothing about WHAT they wrote. */}
+                      <span
+                        className="flex-shrink-0 text-right"
+                        style={{
+                          fontFamily: OUTFIT, fontSize: 11, fontWeight: 600, color: NEU.inkSoft,
+                          opacity: 0.85, fontVariantNumeric: 'tabular-nums', lineHeight: 1.45,
+                        }}
+                      >
+                        Last edited {formatDateTime(d.updated_at)}
+                      </span>
+
+                      {/* One reminder, one draft. No bulk affordance: a button
+                          that mails forty half-finished applicants at once is
+                          the exact shape of the thing that gets a sending
+                          domain blocked. */}
+                      <div className="flex-shrink-0 flex flex-col items-end gap-1">
+                        <button
+                          onClick={() => handleSendDraftReminder(d)}
+                          disabled={remindDisabled}
+                          title={
+                            d.reminder_opt_out ? 'They asked not to be reminded about this application.'
+                            : cooldownH > 0 ? 'One reminder per applicant every three days.'
+                            : 'Email them a link back to their saved answers.'
+                          }
+                          className="draftRemind inline-flex items-center gap-1.5 focus:outline-none"
+                          style={{
+                            padding: '8px 14px', minHeight: 36, borderRadius: 999,
+                            border: `1.5px solid ${remindDisabled ? DRAFT_DASH : NEU.forest}`,
+                            backgroundColor: 'transparent',
+                            color: remindDisabled ? NEU.inkSoft : NEU.forest,
+                            opacity: remindDisabled ? 0.62 : 1,
+                            cursor: remindDisabled ? 'default' : 'pointer',
+                            fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, letterSpacing: '0.08em',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          <Send size={14} strokeWidth={2.6} />
+                          {remindLabel}
+                        </button>
+                        {d.reminders_sent > 0 && !d.reminder_opt_out && (
+                          <span style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 600, color: NEU.inkSoft, opacity: 0.85 }}>
+                            {d.reminders_sent} sent
+                          </span>
+                        )}
+                      </div>
+
+                    </div>
+                  );
+                })}
+                <style>{`
+                  .draftRow { transition: background-color 180ms ${EASE_LOCAL}, border-color 180ms ${EASE_LOCAL}; }
+                  .draftRow:hover { background-color: rgba(154,138,120,0.08); border-color: rgba(154,138,120,0.85); }
+                  .draftRowOpen:focus-visible { outline: 2.5px solid ${NEU.forest}; outline-offset: 3px; border-radius: 10px; }
+                  .draftRemind { transition: background-color 180ms ${EASE_LOCAL}; }
+                  .draftRemind:not(:disabled):hover { background-color: rgba(27,56,40,0.08); }
+                  .draftRemind:focus-visible { outline: 2.5px solid ${NEU.forest}; outline-offset: 2px; }
+                `}</style>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Bulk progress. runBulk clears the selection the moment it starts, so
+          the action bar below is already gone: without this the page would go
+          quiet for the length of a chunked loop. Same sticky position, same
+          pill, so it reads as the bar continuing rather than a new thing. */}
+      {bulkRunning && (
+        <div className="fixed inset-x-0 z-40 flex justify-center px-4" style={{ bottom: 20, pointerEvents: 'none' }}>
+          <div
+            className="inline-flex items-center gap-2.5"
+            style={{ pointerEvents: 'auto', padding: '10px 18px', borderRadius: 999, backgroundColor: NEU.surface, boxShadow: NEU.out }}
+          >
+            <style>{`@keyframes gvSpin { to { transform: rotate(360deg); } } @media (prefers-reduced-motion: reduce) { @keyframes gvSpin { to { transform: none; } } }`}</style>
+            <Loader2 size={15} strokeWidth={2.6} style={{ color: NEU.forest, animation: 'gvSpin 900ms linear infinite' }} />
+            <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 800, color: NEU.ink, fontVariantNumeric: 'tabular-nums' }}>
+              Saving {bulkRunning.done} of {bulkRunning.total}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Sticky bulk-action bar */}
+      {!loading && !bulkRunning && selectedApps.length > 0 && (
+        <div className="fixed inset-x-0 z-40 flex justify-center px-4" style={{ bottom: 20, pointerEvents: 'none' }}>
+          <style>{`@keyframes bulkPulse { 0%,100% { transform: scale(1); box-shadow: 0 4px 10px rgba(27,56,40,0.35); } 50% { transform: scale(1.06); box-shadow: 0 8px 20px rgba(27,56,40,0.5); } }
+            /* Phones: one row that scrolls sideways, 44px targets, edge fade. */
+            @media (max-width: 639.98px) {
+              .gv-bulk-shell { width: 100%; }
+              .gv-bulk-bar { flex-wrap: nowrap !important; justify-content: flex-start !important; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none;
+                -webkit-mask-image: linear-gradient(to right, transparent 0, #000 16px, #000 calc(100% - 16px), transparent 100%);
+                mask-image: linear-gradient(to right, transparent 0, #000 16px, #000 calc(100% - 16px), transparent 100%); }
+              .gv-bulk-bar::-webkit-scrollbar { display: none; }
+              .gv-bulk-bar > * { flex-shrink: 0; white-space: nowrap; }
+              .gv-bulk-bar > button, .gv-bulk-bar > span[title] { min-height: 44px; }
+            }`}</style>
+          <div
+            className="gv-bulk-shell"
+            style={{ pointerEvents: 'auto', maxWidth: '100%', minWidth: 0, borderRadius: 999, backgroundColor: NEU.surface, boxShadow: NEU.out }}
+          >
+          <div
+            className="gv-bulk-bar flex items-center gap-2 flex-wrap justify-center"
+            style={{ padding: '10px 14px' }}
+          >
+            <span className="inline-flex items-center gap-2 pl-1 pr-1" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 800, color: NEU.ink, fontVariantNumeric: 'tabular-nums' }}>
+              <span className="inline-flex items-center justify-center" style={{ minWidth: 22, height: 22, padding: '0 6px', borderRadius: 999, background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`, color: '#FFFFFF', fontSize: 11, fontWeight: 900 }}>
+                {selectedApps.length}
+              </span>
+              selected
+            </span>
+            {notAttendingSelectedCount > 0 && (
+              <span style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, color: '#9A6B2F', fontStyle: 'italic' }}>
+                {notAttendingSelectedCount} not-attending selection{notAttendingSelectedCount === 1 ? '' : 's'} were skipped.
+              </span>
+            )}
+            <span style={{ width: 1, height: 22, background: 'rgba(154,138,120,0.3)' }} />
+
+            {(() => {
+              // Attendance-filtered too (bulkEligibleApps), so blockedCount
+              // below reflects fee-blocked exclusions only — a not-attending
+              // submitted row is accounted for by the skipped-selection note,
+              // not miscounted here as "unpaid".
+              // Team Applications: no bulk Accept (every team accept needs its own seat or permissions step).
+              if (scope === 'team') return null;
+              const submittedSelected = bulkEligibleApps.filter(a => a.status === 'submitted');
+              if (submittedSelected.length === 0) return null;
+              const blockedCount = submittedSelected.length - bulkAcceptable.length;
+              return (
+                <>
+                  {bulkAcceptable.length > 0 ? (
+                    <button
+                      onClick={() => { void bulkAccept(bulkAcceptable); }}
+                      title={blockedCount > 0 ? `${blockedCount} selected application${blockedCount === 1 ? '' : 's'} excluded. ${ACCEPT_BLOCKED_MESSAGE}` : undefined}
+                      className="inline-flex items-center gap-1.5 focus:outline-none"
+                      style={{
+                        padding: '8px 15px', borderRadius: 999, border: 'none', cursor: 'pointer',
+                        fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.03em', color: '#FFFFFF',
+                        background: `linear-gradient(135deg, ${NEU_GRADIENTS.green[0]}, ${NEU_GRADIENTS.green[1]})`,
+                        boxShadow: `0 3px 8px color-mix(in srgb, ${NEU_GRADIENTS.green[0]} 33%, transparent), ${NEU.outSm}`,
+                        animation: suggestion === 'accept' ? 'bulkPulse 1.5s ease-in-out infinite' : undefined,
+                      }}
+                    >
+                      <Check size={14} strokeWidth={2.8} />
+                      Accept {bulkAcceptable.length}
+                      {blockedCount > 0 && ` (${blockedCount} unpaid)`}
+                    </button>
+                  ) : blockedCount > 0 ? (
+                    <span
+                      title={ACCEPT_BLOCKED_MESSAGE}
+                      className="inline-flex items-center gap-1.5"
+                      style={{
+                        padding: '8px 15px', borderRadius: 999, border: '1px solid rgba(184,132,74,0.4)', cursor: 'not-allowed',
+                        fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.03em', color: '#9A6B2F',
+                        backgroundColor: 'rgba(184,132,74,0.1)',
+                      }}
+                    >
+                      <Check size={14} strokeWidth={2.8} />
+                      Accept fee unpaid
+                    </span>
+                  ) : null}
+                </>
+              );
+            })()}
+            {bulkCheckInable.length > 0 && (
+              <button
+                onClick={() => runBulk(bulkCheckInable, { title: `Check in ${bulkCheckInable.length} attendee${bulkCheckInable.length === 1 ? '' : 's'}?`, body: 'They will be marked as physically present on-site.', confirmLabel: 'Check in all' }, a => handleCheckIn(a))}
+                className="inline-flex items-center gap-1.5 focus:outline-none"
+                style={{
+                  padding: '8px 15px', borderRadius: 999, border: 'none', cursor: 'pointer',
+                  fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.03em', color: '#FFFFFF',
+                  background: `linear-gradient(135deg, ${NEU_GRADIENTS.sage[0]}, ${NEU_GRADIENTS.sage[1]})`,
+                  boxShadow: `0 3px 8px color-mix(in srgb, ${NEU_GRADIENTS.sage[0]} 33%, transparent), ${NEU.outSm}`,
+                  animation: suggestion === 'checkin' ? 'bulkPulse 1.5s ease-in-out infinite' : undefined,
+                }}
+              >
+                <UserRoundCheck size={14} strokeWidth={2.7} />
+                Check in {bulkCheckInable.length}
+              </button>
+            )}
+            {bulkRejectable.length > 0 && (
+              <button
+                onClick={() => runBulk(bulkRejectable, { title: `Reject ${bulkRejectable.length} application${bulkRejectable.length === 1 ? '' : 's'}?`, body: 'This rejects the selected applications. You can reinstate them later if needed.', confirmLabel: 'Reject all', danger: true }, a => handleReject(a.id))}
+                className="inline-flex items-center gap-1.5 focus:outline-none"
+                style={{
+                  padding: '8px 15px', borderRadius: 999, cursor: 'pointer',
+                  fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.03em',
+                  color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.09)', border: '1px solid rgba(139,32,32,0.22)',
+                }}
+              >
+                <Ban size={13} strokeWidth={2.6} />
+                Reject {bulkRejectable.length}
+              </button>
+            )}
+            {/* Remind to pay. Same event, same queueEventEmail path as the
+                single-row PaymentMenu item, plus a 24h per-recipient cooldown
+                read off email_outbox — see handleBulkRemindPay. */}
+            {bulkRemindable.length > 0 && (
+              <button
+                onClick={() => handleBulkRemindPay(bulkRemindable)}
+                disabled={bulkEmailBusy}
+                title={`Re-send the payment email to ${bulkRemindable.length} selected. Anyone reminded in the last ${REMIND_PAY_COOLDOWN_HOURS} hours is skipped.`}
+                className="inline-flex items-center gap-1.5 focus:outline-none"
+                style={{
+                  padding: '8px 15px', borderRadius: 999, border: 'none',
+                  cursor: bulkEmailBusy ? 'default' : 'pointer', opacity: bulkEmailBusy ? 0.5 : 1,
+                  fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.03em', color: NEU.ink,
+                  backgroundColor: NEU.surface, boxShadow: NEU.outSm,
+                }}
+              >
+                <Send size={13} strokeWidth={2.6} style={{ color: NEU.deepGold }} />
+                Remind to pay {bulkRemindable.length}
+              </button>
+            )}
+            {/* Custom one-off email to everyone selected (not-attending rows
+                included — a message is not a status change, and "you are down
+                as not attending, is that right?" is exactly the kind of thing
+                this is for). Hence selectedApps, not bulkEligibleApps. */}
+            <button
+              onClick={() => openComposeEmail(selectedApps)}
+              disabled={bulkEmailBusy}
+              title={`Write a one-off email to the ${selectedApps.length} selected`}
+              className="inline-flex items-center gap-1.5 focus:outline-none"
+              style={{
+                padding: '8px 15px', borderRadius: 999, border: 'none',
+                cursor: bulkEmailBusy ? 'default' : 'pointer', opacity: bulkEmailBusy ? 0.5 : 1,
+                fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.03em', color: NEU.ink,
+                backgroundColor: NEU.surface, boxShadow: NEU.outSm,
+              }}
+            >
+              <Mail size={13} strokeWidth={2.6} style={{ color: NEU.deepGold }} />
+              Email {selectedApps.length}
+            </button>
+            <button
+              onClick={clearSelection}
+              className="inline-flex items-center gap-1.5 focus:outline-none"
+              style={{
+                padding: '8px 13px', borderRadius: 999, border: 'none', cursor: 'pointer',
+                fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.03em', color: NEU.inkSoft,
+                backgroundColor: 'transparent',
+              }}
+            >
+              <X size={13} strokeWidth={2.6} />
+              Clear
+            </button>
+          </div>
+          </div>
+        </div>
+      )}
+
+      {/* Applicant pop-up (ApplicantDetail/ApplicantDetailDialog.tsx): a hero
+          with the person, an action bar with every decision this dialog has
+          always offered, then Overview / Preferences / Experience / Answers /
+          Payment. Rendered before confirmModal so confirm dialogs (same z-50)
+          stack on top. */}
+      {(() => {
+        const app = applications.find(a => a.id === reviewId);
+        if (!app) return null;
+        const name = app.profiles?.display_name ?? app.invited_name ?? 'Unknown';
+        const email = app.profiles?.email ?? app.invited_email ?? '';
+        const isDelegate = app.role === 'delegate' || app.role === 'head-delegate';
+        // A chair may rank committees (preference_mode 'committees_only'),
+        // never a country — allocation elsewhere in this pane stays
+        // isDelegate-only.
+        const showsPreferences = isDelegate || app.role === 'chair';
+        // No recorded level → treat as "beginner" (#11).
+        const expLabel = app.profiles?.mun_experience_level ?? app.experience_level ?? 'beginner';
+        // Chair/secretariat only: the conferences they listed on THIS
+        // application (a snapshot, never re-derived from a live MUN CV).
+        // Newest first, stable so entries with the same/no date keep the
+        // order they were added in.
+        const isMunExperienceRole = app.role === 'chair' || app.role === 'secretariat';
+        const munExperience = [...(app.experience_entries ?? [])].sort((a, b) => {
+          if (!a.event_date && !b.event_date) return 0;
+          if (!a.event_date) return 1;
+          if (!b.event_date) return -1;
+          return b.event_date.localeCompare(a.event_date);
+        });
+        const roleConfig = roleConfigs.find(rc => rc.role === app.role);
+        // Includes archived questions so a deleted question's answer stays
+        // labeled and readable, never falling through to the orphaned-answer
+        // fallback below.
+        const questions = questionsOf(normalizeBlocks(roleConfig?.custom_questions ?? []), { includeArchived: true });
+        const answers = app.custom_answers ?? {};
+        // Keys in custom_answers with no matching question at all (archived
+        // or current) — the question was removed before archiving existed, or
+        // the id was never a real question. Their answer is still shown
+        // (never silently dropped), just without a matching label.
+        const questionIds = new Set(questions.map(q => q.id));
+        const orphanedAnswers = Object.entries(answers).filter(([key]) => !questionIds.has(key));
+        // Financial aid: the linked financial_aid_requests row (fetched on demand,
+        // previewAid) is the source of truth when present; the denormalized
+        // columns on the application row are checked too so a request is never
+        // missed if that row hasn't loaded yet (or doesn't exist for any reason).
+        const aidStatus = previewAid?.status ?? (app.aid_status && app.aid_status !== 'none' ? app.aid_status : null);
+        const hasAidRequest = !!previewAid || app.aid_requested || !!aidStatus;
+        const aidStatement = previewAid?.statement ?? app.aid_statement;
+        const aidRequestedAmount = previewAid?.requested_amount ?? app.aid_requested_amount;
+        const aidCurrency = conference.fee_currency;
+        const closeReview = () => { setReviewId(null); setRejectingId(null); setRejectNote(''); };
+        // Double-click guard, the row's controls grey out while its write is in flight.
+        const rowBusy = busyIds.has(app.id);
+        const busyStyle: React.CSSProperties = rowBusy ? { opacity: 0.5, pointerEvents: 'none' } : {};
+        // Not attending: every status-changing action in this modal fades AND
+        // hard-locks (disabled attribute + no pointer events) — only MARK
+        // ATTENDING (the attendance menu item flips to that label automatically)
+        // and REMOVE FROM CONFERENCE (its own payment guard, untouched) stay
+        // fully active. Restores the moment they're marked attending again.
+        const notAttendingLock: React.CSSProperties = !app.attending ? { opacity: 0.45, pointerEvents: 'none' } : {};
+
+        // Primary action: the one thing this status is asking the organiser to
+        // do. 44px minimum, gradient, sits first in the footer.
+        const primaryBtn: React.CSSProperties = {
+          minHeight: 44, padding: '0 24px', borderRadius: 999, border: 'none',
+          fontFamily: OUTFIT, fontSize: 13, fontWeight: 900,
+          color: '#FFFFFF', background: `linear-gradient(135deg, ${NEU_GRADIENTS.green[0]}, ${NEU_GRADIENTS.green[1]})`,
+          boxShadow: `0 4px 12px -2px color-mix(in srgb, ${NEU_GRADIENTS.green[0]} 40%, transparent), inset 0 1px 0 rgba(255,255,255,0.22)`,
+          cursor: 'pointer', textDecoration: 'none', whiteSpace: 'nowrap',
+          transition: `box-shadow 220ms ${EASE_LOCAL}, transform 160ms ${EASE_LOCAL}`,
+        };
+        // Secondary: reachable, clearly not the headline. Extruded neu pill.
+        const secondaryBtn: React.CSSProperties = {
+          minHeight: 40, padding: '0 18px', borderRadius: 999, border: 'none',
+          fontFamily: OUTFIT, fontSize: 12, fontWeight: 800,
+          color: NEU.ink, backgroundColor: NEU.surface, boxShadow: NEU.outSm,
+          cursor: 'pointer', whiteSpace: 'nowrap',
+          transition: `box-shadow 220ms ${EASE_LOCAL}`,
+        };
+        // Compact 3D (NEU.outSm: inner top highlight + forest drop), never a white halo.
+        const liftOn = (e: React.MouseEvent<HTMLElement>) => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSmHover; };
+        const liftOff = (e: React.MouseEvent<HTMLElement>) => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSm; };
+
+        // A role this conference charges nothing for gets no payment control:
+        // there is no state to mark. Chairs are simply the most common such
+        // role, not a special case (#5).
+        const showPaymentControls = roleChargesFee(app.role)
+          && (app.status === 'accepted' || app.status === 'assigned' || app.status === 'submitted' || app.status === 'checked-in');
+        // Unified payment control (F: merge mark-paid vs waive). One menu, both
+        // underlying states still reachable. An invited chair whose role has
+        // no configured fee gets the static WaivedChip instead — there's no
+        // PaymentMenu to show it there.
+        const paymentControls = showPaymentControls ? (
+          <span style={notAttendingLock}>
+            <PaymentMenu
+              disabled={rowBusy || !app.attending}
+              onRemind={() => handleRemindPay(app)}
+              live={livePays.get(app.id) ?? null}
+              money={money.get(app.id)}
+              financialsHref={financialsHrefFor(app)}
+              onReviewProof={() => router.push(`/manage/${conference.slug}/financials?open=todo`)}
+            />
+          </span>
+        ) : (app.role === 'chair' && app.fee_waiver_source === 'chair_invite') ? (
+          <WaivedChip label={moneyLabel(moneyState(money.get(app.id), livePays.get(app.id)))} />
+        ) : null;
+
+        const rejectControls = renderRejectControls(app, !app.attending);
+
+        // Withdraw (F: PART 2 item 1): accepted/assigned only, and only when
+        // payment_status is 'unpaid' or 'waived'. Paid applicants must have
+        // their payment handled first (refunds come with finances).
+        // A free role is stamped 'paid' on arrival by the database, and there
+        // is no payment to handle first, so the guard does not apply to it —
+        // without this exception a free conference could never remove anyone.
+        const canWithdraw = app.payment_status !== 'paid' || !roleChargesFee(app.role);
+
+        // Rare + destructive actions live behind the overflow "…" so they stop
+        // competing with the decision. Same handlers, same guards: REMOVE keeps
+        // its own payment guard and MARK ATTENDING stays live while everything
+        // else is locked out by notAttendingLock.
+        const moreItems: { icon: LucideGlyph; label: string; onClick: () => void; tone?: 'ink' | 'danger'; disabled?: boolean; title?: string }[] = [
+          ...(app.attending
+            ? [{ icon: UserX as LucideGlyph, label: 'Mark not attending', onClick: () => openNotAttendingConfirm(app), disabled: rowBusy }]
+            : [{ icon: Undo2 as LucideGlyph, label: 'Mark attending', onClick: () => handleMarkAttending(app), disabled: rowBusy }]),
+          {
+            icon: LogOut as LucideGlyph,
+            label: 'Remove from conference',
+            onClick: () => { if (canWithdraw) openWithdrawConfirm(app); },
+            tone: 'danger' as const,
+            disabled: rowBusy || !canWithdraw,
+            title: !canWithdraw ? 'Handle their payment before removing' : undefined,
+          },
+        ];
+
+        // Check-in controls: mark on-site attendance (accepted/assigned) or
+        // reverse it (checked-in). Same optimistic handlers as the row buttons.
+        // On accepted/assigned this IS the primary action unless the delegate
+        // still needs allocating, so it renders at primary weight there.
+        const checkInPrimary = (app.status === 'accepted' && !isDelegate) || app.status === 'assigned';
+        const checkInControls = (app.status === 'accepted' || app.status === 'assigned') ? (
+          <button
+            onClick={() => handleCheckIn(app)}
+            disabled={rowBusy || !app.attending}
+            className="inline-flex items-center gap-2 focus:outline-none"
+            style={{ ...(checkInPrimary ? primaryBtn : secondaryBtn), ...busyStyle, ...notAttendingLock }}
+            onMouseEnter={checkInPrimary ? undefined : liftOn}
+            onMouseLeave={checkInPrimary ? undefined : liftOff}
+          >
+            <UserRoundCheck size={checkInPrimary ? 16 : 14} strokeWidth={2.6} />
+            Check in
+          </button>
+        ) : app.status === 'checked-in' ? (
+          <button
+            onClick={() => handleUndoCheckIn(app)}
+            disabled={rowBusy || !app.attending}
+            className="inline-flex items-center gap-2 focus:outline-none"
+            style={{ ...secondaryBtn, color: NEU.inkSoft, ...busyStyle, ...notAttendingLock }}
+            onMouseEnter={liftOn}
+            onMouseLeave={liftOff}
+          >
+            <Undo2 size={14} strokeWidth={2.4} />
+            Undo check-in
+          </button>
+        ) : null;
+
+        const reinstateBtn = (onClick: () => void) => (
+          <button
+            onClick={onClick}
+            disabled={rowBusy || !app.attending}
+            className="inline-flex items-center gap-2 focus:outline-none"
+            style={{ ...primaryBtn, ...busyStyle, ...notAttendingLock }}
+          >
+            <RotateCcw size={16} strokeWidth={2.6} />
+            Reinstate
+          </button>
+        );
+
+        // The decisions, exactly as the old footer offered them. Rendered twice
+        // by the dialog's needs: with the payment menu in the action bar, and
+        // without it while the Payment tab (which shows it) is open.
+        const decisionControls = (withPayment: boolean) => (
+          <>
+            {app.status === 'submitted' && isAcceptBlockedByFee(app) && (
+              <p
+                className="mb-2.5 rounded-xl px-3.5 py-2.5"
+                style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, lineHeight: 1.5, color: REVIEW_WARN_INK, backgroundColor: 'rgba(184,132,74,0.14)', boxShadow: NEU.inSm }}
+              >
+                {ACCEPT_BLOCKED_MESSAGE}
+              </p>
+            )}
+
+            {app.status === 'submitted' ? (
+              /* Undecided (#5): ACCEPT and REJECT side by side across the bar.
+                 Wired to handleAccept and the shared reject flow. */
+              <div className="flex flex-wrap items-center gap-2.5">
+                <div className="apdBig" style={{ flex: '1 1 320px', minWidth: 0 }}>
+                  {renderBigDecisionControls(app, !app.attending)}
+                </div>
+                {withPayment && paymentControls}
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center gap-2.5">
+                {app.status === 'accepted' && (
+                  <>
+                    {isDelegate && (
+                      <span style={notAttendingLock}>
+                        <Link
+                          href={`/manage/${conference.slug}/assignment`}
+                          className="inline-flex items-center gap-2 focus:outline-none"
+                          style={primaryBtn}
+                        >
+                          Assign
+                          <ArrowRight size={16} strokeWidth={2.6} />
+                        </Link>
+                      </span>
+                    )}
+                    {checkInControls}
+                    {withPayment && paymentControls}
+                    {rejectControls}
+                  </>
+                )}
+
+                {(app.status === 'assigned' || app.status === 'checked-in') && (
+                  <>
+                    {checkInControls}
+                    {withPayment && paymentControls}
+                  </>
+                )}
+
+                {app.status === 'rejected' && reinstateBtn(() => openReinstateConfirm(app))}
+                {app.status === 'withdrawn' && reinstateBtn(() => handleReinstateFromWithdrawn(app.id))}
+
+                {(app.status === 'accepted' || app.status === 'assigned' || app.status === 'checked-in') && (
+                  <span style={{ marginLeft: 'auto' }}>
+                    <ReviewMoreMenu items={moreItems} disabled={rowBusy} />
+                  </span>
+                )}
+              </div>
+            )}
+          </>
+        );
+
+        return (
+          <ApplicantDetailDialog
+            key={app.id}
+            app={app}
+            noteCount={noteCounts.get(app.id) ?? 0}
+            name={name}
+            email={email}
+            age={ageForApp(app, questions)}
+            cardRef={reviewCardRef}
+            onClose={closeReview}
+            conferenceSlug={conference.slug}
+            accessToken={accessToken ?? null}
+            chips={(
+              <>
+                {!app.user_id && <NotRegisteredChip onDark />}
+                <RolePill role={app.role} size="sm" onDark />
+                {app.role === 'chair' && app.fee_waiver_source === 'chair_invite' && <InvitedChip onDark />}
+                <StatusPill
+                  status={app.status}
+                  size="sm"
+                  onDark
+                  awaitingResubmission={app.status === 'rejected' && (roleConfig?.allow_resubmission ?? false)}
+                />
+                {!app.attending && <NotAttendingBadge size="sm" onDark />}
+                {app.resubmitted_at && (
+                  <span
+                    className="inline-flex items-center gap-1 font-bold"
+                    title="The applicant edited and resubmitted this application"
+                    style={{ fontSize: 12, fontFamily: OUTFIT, color: '#EED98A' }}
+                  >
+                    <RotateCcw size={14} strokeWidth={2.4} aria-hidden="true" />
+                    Resubmitted {formatDate(app.resubmitted_at)}
+                  </span>
+                )}
+                <ApplicationSourceChip source={app.traffic_source} detail={app.traffic_detail} invited={!!app.invited_email} importedBy={leaderImports.get(app.id) ?? null} />
+                {/* Several roles per person (9 Nov 2026): the same person's other live applications here, from the rows already loaded. */}
+                {app.user_id && applications
+                  .filter(o => o.id !== app.id && o.user_id === app.user_id && ['submitted', 'accepted', 'assigned', 'checked-in'].includes(o.status))
+                  .map(o => (
+                    <button
+                      key={o.id}
+                      type="button"
+                      onClick={() => setReviewId(o.id)}
+                      className="focus:outline-none"
+                      style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 12, fontFamily: OUTFIT, fontWeight: 700, color: '#EED98A', textDecoration: 'underline', textUnderlineOffset: 3 }}
+                    >
+                      Also applied as {roleLabel(o.role)}
+                    </button>
+                  ))}
+              </>
+            )}
+            actions={decisionControls(true)}
+            actionsWithoutPayment={decisionControls(false)}
+            paymentControls={paymentControls}
+            isDelegate={isDelegate}
+            showsPreferences={showsPreferences}
+            feeCharged={roleChargesFee(app.role)}
+            experienceLevel={expLabel}
+            answerItems={questions.map(q => ({
+              key: q.id, label: q.label, answer: displayAnswer(q, answers[q.id]), archived: !!q.archived,
+              ...(q.type === 'file_upload' && typeof answers[q.id] === 'string' && answers[q.id] ? { href: applicationFileHref(app.id, q.id) } : {}),
+            }))}
+            orphanAnswers={orphanedAnswers.map(([key, value]) => ({ key, label: key, answer: Array.isArray(value) ? value.join(', ') : String(value ?? '') }))}
+            listedExperience={munExperience}
+            showListedExperience={isMunExperienceRole}
+            aid={hasAidRequest ? {
+              status: aidStatus,
+              statement: aidStatement ?? null,
+              requestedAmount: aidRequestedAmount ?? null,
+              grantedAmount: previewAid?.status === 'approved' ? (previewAid.granted_amount ?? null) : null,
+              currency: aidCurrency,
+            } : null}
+            dob={app.profiles?.date_of_birth ?? null}
+            jobPicks={jobExtras.picksByApp.get(app.id) ?? null}
+            delegation={(() => {
+              const d = app.society_id ? delegationSummaries.get(app.society_id) : undefined;
+              if (!app.societies?.name) return null;
+              return {
+                name: app.societies.name,
+                logoUrl: app.societies.logo_url,
+                city: app.societies.city,
+                countryCode: app.societies.country_code,
+                members: d?.members ?? 1,
+                country: d?.country ?? null,
+                lead: d?.lead ?? null,
+                leadRole: d?.leadRole ?? null,
+                isHead: !!d?.leadAppIds.includes(app.id),
+              };
+            })()}
+            onOpenDelegation={app.society_id ? () => {
+              closeReview();
+              setDelegationFocus(app.society_id);
+              setListView('delegations');
+            } : undefined}
+          />
+        );
+      })()}
+
+      {/* ── Custom one-off email ──────────────────────────────────────────────
+          A compose sheet for the selected applicants. It writes through
+          queueAdHocEmail (src/lib/adHocEmail.ts), which is the SAME
+          email_sends + email_outbox + renderEmailHtml + triggerEmailDelivery
+          path the Communications composer uses, so this send lands in
+          Communications → History beside every other send and honours the same
+          opt-out. There is no second sender and no new EVENT_REGISTRY key —
+          organizer-written copy is a 'marketing' broadcast, gated through the
+          shared recipientAllowsCategory.
+
+          Deliberately NOT a copy of the full block composer: subject + message
+          only. Anything richer (buttons, banners, saved templates, audience
+          filters) is what Communications is for, and the footer links there. */}
+      {composeOpen && (() => {
+        const recipients = composeIds
+          .map(id => applications.find(a => a.id === id))
+          .filter((a): a is Application => !!a);
+        // Who would get a ⚠field⚠ marker (a {{country}} with no allocation).
+        // queueAdHocEmail skips them whatever happens; this says so up front.
+        const composeBlocks: EmailBlock[] = composeBody.split(/\n{2,}/).map(t => t.trim()).filter(Boolean).map(content => ({ type: 'paragraph', content }));
+        const unresolved = summarizeUnresolved(composeSubject, composeBlocks, recipients.map(a => ({
+          id: a.id,
+          ctx: recipientFieldsContext({
+            delegate_name: a.profiles?.display_name ?? a.invited_name ?? null,
+            delegation_name: a.societies?.name ?? (a.society_id == null ? 'Independent' : null),
+            committee: a.assigned_committee?.abbreviation ?? a.assigned_committee?.name ?? null,
+            country: a.assigned_country_name ?? null,
+            payment_status: a.payment_status,
+          }),
+        })));
+        const unresolvedCount = unresolved.affectedIds.length;
+        const sendableCount = recipients.length - unresolvedCount;
+        const close = () => { if (!bulkEmailBusy) setComposeOpen(false); };
+        const labelStyle: React.CSSProperties = {
+          fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.11em',
+          color: NEU.forest, textTransform: 'uppercase',
+        };
+        const fieldStyle: React.CSSProperties = {
+          fontFamily: OUTFIT, fontSize: 14, fontWeight: 500, color: NEU.ink,
+          backgroundColor: NEU.base, boxShadow: NEU.inSm, borderRadius: 12,
+          border: 'none', outline: 'none', width: '100%', padding: '11px 14px',
+        };
+        return (
+          <Portal><div
+            className="fixed inset-0 z-50 flex items-center justify-center px-4 py-10"
+            style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
+            onClick={close}
+          >
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Write an email to the selected applicants"
+              className="w-full max-w-xl rounded-2xl overflow-y-auto"
+              style={{ maxHeight: '86vh', backgroundColor: NEU.surface, boxShadow: NEU.out, padding: 26 }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-4 mb-5">
+                <div className="min-w-0">
+                  <p style={{ fontFamily: OUTFIT, fontSize: 19, fontWeight: 900, color: NEU.ink, letterSpacing: '-0.01em' }}>
+                    Email {recipients.length} applicant{recipients.length === 1 ? '' : 's'}
+                  </p>
+                  <p className="mt-1" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600, color: NEU.inkSoft, lineHeight: 1.5 }}>
+                    Sent from your conference, in your conference&rsquo;s email design. Anyone who has turned these emails off is skipped automatically.
+                  </p>
+                </div>
+                <button
+                  onClick={close}
+                  aria-label="Close"
+                  className="inline-flex items-center justify-center flex-shrink-0 focus:outline-none"
+                  style={{ width: 34, height: 34, borderRadius: 999, backgroundColor: NEU.base, boxShadow: NEU.inSm, border: 'none', cursor: 'pointer', color: NEU.inkSoft }}
+                >
+                  <X size={16} strokeWidth={2.6} />
+                </button>
+              </div>
+
+              {/* Who it is going to. Named, not just counted — an organizer
+                  should never have to trust a number they cannot check. */}
+              <div className="mb-5">
+                <p className="mb-2" style={labelStyle}>Recipients</p>
+                <div
+                  className="flex flex-wrap gap-1.5 overflow-y-auto"
+                  style={{ maxHeight: 96, padding: 10, borderRadius: 12, backgroundColor: NEU.base, boxShadow: NEU.inSm }}
+                >
+                  {recipients.map(a => (
+                    <span
+                      key={a.id}
+                      className="inline-flex items-center [overflow-wrap:anywhere]"
+                      title={a.profiles?.email ?? a.invited_email ?? ''}
+                      style={{ maxWidth: '100%', fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, color: NEU.ink, backgroundColor: NEU.surface, boxShadow: NEU.outSm, borderRadius: 999, padding: '3px 10px' }}
+                    >
+                      {a.profiles?.display_name ?? a.invited_name ?? 'Unknown'}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mb-4">
+                <label className="flex items-center gap-2 mb-2" style={labelStyle} htmlFor="bulkEmailSubject">
+                  Subject
+                </label>
+                <input
+                  id="bulkEmailSubject"
+                  value={composeSubject}
+                  onChange={e => setComposeSubject(e.target.value)}
+                  disabled={bulkEmailBusy}
+                  placeholder="A short, specific subject line"
+                  style={fieldStyle}
+                />
+              </div>
+
+              <div className="mb-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <span style={labelStyle}>Message</span>
+                  <InfoHint
+                    label="About placeholders"
+                    text="Use {{delegate_name}}, {{role}}, {{delegation_name}}, {{committee}}, {{country}}, {{payment_status}}, {{fee}}, {{conference_name}} or {{conference_dates}} and each recipient gets their own value. Leave a blank line between paragraphs."
+                  />
+                </div>
+                <textarea
+                  value={composeBody}
+                  onChange={e => setComposeBody(e.target.value)}
+                  disabled={bulkEmailBusy}
+                  rows={8}
+                  placeholder={'Hi {{delegate_name}},\n\n…'}
+                  className="resize-y"
+                  style={{ ...fieldStyle, lineHeight: 1.6 }}
+                />
+              </div>
+
+              {unresolvedCount > 0 && (
+                <div role="alert" className="mb-4" style={{ padding: '10px 14px', borderRadius: 12, backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.35)' }}>
+                  <p style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: REVIEW_DANGER, lineHeight: 1.45 }}>
+                    {unresolvedCount} of {recipients.length} {recipients.length === 1 ? 'recipient is' : 'recipients are'} missing {unresolved.fields.map(f => `${f.label} (${f.count})`).join(', ')}.
+                  </p>
+                  <p className="mt-1" style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 600, color: NEU.inkSoft, lineHeight: 1.5 }}>
+                    Their email would show a marker such as &ldquo;⚠{unresolved.fields[0]?.key}⚠&rdquo;, so they will not be sent it.
+                    {sendableCount > 0 ? ` Sending goes to the ${sendableCount} with complete details only.` : ' Assign them first, or take those placeholders out.'}
+                  </p>
+                </div>
+              )}
+
+              {composeError && (
+                <div className="mb-3 flex flex-wrap items-center gap-3">
+                  <p className="flex-1" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: REVIEW_DANGER, lineHeight: 1.5, margin: 0, minWidth: 200 }}>
+                    {composeError}
+                  </p>
+                  {composeEmailsBlocked && conference && (
+                    <GetMoreEmails conferenceId={conference.id} compact onBought={() => { setComposeError(''); setComposeEmailsBlocked(false); }} />
+                  )}
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  onClick={handleSendCustomEmail}
+                  disabled={bulkEmailBusy || sendableCount === 0}
+                  className="inline-flex items-center justify-center gap-2 focus:outline-none"
+                  style={{
+                    minHeight: 44, padding: '0 24px', borderRadius: 999, border: 'none',
+                    fontFamily: OUTFIT, fontSize: 13, fontWeight: 900,
+                    color: '#FFFFFF', background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
+                    boxShadow: `0 4px 12px -2px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 40%, transparent), inset 0 1px 0 rgba(255,255,255,0.22)`,
+                    cursor: bulkEmailBusy ? 'default' : 'pointer', opacity: bulkEmailBusy ? 0.6 : 1,
+                  }}
+                >
+                  <Send size={15} strokeWidth={2.7} />
+                  {bulkEmailBusy ? 'Sending…' : `Send to ${sendableCount}`}
+                </button>
+                <button
+                  onClick={close}
+                  disabled={bulkEmailBusy}
+                  className="inline-flex items-center focus:outline-none"
+                  style={{
+                    minHeight: 44, padding: '0 18px', borderRadius: 999, border: 'none',
+                    fontFamily: OUTFIT, fontSize: 12, fontWeight: 800,
+                    color: NEU.inkSoft, backgroundColor: NEU.surface, boxShadow: NEU.outSm, cursor: 'pointer',
+                  }}
+                >
+                  Cancel
+                </button>
+                {conference && (
+                  <Link
+                    href={`/manage/${conference.slug}/communications`}
+                    className="focus:outline-none"
+                    style={{ marginLeft: 'auto', fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: NEU.forest, textDecoration: 'underline', textUnderlineOffset: 3 }}
+                  >
+                    Need buttons or a saved template? Communications
+                  </Link>
+                )}
+              </div>
+            </div>
+          </div></Portal>
+        );
+      })()}
+
+      {confirmModal}
+      {teamDecisions.popup}
+    </div>
+  );
+}

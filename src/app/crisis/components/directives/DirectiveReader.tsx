@@ -1,6 +1,6 @@
 'use client';
-// Gavelling Crisis: the backroom's "to reply" items, read ONE BY ONE. The item in front is large (the "No. 13"
-// badge overlapping its top edge, the TITLE first, the character beneath it, then the text), and the next
+// Gavelling Crisis: the backroom's "to reply" items, read ONE BY ONE. The item in front is large (the cabinet's
+// name badge overlapping its top edge, the TITLE first with its number, "13: Title", the character beneath it, then the text), and the next
 // items of the lane wait to the right as smaller copies of it (same layout, each shorter and narrower, centred
 // on the front card), every one BEHIND the one before it and peeking out on its right edge, so together they fill the
 // space out to the page's right edge. A card's content sits in the part that peeks out, so no title is ever covered.
@@ -14,12 +14,11 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { Clock, Eye, MessageCircle, Pencil, Reply } from 'lucide-react';
-import { dirNumber } from '@/lib/crisis/format';
 import { KIND_LABEL, type Directive } from '@/lib/crisis/types';
 import { Avatar, Btn, CK, agoLabel, cabinetTint, waitLabel, waitSeverity } from '../../crisisKit';
 import { CharacterLink } from '../character/CharacterProfileHost';
-import { CabinetLogo, NameStack, NumberBadge, StaffPic, ThemeTags, shortName } from './directiveParts';
-import { KIND_ICON, authorName, isBeingWritten, isOpenStatus, memberName, outcomeView, writingAge, writtenByOther, type Lane, type Names } from './directiveKit';
+import { CabinetBadge, CabinetLogo, NameStack, StaffPic, ThemeTags, shortName } from './directiveParts';
+import { KIND_ICON, authorName, isBeingWritten, isOpenStatus, memberName, outcomeView, titleWithNo, writingAge, writtenByOther, type Lane, type Names } from './directiveKit';
 import { CabinetCrest, CabinetFoot, CabinetName, cabinetColorOf, cabinetWash, crestIndent, isCabinetDirective } from './cabinetStamp';
 import { ExtraFront, ExtraNextBody, MEETING_BLUE, MeetingBadge } from './InboxExtraCards';
 import { isExtra, type ReaderItem } from './inboxItems';
@@ -94,20 +93,20 @@ function DirectiveNext({ d, k, fw, names, lane, now, onPick, readOnly, openCount
       padBottom={showFoot ? 46 : 14}
       foot={showFoot ? <ResponsibleFoot d={d} ownerId={ownerId} openCounts={openCounts} onChanged={onChanged} /> : undefined}
       tint={isCab ? cabinetWash(color) : undefined}
-      label={`Read directive No. ${dirNumber(d)}: ${d.title}`}
+      label={`Read directive ${titleWithNo(d)}`}
       badge={isCab
-        ? <CabinetCrest cabinet={cab} n={dirNumber(d)} sealSize={40} left={HIDDEN + 14} stamp="xs" />
-        : <NumberBadge n={dirNumber(d)} color={color} style={{ position: 'absolute', zIndex: 2, top: -9, left: HIDDEN + 14 }} />}
+        ? <CabinetCrest cabinet={cab} sealSize={40} left={HIDDEN + 14} stamp="xs" />
+        : <CabinetBadge cabinet={cab} color={color} style={{ position: 'absolute', zIndex: 2, top: -10, left: HIDDEN + 14 }} />}
     >
       {isCab ? (
         <>
           {/* The name beside the seal, then the title, then the start of the text; the kind and the wait on the bottom row (no submitter on the card). */}
           <CabinetName cabinet={cab} size={13.5} indent={crestIndent(40)} style={{ flex: 'none' }} />
-          <span style={{ display: 'block', flex: 'none', marginTop: 6, fontSize: 18, fontWeight: 800, lineHeight: 1.22, overflowWrap: 'anywhere' }}>{d.title}</span>
+          <span style={{ display: 'block', flex: 'none', marginTop: 6, fontSize: 18, fontWeight: 800, lineHeight: 1.22, overflowWrap: 'anywhere' }}>{titleWithNo(d)}</span>
         </>
       ) : (
         <>
-          <span style={{ display: 'block', flex: 'none', fontSize: 18, fontWeight: 800, lineHeight: 1.22, overflowWrap: 'anywhere' }}>{d.title}</span>
+          <span style={{ display: 'block', flex: 'none', fontSize: 18, fontWeight: 800, lineHeight: 1.22, overflowWrap: 'anywhere' }}>{titleWithNo(d)}</span>
           <span className="flex items-center" style={{ flex: 'none', gap: 9, marginTop: 11 }}>
             <Avatar name={who} src={ch?.picture_url} size={38} color={color} />
             <span style={{ minWidth: 0, flex: 1 }}>
@@ -197,15 +196,15 @@ function FrontCard({ d, names, lane, now, index, total, onPrev, onNext, onRespon
   );
 
   return (
-    <FrontShell color={color} ring={isCab} tint={isCab ? cabinetWash(color) : undefined} label={`Directive No. ${dirNumber(d)}: ${d.title}`} onActivate={onRespond}>
-      {isCab && <CabinetCrest cabinet={cab} n={dirNumber(d)} sealSize={56} left={30} stamp="card" />}
-      {!isCab && <NumberBadge n={dirNumber(d)} color={color} style={{ position: 'absolute', zIndex: 2, top: -9, left: 26 }} />}
+    <FrontShell color={color} ring={isCab} tint={isCab ? cabinetWash(color) : undefined} label={`Directive ${titleWithNo(d)}`} onActivate={onRespond}>
+      {isCab && <CabinetCrest cabinet={cab} sealSize={56} left={30} stamp="card" />}
+      {!isCab && <CabinetBadge cabinet={cab} color={color} style={{ position: 'absolute', zIndex: 2, top: -10, left: 26 }} />}
 
       <div style={{ flex: 'none', padding: isCab ? '30px 26px 0 30px' : '24px 26px 0 30px' }}>
         {isCab ? (
           <>
             <CabinetName cabinet={cab} size={15.5} indent={crestIndent(56)} />
-            <h2 style={{ margin: '12px 0 0', fontSize: 30, lineHeight: 1.18, fontWeight: 800, overflowWrap: 'anywhere' }}>{d.title}</h2>
+            <h2 style={{ margin: '12px 0 0', fontSize: 30, lineHeight: 1.18, fontWeight: 800, overflowWrap: 'anywhere' }}>{titleWithNo(d)}</h2>
           </>
         ) : (
           <>
@@ -215,7 +214,7 @@ function FrontCard({ d, names, lane, now, index, total, onPrev, onNext, onRespon
               <span className="flex-1" />
               {waitClock}
             </p>
-            <h2 style={{ margin: '8px 0 0', fontSize: 28, lineHeight: 1.18, fontWeight: 800, overflowWrap: 'anywhere' }}>{d.title}</h2>
+            <h2 style={{ margin: '8px 0 0', fontSize: 28, lineHeight: 1.18, fontWeight: 800, overflowWrap: 'anywhere' }}>{titleWithNo(d)}</h2>
             <div className="flex items-center" style={{ gap: 14, marginTop: 14 }}>
               <CharacterLink id={ch?.id} style={{ borderRadius: '50%', lineHeight: 0 }}><Avatar name={who} src={ch?.picture_url} size={58} color={color} /></CharacterLink>
               <div style={{ minWidth: 0, flex: 1 }}>
@@ -274,7 +273,9 @@ function FrontCard({ d, names, lane, now, index, total, onPrev, onNext, onRespon
           )}
         </div>
         <NavControls index={index} total={total} onPrev={onPrev} onNext={onNext} />
-        <Btn tone="green" icon={readOnly ? <Eye size={16} strokeWidth={1.5} /> : <Reply size={16} strokeWidth={1.5} />} onClick={onRespond}>{readOnly ? readOnly.actionLabel(d) : open ? 'Respond' : 'Open'}</Btn>
+        {/* The open button is big on purpose: HultMUN's director missed the small one (23 Nov 2026). */}
+        <Btn tone="green" icon={readOnly ? <Eye size={20} strokeWidth={1.5} /> : <Reply size={20} strokeWidth={1.5} />} onClick={onRespond}
+          style={{ padding: '13px 26px', fontSize: 17, borderRadius: 14, gap: 10, minHeight: 50 }}>{readOnly ? readOnly.actionLabel(d) : open ? 'Respond' : 'Open'}</Btn>
       </div>
     </FrontShell>
   );

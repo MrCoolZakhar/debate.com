@@ -14,13 +14,13 @@ export interface NewsStage {
 }
 
 /** The kinds of card the side panel can hold. */
-export type EffectCardKind = 'resources' | 'unit' | 'border' | 'character' | 'news';
+export type EffectCardKind = 'resources' | 'unit' | 'border' | 'character' | 'move' | 'news';
 
 /**
  * One card in "What happens when you send". It only remembers WHAT it is about; what it changes is
  * staged in the maps below (resources, units, regions, characters, news), so the send reads those.
  * target: resources `cab:<id>` or `char:<id>` ('' = the author's cabinet), unit id, country key,
- * character id; news has none.
+ * character id (a status card) or character id (a map move card); news has none.
  */
 export interface EffectCard { id: string; kind: EffectCardKind; target: string }
 
@@ -36,6 +36,8 @@ export interface EffectsDraft {
   /** Character id to the new status. */
   characters: Record<string, { status: CharacterStatus; note: string }>;
   news: NewsStage | null;
+  /** Character id to the exact spot the reply moves them to on the map (a "Move a character" card). */
+  chars: Record<string, { lng: number; lat: number }>;
   /**
    * Changes to the map's territories made on the big map: country outlines and holders, drawn areas. They go out
    * inside the answer itself (effects.map), applied by the database in the same transaction.
@@ -47,14 +49,14 @@ export interface ReplyDraft { outcome: DirectiveOutcome | null; reply: string; e
 
 export const STAGEABLE_STATUSES: CharacterStatus[] = ['active', 'arrested', 'dead', 'missing'];
 
-export const emptyEffects = (): EffectsDraft => ({ cards: [], resources: {}, units: {}, regions: {}, characters: {}, news: null, map: null });
+export const emptyEffects = (): EffectsDraft => ({ cards: [], resources: {}, units: {}, regions: {}, characters: {}, news: null, chars: {}, map: null });
 
 export const newCardId = () => `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
 
 /** How many things the reply will change (a newsflash with no title is not one yet). */
 export function countChanges(e: EffectsDraft): number {
   return Object.keys(e.resources).length + Object.keys(e.units).length + Object.keys(e.regions).length
-    + Object.keys(e.characters).length + (e.news && e.news.title.trim() ? 1 : 0) + setSize(e.map);
+    + Object.keys(e.characters).length + Object.keys(e.chars).length + (e.news && e.news.title.trim() ? 1 : 0) + setSize(e.map);
 }
 
 const OUTCOMES = ['approved', 'partial', 'denied', 'clarify', 'later'] as const;
@@ -113,8 +115,15 @@ function parseEffects(raw: unknown): EffectsDraft {
       fileName: typeof n.fileName === 'string' && n.fileName ? n.fileName : null,
     };
   }
+  if (isObj(raw.chars)) {
+    for (const [k, v] of Object.entries(raw.chars)) {
+      if (!isObj(v)) continue;
+      const lng = num(v.lng); const lat = num(v.lat);
+      if (lng !== undefined && lat !== undefined) out.chars[k] = { lng, lat };
+    }
+  }
   out.map = parseMap(raw.map);
-  const CARD_KINDS: EffectCardKind[] = ['resources', 'unit', 'border', 'character', 'news'];
+  const CARD_KINDS: EffectCardKind[] = ['resources', 'unit', 'border', 'character', 'move', 'news'];
   if (Array.isArray(raw.cards)) {
     for (const c of raw.cards) {
       if (!isObj(c) || typeof c.id !== 'string') continue;
@@ -127,6 +136,7 @@ function parseEffects(raw: unknown): EffectsDraft {
     for (const k of Object.keys(out.units)) out.cards.push({ id: newCardId(), kind: 'unit', target: k });
     for (const k of Object.keys(out.regions)) out.cards.push({ id: newCardId(), kind: 'border', target: k });
     for (const k of Object.keys(out.characters)) out.cards.push({ id: newCardId(), kind: 'character', target: k });
+    for (const k of Object.keys(out.chars)) out.cards.push({ id: newCardId(), kind: 'move', target: k });
     if (out.news) out.cards.push({ id: newCardId(), kind: 'news', target: '' });
     if (out.map) out.cards.push({ id: newCardId(), kind: 'border', target: '' });
   }

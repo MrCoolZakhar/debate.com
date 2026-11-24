@@ -12,6 +12,8 @@ import { addMember, cancelStaffInvite, crisisError, inviteStaff, issueCode, list
 import { useCrisisLive, useSingleFlight } from '@/lib/crisis/live';
 import { ROLE_LABEL, type Cabinet, type Character, type Member } from '@/lib/crisis/types';
 import SpareOffer, { AssignSpareDelegate, freeCharacters, isGoneStatus, isSpareDelegate } from '../character/SpareOffer';
+import { delegateLabel, nameIsCharacter } from '../character/delegateName';
+import { SWAP_DELEGATES_DB, swapDelegateCharacters } from '@/lib/crisis/placeDelegate';
 import { STATUS_WORD } from '../character/characterStatus';
 import { Avatar, Btn, Card, CardTitle, CK, fieldStyle, agoLabel } from '../../crisisKit';
 import { useCrisis, usePresencePoll } from '../../[conference]/[crisis]/CrisisContext';
@@ -579,7 +581,9 @@ function PersonRow({ m, delegates, spare = false, now, isMe, cabinetName, charac
         <div className="stf-cell stf-name flex items-center" data-label="" style={{ gap: 12 }}>
           <Avatar name={m.display_name} src={delegates ? picture : null} size={38} color={color ?? CK.forest2} />
           <span style={{ minWidth: 0 }}>
-            <b style={{ fontSize: 14.5, fontWeight: 800 }}>{m.display_name}</b>
+            {delegates && character && nameIsCharacter(m, character)
+              ? <b style={{ fontSize: 14.5, fontWeight: 800, color: CK.red }}>Name not set</b>
+              : <b style={{ fontSize: 14.5, fontWeight: 800 }}>{m.display_name}</b>}
             {m.role === 'assistant_director' && <span style={{ color: CK.inkSoft, fontSize: 12.5 }}> · Assistant</span>}
             {isMe && <span style={{ color: CK.inkSoft, fontSize: 12.5 }}> · You</span>}
             {m.email && <span style={{ display: 'block', fontSize: 12.5, color: CK.inkSoft }}>{m.email}</span>}
@@ -603,6 +607,7 @@ function PersonRow({ m, delegates, spare = false, now, isMe, cabinetName, charac
         </div>
         <div className="stf-act flex flex-wrap gap-2">
           {needsSpare && <Btn tone="ghost" size="sm" icon={<UserRoundPlus size={13} strokeWidth={1.5} />} onClick={() => setSpareOpen((x) => !x)} aria-expanded={spareOpen}>{spareOpen ? 'Close' : 'Give a spare'}</Btn>}
+          {delegates && !spare && !!character && <Btn tone="ghost" size="sm" icon={<UserRoundPlus size={13} strokeWidth={1.5} />} onClick={() => setOpen(true)}>Change character</Btn>}
           {spare && <Btn size="sm" icon={<UserRoundPlus size={13} strokeWidth={1.5} />} onClick={() => setSpareOpen((x) => !x)} aria-expanded={spareOpen}>{spareOpen ? 'Close' : 'Give a character'}</Btn>}
           <Btn tone="ghost" size="sm" icon={<Pencil size={13} strokeWidth={1.5} />} onClick={() => { if (expanded) { setOpen(false); onClearIssued(); } else setOpen(true); }} aria-expanded={expanded}>{expanded ? 'Close' : 'Manage'}</Btn>
         </div>
@@ -638,13 +643,20 @@ function PersonPanel({ m, isMe, issued, invite, onInvited, onIssued, onClearIssu
   const needsCabinet = role !== 'director' && role !== 'assistant_director';
   const pickedChar = role === 'delegate' && character ? core.characters.find((c) => c.id === character) : undefined;
   const effectiveCabinet = pickedChar ? pickedChar.cabinet_id ?? '' : cabinet;
+  // A delegate can move to ANY character in ANY cabinet (HultMUN, 23 Nov 2026: characters die and delegates swap often). Their cabinet
+  // follows the character (database trigger), so they leave the old cabinet by being given the new character. A character another
+  // delegate plays can be picked only while swapping is switched on (SWAP_DELEGATES_DB): then the two delegates trade characters.
+  const cabIndex = new Map(core.cabinets.map((c, i) => [c.id, i]));
   const charOptions: GSelectOption[] = [
     { value: '', label: 'No character yet' },
     ...core.characters
-      .filter((c) => c.status !== 'spare' && (!cabinet || c.cabinet_id === cabinet))
+      .filter((c) => c.status !== 'spare')
+      .sort((a, b) => (cabIndex.get(a.cabinet_id ?? '') ?? 99) - (cabIndex.get(b.cabinet_id ?? '') ?? 99) || a.sort - b.sort || a.name.localeCompare(b.name))
       .map((c) => {
-        const taken = core.members.find((x) => x.character_id === c.id && x.id !== m.id);
-        return { value: c.id, label: c.name, hint: taken ? `Played by ${taken.display_name}` : undefined };
+        const taken = core.members.find((x) => x.character_id === c.id && x.id !== m.id && x.role === 'delegate');
+        const cabName = core.cabinets.find((x) => x.id === c.cabinet_id)?.name;
+        const played = taken ? `Played by ${delegateLabel(taken, c) ?? 'another delegate'}${SWAP_DELEGATES_DB ? ', swap' : ''}` : 'Free';
+        return { value: c.id, label: c.name, hint: [cabName, played].filter(Boolean).join(' · '), disabled: !!taken && !SWAP_DELEGATES_DB };
       }),
   ];
 
@@ -652,12 +664,24 @@ function PersonPanel({ m, isMe, issued, invite, onInvited, onIssued, onClearIssu
 
   const save = async () => {
     if (busy || !name.trim() || !dirty) return;
+    // Someone else plays the character picked: trade characters with them, in one database call (only while swapping is on).
+    const occupant = role === 'delegate' && character && character !== m.character_id
+      ? core.members.find((x) => x.character_id === character && x.id !== m.id && x.role === 'delegate') ?? null : null;
+    if (occupant && !SWAP_DELEGATES_DB) { notifyErr('Someone else plays that character. Pick a free character.', 'crisis-staff'); return; }
     setBusy('save');
     try {
+      if (occupant) {
+        if (name.trim() !== m.display_name) await saveMember(ref, m.id, { display_name: name.trim() });
+        const r = await swapDelegateCharacters(ref, m.id, occupant.id);
+        if (!r.ok) { notifyErr('The characters changed while you were choosing. Try again.', 'crisis-staff'); await reloadCore(); return; }
+        notifyOk(`${name.trim()} and ${delegateLabel(occupant, null) ?? 'the other delegate'} swapped characters`, 'crisis-staff');
+        await reloadCore();
+        return;
+      }
       await saveMember(ref, m.id, {
         display_name: name.trim(), role, cabinet_id: needsCabinet ? effectiveCabinet || null : null, character_id: role === 'delegate' ? character || null : null,
       });
-      notifyOk('Saved', 'crisis-staff');
+      notifyOk(role === 'delegate' && character && character !== m.character_id ? `${name.trim()} now plays ${core.characters.find((c) => c.id === character)?.name ?? 'the character'}` : 'Saved', 'crisis-staff');
       await reloadCore();
     } catch (e) { notifyErr(crisisError(e, 'Could not save this person.'), 'crisis-staff'); }
     finally { setBusy(null); }

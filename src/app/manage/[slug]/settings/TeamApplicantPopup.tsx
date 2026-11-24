@@ -10,8 +10,9 @@
 //   seat     (Accept on a chair, Team, 14 Nov 2026) pick the committee to seat
 //            them in, "Accept and seat" or "Accept, seat later"
 //   reject   asked in place: "Reject this application?"
-// Every decision is the parent's (team/TeamApplications.tsx), which runs the shared
-// code in applications/teamDecisions.ts. This file only draws and asks.
+// Every decision is the parent's (team/useTeamDecisions.tsx, used by
+// applications/ApplicationsView.tsx with scope 'team'; 23 Nov 2026), which runs the
+// shared code in applications/teamDecisions.ts. This file only draws and asks.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Check, X } from 'lucide-react';

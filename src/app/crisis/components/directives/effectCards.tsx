@@ -6,7 +6,7 @@
 
 import { loadCities, type City } from '../map/cities';
 import { useMemo, useState, type Dispatch, type ReactNode } from 'react';
-import { CircleHelp, Coins, Lock, Map as MapIcon, Minus, Newspaper, Plus, Skull, Undo2, UserCheck, UsersRound, X, type LucideIcon } from 'lucide-react';
+import { CircleHelp, Coins, Lock, Map as MapIcon, MapPin, Minus, Newspaper, Plus, Skull, Undo2, UserCheck, UsersRound, X, type LucideIcon } from 'lucide-react';
 import GSelect from '@/components/GSelect';
 import { amount as fmtAmount } from '@/lib/crisis/format';
 import { kmBetween } from '@/lib/crisis/geo';
@@ -23,7 +23,7 @@ import { STAGEABLE_STATUSES, type EffectCard, type EffectsDraft, type UnitStage 
 export interface StageData { types: ResourceType[]; resources: Resource[]; units: MapUnit[]; regions: MapRegion[]; shapes: MapShape[]; countries: CountryOption[] }
 
 /** What a card asks the pop-up to show full size in place of the directive: the map editor for a unit move or a border. */
-export type MapRequest = { kind: 'border' } | { kind: 'unit'; cardId: string };
+export type MapRequest = { kind: 'border' } | { kind: 'unit'; cardId: string } | { kind: 'char'; cardId: string };
 
 /** Everything a card needs, built once by the pop-up (useEffectsEnv). */
 export interface CardEnv {
@@ -82,7 +82,8 @@ export const CARD_META: Record<EffectCard['kind'], { title: string; Icon: Lucide
   resources: { title: 'Resources', Icon: Coins },
   unit: { title: 'Move a Unit', Icon: MapIcon },
   border: { title: 'Change a Border', Icon: MapIcon },
-  character: { title: 'A Character', Icon: Skull },
+  character: { title: 'Character Status', Icon: Skull },
+  move: { title: 'Move a Character', Icon: MapPin },
   news: { title: 'Newsflash', Icon: Newspaper },
 };
 
@@ -92,7 +93,7 @@ function stepFor(n: number): number {
 }
 
 // ── owners of resources ──
-const ownerOf = (r: Resource) => (r.character_id ? `char:${r.character_id}` : `cab:${r.cabinet_id ?? ''}`);
+export const ownerOf = (r: Resource) => (r.character_id ? `char:${r.character_id}` : `cab:${r.cabinet_id ?? ''}`);
 
 /** The owner a resources card shows when it has not been told: the author's cabinet, then the author, then the first. */
 function defaultOwner(env: CardEnv): string {
@@ -101,7 +102,7 @@ function defaultOwner(env: CardEnv): string {
   if (env.authorCharacterId && rs.some((r) => ownerOf(r) === `char:${env.authorCharacterId}`)) return `char:${env.authorCharacterId}`;
   return rs[0] ? ownerOf(rs[0]) : '';
 }
-const effectiveOwner = (card: EffectCard, env: CardEnv) => card.target || defaultOwner(env);
+export const effectiveOwner = (card: EffectCard, env: CardEnv) => card.target || defaultOwner(env);
 
 /** The draft with everything this card staged taken out (the card itself stays). */
 export function clearCard(e: EffectsDraft, card: EffectCard, env: CardEnv): EffectsDraft {
@@ -115,6 +116,7 @@ export function clearCard(e: EffectsDraft, card: EffectCard, env: CardEnv): Effe
     case 'unit': { const units = { ...e.units }; delete units[card.target]; return { ...e, units }; }
     case 'border': { const regions = { ...e.regions }; if (card.target) delete regions[card.target]; return { ...e, regions, map: null }; }
     case 'character': { const characters = { ...e.characters }; delete characters[card.target]; return { ...e, characters }; }
+    case 'move': { const chars = { ...e.chars }; delete chars[card.target]; return { ...e, chars }; }
     case 'news': return { ...e, news: null };
   }
 }
@@ -447,6 +449,64 @@ export function CharacterCard({ card, env, onTarget, onRemove }: CardProps) {
         </>
       )}
       </>}
+    </CardShell>
+  );
+}
+
+// ── Move a character on the map ──
+// The card says who moves and where from and to, in words. The picker (the same one the character's own page uses) opens
+// full size in place of the directive (MapFullView). Nothing is written until Send reply; then the move is made exactly once
+// (an exact spot, so a repeat changes nothing), or waits in the unsent map with the other map changes (replyToDraft.ts).
+
+/** "Dobrynin: Havana to 50 km NW of Nassau". A character with no spot yet has no "from". */
+export function describeCharMove(ch: Character, to: { lng: number; lat: number } | undefined): string {
+  const from = typeof ch.location_lng === 'number' && typeof ch.location_lat === 'number' ? place(ch.location_lng, ch.location_lat) : null;
+  if (to) return from ? `${ch.name}: ${from} to ${place(to.lng, to.lat)}` : `${ch.name}: to ${place(to.lng, to.lat)}`;
+  return from ? `${ch.name}: ${from}` : `${ch.name}: no spot on the map yet`;
+}
+
+export function CharMoveCard({ card, env, onTarget, onRemove }: CardProps) {
+  const { effects, setEffects, cabById, charById } = env;
+  const taken = usedBy(env, 'move', card.id);
+  const options = useMemo(() => {
+    const sorted = [...env.characters].sort((a, b) => (a.id === env.authorCharacterId ? -1 : b.id === env.authorCharacterId ? 1 : 0));
+    return sorted.map((c) => ({
+      value: c.id, label: c.name, disabled: taken.has(c.id),
+      hint: taken.has(c.id) ? 'Already in another card' : [c.id === env.authorCharacterId ? 'Wrote this directive' : null, cabById.get(c.cabinet_id ?? '')?.name].filter(Boolean).join(', ') || undefined,
+      icon: <Avatar name={c.name} src={c.picture_url} size={24} color={cabById.get(c.cabinet_id ?? '')?.color ?? CK.red} />,
+    }));
+  }, [env.characters, env.authorCharacterId, cabById, taken]);
+  const ch = card.target ? charById.get(card.target) : undefined;
+  const to = ch ? effects.chars[ch.id] : undefined;
+  return (
+    <CardShell kind="move" onRemove={onRemove}>
+      {!env.powers.characters ? <Muted>You cannot change characters. The Crisis Director can allow it in Settings.</Muted> : (
+        <>
+          <div><FieldLabel>Character</FieldLabel>
+            <GSelect value={card.target} options={options} onChange={onTarget} placeholder="Pick a character" aria-label="Character to move" searchable />
+          </div>
+          {ch && (
+            <div className="flex flex-col" style={{ gap: 6 }}>
+              <p className="flex items-start" style={{ margin: 0, gap: 7, fontSize: 13.5, fontWeight: 600, lineHeight: 1.4, color: to ? CK.ink : CK.inkSoft, overflowWrap: 'anywhere' }}>
+                <MapPin size={15} strokeWidth={1.5} aria-hidden style={{ color: CK.red, flex: 'none', marginTop: 2 }} />
+                <span>{describeCharMove(ch, to)}</span>
+              </p>
+              {to && (
+                <button type="button" onClick={() => setEffects((e) => { const chars = { ...e.chars }; delete chars[ch.id]; return { ...e, chars }; })}
+                  className="inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+                  style={{ alignSelf: 'flex-start', gap: 4, border: 0, background: 'transparent', padding: 0, cursor: 'pointer', fontFamily: CK.font, fontSize: 12.5, fontWeight: 700, color: CK.forest, textDecoration: 'underline' }}>
+                  <Undo2 size={12} strokeWidth={1.8} aria-hidden />Keep them where they are
+                </button>
+              )}
+              <div className="flex flex-wrap" style={{ gap: 8 }}>
+                <Btn tone="green" size="sm" icon={<MapPin size={14} strokeWidth={1.5} />} onClick={() => env.openMap({ kind: 'char', cardId: card.id })}>
+                  {to ? 'Pick the spot again' : 'Pick the spot on the map'}
+                </Btn>
+              </div>
+            </div>
+          )}
+        </>
+      )}
     </CardShell>
   );
 }

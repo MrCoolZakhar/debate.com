@@ -19,6 +19,7 @@ import { ROLE_LABEL, type CrisisRole } from '@/lib/crisis/types';
 import { CK, Btn, MotionStyles } from '../../crisisKit';
 import { CrisisProvider, crisisBase, useCrisisGate, type CrisisContextValue } from './CrisisContext';
 import NewsPopup from '../../components/news/NewsPopup';
+import ApprovalQueue from '../../components/news/ApprovalQueue';
 import CabinetDirectivePrompt from '../../components/directives/CabinetDirectivePrompt';
 import ChairDirectivePrompt from '../../components/chair/ChairDirectivePrompt';
 import DelegateReplyPrompt from '../../components/delegate/DelegateReplyPrompt';
@@ -352,6 +353,7 @@ export default function CrisisLayout({ children }: { children: React.ReactNode }
           {children}
         </main>
         <NewsPopup />
+        <ApprovalQueue />
         <CabinetDirectivePrompt />
         <ChairDirectivePrompt />
         <DelegateReplyPrompt />

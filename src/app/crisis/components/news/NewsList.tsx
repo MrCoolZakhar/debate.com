@@ -8,6 +8,7 @@ import type { Cabinet, News } from '@/lib/crisis/types';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { CK, Card, Skeleton } from '../../crisisKit';
 import NewsDetailDialog from './NewsDetailDialog';
+import { AttachmentTag } from './AttachmentView';
 import { ZoomableImage } from './ImageLightbox';
 
 /** "12 min ago": never a calendar date (the crisis has its own in-world date). */
@@ -147,6 +148,7 @@ export function NewsCard({ n, cabinets, onOpen, fresh }: { n: News; cabinets: Ca
       </div>
       <h3 style={{ margin: '6px 0 4px', fontSize: 16, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{n.title}</h3>
       <p style={{ margin: 0, fontSize: 14, lineHeight: 1.55, color: CK.inkSoft, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{n.body}</p>
+      {n.attachment_url && <span style={{ display: 'block', marginTop: 6 }}><AttachmentTag url={n.attachment_url} name={n.attachment_name} /></span>}
       <span style={{ display: 'inline-block', marginTop: 6, fontSize: 13, fontWeight: 700, color: CK.forest, textDecoration: 'underline' }}>Read the full story</span>
     </>
   );

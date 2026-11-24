@@ -12,7 +12,6 @@ import { ArrowLeft, ChevronRight, Gavel, ScrollText, X } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { assignDirective, crisisError, listDirectives, listQueuedCabinetDirectivesFor } from '@/lib/crisis/api';
-import { dirNumber } from '@/lib/crisis/format';
 import { useCrisisLive } from '@/lib/crisis/live';
 import type { Directive } from '@/lib/crisis/types';
 import { serverNow } from '@/lib/serverClock';
@@ -20,7 +19,7 @@ import { agoLabel, Avatar, Btn, CK, useScrollLock } from '../../crisisKit';
 import { crisisBase, useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { staffLoads } from '../command/commandData';
 import { responsibleMembers } from '../command/setupKit';
-import { authorName, buildNames } from './directiveKit';
+import { authorName, buildNames, titleWithNo } from './directiveKit';
 import { StaffPic } from './directiveParts';
 import { CARD_GAP_BELOW, CabinetCrest, CabinetFoot, CabinetHead, CabinetName, SEAL_POP, cabinetColorOf, cabinetRing, cabinetWash, crestIndent } from './cabinetStamp';
 import { plainText } from './attachedImage';
@@ -219,7 +218,7 @@ export default function CabinetDirectivePrompt() {
               <div style={{ position: 'relative', overflow: 'visible', minWidth: 0, background: cabinetWash(cabinetColorOf(cabinet)), borderRadius: 22, padding: '26px 20px 18px', margin: `${SEAL_POP / 2 + 6}px 0 ${CARD_GAP_BELOW}px`, boxShadow: cabinetRing(cabinetColorOf(cabinet), 3, `${CK.shadow}, 0 24px 60px rgba(58,14,15,0.4)`) }}>
                 {/* The seal, the number and the small stamp sit on the card's top border; the name beside them with the state under it, the
                     navigation and X top right; who sent it is only a small fact under the title. */}
-                <CabinetCrest cabinet={cabinet} n={dirNumber(d)} sealSize={SEAL_POP} left={20} stamp="pop" />
+                <CabinetCrest cabinet={cabinet} sealSize={SEAL_POP} left={20} stamp="pop" />
                 <div className="flex items-start justify-between" style={{ gap: 8 }}>
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <CabinetName cabinet={cabinet} size={14.5} indent={crestIndent(SEAL_POP)} />
@@ -250,7 +249,7 @@ export default function CabinetDirectivePrompt() {
                     </button>
                   </div>
                 </div>
-                <h3 style={{ margin: '14px 0 0', fontSize: 25, lineHeight: 1.2, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{d.title}</h3>
+                <h3 style={{ margin: '14px 0 0', fontSize: 25, lineHeight: 1.2, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{titleWithNo(d)}</h3>
                 <div className="flex flex-wrap items-center" style={{ gap: '4px 12px', marginTop: 8, fontSize: 13, fontWeight: 600, color: CK.muted }}>
                   <span className="inline-flex items-center" style={{ gap: 6 }}>
                     From
@@ -295,9 +294,9 @@ export default function CabinetDirectivePrompt() {
               </div>
               <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', marginTop: 6 }}>
                 <div key={d.id} className="flex items-center" style={{ gap: 10 }}>
-                  <CabinetHead cabinet={cabinet} n={dirNumber(d)} sealSize={32} nameSize={13.5} />
+                  <CabinetHead cabinet={cabinet} sealSize={32} nameSize={13.5} />
                 </div>
-                <b style={{ display: 'block', marginTop: 8, fontSize: 18, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{d.title}</b>
+                <b style={{ display: 'block', marginTop: 8, fontSize: 18, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{titleWithNo(d)}</b>
 
                 <div role="listbox" aria-label="Staff" className="cm-fade" style={{ marginTop: 14, maxHeight: 'min(320px, 44dvh)', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
                   {others.length === 0 && <p style={{ margin: 8, fontSize: 14, color: CK.inkSoft }}>There is nobody else on the staff yet</p>}

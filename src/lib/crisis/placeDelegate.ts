@@ -30,3 +30,22 @@ export async function placeDelegate(ref: CrisisRef, member: Pick<Member, 'id'>, 
   await saveMember(ref, member.id, { character_id: character.id });
   return { ok: true };
 }
+
+/**
+ * Swapping two delegates' characters (the target character is played by someone else) is ONE atomic database call,
+ * crisis_swap_delegate_characters (docs/crisis/sql/hultmun-map-characters.sql, section B). It is NOT applied yet: keep this false
+ * until Peter's chat has applied the SQL. While false, a character someone else plays cannot be picked in Staff and Access;
+ * the director gives it to a free character instead (a delegate moves to ANY free character in any cabinet without it).
+ */
+export const SWAP_DELEGATES_DB = true;
+
+export type SwapResult = { ok: true } | { ok: false; reason: 'not_delegates' | 'changed' };
+
+export async function swapDelegateCharacters(ref: CrisisRef, memberA: string, memberB: string): Promise<SwapResult> {
+  const client = await getCrisisClient(ref.conf, ref.crisis);
+  const res = await client.rpc('crisis_swap_delegate_characters', { p_member_a: memberA, p_member_b: memberB });
+  if (res.error) throw new UserFacingError(crisisError(res.error, 'Could not swap the characters.'));
+  const r = res.data as { ok?: boolean; reason?: string } | null;
+  if (r?.ok) return { ok: true };
+  return { ok: false, reason: r?.reason === 'changed' ? 'changed' : 'not_delegates' };
+}

@@ -58,7 +58,7 @@ export function DirectiveCard({ d, author, onOpen }: { d: Directive; author: Per
           boxShadow: ask ? cabinetRing(color, 3, `${CK.shadow}, 0 0 0 5px rgba(47,95,143,0.35)`) : cabinetRing(color, 3, CK.shadow),
         }}
       >
-        <CabinetCrest cabinet={cabinet} n={dirNumber(d)} sealSize={SEAL_ROW} left={16} stamp="row" />
+        <CabinetCrest cabinet={cabinet} sealSize={SEAL_ROW} left={16} stamp="row" />
         <span
           title={tagWord}
           className="inline-flex items-center"
@@ -70,7 +70,7 @@ export function DirectiveCard({ d, author, onOpen }: { d: Directive; author: Per
           {tagIcon}{tagWord}
         </span>
         <CabinetName cabinet={cabinet} size={13} indent={crestIndent(SEAL_ROW)} />
-        <b style={{ display: 'block', marginTop: 6, fontSize: 17, lineHeight: 1.28, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{d.title}</b>
+        <b style={{ display: 'block', marginTop: 6, fontSize: 17, lineHeight: 1.28, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{dirNumber(d)}: {d.title}</b>
         <span
           title={text}
           className="line-clamp-2"

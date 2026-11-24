@@ -3,10 +3,11 @@
 // reply will make, small enough that about five fit without scrolling (more scroll inside the recap). Each line
 // has a tiny X that takes that change back out. Presentation of the staged draft only; writes nothing.
 
-import { Coins, Map as MapIcon, Newspaper, X, Zap, type LucideIcon } from 'lucide-react';
+import { Coins, Map as MapIcon, MapPin, Newspaper, X, Zap, type LucideIcon } from 'lucide-react';
 import { amount as fmtAmount } from '@/lib/crisis/format';
+import { OUTCOME_LABEL, type DirectiveOutcome } from '@/lib/crisis/types';
 import { CK } from '../../crisisKit';
-import { STATUS_META, place, round2, type CardEnv } from './effectCards';
+import { STATUS_META, describeCharMove, place, round2, type CardEnv } from './effectCards';
 import { countChanges } from './replyDraft';
 import { setSize } from '../map/mapEdits';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
@@ -57,13 +58,21 @@ export function buildChanges(env: CardEnv): Change[] {
       remove: () => setEffects((e) => { const characters = { ...e.characters }; delete characters[id]; return { ...e, characters }; }),
     });
   }
+  for (const [id, p] of Object.entries(effects.chars)) {
+    const ch = charById.get(id);
+    out.push({
+      id: `m-${id}`, icon: MapPin, text: ch ? describeCharMove(ch, p) : `A character: to ${place(p.lng, p.lat)}`,
+      remove: () => setEffects((e) => { const chars = { ...e.chars }; delete chars[id]; return { ...e, chars }; }),
+    });
+  }
   if (effects.news && effects.news.title.trim()) {
     out.push({ id: 'news', icon: Newspaper, text: `News: ${effects.news.title.trim()}`, remove: () => setEffects((e) => ({ ...e, news: null })) });
   }
   return out;
 }
 
-export default function EffectsRecap({ env }: { env: CardEnv }) {
+/** `outcome` is the one chosen in the composer: the changes run whatever it is, so a Denied or Clarify reply says so before it is sent. */
+export default function EffectsRecap({ env, outcome }: { env: CardEnv; outcome?: DirectiveOutcome | null }) {
   const changes = buildChanges(env);
   const total = countChanges(env.effects);
   const { settings } = useCrisis();
@@ -84,8 +93,7 @@ export default function EffectsRecap({ env }: { env: CardEnv }) {
               <li key={c.id} className="flex items-start" style={{ gap: 6, padding: '1px 0' }}>
                 <I size={12} strokeWidth={1.5} aria-hidden style={{ color: CK.red, flex: 'none', marginTop: 3 }} />
                 <span style={{ flex: 1, minWidth: 0, fontSize: 12, lineHeight: 1.3, fontWeight: 600, color: CK.ink, overflowWrap: 'anywhere' }}>{c.text}</span>
-                <button type="button" onClick={c.remove} aria-label={`Remove: ${c.text}`} title="Remove this change"
-                  className="grid place-items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+                <button type="button" onClick={c.remove} aria-label={`Remove: ${c.text}`}                   className="grid place-items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
                   style={{ width: 18, height: 18, borderRadius: 6, border: 0, background: CK.well, color: CK.ink, cursor: 'pointer', flex: 'none' }}>
                   <X size={11} strokeWidth={1.8} />
                 </button>
@@ -93,6 +101,9 @@ export default function EffectsRecap({ env }: { env: CardEnv }) {
             );
           })}
         </ul>
+      )}
+      {total > 0 && outcome && outcome !== 'approved' && outcome !== 'partial' && (
+        <p style={{ margin: '6px 0 0', fontSize: 11.5, lineHeight: 1.3, fontWeight: 700, color: CK.goldDeep }}>These changes still happen when you send, because the outcome is {OUTCOME_LABEL[outcome]}.</p>
       )}
       {mapWaits && (
         <p style={{ margin: '6px 0 0', fontSize: 11.5, lineHeight: 1.3, fontWeight: 600, color: CK.inkSoft }}>{MAP_WAITS_NOTE}</p>

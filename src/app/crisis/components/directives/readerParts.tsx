@@ -20,23 +20,23 @@ export const STRIP = 232;
 export const HIDDEN = 40;
 export const MAX_STACK = HEIGHTS.length;
 
-const iconBtn = { width: 34, height: 34, borderRadius: '50%', border: 0, background: CK.well, color: CK.forest, cursor: 'pointer', flex: 'none' } as const;
+const iconBtn = { width: 42, height: 42, borderRadius: '50%', border: 0, background: CK.well, color: CK.forest, cursor: 'pointer', flex: 'none' } as const;
 
 /** The arrows and "3 of 12" of the reader's footer. */
 export function NavControls({ index, total, onPrev, onNext }: { index: number; total: number; onPrev: () => void; onNext: () => void }) {
   return (
     <span className="inline-flex items-center" style={{ gap: 8 }}>
-      <button type="button" onClick={onPrev} disabled={total < 2} aria-label="Previous item" title="Previous (left arrow)"
+      <button type="button" onClick={onPrev} disabled={total < 2} aria-label="Previous item" 
         className="grid place-items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] active:scale-[0.94] transition-transform disabled:opacity-40" style={iconBtn}>
-        <ChevronLeft size={19} strokeWidth={1.6} />
+        <ChevronLeft size={22} strokeWidth={1.6} />
       </button>
       <span className="inline-flex items-baseline" style={{ gap: 5, whiteSpace: 'nowrap' }}>
         <b style={{ fontSize: 20, fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{index + 1}</b>
         <span style={{ fontSize: 12.5, fontWeight: 600, color: CK.inkSoft }}>of {total}</span>
       </span>
-      <button type="button" onClick={onNext} disabled={total < 2} aria-label="Next item" title="Next (right arrow)"
+      <button type="button" onClick={onNext} disabled={total < 2} aria-label="Next item" 
         className="grid place-items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] active:scale-[0.94] transition-transform disabled:opacity-40" style={iconBtn}>
-        <ChevronRight size={19} strokeWidth={1.6} />
+        <ChevronRight size={22} strokeWidth={1.6} />
       </button>
     </span>
   );

@@ -8,16 +8,20 @@
 // map FULL SIZE in place of the whole pop-up (MapFullView) with a Back button, because a pop-up never opens
 // another on top of itself. On a screen narrower than 1000px the side panel is a second step reached by a button.
 // Nothing is applied until Send reply: not the outcome, not the text, not a single change.
+// Opening a directive puts it in the opener's "Mine" lane (HultMUN's director, 23 Nov 2026): an open directive that is not already theirs is
+// claimed for them (crisis_assign_directive with no member), unless a teammate is typing its reply right now ("Take over" claims it itself).
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { ArrowLeft, Send, Zap } from 'lucide-react';
 import Portal from '@/components/Portal';
+import { notifyErr } from '@/lib/appNotify';
+import { assignDirective, crisisError } from '@/lib/crisis/api';
 import type { Directive } from '@/lib/crisis/types';
 import { Btn, CK, useScrollLock } from '../../crisisKit';
 import CharacterModal from '../character/CharacterModal';
 import { InPlaceCharacterScope } from '../character/CharacterProfileHost';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
-import { authorName, buildNames } from './directiveKit';
+import { authorName, buildNames, isBeingWritten, isOpenStatus } from './directiveKit';
 import { cabinetColorOf, isCabinetDirective } from './cabinetStamp';
 import DirectiveMain, { EffectsStepButton } from './DirectiveMain';
 import { DirectiveNav } from './DirectiveNav';
@@ -69,7 +73,7 @@ function typingTarget(t: EventTarget | null): boolean {
 
 export default function DirectivePopup(props: DirectivePopupProps) {
   const { onClose, onSelect, queue } = props;
-  const { staff } = useCrisis();
+  const { staff, ref, memberId } = useCrisis();
 
   const list = useMemo<Directive[]>(() => queue ?? [], [queue]);
 
@@ -87,12 +91,38 @@ export default function DirectivePopup(props: DirectivePopupProps) {
   }
 
   const index = list.findIndex((x) => x.id === shown.id);
+  // Where the directive in front last stood in the queue: claiming one in the Unassigned lane takes it out of that lane, and the arrows
+  // must go on from the same place instead of starting over.
+  const lastIndex = useRef(-1);
+  useEffect(() => { if (index >= 0) lastIndex.current = index; }, [index]);
   const select = useCallback((d: Directive) => { setShown(d); onSelect?.(d.id); }, [onSelect]);
   const step = useCallback((delta: 1 | -1) => {
     if (list.length === 0) return;
-    const at = index < 0 ? (delta > 0 ? 0 : list.length - 1) : (index + delta + list.length) % list.length;
+    let at: number;
+    if (index >= 0) at = (index + delta + list.length) % list.length;
+    else if (lastIndex.current >= 0) at = delta > 0 ? Math.min(lastIndex.current, list.length - 1) : Math.max(0, lastIndex.current - 1);
+    else at = delta > 0 ? 0 : list.length - 1;
     if (list[at] && list[at].id !== shown.id) select(list[at]);
   }, [list, index, shown.id, select]);
+
+  // Opening a directive claims it: it lands in the opener's Mine lane. Tried once per directive per pop-up.
+  const claimTried = useRef(new Set<string>());
+  const changedRef = useRef(props.onChanged);
+  useEffect(() => { changedRef.current = props.onChanged; });
+  useEffect(() => {
+    if (!staff || !memberId) return;
+    const d = shown;
+    if (claimTried.current.has(d.id) || !isOpenStatus(d) || d.assigned_member_id === memberId) return;
+    // A teammate typing the reply keeps it; "Take over" moves it to the person taking over.
+    if (d.drafting_member && d.drafting_member !== memberId && isBeingWritten(d, Date.now())) return;
+    claimTried.current.add(d.id);
+    assignDirective(ref, d.id)
+      .then(() => {
+        setShown((cur) => (cur.id === d.id ? { ...cur, assigned_member_id: memberId, status: cur.status === 'queued' ? 'claimed' : cur.status } : cur));
+        changedRef.current?.('claimed');
+      })
+      .catch((e) => notifyErr(crisisError(e, 'Could not put this directive in your list.'), 'crisis-directive-claim'));
+  }, [shown, staff, memberId, ref]);
 
   const guard = useRef<PopupGuard>({ mapOpen: false, closeMap: () => {} });
   // A character's profile opened from a name in here: it takes the place of the whole pop-up (never on top of it).
@@ -263,7 +293,7 @@ function PopupBody({ directive: d, onClose, onChanged, notesVersion = 0, nav, on
               <p style={{ margin: 0, fontSize: 13.5, fontWeight: 600, color: CK.inkSoft, fontFamily: CK.font }}>Changing a sent reply changes its words only. Resources, units, borders, characters and news do not run again.</p>
             ) : <EffectsPanel env={env} />}
           </div>
-          {d.status !== 'answered' && <EffectsRecap env={env} />}
+          {d.status !== 'answered' && <EffectsRecap env={env} outcome={reply.outcome} />}
         </>
       ) : (
         <InternalNote crisisRef={ref} directiveId={d.id} onAdded={() => setNoteTick((v) => v + 1)} fill />

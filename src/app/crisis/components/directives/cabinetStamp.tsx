@@ -1,7 +1,6 @@
 // Gavelling Crisis: the look of a CABINET directive, in one place (owner, 1 Nov 2026). A cabinet directive is a card framed in its
 // cabinet's own colour with a very faint wash of that colour over the whole card. Everything that matters hangs OVER the card's border,
-// half outside, never clipped: the cabinet's SEAL (no border, no disc behind it, a soft drop shadow only) on the top left, the "No. 26"
-// badge beside it, the red CABINET stamp (small, tilted, on a white ground) on the top border after the badge, the assigned staff
+// half outside, never clipped: the cabinet's SEAL (no border, no disc behind it, a soft drop shadow only) on the top left, the red CABINET stamp (small, tilted, on a white ground) on the top border after the badge, the assigned staff
 // person's avatar on the top right (Command only). The SUBMITTER is not drawn on a card at all (owner, 1 Nov 2026: no hanging portrait, no
 // name); the icons and the wait sit on the card's bottom row (CabinetFoot).
 //
@@ -14,7 +13,6 @@ import type { Cabinet, Directive } from '@/lib/crisis/types';
 import { Avatar, CK } from '../../crisisKit';
 import { crisisDisplay } from '../../displayFont';
 import { CharacterLink, CharacterName } from '../character/CharacterProfileHost';
-import { NumberBadge } from './directiveParts';
 
 export const STAMP_RED = '#A3412F';
 
@@ -93,16 +91,16 @@ export const SEAL_POP = 64;
 export const crestIndent = (sealSize: number): number => sealSize + 8;
 
 /**
- * The crest on the card's top border: the seal (half outside, bigger, no ring) with the "No. 26" badge right beside it, and the small CABINET
- * stamp (`stamp`, white ground, tilted) after the badge, all ON the border. Absolutely positioned: put it as a child of the
- * (position: relative, overflow: visible) card. `sealTop` / `badgeTop` / `stampTop` override where they sit (a pop-up on a phone has no
- * outside to overlap into; `stampTop` is where the stamp's CENTRE sits, 0 = on the border).
+ * The crest on the card's top border: the seal (half outside, bigger, no ring) and the small CABINET stamp (white ground, tilted) right
+ * beside it, both ON the border. The directive's number is NOT drawn here any more (HultMUN's director, 23 Nov 2026): it is part of the
+ * title ("26: Title"), and the cabinet's own name (CabinetName, in its colour) already sits beside the seal. `n` is kept so old callers
+ * compile. Absolutely positioned: put it as a child of the (position: relative, overflow: visible) card. `sealTop` overrides where the
+ * seal sits (a pop-up on a phone has no outside to overlap into; `stampTop` is where the stamp's CENTRE sits, 0 = on the border).
  */
-export function CabinetCrest({ cabinet, n, sealSize = SEAL_ROW, left = 14, sealTop, badgeTop = -9, stamp, stampTop = 0 }: {
-  cabinet?: Pick<Cabinet, 'name' | 'color' | 'logo_url'> | null; n: number; sealSize?: number; left?: number;
-  sealTop?: number | string; badgeTop?: number | string; stamp?: StampSize | false; stampTop?: number | string;
+export function CabinetCrest({ cabinet, sealSize = SEAL_ROW, left = 14, sealTop, stamp, stampTop = 0 }: {
+  cabinet?: Pick<Cabinet, 'name' | 'color' | 'logo_url'> | null; /** Unused: the number lives in the title. */ n?: number; sealSize?: number; left?: number;
+  sealTop?: number | string; /** Unused: there is no badge to place. */ badgeTop?: number | string; stamp?: StampSize | false; stampTop?: number | string;
 }) {
-  const color = cabinetColorOf(cabinet);
   return (
     <>
       <CabinetSeal
@@ -110,9 +108,8 @@ export function CabinetCrest({ cabinet, n, sealSize = SEAL_ROW, left = 14, sealT
         size={sealSize}
         style={{ position: 'absolute', zIndex: 3, top: sealTop ?? -Math.round(sealSize / 2), left, pointerEvents: 'none' }}
       />
-      <NumberBadge n={n} color={color} style={{ position: 'absolute', zIndex: 3, top: badgeTop, left: left + sealSize + 6, pointerEvents: 'none' }} />
       {stamp && (
-        <CabinetStamp size={stamp} style={{ position: 'absolute', zIndex: 3, top: stampTop, left: left + sealSize + 6 + 74, transform: 'translateY(-50%) rotate(-8deg)' }} />
+        <CabinetStamp size={stamp} style={{ position: 'absolute', zIndex: 3, top: stampTop, left: left + sealSize + 8, transform: 'translateY(-50%) rotate(-8deg)' }} />
       )}
     </>
   );
@@ -129,16 +126,15 @@ export function CabinetName({ cabinet, size = 13.5, indent = 0, style }: {
   );
 }
 
-/** A plain inline head (seal, name, number) for places that are not the framed card, such as a step inside a pop-up. */
-export function CabinetHead({ cabinet, n, sealSize = 32, nameSize = 13.5, after }: {
-  cabinet?: Pick<Cabinet, 'name' | 'color' | 'logo_url'> | null; n: number; sealSize?: number; nameSize?: number; after?: ReactNode;
+/** A plain inline head (seal, name) for places that are not the framed card, such as a step inside a pop-up. The number is in the title. */
+export function CabinetHead({ cabinet, sealSize = 32, nameSize = 13.5, after }: {
+  cabinet?: Pick<Cabinet, 'name' | 'color' | 'logo_url'> | null; /** Unused: the number lives in the title. */ n?: number; sealSize?: number; nameSize?: number; after?: ReactNode;
 }) {
   const color = cabinetColorOf(cabinet);
   return (
     <span className="flex items-center flex-wrap" style={{ gap: '4px 9px', minWidth: 0, fontFamily: CK.font }}>
       <CabinetSeal cabinet={cabinet} size={sealSize} />
       <b style={{ fontSize: nameSize, fontWeight: 800, color, lineHeight: 1.2, overflowWrap: 'break-word', wordBreak: 'normal' }}>{cabinet?.name ?? 'Cabinet'}</b>
-      <NumberBadge n={n} color={color} style={{ flex: 'none' }} />
       {after}
     </span>
   );

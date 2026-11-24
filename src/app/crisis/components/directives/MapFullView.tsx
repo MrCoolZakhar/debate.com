@@ -10,7 +10,8 @@ import { Btn, CK } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { applyLocal, diffData, emptySet, setSize, type MapData, type StageOptions } from '../map/mapEdits';
 import WarMap from '../map/WarMap';
-import { describeUnitMove, stageUnitChange, usedBy, type CardEnv, type MapRequest } from './effectCards';
+import CharacterMapPicker from '../character/CharacterMapPicker';
+import { describeCharMove, describeUnitMove, stageUnitChange, usedBy, type CardEnv, type MapRequest } from './effectCards';
 
 export default function MapFullView({ env, req, onBack }: { env: CardEnv; req: MapRequest; onBack: () => void }) {
   const { ref } = useCrisis();
@@ -37,7 +38,8 @@ export default function MapFullView({ env, req, onBack }: { env: CardEnv; req: M
   // The map is read once when it opens: the map as it is, with this reply's earlier border changes laid over it.
   const [startData] = useState<MapData | null>(() => (baseMap ? applyLocal(baseMap, effects.map ?? emptySet(), ref.id) : null));
 
-  const card = req.kind === 'unit' ? effects.cards.find((c) => c.id === req.cardId) : undefined;
+  const card = req.kind === 'unit' || req.kind === 'char' ? effects.cards.find((c) => c.id === req.cardId) : undefined;
+  const mover = req.kind === 'char' && card ? env.charById.get(card.target) : undefined;
   const unitId = card?.target ?? '';
   const unit = data?.units.find((u) => u.id === unitId);
   const moves = useMemo(() => {
@@ -72,8 +74,10 @@ export default function MapFullView({ env, req, onBack }: { env: CardEnv; req: M
   }
 
   const n = setSize(effects.map);
-  const title = req.kind === 'unit' ? 'Move a Unit' : 'Change a Border';
-  const sub = req.kind === 'unit'
+  const title = req.kind === 'unit' ? 'Move a Unit' : req.kind === 'char' ? 'Move a Character' : 'Change a Border';
+  const sub = req.kind === 'char'
+    ? (mover ? describeCharMove(mover, effects.chars[mover.id]) : 'Pick the character on the card first.')
+    : req.kind === 'unit'
     ? (unit ? describeUnitMove(unit, effects.units[unit.id]) : 'Pick a unit on the map, then drag it to where it goes. Dashed lines show the moves this reply plans.')
     : (n ? `${n} ${n === 1 ? 'territory' : 'territories'} will change when you send the reply.` : 'Nothing changes yet. The real borders stay visible underneath.');
 
@@ -90,7 +94,22 @@ export default function MapFullView({ env, req, onBack }: { env: CardEnv; req: M
         </div>
       </div>
       <div ref={body} style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '10px 14px 14px' }}>
-        {stage ? <WarMap stage={stage} /> : (
+        {req.kind === 'char' ? (
+          mover ? (
+            // The picker is the character page's own. Its "Remove the spot" button has no meaning for a reply (a spot is only ever moved), so it is hidden here.
+            <div className="cmv-picker">
+              <style>{'.cmv-picker .cm-btn:nth-of-type(2) { display: none; }'}</style>
+              <CharacterMapPicker
+                key={mover.id}
+                name={mover.name} picture={mover.picture_url} color={env.cabById.get(mover.cabinet_id ?? '')?.color ?? null}
+                lng={effects.chars[mover.id]?.lng ?? mover.location_lng} lat={effects.chars[mover.id]?.lat ?? mover.location_lat}
+                label=""
+                onSave={(sp) => { setEffects((e) => ({ ...e, chars: { ...e.chars, [mover.id]: { lng: sp.lng, lat: sp.lat } } })); onBack(); }}
+                onClear={() => {}}
+              />
+            </div>
+          ) : <p style={{ margin: 0, fontSize: 14, color: CK.inkSoft }}>Pick the character on the card first.</p>
+        ) : stage ? <WarMap stage={stage} /> : (
           <div className="animate-pulse" style={{ height: '100%', minHeight: 300, borderRadius: 16, background: CK.well }} aria-busy="true" />
         )}
       </div>

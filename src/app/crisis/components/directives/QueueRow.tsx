@@ -1,7 +1,7 @@
 'use client';
 // Gavelling Crisis: one directive as a queue row (the one shared look for every directive row).
 // The TITLE comes first, runs the full width of the card and is the biggest text on it; it wraps and is
-// never cut. The number ("No. 13") is a small badge overlapping the top edge. Under the title: the
+// never cut. The number is part of it ("13: Title"); the small badge overlapping the top edge is the CABINET's name in its colour. Under the title: the
 // character on the left (round portrait, surname in bold, the character's title beneath it), and on the
 // right, small: theme, kind, cabinet logo, wait time, backroomer. Clicking the portrait opens the character.
 // Used by the backroom inbox and the "Waiting for a Reply" card on Command.
@@ -13,12 +13,11 @@
 import { Clock, MessageCircle, Pencil } from 'lucide-react';
 import { VisibilityMark, visibilityOf } from './visibilityMark';
 import type { Directive } from '@/lib/crisis/types';
-import { dirNumber } from '@/lib/crisis/format';
 import { Avatar, CK } from '../../crisisKit';
 import { CharacterLink, CharacterName } from '../character/CharacterProfileHost';
 import { seatFitFontPx } from '@/lib/seatName';
-import { CabinetLogo, NumberBadge, shortName, StaffPic, ThemeTags } from './directiveParts';
-import { KIND_ICON, authorName, writerOf, writingAge, writtenByOther, type Names } from './directiveKit';
+import { CabinetBadge, CabinetLogo, shortName, StaffPic, ThemeTags } from './directiveParts';
+import { KIND_ICON, authorName, titleWithNo, writerOf, writingAge, writtenByOther, type Names } from './directiveKit';
 import { CARD_GAP_BELOW, CabinetCrest, CabinetFoot, CabinetName, SEAL_ROW, cabinetColorOf, cabinetRing, cabinetWash, crestIndent, isCabinetDirective } from './cabinetStamp';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { useNow } from './useNow';
@@ -68,18 +67,18 @@ export default function QueueRow({ d, names, whenLabel, sev, selected, delegateN
         }}
       >
         {/* The seal, the number and the small stamp sit ON the card's top border; the submitter is not shown on the card. */}
-        <CabinetCrest cabinet={cab} n={dirNumber(d)} sealSize={seal} left={padX} stamp={compact ? 'xs' : 'row'} />
+        <CabinetCrest cabinet={cab} sealSize={seal} left={padX} stamp={compact ? 'xs' : 'row'} />
         <button
           type="button"
           onClick={onOpen}
-          aria-label={`Open cabinet directive No. ${dirNumber(d)}: ${d.title}`}
+          aria-label={`Open cabinet directive ${titleWithNo(d)}`}
           className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] transition-transform active:scale-[0.99]"
           style={{ position: 'absolute', inset: 0, zIndex: 1, width: '100%', border: 0, background: 'transparent', borderRadius: 'inherit', cursor: 'pointer', padding: 0 }}
         />
         <div style={{ position: 'relative', fontFamily: CK.font, color: CK.ink, padding: compact ? `11px ${padX}px 9px` : `13px ${padX}px 11px`, pointerEvents: 'none' }}>
           {/* The name: one line beside the seal; Command hangs the assignee's avatar on the card's top right corner, so it keeps clear of it. */}
           <CabinetName cabinet={cab} size={compact ? 12.5 : 13.5} indent={crestIndent(seal)} style={{ paddingRight: compact ? 40 : 0 }} />
-          <span style={{ display: 'block', marginTop: compact ? 5 : 7, fontSize: compact ? 15.5 : 18, fontWeight: 800, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{d.title}</span>
+          <span style={{ display: 'block', marginTop: compact ? 5 : 7, fontSize: compact ? 15.5 : 18, fontWeight: 800, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{titleWithNo(d)}</span>
           {/* The bottom line: the icons and the wait. */}
           <CabinetFoot marginTop={compact ? 6 : 8}>
             <VisibilityMark v={visibilityOf(d)} size="sm" />
@@ -124,20 +123,20 @@ export default function QueueRow({ d, names, whenLabel, sev, selected, delegateN
         marginTop: 14, boxShadow: shadow, opacity: other ? 0.62 : 1, filter: other ? 'grayscale(0.7)' : undefined,
       }}
     >
-      <NumberBadge n={dirNumber(d)} color={color} style={{ position: 'absolute', zIndex: 2, top: -9, left: 12 }} />
+      <CabinetBadge cabinet={cab} color={color} style={{ position: 'absolute', zIndex: 2, top: -10, left: 12 }} />
 
       {/* The whole card opens the directive: one button laid over the content; the portrait is a second button above it. */}
       <button
         type="button"
         onClick={onOpen}
-        aria-label={`Open directive No. ${dirNumber(d)}: ${d.title}`}
+        aria-label={`Open directive ${titleWithNo(d)}`}
         className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] transition-transform active:scale-[0.99]"
         style={{ position: 'absolute', inset: 0, zIndex: 1, width: '100%', border: 0, background: 'transparent', borderRadius: 'inherit', cursor: 'pointer', padding: 0 }}
       />
 
       <div style={{ position: 'relative', fontFamily: CK.font, color: CK.ink, padding: compact ? '14px 12px 9px' : '16px 14px 11px', pointerEvents: 'none' }}>
         {/* The title runs the whole width of the card. */}
-        <span style={{ display: 'block', fontSize: titleSize, fontWeight: 800, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{d.title}</span>
+        <span style={{ display: 'block', fontSize: titleSize, fontWeight: 800, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{titleWithNo(d)}</span>
 
         {/* Under it: the character (portrait, surname, title) on the left; wait, theme and backroomer small on the right. */}
         <span className="flex flex-wrap items-center" style={{ gap: '6px 10px', marginTop: compact ? 8 : 10 }}>

@@ -44,6 +44,9 @@ export async function listDirectiveCoauthors(ref: CrisisRef, directiveId: string
   return ((res.data ?? []) as Array<{ character_id: string }>).map((r) => r.character_id);
 }
 
+/** A directive's title as it is read everywhere in the backroom: the number is part of it, "97: Title". */
+export const titleWithNo = (d: Pick<Directive, 'no' | 'cabinet_no' | 'title'>): string => `${dirNumber(d)}: ${d.title}`;
+
 export type Lane = 'mine' | 'unclaimed' | 'open' | 'waiting' | 'answered';
 export type QueueOrder = 'fair' | 'oldest' | 'newest';
 
