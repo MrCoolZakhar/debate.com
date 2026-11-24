@@ -49,7 +49,6 @@ import {
   KIT_CSS, OUTFIT, TermsLine, TextButton,
 } from './authModalKit';
 import AuthQuestionnaire, { CV_QUESTION } from './AuthQuestionnaire';
-import { GoogleIdButton } from './GoogleIdButton';
 import { CrisisAuthSide, CRISIS_AUTH_CSS } from './CrisisAuthSide';
 import { friendlyError } from '@/lib/friendlyError';
 import { joinName, nameProblem, nameProblemMessage, tidyName, titleCaseSuggestion, toTitleCase } from '@/lib/personName';
@@ -352,26 +351,6 @@ function AuthModal({ request }: { request: AuthRequest }) {
     if (e) { setOauthBusy(false); setError(friendlyAuthError(e.message)); }
   }
 
-  /** Google's own button handed us an ID token: sign in here, no redirect through Supabase. */
-  async function signInWithGoogleToken(token: string, nonce: string) {
-    if (oauthBusy) return;
-    setError('');
-    clearPendingBasics();
-    setOauthBusy(true);
-    const { data, error: e } = await supabase.auth.signInWithIdToken({ provider: 'google', token, nonce });
-    if (e || !data.user) {
-      setOauthBusy(false);
-      setError(e ? friendlyAuthError(e.message) : 'Google sign-in did not finish. Try again.');
-      return;
-    }
-    // A Google account made a moment ago gets the new-account steps (basics, then the
-    // questionnaire), the same as the callback's isNew rule for the redirect flow.
-    const created = Date.parse(data.user.created_at ?? '');
-    const justCreated = Number.isFinite(created) && Date.now() - created < 5 * 60 * 1000;
-    setOauthBusy(false);
-    await afterSignedIn(justCreated);
-  }
-
   async function submitEmail(e: React.FormEvent) {
     e.preventDefault();
     if (busy) return;
@@ -498,20 +477,17 @@ function AuthModal({ request }: { request: AuthRequest }) {
                 <GreenButton busy={busy} busyText="Checking…">Continue</GreenButton>
               </div>
               <div className="gv-or" aria-hidden><span /><em>or</em><span /></div>
-              <GoogleIdButton
-                onToken={(t, n) => { void signInWithGoogleToken(t, n); }}
-                fallback={
-                  <div className="gv-socials">
-                    <button type="button" onClick={startGoogle} disabled={oauthBusy} aria-label="Continue with Google" title="Continue with Google" className={`gv-social ${FOCUS}`}>
-                      <GoogleIcon />
-                      {/* The word shows on the phone sheet only, where this is a
-                          full-width outlined button and a bare tile reads as a
-                          mystery. Same accessible name either way. */}
-                      <span className="gv-social-label">Continue with Google</span>
-                    </button>
-                  </div>
-                }
-              />
+              {/* Google sign-in goes through the Supabase redirect (hotfix 24 Nov 2026: Google's own
+                  button was refused, no registered origin). GoogleIdButton.tsx stays unused. */}
+              <div className="gv-socials">
+                <button type="button" onClick={startGoogle} disabled={oauthBusy} aria-label="Continue with Google" title="Continue with Google" className={`gv-social ${FOCUS}`}>
+                  <GoogleIcon />
+                  {/* The word shows on the phone sheet only, where this is a
+                      full-width outlined button and a bare tile reads as a
+                      mystery. Same accessible name either way. */}
+                  <span className="gv-social-label">Continue with Google</span>
+                </button>
+              </div>
               <p className="gv-auth-terms">
                 By continuing you agree to the{' '}
                 <Link href="/terms" target="_blank" rel="noopener" className={`gv-inline ${FOCUS}`}>Terms</Link> and{' '}
@@ -540,16 +516,10 @@ function AuthModal({ request }: { request: AuthRequest }) {
             <div className="gv-auth-screen">
               <p className="gv-auth-lead"><strong>{email}</strong> signs in with Google.</p>
               {error && <ErrorLine>{error}</ErrorLine>}
-              <GoogleIdButton
-                onToken={(t, n) => { void signInWithGoogleToken(t, n); }}
-                fallback={
-                  <button type="button" onClick={startGoogle} disabled={oauthBusy} className={`gv-social ${FOCUS}`} style={{ width: '100%', gap: 12, fontFamily: OUTFIT, fontSize: 16, fontWeight: 600, color: INK }} data-autofocus>
-                    <GoogleIcon />
-                    {oauthBusy ? 'Opening Google…' : 'Continue with Google'}
-                  </button>
-                }
-              />
-              {oauthBusy && <Hint>Signing you in…</Hint>}
+              <button type="button" onClick={startGoogle} disabled={oauthBusy} className={`gv-social ${FOCUS}`} style={{ width: '100%', gap: 12, fontFamily: OUTFIT, fontSize: 16, fontWeight: 600, color: INK }} data-autofocus>
+                <GoogleIcon />
+                {oauthBusy ? 'Opening Google…' : 'Continue with Google'}
+              </button>
               <Hint>Rather use a password? <TextButton onClick={() => go('forgot')}>Email me a link to set one</TextButton></Hint>
             </div>
           )}
