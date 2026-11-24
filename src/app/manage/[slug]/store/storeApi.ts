@@ -270,6 +270,24 @@ export function weeksLabel(days: number): string {
 
 // ── The Store's data ───────────────────────────────────────────────────────
 
+/** A Job Board promotion (my_job_promotions, newest first): counted with the spotlights (24 Nov 2026). */
+export interface JobPromotion {
+  promotion_id: string;
+  listing_id: string;
+  title: string;
+  role: string;
+  committee: string | null;
+  days: number;
+  with_homepage: boolean;
+  credits: number;
+  starts_on: string;
+  ends_on: string;
+  status: 'upcoming' | 'live' | 'ended' | 'cancelled';
+  views: number;
+  clicks: number;
+  by_day: { day: string; views: number; clicks: number }[];
+}
+
 export interface StoreData {
   state: StoreState | null;
   email: EmailAllowance | null;
@@ -277,10 +295,12 @@ export interface StoreData {
   stats: SpotlightStat[];
   prices: Record<string, PlacementPrice>;
   continent: string | null;
+  /** Never fails the Store: an error or a non-array reads as none. */
+  jobPromotions: JobPromotion[];
 }
 
 export function useStoreData(conferenceId: string | null, country: string | null) {
-  const [data, setData] = useState<StoreData>({ state: null, email: null, spotlights: [], stats: [], prices: {}, continent: null });
+  const [data, setData] = useState<StoreData>({ state: null, email: null, spotlights: [], stats: [], prices: {}, continent: null, jobPromotions: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const seq = useRef(0);
@@ -290,7 +310,7 @@ export function useStoreData(conferenceId: string | null, country: string | null
     const mine = ++seq.current;
     try {
       const client = await authedClient();
-      const [st, em, sp, ss, pr, cc] = await Promise.all([
+      const [st, em, sp, ss, pr, cc, jp] = await Promise.all([
         client.rpc('my_store', { p_conf: conferenceId }),
         client.rpc('email_allowance', { p_conf: conferenceId }),
         client.rpc('my_spotlights', { p_conf: conferenceId }),
@@ -299,6 +319,8 @@ export function useStoreData(conferenceId: string | null, country: string | null
         country
           ? client.from('country_continents').select('continent').eq('country', country).maybeSingle()
           : Promise.resolve({ data: null, error: null }),
+        // Its own failure is swallowed: the promotions never fail the Store.
+        Promise.resolve(client.rpc('my_job_promotions', { p_conf: conferenceId })).catch(() => ({ data: null, error: true })),
       ]);
       if (mine !== seq.current) return;
       if (st.error) throw st.error;
@@ -320,6 +342,7 @@ export function useStoreData(conferenceId: string | null, country: string | null
         stats: Array.isArray(ss.data) ? (ss.data as SpotlightStat[]) : [],
         prices,
         continent: (cc.data as { continent?: string } | null)?.continent ?? null,
+        jobPromotions: !jp.error && Array.isArray(jp.data) ? (jp.data as JobPromotion[]) : [],
       });
       setError(null);
     } catch (e) {

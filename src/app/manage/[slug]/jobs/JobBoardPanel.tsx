@@ -333,6 +333,7 @@ export default function JobBoardPanel({ embedded = false }: { embedded?: boolean
         <PromotePopup
           listingId={popup.listing.id}
           listingTitle={popup.listing.title}
+          choices={panel.listings.filter((l) => l.shown === 'live').map((l) => ({ id: l.id, title: l.title }))}
           conferenceCredits={panel.conference_credits}
           onClose={() => setPopup(null)}
           onDone={promoted}

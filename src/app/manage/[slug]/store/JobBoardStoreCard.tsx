@@ -1,7 +1,9 @@
 'use client';
 
-// JobBoardStoreCard — the Store's Job Board card: this conference's live
-// listings, each with Promote (PromotePopup). Prices come from the panel
+// JobBoardStoreCard — the Store's "Promote on the Job Board" section (a full-width
+// section like Bundles since 24 Nov 2026): this conference's live listings in a
+// carousel (JobPromoteCarousel), each with Promote (PromotePopup, which can switch
+// to another live listing in place). Prices come from the panel
 // (readPanel → prices) and the quote, never typed here. Short on credits:
 // the pop-up closes first, then useJobTopUp opens the credits pop-up and
 // re-runs the same promotion once.
@@ -9,8 +11,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { notifyOk } from '@/lib/appNotify';
-import { JOB_ROLE_LABEL } from '@/lib/jobBoard';
-import { StoreCard } from './storeKit';
+import { InfoHint } from '../settings/applicationsUi';
+import JobPromoteCarousel from './JobPromoteCarousel';
 import PromotePopup from '../jobs/PromotePopup';
 import { useJobTopUp } from '../jobs/useJobTopUp';
 import { readPanel, dayLabel, plural, type JobPanel, type Refusal } from '../jobs/jobsApi';
@@ -52,11 +54,19 @@ export default function JobBoardStoreCard({ conferenceId, slug, onChanged }: {
 
   const live = panel ? panel.listings.filter((l) => l.shown === 'live') : [];
 
+  const choices = live.map((l) => ({ id: l.id, title: l.title }));
+
   return (
-    <StoreCard title="Job Board" line="Put a listing first on the Job Board" hint={hint}>
+    <section aria-labelledby="gv-st-jobs">
+      <div className="flex items-center gap-2">
+        <h2 id="gv-st-jobs" className="gv-st-sec">Promote on the Job Board</h2>
+        <InfoHint label="About promoting a listing" text={hint} size={16} />
+      </div>
+      <p className="gv-st-sec-line">Put a listing first on the Job Board, on Explore and in job alerts</p>
+
       {!panel && !loadErr ? (
-        <div aria-busy="true" aria-label="Loading your listings" className="flex flex-col gap-2.5">
-          {[0, 1].map((i) => <span key={i} className="block rounded-[14px]" style={{ height: 64, background: 'rgba(28,20,16,0.07)' }} />)}
+        <div aria-busy="true" aria-label="Loading your listings" className="flex flex-wrap justify-center gap-3.5">
+          {[0, 1, 2].map((i) => <span key={i} className="block rounded-[18px]" style={{ height: 180, flex: '0 1 220px', background: 'rgba(28,20,16,0.07)' }} />)}
         </div>
       ) : null}
 
@@ -75,37 +85,22 @@ export default function JobBoardStoreCard({ conferenceId, slug, onChanged }: {
       ) : null}
 
       {panel && live.length > 0 ? (
-        <div className="gv-st-rows">
-          {live.map((l) => {
-            const sub = [JOB_ROLE_LABEL[l.role] ?? '', l.committee ?? ''].filter(Boolean).join(', ');
-            return (
-              <div key={l.id} className="gv-st-row" style={{ alignItems: 'center' }}>
-                <div style={{ minWidth: 0, flex: '1 1 180px' }}>
-                  <p className="gv-st-row-title" style={{ overflowWrap: 'anywhere' }}>{l.title}</p>
-                  {sub ? <p className="gv-st-quiet" style={{ overflowWrap: 'anywhere' }}>{sub}</p> : null}
-                  {l.promotion ? <p className="gv-st-quiet" style={{ fontWeight: 600, color: '#2A5A3C' }}>Promoted until {dayLabel(l.promotion.ends_on)}</p> : null}
-                </div>
-                {panel.can_promote ? (
-                  <button
-                    type="button"
-                    className="gv-st-btn gv-st-outline"
-                    disabled={!!open}
-                    onClick={() => { if (!open) setOpen({ id: l.id, title: l.title }); }}
-                  >
-                    Promote
-                  </button>
-                ) : null}
-              </div>
-            );
-          })}
-          {!panel.can_promote ? <p className="gv-st-quiet">Only organizers who can spend the conference&rsquo;s credits can promote a listing</p> : null}
-        </div>
+        <>
+          <JobPromoteCarousel
+            listings={live}
+            canPromote={panel.can_promote}
+            promoteOpen={!!open}
+            onPromote={(l) => { if (!open) setOpen({ id: l.id, title: l.title }); }}
+          />
+          {!panel.can_promote ? <p className="gv-st-quiet" style={{ marginTop: 12 }}>Only organizers who can spend the conference&rsquo;s credits can promote a listing</p> : null}
+        </>
       ) : null}
 
       {open && panel ? (
         <PromotePopup
           listingId={open.id}
           listingTitle={open.title}
+          choices={choices}
           conferenceCredits={panel.conference_credits}
           onClose={() => setOpen(null)}
           onDone={(endsOn) => {
@@ -125,6 +120,6 @@ export default function JobBoardStoreCard({ conferenceId, slug, onChanged }: {
           }}
         />
       ) : null}
-    </StoreCard>
+    </section>
   );
 }
