@@ -11,6 +11,11 @@
 //
 // Reads come from the page (my_spotlights, my_spotlight_stats); the only
 // write is cancel_spotlight(p_purchase), as before.
+//
+// Job Board promotions count as spotlights (24 Nov 2026, my_job_promotions):
+// in the summary, listed after the spotlights as "Job Board: {title}", and
+// chosen they open the same dashboard (status, dates, views, clicks, click
+// rate, by day) with no description, editor or Cancel: they can't be cancelled.
 
 import { useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Ban, CalendarClock, CheckCircle2, ChevronRight, Radio } from 'lucide-react';
@@ -18,7 +23,8 @@ import { notifyOk } from '@/lib/appNotify';
 import { friendlyError } from '@/lib/friendlyError';
 import { OUTFIT } from '@/components/neu';
 import { PurchaseShell, PURCHASE_CSS } from '@/components/purchase/purchaseKit';
-import { authedClient, BUNDLES, fmtDay, messageOf, type SpotlightPurchase, type SpotlightStat } from './storeApi';
+import { JOB_ROLE_LABEL } from '@/lib/jobBoard';
+import { authedClient, BUNDLES, fmtDay, messageOf, type JobPromotion, type SpotlightPurchase, type SpotlightStat } from './storeApi';
 import { StoreCard, DEEP_GOLD, FOREST, INK, INK_SOFT, DANGER } from './storeKit';
 import SpotlightPopupEditor from './SpotlightPopupEditor';
 
@@ -92,11 +98,22 @@ function DayStrip({ label, days, pick, color }: { label: string; days: DayStat[]
   );
 }
 
-export default function YourSpotlights({ spotlights, stats, onChanged }: {
-  spotlights: SpotlightPurchase[]; stats: SpotlightStat[]; onChanged: () => void;
+function promoTitle(j: JobPromotion): string {
+  return `Job Board: ${j.title}`;
+}
+
+function promoSub(j: JobPromotion): string {
+  const role = [JOB_ROLE_LABEL[j.role as keyof typeof JOB_ROLE_LABEL] ?? j.role, j.committee ?? ''].filter(Boolean).join(', ');
+  const len = `${j.days} days${j.with_homepage ? ', with the homepage' : ''}`;
+  return `${role} · ${len} · ${fmtDay(j.starts_on)} to ${fmtDay(j.ends_on, true)}`;
+}
+
+export default function YourSpotlights({ spotlights, stats, jobPromotions = [], onChanged }: {
+  spotlights: SpotlightPurchase[]; stats: SpotlightStat[]; jobPromotions?: JobPromotion[]; onChanged: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [chosenId, setChosenId] = useState<string | null>(null);
+  const [chosenPromoId, setChosenPromoId] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -104,16 +121,18 @@ export default function YourSpotlights({ spotlights, stats, onChanged }: {
 
   const statRows = stats as StatWithDays[];
   const summary = useMemo(() => {
-    const live = spotlights.filter(p => p.status === 'live').length;
-    const upcoming = spotlights.filter(p => p.status === 'upcoming').length;
-    const views = statRows.reduce((n, s) => n + (s.views ?? 0), 0);
-    const clicks = statRows.reduce((n, s) => n + (s.clicks ?? 0), 0);
+    const live = spotlights.filter(p => p.status === 'live').length + jobPromotions.filter(j => j.status === 'live').length;
+    const upcoming = spotlights.filter(p => p.status === 'upcoming').length + jobPromotions.filter(j => j.status === 'upcoming').length;
+    const views = statRows.reduce((n, s) => n + (s.views ?? 0), 0) + jobPromotions.reduce((n, j) => n + (j.views ?? 0), 0);
+    const clicks = statRows.reduce((n, s) => n + (s.clicks ?? 0), 0) + jobPromotions.reduce((n, j) => n + (j.clicks ?? 0), 0);
     return { live, upcoming, views, clicks };
-  }, [spotlights, statRows]);
+  }, [spotlights, statRows, jobPromotions]);
 
   const chosen = chosenId ? spotlights.find(p => p.purchase_id === chosenId) ?? null : null;
+  const chosenPromo = chosenPromoId ? jobPromotions.find(j => j.promotion_id === chosenPromoId) ?? null : null;
+  const bookedCount = spotlights.length + jobPromotions.length;
 
-  const close = () => { setOpen(false); setChosenId(null); setConfirming(false); setErr(''); };
+  const close = () => { setOpen(false); setChosenId(null); setChosenPromoId(null); setConfirming(false); setErr(''); };
 
   const cancel = async (id: string) => {
     if (busyRef.current) return;
@@ -147,14 +166,14 @@ export default function YourSpotlights({ spotlights, stats, onChanged }: {
         title="Your Spotlights"
         hint="Every spotlight this conference has booked. Views are how many people saw your card in that placement; clicks are how many opened your page from it."
       >
-        {spotlights.length === 0 ? (
+        {bookedCount === 0 ? (
           <p className="gv-st-quiet">
             No spotlights yet. <a href="#gv-st-spot" className="gv-st-link">Book one above</a>
           </p>
         ) : (
           <button type="button" className="gv-st-summary" onClick={() => setOpen(true)}>
             <span>
-              <span className="gv-st-summary-big">{parts.length ? parts.join(', ') : `${spotlights.length} booked`}</span>
+              <span className="gv-st-summary-big">{parts.length ? parts.join(', ') : `${bookedCount} booked`}</span>
               <span className="gv-st-summary-sub">
                 {summary.views.toLocaleString('en-US')} views · {summary.clicks.toLocaleString('en-US')} clicks
               </span>
@@ -165,10 +184,47 @@ export default function YourSpotlights({ spotlights, stats, onChanged }: {
       </StoreCard>
 
       {open && (
-        <PurchaseShell tone="light" label={chosen ? kindName(chosen) : 'Choose Your Spotlight'} onClose={close} panelClass="gv-ysp" testId="your-spotlights">
+        <PurchaseShell tone="light" label={chosen ? kindName(chosen) : chosenPromo ? promoTitle(chosenPromo) : 'Choose Your Spotlight'} onClose={close} panelClass="gv-ysp" testId="your-spotlights">
           <style>{PURCHASE_CSS}{CSS}</style>
           <div className="gv-ysp-body">
-            {!chosen ? (
+            {chosenPromo ? (() => {
+              // A Job Board promotion: the same dashboard, no description, editor or Cancel.
+              const st = STATUS[chosenPromo.status] ?? STATUS.upcoming;
+              const days: DayStat[] = [...(chosenPromo.by_day ?? [])]
+                .map(d => ({ day: d.day.slice(0, 10), views: d.views ?? 0, clicks: d.clicks ?? 0 }))
+                .sort((a, b) => a.day.localeCompare(b.day));
+              const views = chosenPromo.views ?? 0;
+              const clicks = chosenPromo.clicks ?? 0;
+              const rate = views > 0 ? `${((clicks / views) * 100).toFixed(1)}%` : 'No views';
+              return (
+                <>
+                  <div className="flex items-center gap-2" style={{ paddingRight: 40 }}>
+                    <button type="button" className="gv-ysp-back" onClick={() => setChosenPromoId(null)} aria-label="Back to your spotlights">
+                      <ArrowLeft size={18} aria-hidden />
+                    </button>
+                    <h2 className="gv-buy-rtitle" style={{ fontSize: 22, fontWeight: 800, overflowWrap: 'anywhere' }}>{promoTitle(chosenPromo)}</h2>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                    <span className="gv-st-status" style={{ color: st.color }}><st.Icon size={15} strokeWidth={2.4} aria-hidden />{st.label}</span>
+                    <span style={{ fontFamily: OUTFIT, fontSize: 13, color: INK_SOFT }}>{fmtDay(chosenPromo.starts_on)} to {fmtDay(chosenPromo.ends_on, true)}</span>
+                  </div>
+                  <div className="gv-ysp-stats">
+                    <div><b>{views.toLocaleString('en-US')}</b><span>views</span></div>
+                    <div><b>{clicks.toLocaleString('en-US')}</b><span>clicks</span></div>
+                    <div><b>{rate}</b><span>click rate</span></div>
+                  </div>
+                  <p className="gv-st-quiet">Promotions can&rsquo;t be cancelled</p>
+                  {days.length > 0 ? (
+                    <div className="flex flex-col gap-4">
+                      <DayStrip label="Views" days={days} pick={d => d.views} color={FOREST} />
+                      <DayStrip label="Clicks" days={days} pick={d => d.clicks} color={DEEP_GOLD} />
+                    </div>
+                  ) : (
+                    <p className="gv-st-quiet">Views and clicks show here, day by day, once it is live</p>
+                  )}
+                </>
+              );
+            })() : !chosen ? (
               <>
                 <h2 className="gv-buy-rtitle" style={{ fontSize: 24, fontWeight: 800, paddingRight: 40 }}>Choose Your Spotlight</h2>
                 <ul className="gv-ysp-list">
@@ -180,6 +236,20 @@ export default function YourSpotlights({ spotlights, stats, onChanged }: {
                           <span className="min-w-0">
                             <span className="gv-ysp-row-title">{kindName(p)}</span>
                             <span className="gv-ysp-row-sub">{(p.bookings ?? []).map(b => b.label).join(', ')} · {datesLine(p)}</span>
+                          </span>
+                          <span className="gv-st-status" style={{ color: st.color, flexShrink: 0 }}><st.Icon size={15} strokeWidth={2.4} aria-hidden />{st.label}</span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                  {jobPromotions.map(j => {
+                    const st = STATUS[j.status] ?? STATUS.upcoming;
+                    return (
+                      <li key={j.promotion_id}>
+                        <button type="button" className="gv-ysp-row" onClick={() => { setChosenPromoId(j.promotion_id); setChosenId(null); setConfirming(false); setErr(''); }}>
+                          <span className="min-w-0">
+                            <span className="gv-ysp-row-title">{promoTitle(j)}</span>
+                            <span className="gv-ysp-row-sub">{promoSub(j)}</span>
                           </span>
                           <span className="gv-st-status" style={{ color: st.color, flexShrink: 0 }}><st.Icon size={15} strokeWidth={2.4} aria-hidden />{st.label}</span>
                         </button>

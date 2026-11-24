@@ -252,8 +252,6 @@ export default function StorePage() {
                 <Link href={`/manage/${conference.slug}/import`} className="gv-st-btn gv-st-forest">Go to importer</Link>
               </div>
             </StoreCard>
-
-            <JobBoardStoreCard conferenceId={conference.id} slug={conference.slug} onChanged={() => afterBuy()} />
           </div>
 
           {/* Bundles */}
@@ -301,9 +299,12 @@ export default function StorePage() {
             </div>
           </section>
 
+          {/* Promote on the Job Board: its own full-width section (24 Nov 2026). */}
+          <JobBoardStoreCard conferenceId={conference.id} slug={conference.slug} onChanged={() => afterBuy()} />
+
           {/* Your Spotlights and Your Purchases, side by side (stacked on phones). */}
           <div className="grid gap-5" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))' }}>
-            <YourSpotlights spotlights={data.spotlights} stats={data.stats} onChanged={() => afterBuy()} />
+            <YourSpotlights spotlights={data.spotlights} stats={data.stats} jobPromotions={data.jobPromotions} onChanged={() => afterBuy()} />
             <YourPurchases conferenceId={conference.id} refreshKey={packsKey} />
           </div>
 

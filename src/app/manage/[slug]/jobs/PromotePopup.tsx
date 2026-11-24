@@ -11,6 +11,10 @@
 //
 // PromoteContent is the two columns without a shell, so the posting pop-up
 // can show it inside its own PurchaseShell after "Publish and promote".
+//
+// 24 Nov 2026: with `choices` (the Store and the Job Board panel pass their
+// live listings) the Listing box is a GSelect, so another listing is picked in
+// place: days back to 7, homepage off, the quote read again for it.
 
 import { useEffect, useRef, useState } from 'react';
 import { BarChart3, BellRing, Briefcase, Star } from 'lucide-react';
@@ -18,6 +22,7 @@ import {
   PurchaseShell, Eyebrow, BenefitList, ErrorLine, GoldButton, PURCHASE_CSS,
   FOREST, INK, INK_SOFT, IVORY, type Benefit,
 } from '@/components/purchase/purchaseKit';
+import GSelect from '@/components/GSelect';
 import { LIGHT_CHIP_CSS } from '../store/SponsorshipPopup';
 import { promoteListing, promoteQuote, plural, dayLabel, type PromoteOption, type PromoteQuote, type Refusal } from './jobsApi';
 
@@ -34,6 +39,8 @@ export interface PromoteProps {
   heading?: string;
   /** Whose credits pay: the conference's (default) or the poster's own (a standalone listing on /jobs). */
   payer?: 'conference' | 'you';
+  /** Listings to switch between in place (more than one shows a picker). */
+  choices?: { id: string; title: string }[];
 }
 
 const POINTS: Benefit[] = [
@@ -75,7 +82,11 @@ function activeEnd(active: unknown): string | null {
   return typeof e === 'string' && e ? e : null;
 }
 
-export function PromoteContent({ listingId, listingTitle, conferenceCredits, onClose, onDone, onShort, heading, payer = 'conference' }: PromoteProps) {
+export function PromoteContent({ listingId: firstId, listingTitle: firstTitle, conferenceCredits, onClose, onDone, onShort, heading, payer = 'conference', choices }: PromoteProps) {
+  // The listing being promoted; `choices` lets it change in place.
+  const [current, setCurrent] = useState<{ id: string; title: string }>({ id: firstId, title: firstTitle });
+  const listingId = current.id;
+  const listingTitle = current.title;
   const [quote, setQuote] = useState<PromoteQuote | null>(null);
   const [loadErr, setLoadErr] = useState('');
   const [attempt, setAttempt] = useState(0);
@@ -97,6 +108,19 @@ export function PromoteContent({ listingId, listingTitle, conferenceCredits, onC
   }, [listingId, attempt]);
 
   const tryAgain = () => { setLoadErr(''); setQuote(null); setAttempt((n) => n + 1); };
+
+  const switchTo = (id: string) => {
+    if (busyRef.current || id === listingId) return;
+    const next = choices?.find((c) => c.id === id);
+    if (!next) return;
+    setCurrent({ id: next.id, title: next.title });
+    setDays(7);
+    setHomepage(false);
+    setRefusedFull(null);
+    setErr('');
+    setLoadErr('');
+    setQuote(null);
+  };
 
   const options: PromoteOption[] = quote ? [...quote.options].sort((a, b) => a.days - b.days) : [];
   const opt = options.find((o) => o.days === days) ?? options[0] ?? null;
@@ -158,7 +182,17 @@ export function PromoteContent({ listingId, listingTitle, conferenceCredits, onC
         </div>
         <div className="gv-pr-listing">
           <Eyebrow>Listing</Eyebrow>
-          <p className="gv-pr-listing-title">{listingTitle}</p>
+          {choices && choices.length > 1 ? (
+            <GSelect
+              value={listingId}
+              onChange={switchTo}
+              options={choices.map((c) => ({ value: c.id, label: c.title }))}
+              disabled={busy}
+              aria-label="Listing to promote"
+            />
+          ) : (
+            <p className="gv-pr-listing-title">{listingTitle}</p>
+          )}
           {promotedUntil ? <p className="gv-pr-listing-note">Promoted until {dayLabel(promotedUntil)}</p> : null}
         </div>
         <div>
@@ -220,9 +254,19 @@ export function PromoteContent({ listingId, listingTitle, conferenceCredits, onC
 
             <div className="gv-pr-total" aria-live="polite">
               <div className="gv-pr-total-row">
-                <div className="gv-pr-total-cell">
+                <div className="gv-pr-total-cell gv-pr-total-main">
                   <Eyebrow>{plural(opt.days, 'day')}{withHome ? ', with the homepage' : ''}</Eyebrow>
                   <span className="gv-pr-total-dates">{dayLabel(today)} to {dayLabel(endDay)}</span>
+                  <p className="gv-pr-fine gv-pr-total-fine">
+                    {after >= 0
+                      ? <>{payer === 'you' ? 'Your credits' : 'Conference credits'} after paying: <b>{after}</b></>
+                      : payer === 'you'
+                        ? <>You have {plural(conferenceCredits, 'credit')}, so you buy {plural(-after, 'more credit')} next</>
+                        : <>The conference has {plural(conferenceCredits, 'credit')}, so you buy {plural(-after, 'more credit')} next</>}
+                  </p>
+                  {closesFirst && closes ? (
+                    <p className="gv-pr-fine gv-pr-total-fine">Your listing closes on {dayLabel(closes)}, so the promotion stops then</p>
+                  ) : null}
                 </div>
                 <div className="gv-pr-total-cell gv-pr-total-end">
                   <Eyebrow>Total</Eyebrow>
@@ -230,16 +274,6 @@ export function PromoteContent({ listingId, listingTitle, conferenceCredits, onC
                   <span className="gv-pr-total-cap">{total === 1 ? 'credit' : 'credits'}</span>
                 </div>
               </div>
-              {closesFirst && closes ? (
-                <p className="gv-pr-fine">Your listing closes on {dayLabel(closes)}, so the promotion stops then</p>
-              ) : null}
-              <p className="gv-pr-fine">
-                {after >= 0
-                  ? <>{payer === 'you' ? 'Your credits' : 'Conference credits'} after paying: <b>{after}</b></>
-                  : payer === 'you'
-                    ? <>You have {plural(conferenceCredits, 'credit')}, so you buy {plural(-after, 'more credit')} next</>
-                    : <>The conference has {plural(conferenceCredits, 'credit')}, so you buy {plural(-after, 'more credit')} next</>}
-              </p>
             </div>
 
             <p className="gv-pr-fine">Promotion starts today and can&rsquo;t be refunded</p>
@@ -290,15 +324,18 @@ const PROMOTE_CSS = `
 .gv-pr-tick-off input{cursor:default}
 .gv-pr-fine{margin:0;font-size:13px;line-height:1.5;color:${INK_SOFT}}
 .gv-pr-fine b{color:${INK};font-weight:800;font-variant-numeric:tabular-nums}
-.gv-pr-total{display:flex;flex-direction:column;gap:8px;padding:16px 18px;border-radius:16px;background:#FFFFFF;box-shadow:0 1px 0 rgba(27,56,40,0.08),0 14px 30px -26px rgba(27,56,40,0.45)}
+.gv-pr-total{display:flex;flex-direction:column;gap:8px;padding:14px 18px;border-radius:16px;background:#FFFFFF;box-shadow:0 1px 0 rgba(27,56,40,0.08),0 14px 30px -26px rgba(27,56,40,0.45)}
 .gv-pr-total .gv-buy-eyebrow{margin-bottom:6px}
-.gv-pr-total-row{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.gv-pr-total-row{display:flex;align-items:center;justify-content:space-between;gap:16px}
 .gv-pr-total-cell{display:flex;flex-direction:column;min-width:0}
-.gv-pr-total-end{align-items:flex-end;text-align:right}
+.gv-pr-total-main{flex:1;min-width:0;overflow-wrap:anywhere}
+.gv-pr-total-fine{margin-top:4px;font-size:12px}
+.gv-pr-total-end{align-items:center;text-align:center;flex-shrink:0}
 .gv-pr-total-dates{font-size:18px;font-weight:700;color:${INK};font-variant-numeric:tabular-nums}
-.gv-pr-total-big{font-size:36px;font-weight:800;letter-spacing:-0.03em;line-height:1;color:${FOREST};font-variant-numeric:tabular-nums}
+.gv-pr-total-big{font-size:32px;font-weight:800;letter-spacing:-0.03em;line-height:1;color:${FOREST};font-variant-numeric:tabular-nums}
 .gv-pr-total-cap{margin-top:3px;font-size:12.5px;font-weight:600;color:${INK_SOFT}}
 .gv-pr-not-now{display:flex;justify-content:center}
+@media (min-width:744px){.gv-pr-pop .gv-buy-right{justify-content:safe center}}
 .gv-pr-skel{display:block;width:100%;border-radius:14px;background:rgba(28,20,16,0.08);animation:gvPrPulse 1.2s ease-in-out infinite}
 @keyframes gvPrPulse{0%,100%{opacity:1}50%{opacity:0.55}}
 @media (prefers-reduced-motion:reduce){.gv-pr-skel{animation:none}}
