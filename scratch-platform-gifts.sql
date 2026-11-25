@@ -30,11 +30,36 @@ $$;
 revoke all on function public.my_gifts() from public, anon;
 grant execute on function public.my_gifts() to authenticated;
 
+-- The gift email (owner, 25 Nov 2026, second version): a plain letter from Peter, so Gmail files it as personal mail
+-- rather than a promotion. No banner, voucher box or emoji; one small photo by the signature; the code in a sentence.
+create or replace function public._platform_gift_email(p_first text, p_label text, p_code text)
+returns jsonb language sql immutable set search_path to 'public', 'pg_temp' as $$
+  select jsonb_build_object(
+    'subject', 'A thank you from Peter',
+    'body', 'Hi ' || p_first || ', I wanted to say thank you for being part of Gavelling, so I have put ' || p_label
+      || ' of Gavelling Unlimited on your account, on the house. Your code is ' || p_code
+      || '. Open gavelling.com, sign in with this email and a scratch card will be waiting for you. Peter',
+    'html', '<div style="margin:0;padding:24px 16px;background:#FFFFFF;font-family:Georgia,''Times New Roman'',serif;color:#1C1410">
+<div style="max-width:520px;margin:0 auto;font-size:16px;line-height:1.65">
+<p style="margin:0 0 16px">Hi ' || p_first || ',</p>
+<p style="margin:0 0 16px">I wanted to say thank you for being part of Gavelling, so I have put <b>' || p_label || ' of Gavelling Unlimited</b> on your account, on the house.</p>
+<p style="margin:0 0 16px">Your code is <b style="font-family:Menlo,Consolas,monospace;font-size:15px;letter-spacing:.04em">' || p_code || '</b>. <a href="https://gavelling.com/" style="color:#1B3828;font-weight:700;text-decoration:underline">Open Gavelling</a>, sign in with this email and there will be a little scratch card waiting for you. Scratch it, press Activate, and that is it. You can also type the code in on Manage account, Promo code.</p>
+<p style="margin:0 0 16px">Unlimited gets you discounted conferences, the premium articles on debate, crisis and chairing, and paid chairing jobs on the Job Board. The code keeps for a year, so no rush.</p>
+<p style="margin:0 0 22px">If you have a minute, hit reply and tell me how your MUN season is going. I read every one.</p>
+<table role="presentation" cellpadding="0" cellspacing="0"><tr>
+<td valign="middle" style="padding-right:12px"><img src="https://gavelling.com/PeterPic.jpg" width="44" height="44" alt="Peter Zakhar" style="display:block;border-radius:50%;object-fit:cover"></td>
+<td valign="middle" style="font-size:15px;line-height:1.35">Peter<br><span style="font-family:Arial,sans-serif;font-size:13px;color:#5A5046">Founder, Gavelling</span></td>
+</tr></table>
+</div>
+</div>')
+$$;
+revoke all on function public._platform_gift_email(text, text, text) from public, anon, authenticated;
+
 -- Service role and SQL only. Creates the single-use code, the gift row and Peter's email.
 create or replace function public.admin_gift_unlimited(p_email text, p_days int, p_note text default null)
 returns jsonb language plpgsql security definer set search_path to 'public', 'pg_temp' as $$
 declare
-  v_uid uuid; v_email text; v_promo uuid; v_code text; v_gift uuid; v_label text; v_first text; v_html text;
+  v_uid uuid; v_email text; v_promo uuid; v_code text; v_gift uuid; v_label text; v_first text; v_mail jsonb;
 begin
   if p_days is null or p_days < 1 or p_days > 3650 then
     return jsonb_build_object('ok', false, 'message', 'Days must be between 1 and 3650');
@@ -55,52 +80,11 @@ begin
     else p_days::text || case when p_days = 1 then ' day' else ' days' end end;
   select nullif(split_part(trim(coalesce(display_name, '')), ' ', 1), '') into v_first from profiles where id = v_uid;
   v_first := replace(replace(replace(coalesce(v_first, 'there'), '&', '&amp;'), '<', '&lt;'), '>', '&gt;');
-
-  v_html := '<div style="margin:0;padding:32px 12px;background:#EDE7D8;font-family:Inter,Arial,sans-serif;color:#1C1410">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;margin:0 auto">
-<tr><td align="center" style="padding-bottom:0">
-  <span style="display:inline-block;padding:10px 20px;border-radius:999px;background:#6A1919;background-image:linear-gradient(165deg,#9A2A2A 0%,#6A1919 52%,#3A0E0F 100%);color:#FFF4E6;font-weight:800;font-size:15px;position:relative;top:14px">A Gift For You</span>
-</td></tr>
-<tr><td style="background:#FFFFFF;background-image:linear-gradient(180deg,#FBEDE7 0%,#FFFFFF 150px);border-radius:22px;border-top:4px solid #8E2424;padding:26px 22px 22px">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
-    <td width="64" valign="top"><img src="https://gavelling.com/PeterPic.jpg" width="56" height="56" alt="Peter Zakhar" style="display:block;border-radius:50%;border:3px solid #FFFFFF;object-fit:cover"></td>
-    <td valign="middle" style="padding-left:10px">
-      <div style="font-size:11.5px;font-weight:800;color:#8E2424">From the Gavelling team</div>
-      <div style="font-size:16px;font-weight:800;margin-top:2px">Peter Zakhar</div>
-      <div style="font-size:12.5px;font-weight:600;color:#4E463C;margin-top:2px">Founder, Gavelling</div>
-    </td>
-    <td width="46" valign="top" align="right"><img src="https://cdn.jsdelivr.net/gh/microsoft/fluentui-emoji@main/assets/Rocket/3D/rocket_3d.png" width="44" height="44" alt=""></td>
-  </tr></table>
-  <p style="margin:16px 0 0;font-size:14.5px;line-height:1.6;color:#4E463C">Hi ' || v_first || ',<br><br>This one is from me: ' || v_label || ' of Gavelling Unlimited, on the house. Thank you for being part of Gavelling.</p>
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:14px;border:1.5px solid #B8952E;border-radius:18px;background:#FFFFFF">
-    <tr><td style="padding:14px 18px 12px;background:#FBF4DC;border-bottom:1.5px dashed #B8952E;border-radius:18px 18px 0 0">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
-        <td width="58"><img src="https://cdn.jsdelivr.net/gh/microsoft/fluentui-emoji@main/assets/Wrapped%20gift/3D/wrapped_gift_3d.png" width="48" height="48" alt=""></td>
-        <td><div style="font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#B8952E">Gavelling Unlimited</div><div style="font-size:26px;font-weight:800;line-height:1.1;color:#8E2424">' || v_label || ' free</div></td>
-        <td align="right" style="font-size:12px;font-weight:600;color:#4E463C">Use any time<br>in the next year<div style="margin-top:3px;font:700 12.5px Menlo,monospace;letter-spacing:.06em;color:#1C1410">' || v_code || '</div></td>
-      </tr></table>
-    </td></tr>
-    <tr><td style="padding:12px 18px 14px;font-size:13.5px;line-height:1.9">
-      <b>Discounted conferences</b> <span style="color:#4E463C">across Gavelling</span><br>
-      <b>Premium articles</b> <span style="color:#4E463C">on debate, crisis and chairing</span><br>
-      <b>Paid chairing opportunities</b> <span style="color:#4E463C">on the Job Board</span><br>
-      <span style="color:#857A6C;font-size:12.5px">And more on the way</span>
-    </td></tr>
-  </table>
-  <p style="margin:14px 0 0;text-align:center;font-size:14.5px"><a href="https://gavelling.com/" style="color:#8E2424;font-weight:800;text-decoration:underline">Open Gavelling to activate it</a></p>
-  <p style="margin:6px 0 0;text-align:center;font-size:12.5px;color:#857A6C">Sign in with this email address. You can also enter the code on Manage account, Promo code.</p>
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:16px;background:#F8ECE8;border-radius:14px"><tr>
-    <td width="52" style="padding:10px 0 10px 12px"><img src="https://cdn.jsdelivr.net/gh/microsoft/fluentui-emoji@main/assets/Speech%20balloon/3D/speech_balloon_3d.png" width="36" height="36" alt=""></td>
-    <td style="padding:10px 12px;font-size:13.5px;line-height:1.45;color:#4E463C"><b style="color:#1C1410">Questions?</b> Just reply to this email or write to <a href="mailto:info@gavelling.com" style="color:#1C1410;font-weight:700;text-decoration:underline">info@gavelling.com</a></td>
-  </tr></table>
-</td></tr>
-</table>
-</div>';
+  v_mail := _platform_gift_email(v_first, v_label, v_code);
 
   insert into email_outbox(conference_id, recipient_email, subject, body, body_html, from_name, from_address, reply_to)
-  values (null, v_email, 'A gift for you: ' || v_label || ' of Gavelling Unlimited',
-    'Your gift: ' || v_label || ' of Gavelling Unlimited. Your code is ' || v_code || '. Open gavelling.com to scratch your voucher and activate it.',
-    v_html, 'Peter from Gavelling', 'peter@mail.gavelling.com', 'info@gavelling.com');
+  values (null, v_email, v_mail->>'subject', v_mail->>'body', v_mail->>'html',
+    'Peter from Gavelling', 'peter@mail.gavelling.com', 'info@gavelling.com');
 
   return jsonb_build_object('ok', true, 'gift_id', v_gift, 'code', v_code);
 end $$;
