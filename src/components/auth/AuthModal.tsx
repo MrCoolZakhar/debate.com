@@ -546,6 +546,11 @@ function AuthModal({ request }: { request: AuthRequest }) {
                 return null;
               }}
               onResend={resendSignupCode}
+              // Back to the first screen with the address kept, to correct it. The account
+              // already created for the mistyped address stays as it is (25 Nov 2026).
+              onChangeEmail={() => { setError(''); setHistory([]); setStep('email'); }}
+              onGoogle={startGoogle}
+              googleBusy={oauthBusy}
             />
           )}
 
@@ -789,10 +794,14 @@ function SignupStep({
 }
 
 function CodeStep({
-  email, intro, initialError, onVerify, onResend,
+  email, intro, initialError, onVerify, onResend, onChangeEmail, onGoogle, googleBusy,
 }: {
   email: string; intro: string; initialError?: string;
   onVerify: (code: string) => Promise<string | null>; onResend: () => Promise<string | null>;
+  /** Back to the email screen, the address kept (25 Nov 2026). */
+  onChangeEmail: () => void;
+  /** The parent's startGoogle and its busy flag, for the fallback after two resends. */
+  onGoogle: () => void; googleBusy: boolean;
 }) {
   const { remaining, active, start } = useCooldown(60);
   const [code, setCode] = useState('');
@@ -800,6 +809,8 @@ function CodeStep({
   const [verifying, setVerifying] = useState(false);
   const [resending, setResending] = useState(false);
   const [sent, setSent] = useState(false);
+  // Successful resends; from 2 the fallback (another email, contact, Google) shows.
+  const [resends, setResends] = useState(0);
 
   // A code was sent on the way in, so the first resend waits.
   useEffect(() => { start(); }, [start]);
@@ -824,11 +835,27 @@ function CodeStep({
     if (err) { setError(err); return; }
     start();
     setSent(true);
+    setResends((n) => n + 1);
   }
+
+  const gmail = /@(gmail|googlemail)\.com$/i.test(email.trim());
+  const differentEmailLine = (
+    <Hint>
+      Still nothing? <TextButton onClick={onChangeEmail}>Use a different email</TextButton> or{' '}
+      <Link href="/contact" target="_blank" rel="noopener" className={`gv-inline ${FOCUS}`}>contact us</Link>
+    </Hint>
+  );
+  const googleButton = (
+    <button type="button" onClick={onGoogle} disabled={googleBusy} className={`gv-social ${FOCUS}`} style={{ width: '100%', gap: 12, fontFamily: OUTFIT, fontSize: 16, fontWeight: 600, color: INK }}>
+      <GoogleIcon />
+      {googleBusy ? 'Opening Google…' : 'Continue with Google'}
+    </button>
+  );
 
   return (
     <form className="gv-auth-screen" onSubmit={submit} noValidate>
       <p className="gv-auth-lead">{intro} <strong>{email}</strong>.</p>
+      <Hint>Wrong email? <TextButton onClick={onChangeEmail}>Change it</TextButton></Hint>
       <FloatInput
         id="gv-auth-code"
         label={`${CODE_LENGTH}-digit code`}
@@ -846,11 +873,18 @@ function CodeStep({
         <GreenButton busy={verifying} busyText="Checking…">Continue</GreenButton>
       </div>
       <p className="gv-hint" aria-live="polite">
-        {sent ? 'Sent. Check your inbox and spam. ' : 'Did not get it? '}
+        {sent ? 'Sent. Check your inbox, Spam and Promotions. ' : 'Did not get it? Check Spam and Promotions. '}
         {active
           ? <>You can send another in {remaining}s.</>
           : <TextButton onClick={() => void resend()}>{resending ? 'Sending…' : 'Send a new code'}</TextButton>}
       </p>
+      {resends >= 2 && (
+        // After two resends (25 Nov 2026): a Gmail address sees Google first.
+        <div>
+          {gmail ? googleButton : differentEmailLine}
+          <div style={{ marginTop: 8 }}>{gmail ? differentEmailLine : googleButton}</div>
+        </div>
+      )}
       <Hint>The link in the email works too. It brings you back here, signed in.</Hint>
       <Hint>Still stuck? Visit the <Link href="/help" target="_blank" rel="noopener" className={`gv-inline ${FOCUS}`}>Help Center</Link></Hint>
     </form>
