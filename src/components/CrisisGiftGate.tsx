@@ -3,6 +3,7 @@
 // unanswered voucher in crisis_gifts (my_open_crisis_gift) gets the same scratch-off pop-up the crisis shows, on any page,
 // once the sign-up gates are done. ONE read per account per page visit, keyed on the user id. Never on the crisis
 // (it has its own), the session runtimes, auth, apply or pay paths, or over another dialog.
+// Platform gifts (crisis_id null, admin_gift_unlimited; owner, 25 Nov 2026) use the same card with no crisis wording.
 
 import { useCallback, useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
@@ -11,11 +12,10 @@ import { useAuth } from '@/components/AuthProvider';
 import { useBasicsGateBlocking } from '@/lib/basicsGateState';
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
+import { activateMyGift, giftLength, parseGift, type OpenGift } from '@/lib/gifts';
 import { isLiveRoomsExcludedPath } from '@/components/liveRooms/LiveRoomsGate';
 
 const GiftCard = dynamic(() => import('@/app/crisis/components/delegate/GiftPrompt').then((m) => m.GiftCard), { ssr: false });
-
-interface OpenGift { id: string; code: string }
 
 export default function CrisisGiftGate() {
   const { user } = useAuth();
@@ -34,7 +34,7 @@ export default function CrisisGiftGate() {
         const client = await getFreshAuthedClient();
         if (!client) return;
         const res = await client.rpc('my_open_crisis_gift');
-        if (!off) setGift({ uid, g: res.error ? null : ((res.data as OpenGift | null) ?? null) });
+        if (!off) setGift({ uid, g: res.error ? null : parseGift(res.data) });
       } catch { /* no gift this visit */ }
     })();
     return () => { off = true; };
@@ -44,17 +44,12 @@ export default function CrisisGiftGate() {
 
   const activate = useCallback(async () => {
     if (!g) return false;
-    try {
-      const client = await getFreshAuthedClient();
-      if (!client) { notifyErr('Sign in to activate your gift.'); return false; }
-      const res = await client.rpc('activate_my_crisis_gift', { p_gift: g.id });
-      const r = res.data as { ok?: boolean; message?: string } | null;
-      if (res.error || !r?.ok) { notifyErr(r?.message ?? 'Could not activate your voucher. Try again.'); return false; }
-      notifyOk('Activated. Enjoy two months of Unlimited');
-      setDone(true);
-      return true;
-    } catch { notifyErr('Could not activate your voucher. Try again.'); return false; }
-  }, [g]);
+    const r = await activateMyGift(g.id, uid ?? undefined);
+    if (!r.ok) { notifyErr(r.message); return false; }
+    notifyOk(r.message);
+    setDone(true);
+    return true;
+  }, [g, uid]);
 
   const later = useCallback(() => {
     setDone(true);
@@ -66,5 +61,13 @@ export default function CrisisGiftGate() {
   }, [g]);
 
   if (!g || done || excluded || blocking) return null;
-  return <GiftCard code={g.code} activate={activate} onLater={later} />;
+  const length = giftLength(g.amount);
+  return (
+    <GiftCard
+      code={g.code}
+      activate={activate}
+      onLater={later}
+      platform={g.crisis_id ? undefined : { headline: `A gift from Peter: ${length} of Gavelling Unlimited`, length }}
+    />
+  );
 }

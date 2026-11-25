@@ -15,6 +15,7 @@ import { refreshCreditsEverywhere } from '@/hooks/useCredits';
 import { notifyUnlimitedChanged } from '@/lib/unlimitedStatus';
 import { GoldWord } from '@/components/BrandHeading';
 import { OUTFIT, W } from '../../accountUi';
+import YourGifts from './YourGifts';
 import { PageHead, HelpLine, PrimaryButton, ButtonStyles, FOREST, FOREST_MID, INK, RULE } from '../manageUi';
 
 type ClaimResult =
@@ -120,6 +121,8 @@ export default function PromoCodePage() {
       `}</style>
 
       <PageHead title={<>Promo <GoldWord>Code</GoldWord></>} info={INFO} />
+
+      <YourGifts />
 
       <div style={{ position: 'relative', minHeight: 96 }}>
         {fieldVisible && (
