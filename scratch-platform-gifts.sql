@@ -30,8 +30,9 @@ $$;
 revoke all on function public.my_gifts() from public, anon;
 grant execute on function public.my_gifts() to authenticated;
 
--- The gift email (owner, 25 Nov 2026, second version): a plain letter from Peter, so Gmail files it as personal mail
--- rather than a promotion. No banner, voucher box or emoji; one small photo by the signature; the code in a sentence.
+-- The gift email (owner, 25 Nov 2026, third version): a light letter from Peter in a white card on ivory, his photo at the
+-- top, the code in a soft gold box, signed in italic. One image, no emoji. (Gmail's Promotions tab is driven mostly by the
+-- List-Unsubscribe headers send-emails adds to every email, not by this design.)
 create or replace function public._platform_gift_email(p_first text, p_label text, p_code text)
 returns jsonb language sql immutable set search_path to 'public', 'pg_temp' as $$
   select jsonb_build_object(
@@ -39,18 +40,29 @@ returns jsonb language sql immutable set search_path to 'public', 'pg_temp' as $
     'body', 'Hi ' || p_first || ', I wanted to say thank you for being part of Gavelling, so I have put ' || p_label
       || ' of Gavelling Unlimited on your account, on the house. Your code is ' || p_code
       || '. Open gavelling.com, sign in with this email and a scratch card will be waiting for you. Peter',
-    'html', '<div style="margin:0;padding:24px 16px;background:#FFFFFF;font-family:Georgia,''Times New Roman'',serif;color:#1C1410">
-<div style="max-width:520px;margin:0 auto;font-size:16px;line-height:1.65">
-<p style="margin:0 0 16px">Hi ' || p_first || ',</p>
-<p style="margin:0 0 16px">I wanted to say thank you for being part of Gavelling, so I have put <b>' || p_label || ' of Gavelling Unlimited</b> on your account, on the house.</p>
-<p style="margin:0 0 16px">Your code is <b style="font-family:Menlo,Consolas,monospace;font-size:15px;letter-spacing:.04em">' || p_code || '</b>. <a href="https://gavelling.com/" style="color:#1B3828;font-weight:700;text-decoration:underline">Open Gavelling</a>, sign in with this email and there will be a little scratch card waiting for you. Scratch it, press Activate, and that is it. You can also type the code in on Manage account, Promo code.</p>
-<p style="margin:0 0 16px">Unlimited gets you discounted conferences, the premium articles on debate, crisis and chairing, and paid chairing jobs on the Job Board. The code keeps for a year, so no rush.</p>
-<p style="margin:0 0 22px">If you have a minute, hit reply and tell me how your MUN season is going. I read every one.</p>
-<table role="presentation" cellpadding="0" cellspacing="0"><tr>
-<td valign="middle" style="padding-right:12px"><img src="https://gavelling.com/PeterPic.jpg" width="44" height="44" alt="Peter Zakhar" style="display:block;border-radius:50%;object-fit:cover"></td>
-<td valign="middle" style="font-size:15px;line-height:1.35">Peter<br><span style="font-family:Arial,sans-serif;font-size:13px;color:#5A5046">Founder, Gavelling</span></td>
-</tr></table>
-</div>
+    'html', '<div style="margin:0;padding:28px 14px;background:#EDE7D8;font-family:Inter,''Helvetica Neue'',Arial,sans-serif;color:#1C1410">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:500px;margin:0 auto;background:#FFFFFF;border-radius:20px">
+<tr><td style="padding:26px 26px 24px">
+  <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+    <td valign="middle" style="padding-right:12px"><img src="https://gavelling.com/PeterPic.jpg" width="48" height="48" alt="Peter Zakhar" style="display:block;border-radius:50%;object-fit:cover"></td>
+    <td valign="middle"><div style="font-size:15px;font-weight:700;line-height:1.3">Peter Zakhar</div><div style="font-size:13px;color:#5A5046;line-height:1.3">Founder, Gavelling</div></td>
+  </tr></table>
+  <p style="margin:22px 0 0;font-size:15.5px;line-height:1.65">Hi ' || p_first || ',</p>
+  <p style="margin:12px 0 0;font-size:15.5px;line-height:1.65">I wanted to say thank you for being part of Gavelling, so I have put <b>' || p_label || ' of Gavelling Unlimited</b> on your account, on the house.</p>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:18px;background:#FBF6E4;border:1.5px dashed #C9A640;border-radius:14px"><tr>
+    <td style="padding:14px 18px">
+      <div style="font-size:12.5px;color:#8A6B1E;font-weight:600">Your code</div>
+      <div style="margin-top:2px;font:700 22px Menlo,Consolas,monospace;letter-spacing:.06em;color:#1C1410">' || p_code || '</div>
+    </td>
+    <td align="right" style="padding:14px 18px;font-size:13px;line-height:1.4;color:#5A5046">' || p_label || ' free<br>use it within a year</td>
+  </tr></table>
+  <p style="margin:18px 0 0;font-size:15.5px;line-height:1.65"><a href="https://gavelling.com/" style="color:#1B3828;font-weight:700;text-decoration:underline">Open Gavelling</a> and sign in with this email. A little scratch card will be waiting for you: scratch it, press Activate, and that is it.</p>
+  <p style="margin:12px 0 0;font-size:15.5px;line-height:1.65">Unlimited gets you discounted conferences, the premium articles on debate, crisis and chairing, and paid chairing jobs on the Job Board.</p>
+  <p style="margin:12px 0 0;font-size:15.5px;line-height:1.65">If you have a minute, hit reply and tell me how your MUN season is going. I read every one.</p>
+  <p style="margin:20px 0 0;font-family:Georgia,''Times New Roman'',serif;font-style:italic;font-size:22px;color:#1B3828">Peter</p>
+</td></tr>
+</table>
+<p style="max-width:500px;margin:12px auto 0;text-align:center;font-size:12px;color:#857A6C">You can also type the code in on Manage account, Promo code.</p>
 </div>')
 $$;
 revoke all on function public._platform_gift_email(text, text, text) from public, anon, authenticated;
