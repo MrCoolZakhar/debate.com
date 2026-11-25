@@ -94,9 +94,9 @@ begin
   v_first := replace(replace(replace(coalesce(v_first, 'there'), '&', '&amp;'), '<', '&lt;'), '>', '&gt;');
   v_mail := _platform_gift_email(v_first, v_label, v_code);
 
-  insert into email_outbox(conference_id, recipient_email, subject, body, body_html, from_name, from_address, reply_to)
+  insert into email_outbox(conference_id, recipient_email, subject, body, body_html, from_name, from_address, reply_to, personal)
   values (null, v_email, v_mail->>'subject', v_mail->>'body', v_mail->>'html',
-    'Peter from Gavelling', 'peter@mail.gavelling.com', 'info@gavelling.com');
+    'Peter from Gavelling', 'peter@mail.gavelling.com', 'info@gavelling.com', true);
 
   return jsonb_build_object('ok', true, 'gift_id', v_gift, 'code', v_code);
 end $$;
@@ -156,3 +156,9 @@ returns jsonb language sql stable security definer set search_path to 'public', 
       'lapsed_plan', (select plan from last_paid), 'lapsed_at', (select current_period_end from last_paid), 'source', null)
   )) end;
 $function$;
+
+-- Personal one-to-one emails (owner, 25 Nov 2026, applied as migration email_outbox_personal_flag): email_outbox.personal
+-- (default false). send-emails v20 (source: supabase-functions/send-emails/index.ts) sends a personal row WITHOUT the
+-- List-Unsubscribe / List-Unsubscribe-Post headers, which made Gmail file the gift under Promotions even as a plain letter.
+-- admin_gift_unlimited now inserts its email with personal = true. Never set personal on a broadcast or a campaign.
+alter table public.email_outbox add column if not exists personal boolean not null default false;
