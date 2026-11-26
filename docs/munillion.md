@@ -30,6 +30,11 @@ The daily MUN trivia game (owner, 26 Nov 2026). It's modelled on Krillion's mech
   - Pixel bursts, a screen shake for 85 and up, and a flash for The Gavel.
   - A compact Today and Scoring panel on the right from 1024px.
   - Chiptune sounds synthesised in the browser (`src/app/games/munillion/sound.ts`, with a mute switch remembered on the device).
+- **Suspense, slurs and adding conferences** (owner, 27 Nov 2026).
+  - After an answer the placard grows slowly with a rising sound (1 to 4.8 s, longer for rarer answers), and the score shows only once it stops (phase `growing` in `MunillionGame.tsx`).
+  - Anything that isn't exactly an answer or alias gets "Did you mean ...?" rather than being accepted silently. Partial matches count only as whole words, and conference names are compared without generic words like "youth", "international" or "MUN" (`_munillion_conf_core`).
+  - Slurs and obscenities are refused, never saved and never emailed (`_munillion_is_blocked_text`). The page masks them on the placard (`src/lib/munillionProfanity.ts`). Change both together.
+  - A conference that isn't on Gavelling gets a pop-up after the question ("Add now" or "Add later", both open /conferences/new), plus "Add <name> to Gavelling" on the end screen. Every click is recorded in `munillion_conf_adds` (`munillion_conf_add`, at most 20 per player a day).
 - **Conference index.** Conference names are normalised once into `munillion_conf_index`, rebuilt every 10 minutes by cron `munillion-conf-index` (`_munillion_conf_index_refresh`), so a new conference counts within 10 minutes. Matching an answer reads the index: about 12 ms, against 6 s before.
 - **The reveal returns every answer.** For the conference question that means every indexed conference, at the default score, each with a link. The page shows one row per round that opens into score filters, a search box and the full list.
 - **Unrecognised answers** are saved in `munillion_misses`, for every question. You can retry while the clock runs, up to 25 tries.

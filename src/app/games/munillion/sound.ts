@@ -97,6 +97,51 @@ export function playToot(start = 0, base = 147) {
 
 const SCALE = [262, 330, 392, 523, 659, 784, 1047, 1319];
 
+/**
+ * The placard growing (Krillion's descent, upside down): a long rising whistle under
+ * climbing bubbly blips, lasting as long as the growth, so nobody can tell the score
+ * before it stops. Returns a stop function.
+ */
+export function playRise(ms: number): () => void {
+  const c = ready();
+  if (!c || !master) return () => {};
+  const dur = Math.max(0.4, ms / 1000);
+  const o = c.createOscillator();
+  const g = c.createGain();
+  const lp = c.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.frequency.value = 1800;
+  o.type = 'triangle';
+  o.frequency.setValueAtTime(130, c.currentTime);
+  o.frequency.exponentialRampToValueAtTime(130 + dur * 160, c.currentTime + dur);
+  g.gain.setValueAtTime(0.0001, c.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.06, c.currentTime + 0.15);
+  g.gain.setValueAtTime(0.06, c.currentTime + dur - 0.1);
+  g.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + dur);
+  o.connect(lp).connect(g).connect(master);
+  o.start();
+  o.stop(c.currentTime + dur + 0.05);
+  // the blips speed up and climb as it grows
+  let t = 0.05;
+  let i = 0;
+  while (t < dur - 0.05) {
+    const f = 330 * Math.pow(2, (t / dur) * 2) * (i % 2 ? 1.25 : 1);
+    tone(f, t, 0.05, 'square', 0.028);
+    t += Math.max(0.07, 0.26 - (t / dur) * 0.19);
+    i++;
+  }
+  return () => { try { o.stop(); } catch { /* already stopped */ } };
+}
+
+/** The moment it stops: the toot, louder and higher for rarer answers, the fanfare for The Gavel. */
+export function playReveal(tier: number) {
+  if (tier <= 0) { playAbsent(); return; }
+  const top = tier >= 100 ? 8 : tier >= 85 ? 6 : tier >= 60 ? 4 : tier >= 30 ? 3 : 2;
+  for (let i = 0; i < top; i++) tone(SCALE[i], i * 0.045, 0.1, 'square', 0.06);
+  playToot(top * 0.045 + 0.02, tier >= 85 ? 196 : tier >= 60 ? 175 : 147);
+  if (tier >= 100) playGavel(top * 0.045 + 0.45);
+}
+
 /** The placard growing: a rising arpeggio as long as the score is good, then a toot. */
 export function playGrow(tier: number) {
   const steps = tier >= 100 ? 8 : tier >= 85 ? 6 : tier >= 60 ? 5 : tier >= 30 ? 4 : 3;

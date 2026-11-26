@@ -7,7 +7,7 @@
 
 import { useMemo, useState } from 'react';
 import { TierIcon } from '@/components/munillion/PixelArt';
-import { TIER_ORDER, conferenceHref, tierMeta, type MunReveal, type MunRevealQuestion } from '@/lib/munillion';
+import { ADD_CONFERENCE_HREF, TIER_ORDER, conferenceHref, munConfAdd, tierMeta, type MunReveal, type MunRevealQuestion } from '@/lib/munillion';
 import AddConferenceButton from './AddConferenceButton';
 
 const PAGE = 120;
@@ -56,6 +56,26 @@ function Round({ q, open, onToggle }: { q: MunRevealQuestion; open: boolean; onT
         <span className="mn-round-pts mn-px">{mineTier}</span>
         <span className="mn-round-chev mn-px" aria-hidden>&#9656;</span>
       </button>
+
+      {q.kind === 'conference' && q.missed && q.missed.length ? (
+        <div className="mn-add-cta">
+          {q.missed.slice(-3).map((name) => (
+            <button
+              key={name}
+              type="button"
+              className="mn-add-big mn-tx focus:outline-none"
+              onClick={() => {
+                // the tab opens inside the click; the wish to add it is recorded for us
+                window.open(ADD_CONFERENCE_HREF, '_blank', 'noopener');
+                void munConfAdd(name, 'reveal').catch(() => {});
+              }}
+            >
+              <span className="mn-add-plus" aria-hidden>+</span>
+              Add {name} to Gavelling
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       {open ? (
         <div id={bodyId} className="mn-round-body">

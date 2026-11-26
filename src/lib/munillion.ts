@@ -76,6 +76,8 @@ export interface MunAnswerResult {
   /** 'suggest': a near miss. `suggestion` is the answer the game thinks you meant; submitting it confirms. */
   status?: 'correct' | 'unknown' | 'suggest' | 'late' | 'done' | 'skipped';
   suggestion?: string;
+  /** On the conference question: what was typed is not a conference on Gavelling (offer to add it). */
+  not_listed?: boolean;
   tier?: number;
   label?: string | null;
   sub?: string | null;
@@ -103,6 +105,8 @@ export interface MunRevealQuestion {
   number_max: number | null;
   mine: { typed: string | null; label: string | null; sub: string | null; slug: string | null; tier: number | null } | null;
   gavel: MunRevealAnswer | null;
+  /** Conference question: names this player typed that aren't on Gavelling (for "Add <name>"). */
+  missed?: string[];
   /** Every answer, best tier first (the conference question lists every conference on Gavelling). */
   answers: (MunRevealAnswer & { tier: number })[];
 }
@@ -191,6 +195,11 @@ export function munResetPreview() {
 }
 export function munHistory() {
   return rpc<MunHistory>('munillion_history', { p_token: munillionToken() });
+}
+
+/** Records that a player wants a conference listed ('now' / 'later' from the pop-up, 'reveal' from the end screen, 'dismiss'). */
+export function munConfAdd(typed: string, choice: 'now' | 'later' | 'dismiss' | 'reveal') {
+  return rpc<{ ok: boolean }>('munillion_conf_add', { p_token: munillionToken(), p_typed: typed, p_choice: choice });
 }
 
 /** Where the plus button sends people: listing a conference on Gavelling. */

@@ -796,3 +796,6 @@ grant execute on function public.munillion_reset_preview_play(text) to anon, aut
 --   munillion_lenient_autocorrect: _munillion_initials, _munillion_stem, _munillion_strip_mods, _munillion_sim, _munillion_match_lenient,
 --     a new _munillion_suggest_list (about 60% similar), conference index columns k_acr_first, k_acr_sp and k_name_sp, a new munillion_answer
 --   data: about 90 more operative clause openers added to game 1, question 3 (26 Nov 2026)
+--   munillion_clean_and_did_you_mean / munillion_clean_fix_niger: _munillion_is_blocked_text, table munillion_conf_adds, munillion_conf_add,
+--     did-you-mean for every non-exact answer, munillion_reveal returns 'missed' conference names
+--   munillion_sim_whole_words, munillion_conf_suggest_distinct_words: whole-word partial matches, _munillion_conf_core

@@ -22,7 +22,10 @@ export default function GamesPage() {
           header={
             <header className="mn-title-row">
               <h1 className="mn-title mn-px">MUNillion</h1>
-              <p className="mn-tagline mn-tx">Seven MUN questions a day. The rarer your answer, the bigger your placard grows</p>
+              <p className="mn-tagline mn-tx">
+                <span className="mn-tag-long">Seven MUN questions a day. The rarer your answer, the bigger your placard grows</span>
+                <span className="mn-tag-short">7 MUN questions a day. Rarer answers grow your placard</span>
+              </p>
             </header>
           }
         />
