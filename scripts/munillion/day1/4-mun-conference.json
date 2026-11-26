@@ -1,0 +1,17 @@
+{"position": 4, "prompt": "Name a MUN conference", "hint": "Any conference on Gavelling counts. Yours missing? Add it with the plus", "kind": "conference", "default_tier": 85, "number_max": null,
+ "answers": [
+  {"answer": "HMUN", "tier": 10, "aliases": ["Harvard MUN", "Harvard Model United Nations", "HMUN Boston"], "link_slug": "hmunboston2027"},
+  {"answer": "THIMUN", "tier": 10, "aliases": ["The Hague International Model United Nations", "THIMUN The Hague"], "link_slug": "thimun2027"},
+  {"answer": "WorldMUN", "tier": 30, "aliases": ["Harvard WorldMUN", "World MUN", "Harvard World Model United Nations"], "link_slug": "worldmun"},
+  {"answer": "HNMUN", "tier": 30, "aliases": ["Harvard National Model United Nations", "Harvard National MUN"], "link_slug": "hnmun2027"},
+  {"answer": "NMUN", "tier": 30, "aliases": ["National Model United Nations", "NMUN NY", "NMUN New York", "National MUN"], "link_slug": "nmunny2027"},
+  {"answer": "YMUN", "tier": 30, "aliases": ["Yale Model United Nations", "Yale MUN"], "link_slug": "ymun2027"},
+  {"answer": "PMUNC", "tier": 60, "aliases": ["Princeton Model United Nations Conference", "Princeton MUN"], "link_slug": "pmunc2026"},
+  {"answer": "ILMUNC", "tier": 60, "aliases": ["Ivy League Model United Nations Conference", "Ivy League MUN"], "link_slug": "ilmunc2027"},
+  {"answer": "MUNUC", "tier": 60, "aliases": ["Model United Nations of the University of Chicago", "UChicago MUN"], "link_slug": "munuc2027"},
+  {"answer": "NAIMUN", "tier": 60, "aliases": ["North American Invitational Model United Nations"], "link_slug": "naimun2027"},
+  {"answer": "LIMUN", "tier": 60, "aliases": ["London International Model United Nations"], "link_slug": "limun2027"},
+  {"answer": "OxIMUN", "tier": 60, "aliases": ["Oxford International Model United Nations", "Oxford MUN"], "link_slug": "oximun2026"},
+  {"answer": "LSEMUN", "tier": 60, "aliases": ["London School of Economics Model United Nations", "LSE MUN"], "link_slug": "lsemun2027"},
+  {"answer": "BUSUN", "tier": 100, "aliases": ["Brown University Simulation of the United Nations", "Brown MUN"], "link_slug": "busun2026"}
+ ]}

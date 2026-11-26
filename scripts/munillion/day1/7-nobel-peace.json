@@ -1,0 +1,1078 @@
+{
+  "position": 7,
+  "prompt": "Name a Nobel Peace Prize winner",
+  "hint": "A person or an organisation, any year",
+  "kind": "list",
+  "default_tier": null,
+  "number_max": null,
+  "answers": [
+    {
+      "answer": "Henry Dunant",
+      "tier": 30,
+      "aliases": [
+        "Dunant",
+        "Jean Henri Dunant",
+        "Henri Dunant"
+      ]
+    },
+    {
+      "answer": "Frédéric Passy",
+      "tier": 85,
+      "aliases": [
+        "Passy"
+      ]
+    },
+    {
+      "answer": "Élie Ducommun",
+      "tier": 85,
+      "aliases": [
+        "Ducommun"
+      ]
+    },
+    {
+      "answer": "Charles Albert Gobat",
+      "tier": 85,
+      "aliases": [
+        "Gobat",
+        "Albert Gobat"
+      ]
+    },
+    {
+      "answer": "Randal Cremer",
+      "tier": 85,
+      "aliases": [
+        "Cremer",
+        "William Randal Cremer"
+      ]
+    },
+    {
+      "answer": "Institute of International Law",
+      "tier": 85,
+      "aliases": [
+        "Institut de Droit International"
+      ]
+    },
+    {
+      "answer": "Bertha von Suttner",
+      "tier": 60,
+      "aliases": [
+        "Suttner",
+        "Bertha Suttner"
+      ]
+    },
+    {
+      "answer": "Theodore Roosevelt",
+      "tier": 10,
+      "aliases": [
+        "Roosevelt",
+        "Teddy Roosevelt"
+      ]
+    },
+    {
+      "answer": "Ernesto Teodoro Moneta",
+      "tier": 85,
+      "aliases": [
+        "Moneta",
+        "Ernesto Moneta"
+      ]
+    },
+    {
+      "answer": "Louis Renault",
+      "tier": 85,
+      "aliases": [
+        "Renault"
+      ]
+    },
+    {
+      "answer": "Klas Pontus Arnoldson",
+      "tier": 85,
+      "aliases": [
+        "Arnoldson",
+        "Klas Arnoldson"
+      ]
+    },
+    {
+      "answer": "Fredrik Bajer",
+      "tier": 85,
+      "aliases": [
+        "Bajer"
+      ]
+    },
+    {
+      "answer": "Auguste Beernaert",
+      "tier": 85,
+      "aliases": [
+        "Beernaert"
+      ]
+    },
+    {
+      "answer": "Paul Henri d'Estournelles de Constant",
+      "tier": 85,
+      "aliases": [
+        "d'Estournelles de Constant",
+        "Estournelles de Constant",
+        "d'Estournelles",
+        "Paul d'Estournelles de Constant"
+      ]
+    },
+    {
+      "answer": "Permanent International Peace Bureau",
+      "tier": 85,
+      "aliases": [
+        "International Peace Bureau"
+      ]
+    },
+    {
+      "answer": "Tobias Asser",
+      "tier": 85,
+      "aliases": [
+        "Asser"
+      ]
+    },
+    {
+      "answer": "Alfred Fried",
+      "tier": 85,
+      "aliases": [
+        "Alfred Hermann Fried"
+      ]
+    },
+    {
+      "answer": "Elihu Root",
+      "tier": 60,
+      "aliases": [
+        "Root"
+      ]
+    },
+    {
+      "answer": "Henri La Fontaine",
+      "tier": 85,
+      "aliases": [
+        "La Fontaine"
+      ]
+    },
+    {
+      "answer": "International Committee of the Red Cross",
+      "tier": 10,
+      "aliases": [
+        "ICRC",
+        "Red Cross",
+        "International Red Cross",
+        "Red Cross Committee"
+      ]
+    },
+    {
+      "answer": "Woodrow Wilson",
+      "tier": 30,
+      "aliases": [
+        "Wilson",
+        "President Wilson"
+      ]
+    },
+    {
+      "answer": "Léon Bourgeois",
+      "tier": 85,
+      "aliases": [
+        "Bourgeois"
+      ]
+    },
+    {
+      "answer": "Hjalmar Branting",
+      "tier": 85,
+      "aliases": [
+        "Branting"
+      ]
+    },
+    {
+      "answer": "Christian Lange",
+      "tier": 85,
+      "aliases": [
+        "Christian Louis Lange",
+        "Lange"
+      ]
+    },
+    {
+      "answer": "Fridtjof Nansen",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Austen Chamberlain",
+      "tier": 85,
+      "aliases": [
+        "Chamberlain",
+        "Joseph Austen Chamberlain"
+      ]
+    },
+    {
+      "answer": "Charles G. Dawes",
+      "tier": 85,
+      "aliases": [
+        "Charles Dawes",
+        "Dawes"
+      ]
+    },
+    {
+      "answer": "Aristide Briand",
+      "tier": 60,
+      "aliases": [
+        "Briand"
+      ]
+    },
+    {
+      "answer": "Gustav Stresemann",
+      "tier": 85,
+      "aliases": [
+        "Stresemann"
+      ]
+    },
+    {
+      "answer": "Ferdinand Buisson",
+      "tier": 85,
+      "aliases": [
+        "Buisson"
+      ]
+    },
+    {
+      "answer": "Ludwig Quidde",
+      "tier": 85,
+      "aliases": [
+        "Quidde"
+      ]
+    },
+    {
+      "answer": "Frank B. Kellogg",
+      "tier": 60,
+      "aliases": [
+        "Frank Kellogg",
+        "Kellogg"
+      ]
+    },
+    {
+      "answer": "Nathan Söderblom",
+      "tier": 85,
+      "aliases": [
+        "Soderblom"
+      ]
+    },
+    {
+      "answer": "Jane Addams",
+      "tier": 60,
+      "aliases": [
+        "Addams"
+      ]
+    },
+    {
+      "answer": "Nicholas Murray Butler",
+      "tier": 85,
+      "aliases": [
+        "Nicholas Butler",
+        "Butler"
+      ]
+    },
+    {
+      "answer": "Norman Angell",
+      "tier": 85,
+      "aliases": [
+        "Angell"
+      ]
+    },
+    {
+      "answer": "Arthur Henderson",
+      "tier": 85,
+      "aliases": [
+        "Henderson"
+      ]
+    },
+    {
+      "answer": "Carl von Ossietzky",
+      "tier": 85,
+      "aliases": [
+        "Ossietzky",
+        "Carl Ossietzky"
+      ]
+    },
+    {
+      "answer": "Carlos Saavedra Lamas",
+      "tier": 85,
+      "aliases": [
+        "Saavedra Lamas"
+      ]
+    },
+    {
+      "answer": "Robert Cecil",
+      "tier": 85,
+      "aliases": [
+        "Viscount Cecil of Chelwood",
+        "Lord Robert Cecil",
+        "Cecil"
+      ]
+    },
+    {
+      "answer": "Nansen International Office for Refugees",
+      "tier": 85,
+      "aliases": [
+        "Nansen Office",
+        "Nansen International Office"
+      ]
+    },
+    {
+      "answer": "Cordell Hull",
+      "tier": 60,
+      "aliases": [
+        "Hull"
+      ]
+    },
+    {
+      "answer": "Emily Greene Balch",
+      "tier": 85,
+      "aliases": [
+        "Emily Balch",
+        "Balch"
+      ]
+    },
+    {
+      "answer": "John Mott",
+      "tier": 85,
+      "aliases": [
+        "John R. Mott",
+        "Mott"
+      ]
+    },
+    {
+      "answer": "American Friends Service Committee",
+      "tier": 85,
+      "aliases": [
+        "AFSC",
+        "Quakers"
+      ]
+    },
+    {
+      "answer": "Friends Service Council",
+      "tier": 85,
+      "aliases": [
+        "Friends Service Council of London"
+      ]
+    },
+    {
+      "answer": "John Boyd Orr",
+      "tier": 85,
+      "aliases": [
+        "Boyd Orr",
+        "Lord Boyd Orr"
+      ]
+    },
+    {
+      "answer": "Ralph Bunche",
+      "tier": 60,
+      "aliases": [
+        "Bunche",
+        "Ralph J. Bunche"
+      ]
+    },
+    {
+      "answer": "Léon Jouhaux",
+      "tier": 85,
+      "aliases": [
+        "Jouhaux"
+      ]
+    },
+    {
+      "answer": "Albert Schweitzer",
+      "tier": 30,
+      "aliases": [
+        "Schweitzer"
+      ]
+    },
+    {
+      "answer": "George C. Marshall",
+      "tier": 30,
+      "aliases": [
+        "George Marshall",
+        "Marshall",
+        "General Marshall"
+      ]
+    },
+    {
+      "answer": "United Nations High Commissioner for Refugees",
+      "tier": 60,
+      "aliases": [
+        "UNHCR",
+        "UN Refugee Agency",
+        "Office of the United Nations High Commissioner for Refugees",
+        "UN High Commissioner for Refugees",
+        "High Commissioner for Refugees"
+      ]
+    },
+    {
+      "answer": "Lester B. Pearson",
+      "tier": 100,
+      "aliases": [
+        "Lester Pearson",
+        "Pearson",
+        "Mike Pearson"
+      ]
+    },
+    {
+      "answer": "Dominique Pire",
+      "tier": 85,
+      "aliases": [
+        "Pire",
+        "Georges Pire"
+      ]
+    },
+    {
+      "answer": "Philip Noel-Baker",
+      "tier": 85,
+      "aliases": [
+        "Noel-Baker"
+      ]
+    },
+    {
+      "answer": "Albert Luthuli",
+      "tier": 60,
+      "aliases": [
+        "Luthuli",
+        "Albert Lutuli",
+        "Lutuli",
+        "Chief Albert Luthuli"
+      ]
+    },
+    {
+      "answer": "Dag Hammarskjöld",
+      "tier": 30,
+      "aliases": [
+        "Hammarskjold"
+      ]
+    },
+    {
+      "answer": "Linus Pauling",
+      "tier": 60,
+      "aliases": [
+        "Pauling"
+      ]
+    },
+    {
+      "answer": "International Federation of Red Cross and Red Crescent Societies",
+      "tier": 85,
+      "aliases": [
+        "IFRC",
+        "League of Red Cross Societies",
+        "Red Crescent",
+        "Red Cross and Red Crescent Societies"
+      ]
+    },
+    {
+      "answer": "Martin Luther King Jr.",
+      "tier": 10,
+      "aliases": [
+        "Martin Luther King",
+        "MLK",
+        "Martin Luther King Junior",
+        "Dr King"
+      ]
+    },
+    {
+      "answer": "UNICEF",
+      "tier": 10,
+      "aliases": [
+        "United Nations Children's Fund",
+        "UN Children's Fund",
+        "United Nations International Children's Emergency Fund"
+      ]
+    },
+    {
+      "answer": "René Cassin",
+      "tier": 85,
+      "aliases": [
+        "Cassin"
+      ]
+    },
+    {
+      "answer": "International Labour Organization",
+      "tier": 60,
+      "aliases": [
+        "ILO",
+        "International Labor Organization",
+        "International Labour Organisation"
+      ]
+    },
+    {
+      "answer": "Norman Borlaug",
+      "tier": 60,
+      "aliases": [
+        "Borlaug"
+      ]
+    },
+    {
+      "answer": "Willy Brandt",
+      "tier": 60,
+      "aliases": [
+        "Brandt"
+      ]
+    },
+    {
+      "answer": "Henry Kissinger",
+      "tier": 10,
+      "aliases": [
+        "Kissinger",
+        "Henry A. Kissinger"
+      ]
+    },
+    {
+      "answer": "Lê Đức Thọ",
+      "tier": 85,
+      "aliases": [
+        "Le Duc Tho"
+      ]
+    },
+    {
+      "answer": "Seán MacBride",
+      "tier": 85,
+      "aliases": [
+        "MacBride"
+      ]
+    },
+    {
+      "answer": "Eisaku Satō",
+      "tier": 85,
+      "aliases": [
+        "Sato"
+      ]
+    },
+    {
+      "answer": "Andrei Sakharov",
+      "tier": 30,
+      "aliases": [
+        "Sakharov",
+        "Andrey Sakharov"
+      ]
+    },
+    {
+      "answer": "Mairead Corrigan",
+      "tier": 85,
+      "aliases": [
+        "Mairead Maguire",
+        "Corrigan",
+        "Maguire"
+      ]
+    },
+    {
+      "answer": "Betty Williams",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Amnesty International",
+      "tier": 30,
+      "aliases": [
+        "Amnesty"
+      ]
+    },
+    {
+      "answer": "Menachem Begin",
+      "tier": 60,
+      "aliases": [
+        "Begin"
+      ]
+    },
+    {
+      "answer": "Anwar Sadat",
+      "tier": 60,
+      "aliases": [
+        "Sadat",
+        "Anwar El Sadat"
+      ]
+    },
+    {
+      "answer": "Mother Teresa",
+      "tier": 10,
+      "aliases": [
+        "Teresa",
+        "Mother Theresa",
+        "Saint Teresa of Calcutta",
+        "Mother Teresa of Calcutta"
+      ]
+    },
+    {
+      "answer": "Adolfo Pérez Esquivel",
+      "tier": 85,
+      "aliases": [
+        "Perez Esquivel",
+        "Esquivel"
+      ]
+    },
+    {
+      "answer": "Alfonso García Robles",
+      "tier": 85,
+      "aliases": [
+        "Garcia Robles"
+      ]
+    },
+    {
+      "answer": "Alva Myrdal",
+      "tier": 85,
+      "aliases": [
+        "Myrdal"
+      ]
+    },
+    {
+      "answer": "Lech Wałęsa",
+      "tier": 30,
+      "aliases": [
+        "Walesa",
+        "Lech Walesa"
+      ]
+    },
+    {
+      "answer": "Desmond Tutu",
+      "tier": 30,
+      "aliases": [
+        "Tutu",
+        "Archbishop Tutu"
+      ]
+    },
+    {
+      "answer": "International Physicians for the Prevention of Nuclear War",
+      "tier": 85,
+      "aliases": [
+        "IPPNW"
+      ]
+    },
+    {
+      "answer": "Elie Wiesel",
+      "tier": 60,
+      "aliases": [
+        "Wiesel"
+      ]
+    },
+    {
+      "answer": "Óscar Arias",
+      "tier": 60,
+      "aliases": [
+        "Arias",
+        "Oscar Arias Sanchez"
+      ]
+    },
+    {
+      "answer": "United Nations Peacekeeping Forces",
+      "tier": 60,
+      "aliases": [
+        "UN Peacekeeping Forces",
+        "UN Peacekeepers",
+        "United Nations Peacekeepers",
+        "Blue Helmets",
+        "UN Peacekeeping"
+      ]
+    },
+    {
+      "answer": "Dalai Lama",
+      "tier": 10,
+      "aliases": [
+        "14th Dalai Lama",
+        "Tenzin Gyatso",
+        "His Holiness the Dalai Lama"
+      ]
+    },
+    {
+      "answer": "Mikhail Gorbachev",
+      "tier": 10,
+      "aliases": [
+        "Gorbachev"
+      ]
+    },
+    {
+      "answer": "Aung San Suu Kyi",
+      "tier": 10,
+      "aliases": [
+        "Suu Kyi"
+      ]
+    },
+    {
+      "answer": "Rigoberta Menchú",
+      "tier": 60,
+      "aliases": [
+        "Menchu",
+        "Rigoberta Menchu Tum"
+      ]
+    },
+    {
+      "answer": "F. W. de Klerk",
+      "tier": 30,
+      "aliases": [
+        "de Klerk",
+        "Frederik de Klerk",
+        "Klerk"
+      ]
+    },
+    {
+      "answer": "Nelson Mandela",
+      "tier": 10,
+      "aliases": [
+        "Mandela"
+      ]
+    },
+    {
+      "answer": "Yasser Arafat",
+      "tier": 30,
+      "aliases": [
+        "Arafat"
+      ]
+    },
+    {
+      "answer": "Shimon Peres",
+      "tier": 30,
+      "aliases": [
+        "Peres"
+      ]
+    },
+    {
+      "answer": "Yitzhak Rabin",
+      "tier": 30,
+      "aliases": [
+        "Rabin"
+      ]
+    },
+    {
+      "answer": "Pugwash Conferences on Science and World Affairs",
+      "tier": 85,
+      "aliases": [
+        "Pugwash",
+        "Pugwash Conferences"
+      ]
+    },
+    {
+      "answer": "Joseph Rotblat",
+      "tier": 85,
+      "aliases": [
+        "Rotblat"
+      ]
+    },
+    {
+      "answer": "Carlos Filipe Ximenes Belo",
+      "tier": 85,
+      "aliases": [
+        "Carlos Belo",
+        "Bishop Belo",
+        "Ximenes Belo",
+        "Belo"
+      ]
+    },
+    {
+      "answer": "José Ramos-Horta",
+      "tier": 60,
+      "aliases": [
+        "Ramos-Horta"
+      ]
+    },
+    {
+      "answer": "International Campaign to Ban Landmines",
+      "tier": 60,
+      "aliases": [
+        "ICBL",
+        "Campaign to Ban Landmines"
+      ]
+    },
+    {
+      "answer": "Jody Williams",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "John Hume",
+      "tier": 60,
+      "aliases": [
+        "Hume"
+      ]
+    },
+    {
+      "answer": "David Trimble",
+      "tier": 60,
+      "aliases": [
+        "Trimble"
+      ]
+    },
+    {
+      "answer": "Médecins Sans Frontières",
+      "tier": 30,
+      "aliases": [
+        "Doctors Without Borders",
+        "MSF"
+      ]
+    },
+    {
+      "answer": "Kim Dae-jung",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "United Nations",
+      "tier": 10,
+      "aliases": [
+        "UN",
+        "United Nations Organization",
+        "United Nations Organisation"
+      ]
+    },
+    {
+      "answer": "Kofi Annan",
+      "tier": 30,
+      "aliases": [
+        "Annan"
+      ]
+    },
+    {
+      "answer": "Jimmy Carter",
+      "tier": 10,
+      "aliases": [
+        "Carter",
+        "James Carter",
+        "President Carter"
+      ]
+    },
+    {
+      "answer": "Shirin Ebadi",
+      "tier": 60,
+      "aliases": [
+        "Ebadi"
+      ]
+    },
+    {
+      "answer": "Wangari Maathai",
+      "tier": 30,
+      "aliases": [
+        "Maathai"
+      ]
+    },
+    {
+      "answer": "International Atomic Energy Agency",
+      "tier": 30,
+      "aliases": [
+        "IAEA"
+      ]
+    },
+    {
+      "answer": "Mohamed ElBaradei",
+      "tier": 60,
+      "aliases": [
+        "ElBaradei",
+        "Mohammed ElBaradei"
+      ]
+    },
+    {
+      "answer": "Grameen Bank",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Muhammad Yunus",
+      "tier": 30,
+      "aliases": [
+        "Yunus",
+        "Mohammad Yunus",
+        "Mohammed Yunus"
+      ]
+    },
+    {
+      "answer": "Intergovernmental Panel on Climate Change",
+      "tier": 30,
+      "aliases": [
+        "IPCC"
+      ]
+    },
+    {
+      "answer": "Al Gore",
+      "tier": 10,
+      "aliases": [
+        "Gore",
+        "Albert Gore",
+        "Albert Arnold Gore"
+      ]
+    },
+    {
+      "answer": "Martti Ahtisaari",
+      "tier": 85,
+      "aliases": [
+        "Ahtisaari"
+      ]
+    },
+    {
+      "answer": "Barack Obama",
+      "tier": 10,
+      "aliases": [
+        "Obama",
+        "President Obama"
+      ]
+    },
+    {
+      "answer": "Liu Xiaobo",
+      "tier": 30,
+      "aliases": []
+    },
+    {
+      "answer": "Leymah Gbowee",
+      "tier": 60,
+      "aliases": [
+        "Gbowee"
+      ]
+    },
+    {
+      "answer": "Ellen Johnson Sirleaf",
+      "tier": 60,
+      "aliases": [
+        "Sirleaf",
+        "Johnson Sirleaf"
+      ]
+    },
+    {
+      "answer": "Tawakkol Karman",
+      "tier": 60,
+      "aliases": [
+        "Karman",
+        "Tawakul Karman"
+      ]
+    },
+    {
+      "answer": "European Union",
+      "tier": 30,
+      "aliases": [
+        "EU"
+      ]
+    },
+    {
+      "answer": "Organisation for the Prohibition of Chemical Weapons",
+      "tier": 60,
+      "aliases": [
+        "OPCW",
+        "Organization for the Prohibition of Chemical Weapons"
+      ]
+    },
+    {
+      "answer": "Kailash Satyarthi",
+      "tier": 30,
+      "aliases": [
+        "Satyarthi"
+      ]
+    },
+    {
+      "answer": "Malala Yousafzai",
+      "tier": 10,
+      "aliases": [
+        "Malala",
+        "Yousafzai"
+      ]
+    },
+    {
+      "answer": "Tunisian National Dialogue Quartet",
+      "tier": 85,
+      "aliases": [
+        "National Dialogue Quartet",
+        "Tunisian Quartet",
+        "Tunisia National Dialogue Quartet"
+      ]
+    },
+    {
+      "answer": "Juan Manuel Santos",
+      "tier": 60,
+      "aliases": [
+        "Santos"
+      ]
+    },
+    {
+      "answer": "International Campaign to Abolish Nuclear Weapons",
+      "tier": 60,
+      "aliases": [
+        "ICAN"
+      ]
+    },
+    {
+      "answer": "Denis Mukwege",
+      "tier": 60,
+      "aliases": [
+        "Mukwege"
+      ]
+    },
+    {
+      "answer": "Nadia Murad",
+      "tier": 30,
+      "aliases": [
+        "Murad"
+      ]
+    },
+    {
+      "answer": "Abiy Ahmed",
+      "tier": 30,
+      "aliases": [
+        "Abiy",
+        "Abiy Ahmed Ali"
+      ]
+    },
+    {
+      "answer": "World Food Programme",
+      "tier": 30,
+      "aliases": [
+        "WFP",
+        "World Food Program"
+      ]
+    },
+    {
+      "answer": "Dmitry Muratov",
+      "tier": 85,
+      "aliases": [
+        "Muratov",
+        "Dmitri Muratov"
+      ]
+    },
+    {
+      "answer": "Maria Ressa",
+      "tier": 30,
+      "aliases": [
+        "Ressa"
+      ]
+    },
+    {
+      "answer": "Ales Bialiatski",
+      "tier": 85,
+      "aliases": [
+        "Bialiatski",
+        "Ales Byalyatski"
+      ]
+    },
+    {
+      "answer": "Memorial",
+      "tier": 85,
+      "aliases": [
+        "Memorial Human Rights Defence Centre"
+      ]
+    },
+    {
+      "answer": "Centre for Civil Liberties",
+      "tier": 85,
+      "aliases": [
+        "Center for Civil Liberties",
+        "CCL"
+      ]
+    },
+    {
+      "answer": "Narges Mohammadi",
+      "tier": 30,
+      "aliases": [
+        "Mohammadi"
+      ]
+    },
+    {
+      "answer": "Nihon Hidankyo",
+      "tier": 60,
+      "aliases": [
+        "Hidankyo",
+        "Japan Confederation of A- and H-Bomb Sufferers Organizations"
+      ]
+    },
+    {
+      "answer": "María Corina Machado",
+      "tier": 30,
+      "aliases": [
+        "Machado"
+      ]
+    }
+  ]
+}

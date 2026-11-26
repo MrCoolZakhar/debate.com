@@ -1,0 +1,328 @@
+{
+  "position": 6,
+  "prompt": "Name a UN Security Council resolution by its number",
+  "hint": "Just the number, like 242",
+  "kind": "number",
+  "default_tier": 85,
+  "number_max": 2800,
+  "answers": [
+    {
+      "answer": "47",
+      "tier": 60,
+      "aliases": [],
+      "note": "Kashmir, 1948"
+    },
+    {
+      "answer": "82",
+      "tier": 60,
+      "aliases": [],
+      "note": "Korean War, North Korean invasion condemned, 1950"
+    },
+    {
+      "answer": "83",
+      "tier": 85,
+      "aliases": [],
+      "note": "Korean War, assistance to South Korea, 1950"
+    },
+    {
+      "answer": "84",
+      "tier": 100,
+      "aliases": [],
+      "note": "Korea, unified command under the United States, 1950"
+    },
+    {
+      "answer": "221",
+      "tier": 85,
+      "aliases": [],
+      "note": "Rhodesia, Beira patrol, 1966"
+    },
+    {
+      "answer": "232",
+      "tier": 85,
+      "aliases": [],
+      "note": "Rhodesia sanctions, 1966"
+    },
+    {
+      "answer": "242",
+      "tier": 10,
+      "aliases": [],
+      "note": "Middle East, 1967"
+    },
+    {
+      "answer": "338",
+      "tier": 30,
+      "aliases": [],
+      "note": "Yom Kippur War ceasefire, 1973"
+    },
+    {
+      "answer": "418",
+      "tier": 85,
+      "aliases": [],
+      "note": "South Africa arms embargo, 1977"
+    },
+    {
+      "answer": "425",
+      "tier": 60,
+      "aliases": [],
+      "note": "Israeli withdrawal from Lebanon, creates UNIFIL, 1978"
+    },
+    {
+      "answer": "435",
+      "tier": 85,
+      "aliases": [],
+      "note": "Namibia independence plan, 1978"
+    },
+    {
+      "answer": "502",
+      "tier": 60,
+      "aliases": [],
+      "note": "Falklands, 1982"
+    },
+    {
+      "answer": "598",
+      "tier": 60,
+      "aliases": [],
+      "note": "Iran-Iraq War ceasefire, 1987"
+    },
+    {
+      "answer": "660",
+      "tier": 60,
+      "aliases": [],
+      "note": "Iraq's invasion of Kuwait condemned, 1990"
+    },
+    {
+      "answer": "678",
+      "tier": 30,
+      "aliases": [],
+      "note": "Authorises force against Iraq, 1990"
+    },
+    {
+      "answer": "687",
+      "tier": 30,
+      "aliases": [],
+      "note": "Gulf War ceasefire terms, 1991"
+    },
+    {
+      "answer": "794",
+      "tier": 85,
+      "aliases": [],
+      "note": "Somalia, unified task force, 1992"
+    },
+    {
+      "answer": "827",
+      "tier": 60,
+      "aliases": [],
+      "note": "Creates the Yugoslav tribunal (ICTY), 1993"
+    },
+    {
+      "answer": "940",
+      "tier": 85,
+      "aliases": [],
+      "note": "Haiti, authorises force, 1994"
+    },
+    {
+      "answer": "955",
+      "tier": 60,
+      "aliases": [],
+      "note": "Creates the Rwanda tribunal (ICTR), 1994"
+    },
+    {
+      "answer": "1244",
+      "tier": 60,
+      "aliases": [],
+      "note": "Kosovo, 1999"
+    },
+    {
+      "answer": "1267",
+      "tier": 60,
+      "aliases": [],
+      "note": "Taliban and al-Qaeda sanctions, 1999"
+    },
+    {
+      "answer": "1308",
+      "tier": 85,
+      "aliases": [],
+      "note": "HIV/AIDS as a security issue, 2000"
+    },
+    {
+      "answer": "1325",
+      "tier": 10,
+      "aliases": [],
+      "note": "Women, peace and security, 2000"
+    },
+    {
+      "answer": "1368",
+      "tier": 60,
+      "aliases": [],
+      "note": "After the 9/11 attacks, 2001"
+    },
+    {
+      "answer": "1373",
+      "tier": 30,
+      "aliases": [],
+      "note": "Counter-terrorism after 9/11, 2001"
+    },
+    {
+      "answer": "1441",
+      "tier": 30,
+      "aliases": [],
+      "note": "Iraq disarmament, 2002"
+    },
+    {
+      "answer": "1483",
+      "tier": 60,
+      "aliases": [],
+      "note": "Post-invasion Iraq, 2003"
+    },
+    {
+      "answer": "1540",
+      "tier": 60,
+      "aliases": [],
+      "note": "Weapons of mass destruction and non-state actors, 2004"
+    },
+    {
+      "answer": "1559",
+      "tier": 60,
+      "aliases": [],
+      "note": "Lebanon, Syrian withdrawal, 2004"
+    },
+    {
+      "answer": "1593",
+      "tier": 60,
+      "aliases": [],
+      "note": "Darfur referred to the ICC, 2005"
+    },
+    {
+      "answer": "1674",
+      "tier": 60,
+      "aliases": [],
+      "note": "Protection of civilians and the responsibility to protect, 2006"
+    },
+    {
+      "answer": "1701",
+      "tier": 60,
+      "aliases": [],
+      "note": "Israel and Hezbollah, 2006"
+    },
+    {
+      "answer": "1718",
+      "tier": 60,
+      "aliases": [],
+      "note": "North Korea sanctions, 2006"
+    },
+    {
+      "answer": "1737",
+      "tier": 60,
+      "aliases": [],
+      "note": "Iran sanctions, 2006"
+    },
+    {
+      "answer": "1816",
+      "tier": 85,
+      "aliases": [],
+      "note": "Somali piracy, 2008"
+    },
+    {
+      "answer": "1820",
+      "tier": 60,
+      "aliases": [],
+      "note": "Sexual violence in conflict, 2008"
+    },
+    {
+      "answer": "1970",
+      "tier": 60,
+      "aliases": [],
+      "note": "Libya sanctions and ICC referral, 2011"
+    },
+    {
+      "answer": "1973",
+      "tier": 30,
+      "aliases": [],
+      "note": "Libya no-fly zone, 2011"
+    },
+    {
+      "answer": "2118",
+      "tier": 60,
+      "aliases": [],
+      "note": "Syria chemical weapons, 2013"
+    },
+    {
+      "answer": "2166",
+      "tier": 60,
+      "aliases": [],
+      "note": "Downing of flight MH17, 2014"
+    },
+    {
+      "answer": "2216",
+      "tier": 85,
+      "aliases": [],
+      "note": "Yemen arms embargo, 2015"
+    },
+    {
+      "answer": "2231",
+      "tier": 30,
+      "aliases": [],
+      "note": "Iran nuclear deal (JCPOA), 2015"
+    },
+    {
+      "answer": "2250",
+      "tier": 60,
+      "aliases": [],
+      "note": "Youth, peace and security, 2015"
+    },
+    {
+      "answer": "2254",
+      "tier": 60,
+      "aliases": [],
+      "note": "Syria peace roadmap, 2015"
+    },
+    {
+      "answer": "2334",
+      "tier": 30,
+      "aliases": [],
+      "note": "Israeli settlements, 2016"
+    },
+    {
+      "answer": "2397",
+      "tier": 60,
+      "aliases": [],
+      "note": "North Korea sanctions, 2017"
+    },
+    {
+      "answer": "2417",
+      "tier": 85,
+      "aliases": [],
+      "note": "Conflict and hunger, 2018"
+    },
+    {
+      "answer": "2532",
+      "tier": 85,
+      "aliases": [],
+      "note": "Global ceasefire during COVID-19, 2020"
+    },
+    {
+      "answer": "2623",
+      "tier": 85,
+      "aliases": [],
+      "note": "Emergency session on Ukraine, 2022"
+    },
+    {
+      "answer": "2722",
+      "tier": 60,
+      "aliases": [],
+      "note": "Houthi attacks in the Red Sea, 2024"
+    },
+    {
+      "answer": "2728",
+      "tier": 60,
+      "aliases": [],
+      "note": "Gaza ceasefire during Ramadan, 2024"
+    },
+    {
+      "answer": "2735",
+      "tier": 85,
+      "aliases": [],
+      "note": "Gaza ceasefire plan, 2024"
+    }
+  ]
+}

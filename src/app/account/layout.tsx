@@ -5,7 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import {
   User, ScrollText, CalendarCheck, FileClock, Coins, Infinity as InfinityIcon, Ticket,
-  Settings2, LogOut, Sparkles,
+  Settings2, LogOut, Sparkles, Gamepad2,
   type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
@@ -48,6 +48,7 @@ type NavLink = {
 const PROFILE_LINKS: NavLink[] = [
   { label: 'Profile', href: '/account/profile', Icon: User },
   { label: 'MUN CV', href: '/account/cv', Icon: ScrollText },
+  { label: 'Games', href: '/account/games', Icon: Gamepad2, match: 'prefix' },
   { label: 'My conferences', href: '/account/conferences', Icon: CalendarCheck, match: 'prefix' },
 ];
 

@@ -1,0 +1,234 @@
+{
+  "position": 5,
+  "prompt": "Name a UN member whose flag has no red in it",
+  "hint": "Maroon counts as red. Orange and saffron don't",
+  "kind": "list",
+  "default_tier": null,
+  "number_max": null,
+  "answers": [
+    {
+      "answer": "India",
+      "tier": 10,
+      "aliases": []
+    },
+    {
+      "answer": "Brazil",
+      "tier": 10,
+      "aliases": [
+        "Brasil"
+      ]
+    },
+    {
+      "answer": "Sweden",
+      "tier": 10,
+      "aliases": []
+    },
+    {
+      "answer": "Greece",
+      "tier": 10,
+      "aliases": [
+        "Hellenic Republic"
+      ]
+    },
+    {
+      "answer": "Ukraine",
+      "tier": 10,
+      "aliases": []
+    },
+    {
+      "answer": "Israel",
+      "tier": 30,
+      "aliases": []
+    },
+    {
+      "answer": "Argentina",
+      "tier": 30,
+      "aliases": []
+    },
+    {
+      "answer": "Saudi Arabia",
+      "tier": 30,
+      "aliases": [
+        "KSA",
+        "Kingdom of Saudi Arabia"
+      ]
+    },
+    {
+      "answer": "Ireland",
+      "tier": 30,
+      "aliases": [
+        "Republic of Ireland",
+        "Eire"
+      ]
+    },
+    {
+      "answer": "Pakistan",
+      "tier": 30,
+      "aliases": []
+    },
+    {
+      "answer": "Nigeria",
+      "tier": 30,
+      "aliases": []
+    },
+    {
+      "answer": "Finland",
+      "tier": 30,
+      "aliases": []
+    },
+    {
+      "answer": "Jamaica",
+      "tier": 30,
+      "aliases": []
+    },
+    {
+      "answer": "Uruguay",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Bahamas",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Estonia",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Kazakhstan",
+      "tier": 60,
+      "aliases": [
+        "Kazakstan"
+      ]
+    },
+    {
+      "answer": "Botswana",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Cyprus",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Honduras",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Côte d'Ivoire",
+      "tier": 60,
+      "aliases": [
+        "Ivory Coast",
+        "Cote dIvoire"
+      ]
+    },
+    {
+      "answer": "Tanzania",
+      "tier": 60,
+      "aliases": [
+        "United Republic of Tanzania"
+      ]
+    },
+    {
+      "answer": "Somalia",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Bosnia and Herzegovina",
+      "tier": 60,
+      "aliases": [
+        "Bosnia",
+        "BiH"
+      ]
+    },
+    {
+      "answer": "Barbados",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Bhutan",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Gabon",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Lesotho",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Marshall Islands",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Micronesia",
+      "tier": 85,
+      "aliases": [
+        "Federated States of Micronesia",
+        "FSM"
+      ]
+    },
+    {
+      "answer": "Nauru",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Niger",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Rwanda",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Saint Lucia",
+      "tier": 85,
+      "aliases": [
+        "St Lucia"
+      ]
+    },
+    {
+      "answer": "Saint Vincent and the Grenadines",
+      "tier": 85,
+      "aliases": [
+        "St Vincent and the Grenadines",
+        "St Vincent",
+        "Saint Vincent"
+      ]
+    },
+    {
+      "answer": "San Marino",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Sierra Leone",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Solomon Islands",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Palau",
+      "tier": 100,
+      "aliases": []
+    }
+  ]
+}

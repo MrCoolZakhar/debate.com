@@ -1,0 +1,1127 @@
+{
+  "position": 1,
+  "prompt": "Name a current UN member state",
+  "hint": "Any of the 193. Observers like Palestine and the Holy See don't count",
+  "kind": "list",
+  "default_tier": null,
+  "number_max": null,
+  "answers": [
+    {
+      "answer": "Afghanistan",
+      "tier": 30,
+      "aliases": []
+    },
+    {
+      "answer": "Albania",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Algeria",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Andorra",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Angola",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Antigua and Barbuda",
+      "tier": 85,
+      "aliases": [
+        "Antigua"
+      ]
+    },
+    {
+      "answer": "Argentina",
+      "tier": 10,
+      "aliases": []
+    },
+    {
+      "answer": "Armenia",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Australia",
+      "tier": 10,
+      "aliases": []
+    },
+    {
+      "answer": "Austria",
+      "tier": 30,
+      "aliases": []
+    },
+    {
+      "answer": "Azerbaijan",
+      "tier": 60,
+      "aliases": [
+        "Azerbajan"
+      ]
+    },
+    {
+      "answer": "Bahamas",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Bahrain",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Bangladesh",
+      "tier": 30,
+      "aliases": []
+    },
+    {
+      "answer": "Barbados",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Belarus",
+      "tier": 60,
+      "aliases": [
+        "Byelorussia",
+        "Belorussia"
+      ]
+    },
+    {
+      "answer": "Belgium",
+      "tier": 30,
+      "aliases": []
+    },
+    {
+      "answer": "Belize",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Benin",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Bhutan",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Bolivia",
+      "tier": 60,
+      "aliases": [
+        "Plurinational State of Bolivia"
+      ]
+    },
+    {
+      "answer": "Bosnia and Herzegovina",
+      "tier": 85,
+      "aliases": [
+        "Bosnia",
+        "BiH"
+      ]
+    },
+    {
+      "answer": "Botswana",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Brazil",
+      "tier": 10,
+      "aliases": [
+        "Brasil"
+      ]
+    },
+    {
+      "answer": "Brunei",
+      "tier": 85,
+      "aliases": [
+        "Brunei Darussalam"
+      ]
+    },
+    {
+      "answer": "Bulgaria",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Burkina Faso",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Burundi",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Cabo Verde",
+      "tier": 85,
+      "aliases": [
+        "Cape Verde"
+      ]
+    },
+    {
+      "answer": "Cambodia",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Cameroon",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Canada",
+      "tier": 10,
+      "aliases": []
+    },
+    {
+      "answer": "Central African Republic",
+      "tier": 85,
+      "aliases": [
+        "CAR"
+      ]
+    },
+    {
+      "answer": "Chad",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Chile",
+      "tier": 30,
+      "aliases": []
+    },
+    {
+      "answer": "China",
+      "tier": 10,
+      "aliases": [
+        "PRC",
+        "People's Republic of China"
+      ]
+    },
+    {
+      "answer": "Colombia",
+      "tier": 30,
+      "aliases": []
+    },
+    {
+      "answer": "Comoros",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Republic of the Congo",
+      "tier": 85,
+      "aliases": [
+        "Congo-Brazzaville",
+        "Republic of Congo",
+        "Congo Republic"
+      ]
+    },
+    {
+      "answer": "Costa Rica",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Côte d'Ivoire",
+      "tier": 85,
+      "aliases": [
+        "Ivory Coast",
+        "Cote dIvoire"
+      ]
+    },
+    {
+      "answer": "Croatia",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Cuba",
+      "tier": 30,
+      "aliases": []
+    },
+    {
+      "answer": "Cyprus",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Czechia",
+      "tier": 60,
+      "aliases": [
+        "Czech Republic",
+        "Czech"
+      ]
+    },
+    {
+      "answer": "Democratic Republic of the Congo",
+      "tier": 60,
+      "aliases": [
+        "DRC",
+        "DR Congo",
+        "Democratic Republic of Congo",
+        "Congo-Kinshasa",
+        "Zaire"
+      ]
+    },
+    {
+      "answer": "Denmark",
+      "tier": 30,
+      "aliases": []
+    },
+    {
+      "answer": "Djibouti",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Dominica",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Dominican Republic",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Ecuador",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Egypt",
+      "tier": 10,
+      "aliases": []
+    },
+    {
+      "answer": "El Salvador",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Equatorial Guinea",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Eritrea",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Estonia",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Eswatini",
+      "tier": 85,
+      "aliases": [
+        "Swaziland",
+        "Kingdom of Eswatini"
+      ]
+    },
+    {
+      "answer": "Ethiopia",
+      "tier": 30,
+      "aliases": []
+    },
+    {
+      "answer": "Fiji",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Finland",
+      "tier": 30,
+      "aliases": []
+    },
+    {
+      "answer": "France",
+      "tier": 10,
+      "aliases": []
+    },
+    {
+      "answer": "Gabon",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Gambia",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Georgia",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Germany",
+      "tier": 10,
+      "aliases": [
+        "Deutschland"
+      ]
+    },
+    {
+      "answer": "Ghana",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Greece",
+      "tier": 30,
+      "aliases": [
+        "Hellenic Republic"
+      ]
+    },
+    {
+      "answer": "Grenada",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Guatemala",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Guinea",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Guinea-Bissau",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Guyana",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Haiti",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Honduras",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Hungary",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Iceland",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "India",
+      "tier": 10,
+      "aliases": []
+    },
+    {
+      "answer": "Indonesia",
+      "tier": 30,
+      "aliases": []
+    },
+    {
+      "answer": "Iran",
+      "tier": 30,
+      "aliases": [
+        "Islamic Republic of Iran"
+      ]
+    },
+    {
+      "answer": "Iraq",
+      "tier": 30,
+      "aliases": []
+    },
+    {
+      "answer": "Ireland",
+      "tier": 30,
+      "aliases": [
+        "Republic of Ireland",
+        "Eire"
+      ]
+    },
+    {
+      "answer": "Israel",
+      "tier": 30,
+      "aliases": []
+    },
+    {
+      "answer": "Italy",
+      "tier": 10,
+      "aliases": []
+    },
+    {
+      "answer": "Jamaica",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Japan",
+      "tier": 10,
+      "aliases": []
+    },
+    {
+      "answer": "Jordan",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Kazakhstan",
+      "tier": 60,
+      "aliases": [
+        "Kazakstan"
+      ]
+    },
+    {
+      "answer": "Kenya",
+      "tier": 30,
+      "aliases": []
+    },
+    {
+      "answer": "Kiribati",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Kuwait",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Kyrgyzstan",
+      "tier": 85,
+      "aliases": [
+        "Kyrgyz Republic",
+        "Kyrgystan",
+        "Kirghizstan"
+      ]
+    },
+    {
+      "answer": "Laos",
+      "tier": 85,
+      "aliases": [
+        "Lao PDR",
+        "Lao People's Democratic Republic"
+      ]
+    },
+    {
+      "answer": "Latvia",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Lebanon",
+      "tier": 60,
+      "aliases": [
+        "Lebanese Republic"
+      ]
+    },
+    {
+      "answer": "Lesotho",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Liberia",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Libya",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Liechtenstein",
+      "tier": 85,
+      "aliases": [
+        "Lichtenstein"
+      ]
+    },
+    {
+      "answer": "Lithuania",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Luxembourg",
+      "tier": 60,
+      "aliases": [
+        "Luxemburg"
+      ]
+    },
+    {
+      "answer": "Madagascar",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Malawi",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Malaysia",
+      "tier": 30,
+      "aliases": []
+    },
+    {
+      "answer": "Maldives",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Mali",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Malta",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Marshall Islands",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Mauritania",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Mauritius",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Mexico",
+      "tier": 10,
+      "aliases": []
+    },
+    {
+      "answer": "Micronesia",
+      "tier": 85,
+      "aliases": [
+        "Federated States of Micronesia",
+        "FSM"
+      ]
+    },
+    {
+      "answer": "Moldova",
+      "tier": 85,
+      "aliases": [
+        "Republic of Moldova"
+      ]
+    },
+    {
+      "answer": "Monaco",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Mongolia",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Montenegro",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Morocco",
+      "tier": 30,
+      "aliases": []
+    },
+    {
+      "answer": "Mozambique",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Myanmar",
+      "tier": 60,
+      "aliases": [
+        "Burma"
+      ]
+    },
+    {
+      "answer": "Namibia",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Nauru",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Nepal",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Netherlands",
+      "tier": 30,
+      "aliases": [
+        "Holland",
+        "Kingdom of the Netherlands"
+      ]
+    },
+    {
+      "answer": "New Zealand",
+      "tier": 30,
+      "aliases": []
+    },
+    {
+      "answer": "Nicaragua",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Niger",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Nigeria",
+      "tier": 10,
+      "aliases": []
+    },
+    {
+      "answer": "North Korea",
+      "tier": 30,
+      "aliases": [
+        "DPRK",
+        "Democratic People's Republic of Korea"
+      ]
+    },
+    {
+      "answer": "North Macedonia",
+      "tier": 85,
+      "aliases": [
+        "Macedonia",
+        "FYROM"
+      ]
+    },
+    {
+      "answer": "Norway",
+      "tier": 30,
+      "aliases": []
+    },
+    {
+      "answer": "Oman",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Pakistan",
+      "tier": 30,
+      "aliases": []
+    },
+    {
+      "answer": "Palau",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Panama",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Papua New Guinea",
+      "tier": 85,
+      "aliases": [
+        "PNG"
+      ]
+    },
+    {
+      "answer": "Paraguay",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Peru",
+      "tier": 30,
+      "aliases": []
+    },
+    {
+      "answer": "Philippines",
+      "tier": 30,
+      "aliases": [
+        "Phillipines",
+        "Philipines",
+        "Republic of the Philippines"
+      ]
+    },
+    {
+      "answer": "Poland",
+      "tier": 30,
+      "aliases": []
+    },
+    {
+      "answer": "Portugal",
+      "tier": 30,
+      "aliases": []
+    },
+    {
+      "answer": "Qatar",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Romania",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Russia",
+      "tier": 10,
+      "aliases": [
+        "Russian Federation"
+      ]
+    },
+    {
+      "answer": "Rwanda",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Saint Kitts and Nevis",
+      "tier": 85,
+      "aliases": [
+        "St Kitts and Nevis",
+        "St Kitts",
+        "Saint Kitts"
+      ]
+    },
+    {
+      "answer": "Saint Lucia",
+      "tier": 85,
+      "aliases": [
+        "St Lucia"
+      ]
+    },
+    {
+      "answer": "Saint Vincent and the Grenadines",
+      "tier": 85,
+      "aliases": [
+        "St Vincent and the Grenadines",
+        "St Vincent",
+        "Saint Vincent"
+      ]
+    },
+    {
+      "answer": "Samoa",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "San Marino",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Saudi Arabia",
+      "tier": 10,
+      "aliases": [
+        "KSA",
+        "Kingdom of Saudi Arabia"
+      ]
+    },
+    {
+      "answer": "Senegal",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Serbia",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Seychelles",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Sierra Leone",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Singapore",
+      "tier": 30,
+      "aliases": []
+    },
+    {
+      "answer": "Slovakia",
+      "tier": 60,
+      "aliases": [
+        "Slovak Republic"
+      ]
+    },
+    {
+      "answer": "Slovenia",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Solomon Islands",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Somalia",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "South Africa",
+      "tier": 10,
+      "aliases": []
+    },
+    {
+      "answer": "South Korea",
+      "tier": 30,
+      "aliases": [
+        "Republic of Korea",
+        "ROK"
+      ]
+    },
+    {
+      "answer": "South Sudan",
+      "tier": 85,
+      "aliases": [
+        "Republic of South Sudan"
+      ]
+    },
+    {
+      "answer": "Spain",
+      "tier": 10,
+      "aliases": [
+        "Espana"
+      ]
+    },
+    {
+      "answer": "Sri Lanka",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Sudan",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Suriname",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Sweden",
+      "tier": 30,
+      "aliases": []
+    },
+    {
+      "answer": "Switzerland",
+      "tier": 30,
+      "aliases": [
+        "Swiss Confederation"
+      ]
+    },
+    {
+      "answer": "Syria",
+      "tier": 30,
+      "aliases": [
+        "Syrian Arab Republic"
+      ]
+    },
+    {
+      "answer": "São Tomé and Príncipe",
+      "tier": 85,
+      "aliases": [
+        "Sao Tome"
+      ]
+    },
+    {
+      "answer": "Tajikistan",
+      "tier": 85,
+      "aliases": [
+        "Tajikstan"
+      ]
+    },
+    {
+      "answer": "Tanzania",
+      "tier": 60,
+      "aliases": [
+        "United Republic of Tanzania"
+      ]
+    },
+    {
+      "answer": "Thailand",
+      "tier": 30,
+      "aliases": []
+    },
+    {
+      "answer": "Timor-Leste",
+      "tier": 85,
+      "aliases": [
+        "East Timor"
+      ]
+    },
+    {
+      "answer": "Togo",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Tonga",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Trinidad and Tobago",
+      "tier": 85,
+      "aliases": [
+        "Trinidad"
+      ]
+    },
+    {
+      "answer": "Tunisia",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Türkiye",
+      "tier": 30,
+      "aliases": [
+        "Turkey",
+        "Republic of Turkey"
+      ]
+    },
+    {
+      "answer": "Turkmenistan",
+      "tier": 85,
+      "aliases": [
+        "Turkmenia"
+      ]
+    },
+    {
+      "answer": "Tuvalu",
+      "tier": 100,
+      "aliases": []
+    },
+    {
+      "answer": "Uganda",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Ukraine",
+      "tier": 30,
+      "aliases": []
+    },
+    {
+      "answer": "United Arab Emirates",
+      "tier": 30,
+      "aliases": [
+        "UAE",
+        "Emirates"
+      ]
+    },
+    {
+      "answer": "United Kingdom",
+      "tier": 10,
+      "aliases": [
+        "UK",
+        "Britain",
+        "Great Britain",
+        "United Kingdom of Great Britain and Northern Ireland",
+        "GB"
+      ]
+    },
+    {
+      "answer": "United States",
+      "tier": 10,
+      "aliases": [
+        "USA",
+        "US",
+        "America",
+        "United States of America",
+        "USofA"
+      ]
+    },
+    {
+      "answer": "Uruguay",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Uzbekistan",
+      "tier": 60,
+      "aliases": [
+        "Uzbekstan"
+      ]
+    },
+    {
+      "answer": "Vanuatu",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Venezuela",
+      "tier": 30,
+      "aliases": [
+        "Bolivarian Republic of Venezuela"
+      ]
+    },
+    {
+      "answer": "Vietnam",
+      "tier": 30,
+      "aliases": [
+        "Viet Nam"
+      ]
+    },
+    {
+      "answer": "Yemen",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Zambia",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Zimbabwe",
+      "tier": 60,
+      "aliases": []
+    }
+  ]
+}
