@@ -182,6 +182,10 @@ export function munSkip(position: number, preview = false) {
 export function munReveal(preview = false) {
   return rpc<MunReveal>('munillion_reveal', { p_token: munillionToken(), p_preview: preview });
 }
+/** Clears this player's own play of an unpublished game, so the preview can be tried again. */
+export function munResetPreview() {
+  return rpc<{ ok: boolean; reason?: string }>('munillion_reset_preview_play', { p_token: munillionToken() });
+}
 export function munHistory() {
   return rpc<MunHistory>('munillion_history', { p_token: munillionToken() });
 }

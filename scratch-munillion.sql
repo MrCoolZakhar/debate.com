@@ -253,7 +253,7 @@ $$;
 create or replace function public._munillion_current_game(p_preview boolean) returns public.munillion_games
 language sql stable security definer set search_path = public, pg_temp as $$
   select g.* from public.munillion_games g
-   where case when coalesce(p_preview, false) and public.is_platform_admin() then true
+   where case when coalesce(p_preview, false) then true  -- open to anyone (owner, 26 Nov 2026; migration munillion_open_preview)
               else g.published and g.game_date <= (now() at time zone 'utc')::date end
    order by g.number desc limit 1
 $$;
@@ -770,3 +770,19 @@ grant execute on function public.munillion_admin_game(int), public.munillion_adm
   public.munillion_admin_update_question(uuid, text, text, int, int, int), public.munillion_admin_publish(int, boolean, date),
   public.munillion_admin_reset_my_play(int)
   to authenticated;
+
+-- migration munillion_open_preview (owner, 26 Nov 2026): the preview is not behind a staff account.
+create or replace function public.munillion_reset_preview_play(p_token text) returns jsonb
+language plpgsql security definer set search_path = public, extensions, pg_temp as $$
+declare v record; g public.munillion_games;
+begin
+  select * into v from public._munillion_player(p_token);
+  if v.player_key is null then return jsonb_build_object('ok', false, 'reason', 'no_player'); end if;
+  g := public._munillion_current_game(true);
+  if g.id is null then return jsonb_build_object('ok', false, 'reason', 'no_game'); end if;
+  if g.published then return jsonb_build_object('ok', false, 'reason', 'published'); end if;
+  delete from public.munillion_plays where game_id = g.id and player_key = v.player_key;
+  return jsonb_build_object('ok', true);
+end $$;
+revoke all on function public.munillion_reset_preview_play(text) from public, anon, authenticated;
+grant execute on function public.munillion_reset_preview_play(text) to anon, authenticated;

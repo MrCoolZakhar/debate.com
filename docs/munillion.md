@@ -21,6 +21,7 @@ The daily MUN trivia game (owner, 26 Nov 2026). It's modelled on Krillion's mech
 - **Players.** A player is `u:<user id>` when signed in, otherwise `d:<sha256 of the browser token>` (`localStorage gavelling-munillion-token`). Signing in moves the browser's plays onto the account (`_munillion_claim`, run inside `munillion_today` and `munillion_history`).
 - **Today's game** is the newest published game dated today or earlier, in UTC. The streak is the number of consecutive published games finished, counted back from the newest.
 - **The answer key** is only returned by `munillion_reveal` once the player has finished.
+- **The preview is open to anyone** (owner, 26 Nov 2026: not behind a staff account). `/games?preview=1` plays the newest game, published or not, signed in or not. `munillion_reset_preview_play` lets anyone clear their own play of an unpublished game to try again (migration `munillion_open_preview`). A preview play counts as that player's real play once the game is published.
 
 ## Where things live
 

@@ -14,7 +14,6 @@ import { useAuth } from '@/components/AuthProvider';
 import { openAuth } from '@/lib/authModal';
 import { friendlyError } from '@/lib/friendlyError';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
-import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { DeskScene, TierIcon } from '@/components/munillion/PixelArt';
 import {
   MAX_POINTS,
@@ -22,6 +21,7 @@ import {
   conferenceHref,
   munAnswer,
   munOpen,
+  munResetPreview,
   munReveal,
   munSkip,
   munToday,
@@ -292,10 +292,9 @@ export default function MunillionGame() {
   const resetMyPlay = useCallback(async () => {
     if (!game) return;
     try {
-      const c = await getFreshAuthedClient();
-      if (!c) return;
-      const { data, error } = await c.rpc('munillion_admin_reset_my_play', { p_number: game.number });
-      if (error || !(data as { ok?: boolean })?.ok) { notifyErr("Couldn't reset your play"); return; }
+      // Anyone may clear their own play of an unpublished game (the preview is not behind a staff account).
+      const r = await munResetPreview();
+      if (!r?.ok) { notifyErr("Couldn't reset your play"); return; }
       setReveal(null);
       setResult(null);
       await load();
@@ -477,7 +476,7 @@ export default function MunillionGame() {
           ) : (
             <Link className="mn-btn is-ghost focus:outline-none" href="/account/games" style={{ textDecoration: 'none' }}>Your past games</Link>
           )}
-          {preview ? (
+          {preview && game.preview ? (
             <button type="button" className="mn-btn is-gold is-small focus:outline-none" onClick={() => void resetMyPlay()}>Reset my play</button>
           ) : null}
         </div>
@@ -493,7 +492,7 @@ export default function MunillionGame() {
     <>
       {preview && game?.preview ? (
         <div className="mn-preview" role="note">
-          <span>Preview of MUNillion #{game.number} for {formatDate(game.date)}. Players can&apos;t see it until it&apos;s published</span>
+          <span>Preview of MUNillion #{game.number} for {formatDate(game.date)}. It only shows on /games once it&apos;s published</span>
           <Link className="mn-link" href="/admin/munillion">Review answers</Link>
         </div>
       ) : null}
