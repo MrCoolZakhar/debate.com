@@ -11,21 +11,22 @@ export const metadata = pageMetadata({
   path: '/games',
 });
 
+// The game fills exactly one screen (owner, 26 Nov 2026); the top bar floats over the hall.
 export default function GamesPage() {
   return (
-    <div className="mn-page min-h-screen flex flex-col">
+    <div className="mn-page">
       <style dangerouslySetInnerHTML={{ __html: MUNILLION_CSS }} />
-      <SiteNav />
-      <main className="flex-1 w-full">
+      <div className="mn-shell">
+        <SiteNav overlay />
         <MunillionGame
           header={
             <header className="mn-title-row">
               <h1 className="mn-title mn-px">MUNillion</h1>
-              <p className="mn-tagline mn-tx">Seven MUN questions a day. The rarer your answer, the higher your placard goes</p>
+              <p className="mn-tagline mn-tx">Seven MUN questions a day. The rarer your answer, the bigger your placard grows</p>
             </header>
           }
         />
-      </main>
+      </div>
       <SiteFooter />
     </div>
   );

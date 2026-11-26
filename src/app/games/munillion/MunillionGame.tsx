@@ -7,14 +7,16 @@
 // they finish. Scores: 100 The Gavel, 85 Best Delegate, 60 Outstanding Delegate,
 // 30 Honourable Mention, 10 Participation Certificate, 0 Absent.
 //
-// The stage (Krillion's layout, our own art): a pixel UN General Assembly hall,
-// a delegate's hand floating in the middle with a placard that shows what you
-// type, and the score rungs it rises to after each answer. A near miss is
-// autocorrected: the box fills with the answer the game thinks you meant and
-// submitting again confirms it.
+// The stage fits one screen on every device. A pixel UN General Assembly hall
+// sits behind it; a delegate's hand stands behind the panels, dimmed, holding a
+// placard that shows what you type, and after every answer it GROWS with the
+// score: fast, then slowing, swaying and twisting (a full spin for The Gavel).
+// Sounds are synthesised chiptune (sound.ts). A near miss is autocorrected:
+// the box fills with the answer the game means and submitting again confirms.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import Link from 'next/link';
+import { Volume2, VolumeX } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { openAuth } from '@/lib/authModal';
 import { friendlyError } from '@/lib/friendlyError';
@@ -40,6 +42,9 @@ import {
 } from '@/lib/munillion';
 import RevealList from './RevealList';
 import AddConferenceButton from './AddConferenceButton';
+import {
+  playAbsent, playBuzz, playGrow, playStart, playSuggest, playTick, setSoundMuted, soundMuted, unlockSound,
+} from './sound';
 
 type Phase = 'loading' | 'error' | 'nogame' | 'intro' | 'question' | 'result' | 'summary';
 
@@ -53,19 +58,23 @@ interface ResultView {
   reason: 'correct' | 'late' | 'skipped';
 }
 
-/** Where the hand floats (top of the hand zone, %) for each score; the rest spot is where it waits. */
-const RUNG_TOP: Record<number, number> = { 100: 6, 85: 21, 60: 36, 30: 51, 10: 65, 0: 88 };
-const REST_TOP = 74;
-const RUNGS = [100, 85, 60, 30, 10];
+interface Bit { bx: string; by: string; br: string; c: string; delay: string }
 
 // Fixed motes so the server and the browser draw the same thing.
 const MOTES = Array.from({ length: 22 }, (_, i) => ({
   left: (i * 37 + 11) % 100,
   d: 11 + ((i * 7) % 9),
   delay: -((i * 13) % 17),
-  x: ((i % 2 ? 1 : -1) * (10 + ((i * 5) % 24))),
+  x: (i % 2 ? 1 : -1) * (10 + ((i * 5) % 24)),
   paper: i % 3 === 0,
 }));
+
+const BURST_COLOURS = ['#EED98A', '#FF8FA3', '#7BC9A0', '#F3EEDF', '#5AC8FF'];
+
+/** How big the hand stands for a score: 0.85 at zero, about 4 at a perfect 700 (it fills the hall behind the panels). */
+function scaleFor(total: number): number {
+  return 0.85 + Math.min(1, Math.max(0, total) / MAX_POINTS) * 3.2;
+}
 
 function formatDate(iso: string | undefined): string {
   if (!iso) return '';
@@ -91,12 +100,44 @@ function Countdown({ prefix }: { prefix: string }) {
   return <p className="mn-countdown mn-px">{prefix} {hms(msToNextUtcMidnight(now))}</p>;
 }
 
+/** Points that count up when a result lands. */
+function CountUp({ to }: { to: number }) {
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    let raf = 0;
+    const t0 = performance.now();
+    const step = (t: number) => {
+      const p = Math.min(1, (t - t0) / 700);
+      setN(Math.round(to * (1 - Math.pow(1 - p, 3))));
+      if (p < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [to]);
+  return <>{n}</>;
+}
+
 function firstOpenPosition(questions: MunQuestion[], answers: Record<number, MunPlayAnswer>): number {
   for (const q of questions) {
     const a = answers[q.position];
     if (!a || a.tier === null) return q.position;
   }
   return questions.length + 1;
+}
+
+function makeBurst(tier: number): Bit[] {
+  const n = tier >= 100 ? 70 : tier >= 85 ? 44 : tier >= 60 ? 26 : tier >= 30 ? 14 : tier > 0 ? 6 : 0;
+  return Array.from({ length: n }, (_, i) => {
+    const a = (i / n) * Math.PI * 2 + Math.random() * 0.4;
+    const r = 120 + Math.random() * (tier >= 85 ? 380 : 220);
+    return {
+      bx: `${Math.round(Math.cos(a) * r)}px`,
+      by: `${Math.round(Math.sin(a) * r - 60)}px`,
+      br: `${Math.round(Math.random() * 540 - 270)}deg`,
+      c: BURST_COLOURS[i % BURST_COLOURS.length],
+      delay: `${Math.round(Math.random() * 120)}ms`,
+    };
+  });
 }
 
 export default function MunillionGame({ header }: { header?: ReactNode }) {
@@ -118,8 +159,16 @@ export default function MunillionGame({ header }: { header?: ReactNode }) {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<ResultView | null>(null);
   const [reveal, setReveal] = useState<MunReveal | null>(null);
+  const [muted, setMuted] = useState(false);
+  const [growKey, setGrowKey] = useState(0);
+  const [burst, setBurst] = useState<{ key: number; bits: Bit[]; flash: boolean; quake: boolean } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const growRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const scaleRef = useRef(1);
+  const growTargetRef = useRef<{ total: number; tier: number }>({ total: 0, tier: 0 });
   const expiringRef = useRef(false);
+  const tickRef = useRef(0);
 
   const questions = useMemo(() => today?.questions ?? [], [today]);
   const count = questions.length || 7;
@@ -129,10 +178,75 @@ export default function MunillionGame({ header }: { header?: ReactNode }) {
   // ?preview=1 plays the newest game, published or not (read here, not through useSearchParams, so the page renders on the server).
   useEffect(() => {
     setPreview(new URLSearchParams(window.location.search).get('preview') === '1');
+    setMuted(soundMuted());
   }, []);
+
+  // The hand stands at the size of the score already earned when the page loads (no animation).
+  useEffect(() => {
+    if (growKey !== 0 || !growRef.current) return;
+    scaleRef.current = scaleFor(total);
+    growRef.current.style.transform = `scale(${scaleRef.current})`;
+  }, [total, growKey]);
+
+  // After each answer the hand grows: fast, then slowing, swaying side to side; The Gavel spins it round.
+  useEffect(() => {
+    const el = growRef.current;
+    if (!growKey || !el) return;
+    const { total: target, tier } = growTargetRef.current;
+    const a = scaleRef.current;
+    const b = scaleFor(target);
+    scaleRef.current = b;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || typeof el.animate !== 'function') {
+      el.style.transform = `scale(${b})`;
+      return;
+    }
+    const d = b - a;
+    let frames: Keyframe[];
+    if (tier === 0) {
+      frames = [
+        { transform: `scale(${a}) rotate(0deg)` },
+        { transform: `scale(${a * 0.9}) rotate(-9deg)`, offset: 0.3 },
+        { transform: `scale(${a * 0.95}) rotate(6deg)`, offset: 0.6 },
+        { transform: `scale(${b}) rotate(0deg)` },
+      ];
+    } else if (tier >= 100) {
+      frames = [
+        { transform: `scale(${a}) rotateY(0deg) rotate(0deg)` },
+        { transform: `scale(${a + d * 0.65}) rotateY(180deg) rotate(-10deg) translateX(-3%)`, offset: 0.22 },
+        { transform: `scale(${b * 1.08}) rotateY(360deg) rotate(8deg) translateX(3%)`, offset: 0.5 },
+        { transform: `scale(${b * 0.98}) rotateY(360deg) rotate(-4deg)`, offset: 0.74 },
+        { transform: `scale(${b}) rotateY(360deg) rotate(1deg)`, offset: 0.9 },
+        { transform: `scale(${b}) rotateY(360deg) rotate(0deg)` },
+      ];
+    } else {
+      frames = [
+        { transform: `scale(${a}) rotate(0deg) translateX(0)` },
+        { transform: `scale(${a + d * 0.75}) rotate(-8deg) translateX(-3%)`, offset: 0.22 },
+        { transform: `scale(${a + d * 0.96}) rotate(6deg) translateX(2.5%)`, offset: 0.48 },
+        { transform: `scale(${b + d * 0.05}) rotate(-3deg) translateX(-1%)`, offset: 0.7 },
+        { transform: `scale(${b}) rotate(1.5deg) translateX(0)`, offset: 0.86 },
+        { transform: `scale(${b}) rotate(0deg) translateX(0)` },
+      ];
+    }
+    const anim = el.animate(frames, { duration: tier >= 100 ? 2600 : tier === 0 ? 1100 : 1900, easing: 'cubic-bezier(.12,.9,.28,1)', fill: 'forwards' });
+    anim.onfinish = () => { el.style.transform = `scale(${b})`; anim.cancel(); };
+    return () => { anim.onfinish = null; };
+  }, [growKey]);
+
+  // A big score shakes the hall for half a second (a class toggle, so nothing remounts).
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!burst?.quake || !el) return;
+    el.classList.remove('mn-shakeit');
+    void el.offsetWidth;
+    el.classList.add('mn-shakeit');
+    const id = window.setTimeout(() => el.classList.remove('mn-shakeit'), 600);
+    return () => window.clearTimeout(id);
+  }, [burst]);
 
   const startQuestion = useCallback((position: number, secondsLeft: number) => {
     expiringRef.current = false;
+    tickRef.current = 0;
     setPos(position);
     setInput('');
     setMsg(null);
@@ -181,12 +295,14 @@ export default function MunillionGame({ header }: { header?: ReactNode }) {
 
   const openQuestion = useCallback(async (position: number) => {
     if (preview === null) return;
+    unlockSound();
     setBusy(true);
     try {
       const r = await munOpen(position, preview);
       if (!r.ok || r.answered) { await load(); return; }
       const fallback = questions.find((x) => x.position === position)?.seconds ?? 30;
       startQuestion(position, r.seconds_left ?? fallback);
+      playStart();
     } catch (e) {
       notifyErr(friendlyError(e, "Couldn't open the next question"));
     } finally {
@@ -196,15 +312,21 @@ export default function MunillionGame({ header }: { header?: ReactNode }) {
 
   const applyResult = useCallback((position: number, r: MunAnswerResult, reason: ResultView['reason'], typed: string | null) => {
     const tier = r.tier ?? 0;
+    const newTotal = typeof r.total === 'number' ? r.total : total + tier;
     setAnswers((m) => ({
       ...m,
       [position]: { position, tier, typed, label: r.label ?? null, sub: r.sub ?? null, slug: r.slug ?? null, seconds_left: null },
     }));
-    if (typeof r.total === 'number') setTotal(r.total);
+    setTotal(newTotal);
     setSuggestion(null);
+    setMsg(null);
     setResult({ position, tier, label: r.label ?? null, sub: r.sub ?? null, slug: r.slug ?? null, typed, reason });
+    growTargetRef.current = { total: newTotal, tier };
+    setGrowKey((k) => k + 1);
+    setBurst({ key: Date.now(), bits: makeBurst(tier), flash: tier >= 100, quake: tier >= 85 });
+    if (tier > 0) playGrow(tier); else playAbsent();
     setPhase('result');
-  }, []);
+  }, [total]);
 
   const giveUp = useCallback(async (reason: 'late' | 'skipped') => {
     if (!q || preview === null) return;
@@ -223,6 +345,7 @@ export default function MunillionGame({ header }: { header?: ReactNode }) {
   const submit = useCallback(async () => {
     const text = input.trim();
     if (!text || busy || !q || preview === null) return;
+    unlockSound();
     setBusy(true);
     try {
       const r = await munAnswer(q.position, text, preview);
@@ -231,12 +354,14 @@ export default function MunillionGame({ header }: { header?: ReactNode }) {
         setSuggestion({ typed: text, to: r.suggestion });
         setInput(r.suggestion);
         setMsg(null);
+        playSuggest();
         window.setTimeout(() => inputRef.current?.focus(), 0);
         return;
       }
       if (r.status === 'unknown') {
         setShake((s) => s + 1);
         setSuggestion(null);
+        playBuzz();
         if ((r.attempts_left ?? 1) <= 0) setMsg("That's every try for this one");
         else if (q.kind === 'conference') setMsg('Not on Gavelling yet. Try another, or add yours with the plus');
         else if (q.kind === 'number') setMsg('Type a resolution number, like 242');
@@ -273,6 +398,12 @@ export default function MunillionGame({ header }: { header?: ReactNode }) {
 
   const remainingMs = phase === 'question' ? Math.max(0, deadline - now) : 0;
   const remaining = Math.ceil(remainingMs / 1000);
+
+  useEffect(() => {
+    if (phase !== 'question' || remaining > 5 || remaining <= 0 || tickRef.current === remaining) return;
+    tickRef.current = remaining;
+    playTick(remaining > 2);
+  }, [phase, remaining]);
 
   useEffect(() => {
     if (phase !== 'question' || !deadline || remainingMs > 0 || expiringRef.current) return;
@@ -313,6 +444,7 @@ export default function MunillionGame({ header }: { header?: ReactNode }) {
       if (!r?.ok) { notifyErr("Couldn't reset your play"); return; }
       setReveal(null);
       setResult(null);
+      setGrowKey(0);
       await load();
       notifyOk('Your play was reset');
     } catch (e) {
@@ -320,55 +452,43 @@ export default function MunillionGame({ header }: { header?: ReactNode }) {
     }
   }, [load]);
 
+  const toggleSound = useCallback(() => {
+    unlockSound();
+    setMuted((m) => { setSoundMuted(!m); return !m; });
+  }, []);
+
   const signedIn = !!today?.signed_in;
   const streak = today?.streak ?? 0;
   const answeredCount = questions.filter((x) => answers[x.position] && answers[x.position].tier !== null).length;
 
-  // ── the floating hand ─────────────────────────────────────────────────────
+  // ── the hand (behind everything) ──────────────────────────────────────────
 
-  const handTop = phase === 'result' && result ? RUNG_TOP[result.tier] ?? REST_TOP : REST_TOP;
   const placardText = phase === 'result' && result
     ? (result.tier > 0 ? (result.label || result.typed || '') : 'Absent')
-    : phase === 'question' ? input.trim() : phase === 'intro' ? 'Ready?' : '';
+    : phase === 'question' ? input.trim()
+    : phase === 'intro' ? 'Ready?'
+    : phase === 'summary' ? `${total} points`
+    : phase === 'nogame' ? 'Soon' : '';
   const placardSmall = phase === 'result' && result ? tierMeta(result.tier).name : phase === 'question' ? `Question ${pos}` : 'Delegate';
 
-  const handZone = (
-    <div className="mn-hand-zone">
-      <div className={`mn-ladder${phase === 'result' ? ' is-on' : ''}`} aria-hidden>
-        {RUNGS.map((t) => (
-          <div key={t} className={`mn-rung${result && phase === 'result' && result.tier === t ? ' is-hit' : ''}`} style={{ top: `${RUNG_TOP[t]}%` }}>
-            <span className="mn-px">{tierMeta(t).name} · {t}</span>
+  const handLayer = (
+    <>
+      <div className={`mn-halo${phase === 'result' && (result?.tier ?? 0) >= 85 ? ' is-on' : ''}`} aria-hidden />
+      <div className="mn-handlayer" aria-hidden>
+        <div ref={growRef} className="mn-grower">
+          <div className="mn-bob">
+            <div className="mn-hand-fig">
+              <div className={`mn-placard mn-tx${placardText ? '' : ' is-empty'}`}>
+                <small className="mn-px">{placardSmall}</small>
+                {placardText || 'Your answer'}
+              </div>
+              <div className="mn-arm"><ArmSprite size={84} /></div>
+            </div>
           </div>
-        ))}
-      </div>
-      <div className="mn-hand" style={{ '--top': `${handTop}%` } as CSSProperties}>
-        <div className="mn-hand-bob">
-          {phase === 'result' && result && result.tier >= 85 ? <div className="mn-glow" aria-hidden /> : null}
-          <div className={`mn-placard mn-tx${placardText ? '' : ' is-empty'}`} aria-live="polite">
-            <small className="mn-px">{placardSmall}</small>
-            {placardText || 'Your answer'}
-          </div>
-          <div className="mn-arm"><ArmSprite size={84} /></div>
         </div>
       </div>
-      {phase === 'result' && result ? (
-        <div className="mn-result-tag">
-          <div className="mn-tier-name mn-px">{tierMeta(result.tier).name}</div>
-          <div className={`mn-points mn-px${result.tier === 0 ? ' is-zero' : ''}`}>+{result.tier}</div>
-          <p className="mn-line mn-tx">
-            {result.reason === 'late' ? 'Out of time' : result.reason === 'skipped' ? 'You passed on this one' : (
-              <>
-                {result.slug ? (
-                  <a href={conferenceHref(result.slug)} target="_blank" rel="noopener noreferrer">{result.label}</a>
-                ) : null}
-                {result.slug && result.sub ? <> · {result.sub}</> : null}
-                {!result.slug ? (result.sub ? `${result.sub}. ` : '') + tierMeta(result.tier).line : null}
-              </>
-            )}
-          </p>
-        </div>
-      ) : null}
-    </div>
+      <div className="mn-dim" aria-hidden />
+    </>
   );
 
   // ── the panels ────────────────────────────────────────────────────────────
@@ -391,68 +511,94 @@ export default function MunillionGame({ header }: { header?: ReactNode }) {
         </div>
         <div className="mn-progress-label mn-px">
           {phase === 'summary' ? 'Done for today' : `Question ${Math.min(pos, count)} of ${count}`}
+          {preview && game?.preview ? <em>Preview</em> : null}
         </div>
       </div>
-      <div className="mn-panel mn-box" style={{ textAlign: 'right' }}>
-        <div className="mn-box-label mn-px">Streak</div>
-        <div className="mn-box-value mn-px">{streak}</div>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div className="mn-panel mn-box" style={{ textAlign: 'right' }}>
+          <div className="mn-box-label mn-px">Streak</div>
+          <div className="mn-box-value mn-px">{streak}</div>
+        </div>
+        <button type="button" className="mn-btn mn-px is-ghost is-icon focus:outline-none" onClick={toggleSound} aria-label={muted ? 'Turn sound on' : 'Turn sound off'} aria-pressed={!muted}>
+          {muted ? <VolumeX size={16} strokeWidth={1.5} aria-hidden /> : <Volume2 size={16} strokeWidth={1.5} aria-hidden />}
+        </button>
       </div>
     </div>
+  );
+
+  const side = (
+    <aside className="mn-side" aria-label="Today and scoring">
+      <div className="mn-panel">
+        <h2 className="mn-px">Today</h2>
+        <ol className="mn-mini">
+          {Array.from({ length: count }, (_, i) => {
+            const p = i + 1;
+            const a = answers[p];
+            const done = a && a.tier !== null;
+            const isNow = !done && (phase === 'question' || phase === 'result') && p === pos;
+            return (
+              <li key={p} className="mn-tx">
+                {done ? <TierIcon tier={a.tier} size={20} label={tierMeta(a.tier).name} /> : <span className={`mn-num mn-px${isNow ? ' is-now' : ''}`}>{p}</span>}
+                <span className={done ? undefined : 'is-muted'}>
+                  {done ? (a.tier ? (a.label || a.typed) : 'Absent') : isNow ? 'Now' : `Question ${p}`}
+                </span>
+                {done ? <span className="mn-px">{a.tier}</span> : <span />}
+              </li>
+            );
+          })}
+        </ol>
+      </div>
+      <div className="mn-panel">
+        <h2 className="mn-px">Scoring</h2>
+        <ul className="mn-mini">
+          {TIER_ORDER.map((t) => (
+            <li key={t} className="mn-tx">
+              <TierIcon tier={t} size={20} label={tierMeta(t).name} />
+              <span>{tierMeta(t).name}</span>
+              <span className="mn-px">{t}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </aside>
   );
 
   let centre: ReactNode = null;
   let bar: ReactNode = null;
 
   if (phase === 'loading') {
-    centre = <div className="mn-panel mn-card" aria-hidden style={{ minHeight: 180, opacity: 0.6 }} />;
+    centre = <div className="mn-panel mn-card" aria-hidden style={{ minHeight: 120, opacity: 0.6 }} />;
   } else if (phase === 'error') {
     centre = (
       <div className="mn-panel mn-card">
         <h2 className="mn-h2 mn-px">Couldn&apos;t Load Today&apos;s Game</h2>
         <p className="mn-p mn-tx">Check your connection and try again</p>
-        <div className="mn-row">
-          <button type="button" className="mn-btn mn-px focus:outline-none" onClick={() => { setPhase('loading'); void load(); }}>Try again</button>
-        </div>
       </div>
     );
+    bar = <button type="button" className="mn-btn mn-px is-wide focus:outline-none" onClick={() => { setPhase('loading'); void load(); }}>Try again</button>;
   } else if (phase === 'nogame') {
     centre = (
-      <>
-        <div className="mn-panel mn-card">
-          <h2 className="mn-h2 mn-px">The First MUNillion Is Almost Here</h2>
-          <p className="mn-p mn-tx">Seven questions go live at midnight UTC. Come back and raise your placard</p>
-          <Countdown prefix="Next check in" />
-        </div>
-        {handZone}
-      </>
+      <div className="mn-panel mn-card">
+        <h2 className="mn-h2 mn-px">The First MUNillion Is Almost Here</h2>
+        <p className="mn-p mn-tx">Seven questions go live at midnight UTC. Come back and grow your placard</p>
+        <Countdown prefix="Next check in" />
+      </div>
     );
   } else if (phase === 'intro' && game) {
     const started = answeredCount > 0;
     centre = (
-      <>
-        <div className="mn-panel mn-card">
-          <div className="mn-kicker mn-px">MUNillion #{game.number} · {formatDate(game.date)}</div>
-          <h2 className="mn-h2 mn-px" style={{ marginTop: 12 }}>{started ? 'Pick Up Where You Left Off' : "Today's Seven Questions"}</h2>
-          <p className="mn-p mn-tx">Thirty seconds each, one answer per question. Common answers keep your placard low, rare ones raise it, and one answer on every list wins The Gavel</p>
-          <ul className="mn-legend">
-            {TIER_ORDER.map((t) => (
-              <li key={t} className="mn-tx">
-                <TierIcon tier={t} size={26} label={tierMeta(t).name} />
-                <span>{tierMeta(t).name}</span>
-                <span className="mn-px">{t}</span>
-              </li>
-            ))}
-          </ul>
-          {!signedIn ? (
-            <p className="mn-p mn-tx" style={{ fontSize: 19 }}>
-              <button type="button" className="mn-link mn-tx focus:outline-none" style={{ background: 'none', border: 0, padding: 0, cursor: 'pointer', fontSize: 'inherit' }} onClick={() => openAuth({ next: '/games' })}>
-                Sign in
-              </button>{' '}to keep your streak on every device
-            </p>
-          ) : null}
-        </div>
-        {handZone}
-      </>
+      <div className="mn-panel mn-card">
+        <div className="mn-kicker mn-px">MUNillion #{game.number} · {formatDate(game.date)}</div>
+        <h2 className="mn-h2 mn-px" style={{ marginTop: '1vh' }}>{started ? 'Pick Up Where You Left Off' : "Today's Seven Questions"}</h2>
+        <p className="mn-p mn-tx">Thirty seconds each, one answer per question. Rare answers make your placard grow, and one answer on every list wins The Gavel</p>
+        {!signedIn ? (
+          <p className="mn-p mn-tx">
+            <button type="button" className="mn-link mn-tx focus:outline-none" style={{ background: 'none', border: 0, padding: 0, cursor: 'pointer', fontSize: 'inherit' }} onClick={() => openAuth({ next: '/games' })}>
+              Sign in
+            </button>{' '}to keep your streak on every device
+          </p>
+        ) : null}
+      </div>
     );
     bar = (
       <button type="button" className="mn-btn mn-px is-wide focus:outline-none" disabled={busy} onClick={() => void openQuestion(pos)}>
@@ -461,16 +607,13 @@ export default function MunillionGame({ header }: { header?: ReactNode }) {
     );
   } else if (phase === 'question' && q) {
     const pct = q.seconds > 0 ? Math.max(0, Math.min(1, remainingMs / (q.seconds * 1000))) : 0;
-    const C = 2 * Math.PI * 30;
+    const C = 2 * Math.PI * 27;
     centre = (
-      <>
-        <div className="mn-panel mn-card">
-          <div className="mn-kicker mn-px">Question {q.position} of {count}</div>
-          <h2 className="mn-prompt mn-tx">{q.prompt}</h2>
-          {q.hint ? <p className="mn-hint mn-tx">{q.hint}</p> : null}
-        </div>
-        {handZone}
-      </>
+      <div className="mn-panel mn-card">
+        <div className="mn-kicker mn-px">Question {q.position} of {count}</div>
+        <h2 className="mn-prompt mn-tx">{q.prompt}</h2>
+        {q.hint ? <p className="mn-hint mn-tx">{q.hint}</p> : null}
+      </div>
     );
     bar = (
       <>
@@ -479,11 +622,13 @@ export default function MunillionGame({ header }: { header?: ReactNode }) {
             <div className="mn-tx">&ldquo;{suggestion.typed}&rdquo; &rarr; <b>&ldquo;{suggestion.to}&rdquo;</b></div>
             <div className="mn-px">Submit again to confirm, or edit</div>
           </div>
+        ) : msg ? (
+          <p className="mn-msg mn-tx" role="status" aria-live="polite">{msg}</p>
         ) : null}
         <form key={shake} className={`mn-answer-row${shake ? ' mn-shake' : ''}`} onSubmit={(e) => { e.preventDefault(); void submit(); }}>
           <div className={`mn-timer mn-px${remaining <= 5 ? ' is-low' : ''}`} aria-label={`${remaining} seconds left`}>
-            <svg width="64" height="64" viewBox="0 0 64 64" aria-hidden>
-              <circle cx="32" cy="32" r="30" fill="none" stroke="rgba(238,217,138,.9)" strokeWidth="3" strokeDasharray={`${C * pct} ${C}`} />
+            <svg width="60" height="60" viewBox="0 0 60 60" aria-hidden>
+              <circle cx="30" cy="30" r="27" fill="none" stroke={remaining <= 5 ? '#FF8FA3' : '#EED98A'} strokeWidth="3" strokeDasharray={`${C * pct} ${C}`} />
             </svg>
             {remaining}
           </div>
@@ -504,18 +649,33 @@ export default function MunillionGame({ header }: { header?: ReactNode }) {
           />
           <button type="submit" className="mn-btn mn-px focus:outline-none" disabled={busy || !input.trim()}>Raise</button>
         </form>
-        <div className="mn-drain" aria-hidden><span style={{ width: `${pct * 100}%` }} /></div>
-        <p className="mn-msg mn-tx" role="status" aria-live="polite">{msg ?? ''}</p>
-        <div className="mn-row is-center" style={{ marginTop: 2 }}>
+        <div className="mn-row is-center">
           <button type="button" className="mn-btn mn-px is-ghost is-small focus:outline-none" disabled={busy} onClick={() => void giveUp('skipped')}>Pass</button>
           {q.kind === 'conference' ? <AddConferenceButton /> : null}
         </div>
       </>
     );
   } else if (phase === 'result' && result) {
+    const meta = tierMeta(result.tier);
     const resQ = questions.find((x) => x.position === result.position);
     const last = result.position >= count;
-    centre = handZone;
+    centre = (
+      <div key={`r-${result.position}`} className="mn-panel mn-card mn-result">
+        <div className="mn-kicker mn-px">Question {result.position} of {count}</div>
+        <div className="mn-result-icon" style={{ marginTop: '1vh' }}><TierIcon tier={result.tier} size={72} label={meta.name} /></div>
+        <div className="mn-tier-name mn-px">{meta.name}</div>
+        <div className={`mn-points mn-px${result.tier === 0 ? ' is-zero' : ''}`}>+<CountUp to={result.tier} /></div>
+        <p className="mn-line mn-tx">
+          {result.reason === 'late' ? 'Out of time' : result.reason === 'skipped' ? 'You passed on this one' : (
+            <>
+              {result.slug ? <><a href={conferenceHref(result.slug)} target="_blank" rel="noopener noreferrer">{result.label}</a>{result.sub ? ` · ${result.sub}` : ''}</> : null}
+              {!result.slug ? `${result.label ?? ''}${result.sub ? ` · ${result.sub}` : ''}` : null}
+              <br />{meta.line}
+            </>
+          )}
+        </p>
+      </div>
+    );
     bar = (
       <div className="mn-row is-center" style={{ marginTop: 0 }}>
         <button type="button" className="mn-btn mn-px is-wide focus:outline-none" style={{ flex: 1 }} disabled={busy} onClick={() => void goNext()}>
@@ -535,7 +695,7 @@ export default function MunillionGame({ header }: { header?: ReactNode }) {
             const t = answers[x.position]?.tier ?? 0;
             return (
               <figure key={x.position}>
-                <TierIcon tier={t} size={38} label={`Question ${x.position}: ${tierMeta(t).name}`} />
+                <TierIcon tier={t} size={34} label={`Question ${x.position}: ${tierMeta(t).name}`} />
                 <figcaption className="mn-px">{t}</figcaption>
               </figure>
             );
@@ -559,10 +719,9 @@ export default function MunillionGame({ header }: { header?: ReactNode }) {
   }
 
   return (
-    <div className="mn-stage">
-      <div className={`mn-bg${phase === 'result' && (result?.tier ?? 0) >= 60 ? ' is-up' : ''}`} aria-hidden />
+    <div className="mn-stage" ref={stageRef}>
+      <div className="mn-bg" aria-hidden />
       <div className="mn-shade" aria-hidden />
-      <div className="mn-scan" aria-hidden />
       <div className="mn-motes" aria-hidden>
         {MOTES.map((m, i) => (
           <span
@@ -572,17 +731,24 @@ export default function MunillionGame({ header }: { header?: ReactNode }) {
           />
         ))}
       </div>
-
-      {preview && game?.preview ? (
-        <div className="mn-preview mn-px" role="note">
-          <span>Preview of MUNillion #{game.number} for {formatDate(game.date)}. It only shows on /games once it&apos;s published</span>
-          <Link className="mn-link" href="/admin/munillion">Review answers</Link>
+      {handLayer}
+      {burst && burst.bits.length ? (
+        <div className="mn-burst" key={burst.key} aria-hidden>
+          {burst.bits.map((b, i) => (
+            <span key={i} className="mn-bit" style={{ '--bx': b.bx, '--by': b.by, '--br': b.br, '--c': b.c, animationDelay: b.delay } as CSSProperties} />
+          ))}
         </div>
       ) : null}
-      {phase === 'intro' || phase === 'nogame' || phase === 'loading' || phase === 'error' ? header : null}
-      {phase !== 'loading' ? hud : null}
-      <section className="mn-centre" aria-label="MUNillion">{centre}</section>
-      {bar ? <div className="mn-bar-zone">{bar}</div> : null}
+      {burst?.flash ? <div className="mn-flash" key={`f-${burst.key}`} aria-hidden /> : null}
+      <div className="mn-scan" aria-hidden />
+
+      <div>{phase === 'intro' || phase === 'nogame' || phase === 'loading' || phase === 'error' ? header : null}</div>
+      {phase !== 'loading' ? hud : <div />}
+      <div className="mn-main">
+        <section className="mn-centre" aria-label="MUNillion">{centre}</section>
+        {side}
+      </div>
+      <div className="mn-bar-zone">{bar}</div>
     </div>
   );
 }

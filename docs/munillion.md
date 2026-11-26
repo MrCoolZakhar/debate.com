@@ -19,6 +19,17 @@ The daily MUN trivia game (owner, 26 Nov 2026). It's modelled on Krillion's mech
   - A near miss is not scored. `munillion_answer` answers `status: 'suggest'` with the answer it thinks you meant, the page fills the box with it ("Vogue magazin" becomes "Vogue"), and submitting again confirms, because that's an exact match.
   - It catches four kinds of near miss: the start of an answer (4 letters or more), an answer followed by extra words, one typo (two for 10 letters or more), and two neighbouring letters swapped. A tie goes to the longer answer (`_munillion_suggest_list`).
   - Conferences are corrected against `munillion_conf_index` (`_munillion_suggest_conf`).
+- **Lenient autocorrect** (owner, 26 Nov 2026, migration `munillion_lenient_autocorrect`).
+  - Accepted straight away: the same word with another ending ("condemning" counts as Condemns) or with a leading "strongly", "further", "also" and so on (`_munillion_match_lenient`).
+  - Offered as a suggestion: anything about 60% similar (`_munillion_sim`: typos, swaps, part of an answer, an answer inside what was typed, initials such as "icj").
+  - For conferences, the first word of an acronym ("HMUN") finds the conference.
+  - Game 1's operative clause list was expanded to about 200 openers.
+- **The look on screen** (same day).
+  - One screen on every device (100dvh, less the 62px mobile tab bar), with the top bar floating over the hall.
+  - The hand sits behind every panel, dimmed. After each answer it grows with the total (0.85 times at zero up to about 4 times at 700), fast then slowing, swaying side to side. The Gavel spins it.
+  - Pixel bursts, a screen shake for 85 and up, and a flash for The Gavel.
+  - A compact Today and Scoring panel on the right from 1024px.
+  - Chiptune sounds synthesised in the browser (`src/app/games/munillion/sound.ts`, with a mute switch remembered on the device).
 - **Conference index.** Conference names are normalised once into `munillion_conf_index`, rebuilt every 10 minutes by cron `munillion-conf-index` (`_munillion_conf_index_refresh`), so a new conference counts within 10 minutes. Matching an answer reads the index: about 12 ms, against 6 s before.
 - **The reveal returns every answer.** For the conference question that means every indexed conference, at the default score, each with a link. The page shows one row per round that opens into score filters, a search box and the full list.
 - **Unrecognised answers** are saved in `munillion_misses`, for every question. You can retry while the clock runs, up to 25 tries.

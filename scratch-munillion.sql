@@ -793,3 +793,6 @@ grant execute on function public.munillion_reset_preview_play(text) to anon, aut
 --     and _munillion_find_conf / _munillion_suggest_conf reading the index
 --   munillion_autocorrect_swaps: _munillion_is_swap and _munillion_typo (two swapped letters count as one typo)
 --   munillion_autocorrect_ties: a tie in _munillion_suggest_list goes to the longer answer
+--   munillion_lenient_autocorrect: _munillion_initials, _munillion_stem, _munillion_strip_mods, _munillion_sim, _munillion_match_lenient,
+--     a new _munillion_suggest_list (about 60% similar), conference index columns k_acr_first, k_acr_sp and k_name_sp, a new munillion_answer
+--   data: about 90 more operative clause openers added to game 1, question 3 (26 Nov 2026)
