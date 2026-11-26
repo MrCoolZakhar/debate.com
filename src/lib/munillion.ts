@@ -22,7 +22,7 @@ export interface TierMeta {
 }
 
 export const TIERS: Record<TierValue, TierMeta> = {
-  100: { value: 100, name: 'Gavel', line: 'Only one answer on the list gets the gavel, and you found it' },
+  100: { value: 100, name: 'The Gavel', line: 'Only one answer on the list wins The Gavel, and you found it' },
   85: { value: 85, name: 'Best Delegate', line: 'Almost nobody goes there' },
   60: { value: 60, name: 'Outstanding Delegate', line: 'A strong pick most people miss' },
   30: { value: 30, name: 'Honourable Mention', line: 'A solid answer plenty of people give' },
@@ -73,7 +73,9 @@ export interface MunToday {
 export interface MunAnswerResult {
   ok: boolean;
   reason?: string;
-  status?: 'correct' | 'unknown' | 'late' | 'done' | 'skipped';
+  /** 'suggest': a near miss. `suggestion` is the answer the game thinks you meant; submitting it confirms. */
+  status?: 'correct' | 'unknown' | 'suggest' | 'late' | 'done' | 'skipped';
+  suggestion?: string;
   tier?: number;
   label?: string | null;
   sub?: string | null;
@@ -91,7 +93,7 @@ export interface MunOpenResult {
   seconds_left?: number;
 }
 
-export interface MunRevealAnswer { answer: string; note: string | null; slug: string | null }
+export interface MunRevealAnswer { answer: string; note: string | null; slug: string | null; tier?: number }
 
 export interface MunRevealQuestion {
   position: number;
@@ -101,7 +103,8 @@ export interface MunRevealQuestion {
   number_max: number | null;
   mine: { typed: string | null; label: string | null; sub: string | null; slug: string | null; tier: number | null } | null;
   gavel: MunRevealAnswer | null;
-  tiers: { tier: number; total: number; answers: MunRevealAnswer[] }[];
+  /** Every answer, best tier first (the conference question lists every conference on Gavelling). */
+  answers: (MunRevealAnswer & { tier: number })[];
 }
 
 export interface MunReveal {

@@ -160,17 +160,6 @@ const PLUS: Grid = [
   '..kkkk..',
 ];
 
-const FIST: Grid = [
-  '..kkkkkkk.',
-  '.ksssssssk',
-  'ksSsSsSsSk',
-  'ksssssssSk',
-  'ksssssssSk',
-  '.ksssssSSk',
-  '..kuuuuuuk',
-  '..kuuuuuuk',
-];
-
 const TIER_SPRITES: Record<TierValue, Grid> = {
   100: GAVEL,
   85: TROPHY,
@@ -236,101 +225,33 @@ export function PlusIcon({ size = 16 }: { size?: number }) {
   return <PixelSprite grid={PLUS} size={size} />;
 }
 
-// ── The desk scene ──────────────────────────────────────────────────────────
-// A wood-panelled hall, a desk, and a delegate's hand holding a placard that
-// shows the score. `level` 0..1 lifts the hand; the move steps like pixel art.
+// ── The delegate's arm ──────────────────────────────────────────────────────
+// A fist gripping the bottom of the placard, a white cuff and a suit sleeve
+// running down out of frame. The placard itself is HTML above it (crisp text).
 
-const SCENE_W = 64;
-const SCENE_H = 140;
-const DESK_TOP = 112;
-const PLACARD_H = 18;
-const MAX_LIFT = 82;
+const ARM: Grid = [
+  '..kkkkkkkkkk..',
+  '.kssssssssssk.',
+  'ksSssSssSssSsk',
+  'kssssssssssssk',
+  'ksSssssssssSSk',
+  'kssssssssssSSk',
+  '.kssssssssSSk.',
+  '..kssssssSSk..',
+  '..kuuuuuuuuk..',
+  '..kuuuuuuuuk..',
+  '..kbbbbbbbBk..',
+  '..kbbbbbbbBk..',
+  '..kbbbbbbbBk..',
+  '..kbbbbbbbBk..',
+  '..kbbbbbbbBk..',
+  '..kbbbbbbbBk..',
+  '..kbbbbbbbBk..',
+  '..kbbbbbbbBk..',
+  '..kbbbbbbbBk..',
+  '..kbbbbbbbBk..',
+];
 
-export function DeskScene({
-  level,
-  points,
-  bump = 0,
-  className,
-  style,
-  slice = false,
-}: {
-  level: number;
-  points: number;
-  /** Change it to wiggle the placard (a new answer landed). */
-  bump?: number;
-  className?: string;
-  style?: CSSProperties;
-  /** Fill a wide box (the phone band) instead of keeping the tall shape. */
-  slice?: boolean;
-}) {
-  const lift = Math.round(Math.max(0, Math.min(1, level)) * MAX_LIFT);
-  const restY = DESK_TOP - PLACARD_H;
-  const panels = Array.from({ length: SCENE_W / 8 }, (_, i) => i * 8);
-  const specks = [
-    [9, 18], [51, 11], [40, 34], [14, 52], [56, 60], [6, 78], [33, 6], [47, 86], [21, 30],
-  ];
-  return (
-    <svg
-      viewBox={`0 0 ${SCENE_W} ${SCENE_H}`}
-      preserveAspectRatio={slice ? 'xMidYMax slice' : 'xMidYMax meet'}
-      shapeRendering="crispEdges"
-      className={className}
-      style={{ display: 'block', ...style }}
-      role="img"
-      aria-label={`A delegate raises their placard: ${points} points`}
-    >
-      {/* the hall */}
-      <rect x={0} y={0} width={SCENE_W} height={SCENE_H} fill="#EFE7D4" />
-      {panels.map((x) => (
-        <rect key={x} x={x} y={0} width={1} height={DESK_TOP} fill="#E4D9C1" />
-      ))}
-      <rect x={0} y={38} width={SCENE_W} height={1} fill="#D9CCAF" />
-      <rect x={0} y={39} width={SCENE_W} height={1} fill="#F7F1E3" />
-      {specks.map(([x, y], i) => (
-        <rect key={i} x={x} y={y} width={1} height={1} fill="#C9A84A" className="mn-speck" style={{ animationDelay: `${(i % 5) * 0.7}s` }} />
-      ))}
-
-      {/* the arm, hand and placard (lifted together) */}
-      <g className="mn-lift" style={{ transform: `translateY(${-lift}px)` }}>
-        <g key={bump} className={bump ? 'mn-wiggle' : undefined} style={{ transformOrigin: `32px ${restY + PLACARD_H}px` }}>
-          {/* sleeve: long enough to reach below the desk at any height */}
-          <rect x={28} y={restY + PLACARD_H + 4} width={8} height={MAX_LIFT + 40} fill="#2D3E57" />
-          <rect x={28} y={restY + PLACARD_H + 4} width={1} height={MAX_LIFT + 40} fill="#1C1410" />
-          <rect x={35} y={restY + PLACARD_H + 4} width={1} height={MAX_LIFT + 40} fill="#1C1410" />
-          <rect x={33} y={restY + PLACARD_H + 4} width={2} height={MAX_LIFT + 40} fill="#1F2C40" />
-          {/* placard */}
-          <rect x={11} y={restY} width={42} height={PLACARD_H} fill="#1C1410" />
-          <rect x={12} y={restY + 1} width={40} height={PLACARD_H - 2} fill="#FBF7EC" />
-          <rect x={12} y={restY + PLACARD_H - 3} width={40} height={2} fill="#D8CFB8" />
-          <rect x={14} y={restY + 3} width={36} height={1} fill="#1B3828" />
-          <text
-            x={32}
-            y={restY + 12.5}
-            textAnchor="middle"
-            fontSize={8}
-            fill="#1C1410"
-            style={{ fontFamily: 'var(--font-pixel), monospace' }}
-          >
-            {points}
-          </text>
-          {/* the hand gripping the bottom edge */}
-          <Rects grid={FIST} x={27} y={restY + PLACARD_H - 4} />
-        </g>
-      </g>
-
-      {/* the desk, in front of the arm */}
-      <rect x={0} y={DESK_TOP} width={SCENE_W} height={1} fill="#1C1410" />
-      <rect x={0} y={DESK_TOP + 1} width={SCENE_W} height={2} fill="#A9794A" />
-      <rect x={0} y={DESK_TOP + 3} width={SCENE_W} height={3} fill="#8A6238" />
-      <rect x={0} y={DESK_TOP + 6} width={SCENE_W} height={1} fill="#1C1410" />
-      <rect x={0} y={DESK_TOP + 7} width={SCENE_W} height={SCENE_H - DESK_TOP - 7} fill="#6B4A2B" />
-      {[8, 24, 40, 56].map((x) => (
-        <rect key={x} x={x} y={DESK_TOP + 10} width={1} height={SCENE_H - DESK_TOP - 13} fill="#5A3C22" />
-      ))}
-      {/* a little gavel resting on the desk */}
-      <g transform={`translate(44 ${DESK_TOP - 8}) scale(0.5)`}>
-        <Rects grid={GAVEL} />
-      </g>
-    </svg>
-  );
+export function ArmSprite({ size = 84 }: { size?: number }) {
+  return <PixelSprite grid={ARM} size={size} />;
 }

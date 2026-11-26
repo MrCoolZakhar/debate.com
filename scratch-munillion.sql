@@ -786,3 +786,10 @@ begin
 end $$;
 revoke all on function public.munillion_reset_preview_play(text) from public, anon, authenticated;
 grant execute on function public.munillion_reset_preview_play(text) to anon, authenticated;
+
+-- Later migrations, all applied on 26 Nov 2026. Their full bodies live in the database (list_migrations):
+--   munillion_autocorrect_and_full_reveal: status 'suggest' plus a suggestion in munillion_answer; munillion_reveal returns every answer
+--   munillion_conf_index: table munillion_conf_index, _munillion_conf_index_refresh(), cron 'munillion-conf-index' every 10 minutes,
+--     and _munillion_find_conf / _munillion_suggest_conf reading the index
+--   munillion_autocorrect_swaps: _munillion_is_swap and _munillion_typo (two swapped letters count as one typo)
+--   munillion_autocorrect_ties: a tie in _munillion_suggest_list goes to the longer answer

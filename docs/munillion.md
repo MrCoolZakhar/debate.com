@@ -5,7 +5,7 @@ The daily MUN trivia game (owner, 26 Nov 2026). It's modelled on Krillion's mech
 ## How it works
 
 - **Scores are preset by Gavelling.** They are never computed from what players answer. Peter reviews every list at `/admin/munillion` before a game is published.
-  - 100 Gavel: exactly one answer per question, enforced by a unique index.
+  - 100 The Gavel: exactly one answer per question, enforced by a unique index.
   - 85 Best Delegate.
   - 60 Outstanding Delegate.
   - 30 Honourable Mention.
@@ -15,6 +15,12 @@ The daily MUN trivia game (owner, 26 Nov 2026). It's modelled on Krillion's mech
   - Every public, non-test conference counts (`is_public`, status `public`, not `conference_is_test`), and so do public Gavelling listings.
   - It scores the question's `default_tier`, or an override row in `munillion_answers` (whose `link_slug` gives the page it links to).
   - Blocked conferences (`gavelling_listing_blocklist`) never count, are never shown and are never reported.
+- **Autocorrect, like Krillion** (owner, 26 Nov 2026).
+  - A near miss is not scored. `munillion_answer` answers `status: 'suggest'` with the answer it thinks you meant, the page fills the box with it ("Vogue magazin" becomes "Vogue"), and submitting again confirms, because that's an exact match.
+  - It catches four kinds of near miss: the start of an answer (4 letters or more), an answer followed by extra words, one typo (two for 10 letters or more), and two neighbouring letters swapped. A tie goes to the longer answer (`_munillion_suggest_list`).
+  - Conferences are corrected against `munillion_conf_index` (`_munillion_suggest_conf`).
+- **Conference index.** Conference names are normalised once into `munillion_conf_index`, rebuilt every 10 minutes by cron `munillion-conf-index` (`_munillion_conf_index_refresh`), so a new conference counts within 10 minutes. Matching an answer reads the index: about 12 ms, against 6 s before.
+- **The reveal returns every answer.** For the conference question that means every indexed conference, at the default score, each with a link. The page shows one row per round that opens into score filters, a search box and the full list.
 - **Unrecognised answers** are saved in `munillion_misses`, for every question. You can retry while the clock runs, up to 25 tries.
 - **New-conference email.** When 3 different players type the same conference that isn't on Gavelling, one email goes to info@gavelling.com (`_munillion_conf_alert`): once per name, at most 10 a day.
 - **The clock lives in the database.** `munillion_open` stamps `opened_at`, and an answer more than `seconds + 3` after it is Absent. A reload never resets a question.
@@ -25,12 +31,12 @@ The daily MUN trivia game (owner, 26 Nov 2026). It's modelled on Krillion's mech
 
 ## Where things live
 
-- **Database:** `scratch-munillion.sql`, the record of what's applied. Migrations: `munillion_core`, `munillion_seed_game_1` and `munillion_blocklist_names`. They were applied from Claude Code with Peter's one-off approval on 26 Nov 2026.
+- **Database:** `scratch-munillion.sql`, the record of what's applied. Migrations: `munillion_core`, `munillion_seed_game_1`, `munillion_blocklist_names`, `munillion_open_preview`, `munillion_autocorrect_and_full_reveal`, `munillion_conf_index`, `munillion_autocorrect_swaps` and `munillion_autocorrect_ties`. They were applied from Claude Code with Peter's one-off approval on 26 Nov 2026.
 - **Tables:** `munillion_games`, `_questions`, `_answers`, `_plays`, `_play_answers`, `_misses` and `_miss_alerts`. RLS is on with no policies, so tables are only reached through the functions.
 - **Client:**
   - `src/lib/munillion.ts`: calls, tiers and the token.
   - `src/components/munillion/PixelArt.tsx`: tier icons and the desk scene.
-  - `src/app/games/*`: the page. It loads the Silkscreen and Pixelify Sans fonts on /games only.
+  - `src/app/games/*`: the page. It loads the Press Start 2P and VT323 fonts on /games only. The background is `public/games/munillion-hall.jpg`, a pixel-art General Assembly hall generated in Canva on 26 Nov 2026.
   - `src/app/account/games`: the profile Games tab.
   - `src/app/admin/munillion`: the review page.
 - **Answer lists for game 1:** `scripts/munillion/day1/*.json`. The seed is `seed.json`.

@@ -10,8 +10,7 @@ export default function AddConferenceButton({ href = ADD_CONFERENCE_HREF, small 
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className={`mn-btn is-gold${small ? ' is-small' : ''}`}
-      style={{ textDecoration: 'none' }}
+      className={`mn-btn mn-px is-gold focus:outline-none${small ? ' is-small' : ''}`}
     >
       <PlusIcon size={14} />
       Add your conference
