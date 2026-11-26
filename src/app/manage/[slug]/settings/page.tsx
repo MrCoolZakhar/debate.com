@@ -778,6 +778,9 @@ export default function SettingsPage() {
   const snap = (o: Record<string, unknown>) => JSON.stringify(o);
   const detailsBaseline = useRef<string | null>(null);
   const visualBaseline = useRef<string | null>(null);
+  // The contact email the database holds (it is NOT NULL, 26 Nov 2026): a save
+  // with the field empty leaves it out, and the baseline keeps this one.
+  const savedContactEmail = useRef('');
   const minAgeBaseline = useRef<string | null>(null);
   const detailsSnap = () => snap({ fullName, acronym, description, studentLevel, startDate, endDate, datesTbd, country, city, format, expectedDelegates });
 
@@ -1039,6 +1042,7 @@ export default function SettingsPage() {
       format: (conference.format as 'in-person' | 'online' | 'hybrid' | '') ?? '',
       expectedDelegates: conference.expected_delegates != null ? String(conference.expected_delegates) : '',
     });
+    savedContactEmail.current = conference.contact_email ?? '';
     visualBaseline.current = snap({
       contactEmail: conference.contact_email ?? '', instagramUrl: conference.instagram_url ?? '',
       facebookUrl: conference.facebook_url ?? '', tiktokUrl: conference.tiktok_url ?? '',
@@ -2834,12 +2838,25 @@ export default function SettingsPage() {
       setContactEmailError('Enter a single email address, e.g. contact@yourmun.org.');
       return;
     }
-    setContactEmailError('');
+    // contact_email is NOT NULL: an empty field is never sent (26 Nov 2026). The
+    // links still save; the email keeps the one already saved and the field
+    // keeps saying it is missing until a valid one is typed.
+    const emailMissing = !trimmedEmail;
+    const links = { instagramUrl, facebookUrl, tiktokUrl, whatsappUrl, websiteUrl };
+    // The snapshot keeps the field's own text (as visualSnap does), so a trailing space never re-arms the autosave.
+    const writtenSnap = snap({ contactEmail: emailMissing ? savedContactEmail.current : contactEmail, ...links });
+    if (emailMissing) {
+      setContactEmailError('Add an email so applicants can reach you');
+      // Nothing but the empty email changed: nothing to write (and no autosave loop).
+      if (writtenSnap === visualBaseline.current) return;
+    } else {
+      setContactEmailError('');
+    }
     setVisualSaving(true);
     // Normalize bare handles/domains ("@mymun", "instagram.com/mymun", "mymun")
     // into valid absolute URLs so the public page's links always work.
     const updates = {
-      contact_email: contactEmail || null,
+      ...(emailMissing ? {} : { contact_email: trimmedEmail }),
       instagram_url: normalizeSocialUrl(instagramUrl, 'instagram'),
       facebook_url: normalizeSocialUrl(facebookUrl, 'facebook'),
       tiktok_url: normalizeSocialUrl(tiktokUrl, 'tiktok'),
@@ -2860,7 +2877,9 @@ export default function SettingsPage() {
       return;
     }
     await refreshConferenceQuiet();
-    visualBaseline.current = visualSnap();
+    // The baseline is what was written, never the empty email left out.
+    if (!emailMissing) savedContactEmail.current = contactEmail;
+    visualBaseline.current = writtenSnap;
     setVisualSaving(false);
     setVisualSaved(true);
     setTimeout(() => setVisualSaved(false), 2500);
@@ -3553,8 +3572,8 @@ export default function SettingsPage() {
           >
             <div className="gvg-fields">
               <PlainField
-                label="Contact email" htmlFor="set-contact-email"
-                note={contactEmailError ? <span style={{ color: '#8B2020' }}>{contactEmailError}</span> : 'Where applicants write to you.'}
+                label="Contact email (required)" htmlFor="set-contact-email"
+                note={contactEmailError ? <span id="set-contact-email-note" style={{ color: '#8B2020' }}>{contactEmailError}</span> : 'Where applicants write to you.'}
               >
                 <IconInput icon={<Emoji3D name="Envelope" size={22} />}>
                   <input
@@ -3564,9 +3583,13 @@ export default function SettingsPage() {
                     value={contactEmail}
                     onChange={(e) => { setContactEmail(e.target.value); if (contactEmailError) setContactEmailError(''); }}
                     placeholder="hello@yourmun.org"
+                    style={contactEmailError ? { borderColor: '#8B2020' } : undefined}
+                    aria-invalid={contactEmailError ? true : undefined}
+                    aria-describedby={contactEmailError ? 'set-contact-email-note' : undefined}
                     onBlur={(e) => {
                       const trimmed = e.target.value.trim();
-                      if (trimmed && !CONTACT_EMAIL_PATTERN.test(trimmed)) setContactEmailError('Enter a single email address, e.g. contact@yourmun.org.');
+                      if (!trimmed) setContactEmailError('Add an email so applicants can reach you');
+                      else if (!CONTACT_EMAIL_PATTERN.test(trimmed)) setContactEmailError('Enter a single email address, e.g. contact@yourmun.org.');
                       else setContactEmailError('');
                     }}
                   />
