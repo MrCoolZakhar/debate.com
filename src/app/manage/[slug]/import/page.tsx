@@ -743,7 +743,8 @@ export default function ImportPage() {
   return (
     <div className="px-4 sm:px-6 md:px-10 py-6 md:py-9">
       <style>{IMPORT_CSS}</style>
-      <div className="mx-auto" style={{ maxWidth: 960 }}>
+      {/* The page fills its content width like the other organiser pages (prompt 81). */}
+      <div>
         <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2 mb-6">
           <div style={{ minWidth: 0 }}>
             <h1 className="gv-imp-title">

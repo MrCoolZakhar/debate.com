@@ -300,7 +300,7 @@ export function classifyImportRows(rows: ParsedImportRow[], ctx: ClassifyContext
 
     const { role, isChair, blank: roleBlank } = mapRole(raw.role);
     if (isChair) {
-      reasons.push({ severity: 'error', message: "Chairs aren't importable. Invite chairs from Committees instead." });
+      reasons.push({ severity: 'error', message: "Chairs aren't importable. Chairs, secretariat and staff apply through Team Applications." });
     } else if (roleBlank) {
       reasons.push({ severity: 'error', message: 'Add a role: delegate, head delegate, faculty advisor or observer.' });
     } else if (!role) {

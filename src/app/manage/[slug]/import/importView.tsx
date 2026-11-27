@@ -52,7 +52,7 @@ function shortReason(m: string): string {
   let x: RegExpMatchArray | null;
   if (m.startsWith('Invalid email address')) return "Email can't receive mail";
   if (m === 'Missing name.') return 'No name';
-  if (m.startsWith("Chairs aren't importable")) return 'Chairs are invited from Committees';
+  if (m.startsWith("Chairs aren't importable")) return 'Chairs apply through Team Applications';
   if (m.startsWith('Add a role')) return 'No role';
   if ((x = m.match(/^Unknown role "(.*)"\./))) return `Unknown role "${x[1]}"`;
   if (m.startsWith('Duplicate email + role')) return 'Listed twice in this file';
@@ -442,11 +442,12 @@ export function ImportDropZone({ parsing, fileName, fileError, onChoose, onFile,
           </>
         )}
       </div>
-      <div className="flex flex-wrap items-center gap-3 mt-3">
-        <button type="button" className="gv-imp-secondary" style={{ gap: 8 }} onClick={onTemplate}>
+      {/* Side by side across the width (prompt 81), stacked on phones. */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+        <button type="button" className="gv-imp-secondary" style={{ gap: 8, width: '100%' }} onClick={onTemplate}>
           <Download size={16} aria-hidden /> Download the template
         </button>
-        <button type="button" className="gv-imp-secondary" style={{ gap: 8 }} onClick={() => setHelpOpen(true)}>
+        <button type="button" className="gv-imp-secondary" style={{ gap: 8, width: '100%' }} onClick={() => setHelpOpen(true)}>
           <CircleHelp size={16} aria-hidden /> How it Works
         </button>
       </div>

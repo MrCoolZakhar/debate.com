@@ -38,6 +38,11 @@ import CopyToPopup from './CopyToPopup';
 import FindPeoplePopup from './FindPeoplePopup';
 import SentInvitesCard from './SentInvitesCard';
 import { useJobTopUp } from './useJobTopUp';
+import { getFreshAuthedClient } from '@/lib/supabase-auth';
+
+/** The Job Board's visit stamp: once per conference per page load (prompt 81). */
+const jobsVisitSent = new Set<string>();
+const VISIT_AFTER_MS = 5000;
 import {
   dayLabel, readDigest, readPanel, setJobSettings,
   type DigestLine, type JobPanel, type MyMode, type OrgListing,
@@ -113,8 +118,39 @@ export default function JobBoardPanel({ embedded = false }: { embedded?: boolean
   // listing when it is live and promotable, else a quiet line; the param then
   // leaves the URL.
   const [promoteGone, setPromoteGone] = useState(false);
-  // "Do it Later" landed this visit (the next panel read says onboarding false too).
-  const [onboardingDone, setOnboardingDone] = useState(false);
+  // Looking at the Job Board completes "List Chair, Secretariat or Staff
+  // Positions" (prompt 81): once the panel has loaded and the tab has been in
+  // view for 5 seconds, mark_organiser_visit(conference, 'jobs'), once per page
+  // load, fire and forget, like Communications and the Store. The timer pauses
+  // while the document is hidden and starts again if the tab is left.
+  const panelLoaded = !!panel;
+  useEffect(() => {
+    if (!panelLoaded || !confId || jobsVisitSent.has(confId)) return;
+    let left = VISIT_AFTER_MS;
+    let startedAt: number | null = null;
+    let timer: number | undefined;
+    const fire = () => {
+      if (jobsVisitSent.has(confId)) return;
+      jobsVisitSent.add(confId);
+      void (async () => {
+        try {
+          const client = await getFreshAuthedClient();
+          if (client) await client.rpc('mark_organiser_visit', { p_conference: confId, p_page: 'jobs' });
+        } catch { /* silent by design: nothing on screen depends on it */ }
+      })();
+    };
+    const run = () => { startedAt = Date.now(); timer = window.setTimeout(fire, left); };
+    const pause = () => {
+      if (timer !== undefined) window.clearTimeout(timer);
+      timer = undefined;
+      if (startedAt !== null) left = Math.max(0, left - (Date.now() - startedAt));
+      startedAt = null;
+    };
+    const onVis = () => { if (document.visibilityState === 'visible') { if (startedAt === null) run(); } else pause(); };
+    if (document.visibilityState === 'visible') run();
+    document.addEventListener('visibilitychange', onVis);
+    return () => { pause(); document.removeEventListener('visibilitychange', onVis); };
+  }, [panelLoaded, confId]);
   const promoteDone = useRef(false);
   useEffect(() => {
     if (!panel || promoteDone.current) return;
@@ -235,15 +271,13 @@ export default function JobBoardPanel({ embedded = false }: { embedded?: boolean
             focus
             className="gv-jb-main"
           >
-            {listings.length === 0 && panel.onboarding && !onboardingDone ? (
+            {listings.length === 0 && panel.onboarding ? (
               // First time on the Job Board (prompt 14): the onboarding in place of the empty state.
               <JobBoardOnboarding
                 openChairHref={chairOn ? null : `/manage/${slug}/settings?tab=applications&role=chair`}
-                confId={conference.id}
                 canPack={panel.committees.length > 0 && panel.roles.some((r) => r.role === 'chair' && r.enabled)}
                 onPost={() => setPopup({ kind: 'post', listing: null })}
                 onPack={() => setPopup({ kind: 'pack' })}
-                onLater={() => { setOnboardingDone(true); void reload(); }}
               />
             ) : listings.length === 0 && !chairOn ? (
               // Prompt 44: chair applications are not open, so nothing was drafted yet.

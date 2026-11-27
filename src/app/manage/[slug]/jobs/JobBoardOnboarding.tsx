@@ -5,16 +5,14 @@
 // Owner, 21 Oct 2026: the set-up step "List Chair, Secretariat or Staff
 // Positions" opens the Job Board, where a conference that has never had a
 // listing (job_conference_panel's onboarding) gets this card at the top in
-// place of the empty Your Listings state (not a pop-up). "Do it Later"
-// records conferences.jobs_later_at through job_onboarding_later, which also
-// completes the set-up step; the card then leaves for good. Posting a first
-// listing makes it go on the next panel read.
+// place of the empty Your Listings state (not a pop-up). There is no "Do it
+// Later" any more (prompt 81): looking at the Job Board completes the set-up
+// step (JobBoardPanel stamps the visit). Posting a first listing makes the card
+// go on the next panel read.
 
-import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { Layers, Plus } from 'lucide-react';
 import { OUTFIT } from '@/components/neu';
-import { jobOnboardingLater } from './jobsApi';
 import { EmptyArt } from './jobKit';
 
 const INK = '#1C1410';
@@ -26,40 +24,14 @@ const STEPS = [
   'People apply on Gavelling, free for you, and land in Team',
 ];
 
-export default function JobBoardOnboarding({ confId, canPack, onPost, onPack, onLater, openChairHref = null }: {
+export default function JobBoardOnboarding({ canPack, onPost, onPack, openChairHref = null }: {
   /** Chair applications are not open (prompt 44): lead with opening them, since that drafts a chair listing per committee. */
   openChairHref?: string | null;
-  confId: string;
   /** The conference has committees and the chair role is on. */
   canPack: boolean;
   onPost: () => void;
   onPack: () => void;
-  /** "Do it Later" landed: the page shows the normal empty state. */
-  onLater: () => void;
 }) {
-  const [hidden, setHidden] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState('');
-  const busyRef = useRef(false);
-
-  if (hidden) return null;
-
-  const later = async () => {
-    if (busyRef.current) return;
-    busyRef.current = true;
-    setBusy(true);
-    setErr('');
-    setHidden(true);
-    try {
-      const r = await jobOnboardingLater(confId);
-      if (!r.ok) { setHidden(false); setErr(r.message); return; }
-      onLater();
-    } finally {
-      busyRef.current = false;
-      setBusy(false);
-    }
-  };
-
   return (
     <EmptyArt image="/onboarding/podium-01.jpg">
     <div style={{ fontFamily: OUTFIT, padding: '4px 4px 6px' }}>
@@ -101,17 +73,7 @@ export default function JobBoardOnboarding({ confId, canPack, onPost, onPack, on
             <Layers size={16} strokeWidth={1.6} aria-hidden /> Post chair roles for every committee
           </button>
         )}
-        <button
-          type="button"
-          onClick={() => { void later(); }}
-          disabled={busy}
-          className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] rounded"
-          style={{ background: 'none', border: 'none', padding: '6px 4px', cursor: busy ? 'default' : 'pointer', fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, color: INK_SOFT, textDecoration: 'underline', textUnderlineOffset: 3 }}
-        >
-          Do it Later
-        </button>
       </div>
-      {err && <p role="alert" style={{ margin: '10px 0 0', fontSize: 13.5, color: '#9E2A12' }}>{err}</p>}
     </div>
     </EmptyArt>
   );

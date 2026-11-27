@@ -39,7 +39,7 @@ const COLUMNS: Record<CanonicalHeader, Column> = {
   role: {
     what: 'What they come as',
     needed: 'Yes',
-    values: 'delegate, head delegate, faculty advisor or observer. Chairs are invited from Committees',
+    values: 'delegate, head delegate, faculty advisor or observer. Chairs, secretariat and staff apply through Team Applications',
   },
   delegation: {
     what: 'Their school or delegation',
