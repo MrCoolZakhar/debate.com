@@ -131,6 +131,11 @@ export default function YourSpotlights({ spotlights, stats, jobPromotions = [], 
   const chosen = chosenId ? spotlights.find(p => p.purchase_id === chosenId) ?? null : null;
   const chosenPromo = chosenPromoId ? jobPromotions.find(j => j.promotion_id === chosenPromoId) ?? null : null;
   const bookedCount = spotlights.length + jobPromotions.length;
+  // Choose Your Spotlight lists only what can still run (prompt 75): live and upcoming.
+  const runs = (status: string) => status === 'live' || status === 'upcoming';
+  const runningSpots = spotlights.filter(p => runs(p.status));
+  const runningPromos = jobPromotions.filter(j => runs(j.status));
+  const runningCount = runningSpots.length + runningPromos.length;
 
   const close = () => { setOpen(false); setChosenId(null); setChosenPromoId(null); setConfirming(false); setErr(''); };
 
@@ -170,6 +175,8 @@ export default function YourSpotlights({ spotlights, stats, jobPromotions = [], 
           <p className="gv-st-quiet">
             No spotlights yet. <a href="#gv-st-spot" className="gv-st-link">Book one above</a>
           </p>
+        ) : runningCount === 0 ? (
+          <p className="gv-st-quiet">No live spotlights</p>
         ) : (
           <button type="button" className="gv-st-summary" onClick={() => setOpen(true)}>
             <span>
@@ -228,7 +235,7 @@ export default function YourSpotlights({ spotlights, stats, jobPromotions = [], 
               <>
                 <h2 className="gv-buy-rtitle" style={{ fontSize: 24, fontWeight: 800, paddingRight: 40 }}>Choose Your Spotlight</h2>
                 <ul className="gv-ysp-list">
-                  {spotlights.map(p => {
+                  {runningSpots.map(p => {
                     const st = STATUS[p.status] ?? STATUS.upcoming;
                     return (
                       <li key={p.purchase_id}>
@@ -242,7 +249,7 @@ export default function YourSpotlights({ spotlights, stats, jobPromotions = [], 
                       </li>
                     );
                   })}
-                  {jobPromotions.map(j => {
+                  {runningPromos.map(j => {
                     const st = STATUS[j.status] ?? STATUS.upcoming;
                     return (
                       <li key={j.promotion_id}>

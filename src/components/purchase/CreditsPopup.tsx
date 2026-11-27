@@ -223,7 +223,7 @@ export default function CreditsPopup({ request }: { request: CreditsPopupRequest
           </>
         ) : (
           <>
-            <h3 className="gv-buy-rtitle">{RIGHT_TITLE[context]}</h3>
+            <h3 className="gv-buy-rtitle">{context === 'organizer' && purpose === 'store' ? 'Credits for your conference' : RIGHT_TITLE[context]}</h3>
 
             {destination && (
               <div className="gv-buy-plans" role="radiogroup" aria-label="Where the credits go" style={{ gridTemplateColumns: '1fr 1fr' }}>

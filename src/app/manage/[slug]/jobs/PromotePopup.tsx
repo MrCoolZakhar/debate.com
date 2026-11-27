@@ -15,6 +15,12 @@
 // 24 Nov 2026: with `choices` (the Store and the Job Board panel pass their
 // live listings) the Listing box is a GSelect, so another listing is picked in
 // place: days back to 7, homepage off, the quote read again for it.
+//
+// Prompt 75: a short answer whose your_credits covers what the conference
+// lacks (credits minus conference_credits) is not handed off. The pop-up says
+// so in place and "Use my credits" re-runs the same call with p_top_up true.
+// Only when the organiser's own credits are not enough either does it go to
+// onShort (the credits pop-up) as before.
 
 import { useEffect, useRef, useState } from 'react';
 import { BarChart3, BellRing, Briefcase, Star } from 'lucide-react';
@@ -97,6 +103,8 @@ export function PromoteContent({ listingId: firstId, listingTitle: firstTitle, c
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
+  // A short answer the organiser's own credits cover: the same call, ready to re-run with p_top_up true.
+  const [ownOffer, setOwnOffer] = useState<{ conferenceHas: number; use: number; days: Days; home: boolean } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -120,6 +128,7 @@ export function PromoteContent({ listingId: firstId, listingTitle: firstTitle, c
     setErr('');
     setLoadErr('');
     setQuote(null);
+    setOwnOffer(null);
   };
 
   const options: PromoteOption[] = quote ? [...quote.options].sort((a, b) => a.days - b.days) : [];
@@ -143,6 +152,7 @@ export function PromoteContent({ listingId: firstId, listingTitle: firstTitle, c
   const pick = (d: Days) => {
     setDays(d);
     setErr('');
+    setOwnOffer(null);
     const o = options.find((x) => x.days === d);
     if (o && (o.homepage_full_days.length > 0 || (refusedFull && refusedFull.days === d))) setHomepage(false);
   };
@@ -158,6 +168,13 @@ export function PromoteContent({ listingId: firstId, listingTitle: firstTitle, c
       const r = await promoteListing(listingId, chosen, home, false);
       if (r.ok) { onDone(r.ends_on ?? null); return; }
       if ((r.need_credits ?? 0) > 0 || r.code === 'short') {
+        const cost = Number(r.credits) || 0;
+        const confHas = Math.max(0, Number(r.conference_credits) || 0);
+        const lack = Math.max(0, cost - confHas);
+        if (payer === 'conference' && lack > 0 && (Number(r.your_credits) || 0) >= lack) {
+          setOwnOffer({ conferenceHas: confHas, use: lack, days: chosen, home });
+          return;
+        }
         onShort({ need: Math.max(1, r.need_credits ?? 1), retry: () => promoteListing(listingId, chosen, home, true) });
         return;
       }
@@ -166,6 +183,29 @@ export function PromoteContent({ listingId: firstId, listingTitle: firstTitle, c
         setHomepage(false);
         return;
       }
+      setErr(r.message);
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
+  };
+
+  const spendMine = async () => {
+    if (busyRef.current || !ownOffer) return;
+    busyRef.current = true;
+    setBusy(true);
+    setErr('');
+    try {
+      const r = await promoteListing(listingId, ownOffer.days, ownOffer.home, true);
+      if (r.ok) { onDone(r.ends_on ?? null); return; }
+      if ((r.need_credits ?? 0) > 0 || r.code === 'short') {
+        // Spent meanwhile: buy what is missing, as before.
+        const { days: d, home: h } = ownOffer;
+        setOwnOffer(null);
+        onShort({ need: Math.max(1, r.need_credits ?? 1), retry: () => promoteListing(listingId, d, h, true) });
+        return;
+      }
+      setOwnOffer(null);
       setErr(r.message);
     } finally {
       busyRef.current = false;
@@ -245,7 +285,7 @@ export function PromoteContent({ listingId: firstId, listingTitle: firstTitle, c
                 type="checkbox"
                 checked={withHome}
                 disabled={homeBlocked}
-                onChange={(e) => { setHomepage(e.target.checked); setErr(''); }}
+                onChange={(e) => { setHomepage(e.target.checked); setErr(''); setOwnOffer(null); }}
               />
               <span>Also show it on the homepage (+{plural(extra, 'credit')})</span>
             </label>
@@ -278,11 +318,22 @@ export function PromoteContent({ listingId: firstId, listingTitle: firstTitle, c
 
             <p className="gv-pr-fine">Promotion starts today and can&rsquo;t be refunded</p>
             {err ? <ErrorLine>{err}</ErrorLine> : null}
-            <div className="gv-pr-cta">
-              <GoldButton onClick={() => { void promote(); }} busy={busy} busyText="Promoting…">
-                {`Promote for ${plural(total, 'credit')}`}
-              </GoldButton>
-            </div>
+            {ownOffer ? (
+              <>
+                <p className="gv-pr-own" role="status">
+                  Your conference has {plural(ownOffer.conferenceHas, 'credit')}. Use {ownOffer.use} of your own credits to promote
+                </p>
+                <div className="gv-pr-cta">
+                  <GoldButton onClick={() => { void spendMine(); }} busy={busy} busyText="Promoting…">Use my credits</GoldButton>
+                </div>
+              </>
+            ) : (
+              <div className="gv-pr-cta">
+                <GoldButton onClick={() => { void promote(); }} busy={busy} busyText="Promoting…">
+                  {`Promote for ${plural(total, 'credit')}`}
+                </GoldButton>
+              </div>
+            )}
             <div className="gv-pr-not-now">
               <button type="button" className="gv-buy-swapbtn" onClick={onClose}>Not now</button>
             </div>
@@ -335,6 +386,7 @@ const PROMOTE_CSS = `
 .gv-pr-total-big{font-size:32px;font-weight:800;letter-spacing:-0.03em;line-height:1;color:${FOREST};font-variant-numeric:tabular-nums}
 .gv-pr-total-cap{margin-top:3px;font-size:12.5px;font-weight:600;color:${INK_SOFT}}
 .gv-pr-not-now{display:flex;justify-content:center}
+.gv-pr-own{margin:0;font-size:14.5px;font-weight:600;line-height:1.45;color:${INK}}
 @media (min-width:744px){.gv-pr-pop .gv-buy-right{justify-content:safe center}}
 .gv-pr-skel{display:block;width:100%;border-radius:14px;background:rgba(28,20,16,0.08);animation:gvPrPulse 1.2s ease-in-out infinite}
 @keyframes gvPrPulse{0%,100%{opacity:1}50%{opacity:0.55}}
