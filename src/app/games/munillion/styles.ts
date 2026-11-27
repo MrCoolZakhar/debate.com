@@ -6,7 +6,7 @@
 // for prompts and text; both have one weight, so weights are pinned to 400.
 
 export const MUNILLION_CSS = `
-.mn-page { background: #0E141B; color: #F3EEDF; }
+.mn-page { background: #0E141B; color: #F3EEDF; overflow-x: clip; }
 .mn-page .mn-px, .mn-page .mn-tx { font-weight: 400 !important; font-synthesis: none; }
 .mn-px { font-family: var(--font-pixel), monospace; letter-spacing: .02em; line-height: 1.55; }
 .mn-tx { font-family: var(--font-pixel-body), monospace; line-height: 1.15; }
@@ -16,7 +16,7 @@ export const MUNILLION_CSS = `
   position: relative; overflow: hidden; isolation: isolate;
   /* the Motion to Save bar (SaleBar, 40px, --gv-sale-bar-offset) sits above the page while a sale runs */
   height: calc(100vh - var(--gv-sale-bar-offset, 0px)); height: calc(100dvh - var(--gv-sale-bar-offset, 0px)); min-height: 480px;
-  display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; gap: clamp(6px, 1.2vh, 12px);
+  display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; grid-template-columns: minmax(0, 1fr); gap: clamp(6px, 1.2vh, 12px);
   padding: 76px clamp(12px, 2vw, 24px) clamp(10px, 1.8vh, 18px);
 }
 /* below 1024px the site's bottom tab bar (62px, MobileTabBar) takes the bottom of the screen */
@@ -69,11 +69,13 @@ export const MUNILLION_CSS = `
 @keyframes mn-quake { 0%, 100% { transform: translate(0, 0); } 20% { transform: translate(-6px, 3px); } 40% { transform: translate(5px, -4px); } 60% { transform: translate(-4px, 2px); } 80% { transform: translate(3px, -1px); } }
 
 .mn-title-row { text-align: center; }
-.mn-title { margin: 0; color: #EED98A; font-size: clamp(30px, 6.4vh, 66px); line-height: 1.15;
+/* never wider than the screen: Press Start 2P is 1em a letter, so 9 letters fit in 9.6vw each */
+.mn-stage > * { min-width: 0; }
+.mn-title { margin: 0; color: #EED98A; font-size: clamp(24px, min(6.4vh, 9.6vw), 66px); line-height: 1.15;
   text-shadow: 3px 3px 0 #1B3828, -2px 0 0 rgba(255,90,120,.35), 2px 0 0 rgba(90,200,255,.35); }
-.mn-tagline { margin: .8vh auto 0; color: #E6DFCC; font-size: clamp(15px, 2.5vh, 23px); white-space: nowrap; }
+.mn-tagline { margin: .8vh auto 0; color: #E6DFCC; font-size: clamp(13px, min(2.5vh, 2.5vw), 23px); white-space: nowrap; }
 .mn-tag-short { display: none; }
-@media (max-width: 760px) { .mn-tag-long { display: none; } .mn-tag-short { display: inline; } .mn-tagline { font-size: clamp(13px, 4.2vw, 18px); } }
+@media (max-width: 760px) { .mn-tag-long { display: none; } .mn-tag-short { display: inline; } .mn-tagline { font-size: clamp(11px, 3.6vw, 18px); } }
 
 .mn-panel { background: rgba(12,16,23,.88); border: 3px solid #EED98A; box-shadow: 0 0 0 3px #0B0E13, 5px 5px 0 3px rgba(0,0,0,.45); }
 .mn-hud { width: min(100%, 1180px); justify-self: center; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; }
@@ -96,13 +98,13 @@ export const MUNILLION_CSS = `
 .mn-kicker { color: #FF8FA3; font-size: 9px; }
 .mn-prompt { margin: 1vh 0 .4vh; color: #F3EEDF; font-size: clamp(24px, 4.4vh, 40px); text-wrap: balance; }
 .mn-hint { margin: 0; color: #B9B09A; font-size: clamp(16px, 2.4vh, 20px); }
-.mn-h2 { margin: 0; color: #EED98A; font-size: clamp(12px, 2vh, 17px); line-height: 1.6; }
+.mn-h2 { margin: 0; color: #EED98A; font-size: clamp(11px, min(2vh, 3.8vw), 17px); line-height: 1.6; overflow-wrap: anywhere; }
 .mn-p { margin: 1vh 0 0; color: #E6DFCC; font-size: clamp(17px, 2.6vh, 21px); }
 
 .mn-result { text-align: center; }
 .mn-result-icon { display: flex; justify-content: center; animation: mn-pop .5s steps(5, end) 1; }
 @keyframes mn-pop { 0% { transform: scale(.3); } 70% { transform: scale(1.18); } 100% { transform: scale(1); } }
-.mn-tier-name { margin-top: .8vh; color: #EED98A; font-size: clamp(13px, 2.4vh, 22px); text-shadow: 2px 2px 0 #0B0E13; }
+.mn-tier-name { margin-top: .8vh; color: #EED98A; font-size: clamp(12px, min(2.4vh, 5vw), 22px); text-shadow: 2px 2px 0 #0B0E13; }
 .mn-points { display: inline-block; margin-top: .8vh; padding: 4px 12px; background: #EED98A; color: #1C1410; font-size: clamp(12px, 2vh, 16px); border: 3px solid #0B0E13; }
 .mn-points.is-zero { background: #8D846F; }
 .mn-line { margin: .8vh 0 0; color: #E6DFCC; font-size: clamp(17px, 2.5vh, 21px); }
@@ -158,7 +160,7 @@ export const MUNILLION_CSS = `
 
 /* summary: fills the middle and scrolls inside, so the page itself never scrolls */
 .mn-summary { width: min(100%, 760px); height: 100%; overflow-y: auto; padding: clamp(14px, 2.4vh, 26px); text-align: center; overscroll-behavior: contain; }
-.mn-total { color: #EED98A; font-size: clamp(30px, 6vh, 56px); line-height: 1.2; margin-top: 1vh; }
+.mn-total { color: #EED98A; font-size: clamp(26px, min(6vh, 11vw), 56px); line-height: 1.2; margin-top: 1vh; }
 .mn-total small { color: #B9B09A; font-size: .3em; }
 .mn-icons { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; margin: 1.6vh 0 4px; }
 .mn-icons figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; }
