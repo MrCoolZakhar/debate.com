@@ -6,15 +6,19 @@
 // always pass, and the server answers with a sentence when promoting or a paid
 // listing also needs the Store permission.
 //
-// Two columns that fill the width: the listings (drafts first) as the main
-// column; the digest (job_digest) and the emails card (job_settings_set) at
+// Two columns that fill the width: the listings as the main column (prompt 72:
+// filters Open, Expired, Drafts, Hidden and All, Open first, and the role band
+// narrows by role; the funnel's Started and Applied open the people behind
+// them in ListingPeoplePopup); the digest (job_digest) and the emails card (job_settings_set) at
 // the side. Pop-ups: PostingPopup (post and edit, with "Publish and promote")
 // and PromotePopup. Short on credits closes the pop-up first, then
 // useJobTopUp opens the credits pop-up and retries the same call once.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { BarChart3, Briefcase, Eye, Layers, Mail, MousePointerClick, Plus, UserSearch } from 'lucide-react';
+import { BarChart3, Briefcase, Eye, Layers, Mail, Megaphone, MousePointerClick, Plus, UserSearch } from 'lucide-react';
+import { GoldButton, GoldButtonStyles } from '@/components/GoldButton';
+import ListingPeoplePopup from './ListingPeoplePopup';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
 import { GoldWord } from '@/components/BrandHeading';
@@ -42,7 +46,8 @@ const INK = '#1C1410';
 const INK_SOFT = '#5C5140';
 const FOREST = '#1B3828';
 
-type Popup = { kind: 'post'; listing: OrgListing | null } | { kind: 'promote'; listing: OrgListing } | { kind: 'pack' } | { kind: 'find' } | { kind: 'copy'; listing: OrgListing } | null;
+type Popup = { kind: 'post'; listing: OrgListing | null } | { kind: 'promote'; listing: OrgListing } | { kind: 'pack' } | { kind: 'find' } | { kind: 'copy'; listing: OrgListing }
+  | { kind: 'people'; listing: OrgListing; stage: 'started' | 'applied' } | null;
 
 /** A draft the database wrote by itself when chair applications opened (prompt 44):
  *  a chair draft with no offers, no screening questions and no deadline. */
@@ -52,7 +57,17 @@ function isAutoDraft(l: OrgListing): boolean {
   return l.shown === 'draft' && l.role === 'chair' && noOffers && (l.questions?.length ?? 0) === 0 && !l.deadline;
 }
 
-const ORDER: Record<string, number> = { draft: 0, live: 1, hidden: 2, closed: 3 };
+// Prompt 72: "All" lists live, drafts, hidden, closed; newest first inside each.
+const ORDER: Record<string, number> = { live: 0, draft: 1, hidden: 2, closed: 3 };
+type ListFilter = 'live' | 'closed' | 'draft' | 'hidden' | 'all';
+const FILTERS: { key: ListFilter; label: string; empty: string }[] = [
+  { key: 'live', label: 'Open', empty: 'No open listings' },
+  { key: 'closed', label: 'Expired', empty: 'No expired listings' },
+  { key: 'draft', label: 'Drafts', empty: 'No drafts' },
+  { key: 'hidden', label: 'Hidden', empty: 'No hidden listings' },
+  { key: 'all', label: 'All', empty: 'No listings' },
+];
+const newestFirst = (a: OrgListing, b: OrgListing) => (b.published_at ?? '').localeCompare(a.published_at ?? '');
 
 /** The organiser's Job Board (moved from jobs/page.tsx; Team > Job Board since
  *  14 Nov 2026). `embedded`: inside the Team page, so its own page title and
@@ -120,9 +135,16 @@ export default function JobBoardPanel({ embedded = false }: { embedded?: boolean
   }, [panel]);
 
   const listings = useMemo(
-    () => [...(panel?.listings ?? [])].sort((a, b) => (ORDER[a.shown] ?? 9) - (ORDER[b.shown] ?? 9)),
+    () => [...(panel?.listings ?? [])].sort((a, b) => ((ORDER[a.shown] ?? 9) - (ORDER[b.shown] ?? 9)) || newestFirst(a, b)),
     [panel],
   );
+  // Open on every load; no live listing but some drafts: Drafts, so a first visit is never empty.
+  const [filterPick, setFilterPick] = useState<ListFilter | null>(null);
+  const [roleFilter, setRoleFilter] = useState<JobRole | null>(null);
+  const filter: ListFilter = filterPick
+    ?? (!listings.some((l) => l.shown === 'live') && listings.some((l) => l.shown === 'draft') ? 'draft' : 'live');
+  const filterCount = (k: ListFilter) => (k === 'all' ? listings.length : listings.filter((l) => l.shown === k).length);
+  const visible = listings.filter((l) => (filter === 'all' || l.shown === filter) && (!roleFilter || l.role === roleFilter));
 
   const liveByRole = useMemo(() => {
     const n: Record<JobRole, number> = { chair: 0, secretariat: 0, staff: 0 };
@@ -146,6 +168,7 @@ export default function JobBoardPanel({ embedded = false }: { embedded?: boolean
   // Prompt 44: whether chair applications are open (the auto drafts follow them).
   const chairOn = !!panel?.roles.some((r) => r.role === 'chair' && r.enabled);
   const draftCount = listings.filter((l) => l.shown === 'draft').length;
+  const liveListings = (panel?.listings ?? []).filter((l) => l.shown === 'live');
 
   return (
     <div className={embedded ? 'gv-jb' : 'gv-jb px-6 md:px-10 py-8'}>
@@ -153,9 +176,11 @@ export default function JobBoardPanel({ embedded = false }: { embedded?: boolean
       <style>{JOB_KIT_CSS}</style>
       <style>{ROW_CSS}</style>
       <style>{PAGE_CSS}</style>
+      <GoldButtonStyles />
 
-      <header className="gv-jb-head">
-        {!embedded ? (
+      {/* Embedded in the Team page: one row of actions under its header, no title and no gap (prompt 72). */}
+      <header className={`gv-jb-head${embedded ? ' gv-jb-head-embedded' : ''}`}>
+        {!embedded && (
         <div>
           <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 13, color: NEU.inkSoft, letterSpacing: '0.06em', margin: '0 0 6px' }}>
             {conference.acronym} / Job Board
@@ -164,9 +189,17 @@ export default function JobBoardPanel({ embedded = false }: { embedded?: boolean
             Job <GoldWord>Board</GoldWord>
           </h1>
         </div>
-        ) : <div />}
+        )}
         {panel && (
           <div className="flex flex-wrap items-center gap-2.5">
+            <button type="button" className="gv-st-btn gv-st-forest gv-jb-post" onClick={() => setPopup({ kind: 'post', listing: null })}>
+              <Plus size={17} strokeWidth={2} aria-hidden /> Post a listing
+            </button>
+            {panel.can_promote && liveListings.length > 0 && (
+              <GoldButton className="gv-jb-gold" onClick={() => setPopup({ kind: 'promote', listing: liveListings[0] })}>
+                <Megaphone size={17} strokeWidth={ICON_STROKE} aria-hidden /> Promote a listing
+              </GoldButton>
+            )}
             {panel.listings.some((l) => l.shown === 'live' && l.kind === 'gavelling') && (
               <button type="button" className="gv-st-btn gv-st-outline gv-jb-post" onClick={() => setPopup({ kind: 'find' })}>
                 <UserSearch size={17} strokeWidth={ICON_STROKE} aria-hidden /> Find people
@@ -177,9 +210,6 @@ export default function JobBoardPanel({ embedded = false }: { embedded?: boolean
                 <Layers size={17} strokeWidth={ICON_STROKE} aria-hidden /> Post chair roles for every committee
               </button>
             )}
-            <button type="button" className="gv-st-btn gv-st-forest gv-jb-post" onClick={() => setPopup({ kind: 'post', listing: null })}>
-              <Plus size={17} strokeWidth={2} aria-hidden /> Post a listing
-            </button>
           </div>
         )}
       </header>
@@ -243,14 +273,34 @@ export default function JobBoardPanel({ embedded = false }: { embedded?: boolean
               </EmptyArt>
             ) : (
               <>
-              <RoleBand live={liveByRole} />
-              {draftCount > 0 && (
+              <RoleBand live={liveByRole} selected={roleFilter} onToggle={setRoleFilter} />
+              <div className="gv-jb-filters" role="group" aria-label="Show listings">
+                {FILTERS.filter((f) => f.key !== 'hidden' || filterCount('hidden') > 0).map((f) => {
+                  const n = filterCount(f.key);
+                  return (
+                    <button
+                      key={f.key}
+                      type="button"
+                      aria-pressed={filter === f.key}
+                      className={`gv-jb-filter${filter === f.key ? ' gv-jb-filter-on' : ''}${n === 0 ? ' gv-jb-filter-none' : ''}`}
+                      onClick={() => setFilterPick(f.key)}
+                    >
+                      {f.label} <span className="gv-jb-filter-n">{n.toLocaleString('en-US')}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {draftCount > 0 && filter !== 'draft' && (
                 <p style={{ fontFamily: OUTFIT, fontSize: 14, color: INK, margin: '0 0 10px', overflowWrap: 'anywhere' }}>
-                  {draftCount} {draftCount === 1 ? 'listing' : 'listings'} ready as drafts. Open each one, check it and publish.
+                  {draftCount} {draftCount === 1 ? 'listing' : 'listings'} ready as drafts. Open each one, check it and publish.{' '}
+                  <button type="button" className="gv-jb-showdrafts" onClick={() => setFilterPick('draft')}>Show drafts</button>
                 </p>
               )}
+              {visible.length === 0 ? (
+                <p className="gv-jb-quiet" style={{ padding: '6px 0 4px' }}>{FILTERS.find((f) => f.key === filter)?.empty}</p>
+              ) : (
               <ul className="gv-jb-list">
-                {listings.map((l) => (
+                {visible.map((l) => (
                   <ListingRow
                     key={l.id}
                     listing={l}
@@ -260,9 +310,11 @@ export default function JobBoardPanel({ embedded = false }: { embedded?: boolean
                     onEdit={() => setPopup({ kind: 'post', listing: l })}
                     onPromote={() => setPopup({ kind: 'promote', listing: l })}
                     onChanged={(m) => { notifyOk(m, 'jobs'); void reload(); }}
+                    onOpenPeople={(stage) => setPopup({ kind: 'people', listing: l, stage })}
                   />
                 ))}
               </ul>
+              )}
               </>
             )}
           </BoardCard>
@@ -280,6 +332,15 @@ export default function JobBoardPanel({ embedded = false }: { embedded?: boolean
         </div>
       )}
 
+      {popup?.kind === 'people' && (
+        <ListingPeoplePopup
+          listingId={popup.listing.id}
+          title={popup.listing.title}
+          slug={slug}
+          initial={popup.stage}
+          onClose={() => setPopup(null)}
+        />
+      )}
       {popup?.kind === 'copy' && panel && (
         <CopyToPopup
           from={popup.listing}
@@ -440,8 +501,8 @@ function EmailsCard({ confId, settings, onSaved }: {
 
   return (
     <BoardCard
-      title="Emails"
-      hint="The switch is for the whole conference. When it is on, each organizer chooses for themselves how often they hear about new applicants"
+      title="Applicant Emails"
+      hint="When this is on, your organizers get an email when someone applies through one of your listings. Each organizer picks below how often they hear, just for themselves"
       icon={Mail}
     >
       <div className="gv-jb-switchrow">
@@ -482,7 +543,19 @@ function EmailsCard({ confId, settings, onSaved }: {
 
 const PAGE_CSS = `
 .gv-jb-head{display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:16px;margin-bottom:34px}
+.gv-jb-head-embedded{justify-content:flex-start;margin-bottom:18px}
 .gv-jb-post{min-height:48px;padding:0 22px;font-size:15px}
+.gv-gold-cta.gv-jb-gold{min-height:48px;padding:0 22px;gap:8px;text-transform:none;letter-spacing:0.01em;font-weight:700}
+.gv-jb-filters{display:flex;flex-wrap:wrap;gap:6px 8px;margin:0 0 12px}
+.gv-jb-filter{min-height:38px;padding:0 14px;border-radius:12px;border:1.5px solid rgba(28,20,16,0.12);background:#FFFFFF;cursor:pointer;font-family:${OUTFIT};font-size:14px;font-weight:700;color:${INK}}
+.gv-jb-filter-on{border-color:${FOREST};background:#F4F0E6;color:${FOREST}}
+.gv-jb-filter-none{color:${INK_SOFT};opacity:0.6}
+.gv-jb-filter-n{font-weight:600;font-variant-numeric:tabular-nums;margin-left:3px}
+.gv-jb-filter:focus{outline:none}
+.gv-jb-filter:focus-visible{outline:2px solid ${FOREST};outline-offset:2px}
+.gv-jb-showdrafts{border:none;background:none;padding:0;cursor:pointer;font:inherit;font-weight:800;color:${INK};text-decoration:underline;text-underline-offset:3px}
+.gv-jb-showdrafts:focus{outline:none}
+.gv-jb-showdrafts:focus-visible{outline:2px solid ${FOREST};outline-offset:2px;border-radius:4px}
 .gv-jb-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:34px 24px;align-items:start}
 @media (min-width:1100px){.gv-jb-grid{grid-template-columns:minmax(0,1fr) minmax(320px,380px)}}
 @media (min-width:1600px){.gv-jb-grid{grid-template-columns:minmax(0,1fr) minmax(360px,440px)}}

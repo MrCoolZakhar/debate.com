@@ -82,7 +82,13 @@ export function RoleThumb({ role, size = 60 }: { role: JobRole; size?: number })
  * The band at the top of Your Listings: one photo per role type, each with a
  * solid ink plate carrying the role word and how many of its listings are live.
  */
-export function RoleBand({ live }: { live: Record<JobRole, number> }) {
+export function RoleBand({ live, selected = null, onToggle }: {
+  live: Record<JobRole, number>;
+  /** Prompt 72: the role the list is narrowed to (null = every role). */
+  selected?: JobRole | null;
+  /** With it, each tile is a toggle button; pressing the selected one clears it. */
+  onToggle?: (role: JobRole | null) => void;
+}) {
   const roles: JobRole[] = ['chair', 'secretariat', 'staff'];
   return (
     <div className="gv-jk-band" aria-label="Live listings by role" role="group">
@@ -90,8 +96,18 @@ export function RoleBand({ live }: { live: Record<JobRole, number> }) {
         const t = ROLE_THEME[r];
         const Icon = t.icon;
         const n = live[r] ?? 0;
+        const Tile = onToggle ? 'button' : 'div';
         return (
-          <div key={r} className="gv-jk-band-tile">
+          <Tile
+            key={r}
+            className={`gv-jk-band-tile${onToggle ? ' gv-jk-band-btn' : ''}${selected === r ? ' gv-jk-band-on' : ''}`}
+            {...(onToggle ? {
+              type: 'button' as const,
+              'aria-pressed': selected === r,
+              'aria-label': `${t.plural}, ${n} live${selected === r ? ', showing only these' : ''}`,
+              onClick: () => onToggle(selected === r ? null : r),
+            } : {})}
+          >
             <Image src={t.image} alt="" fill sizes="(min-width:1100px) 22vw, 33vw" style={{ objectFit: 'cover' }} />
             <span className="gv-jk-band-bar" style={{ background: t.accent }} aria-hidden />
             <div className="gv-jk-plate" style={{ borderLeftColor: t.accent }}>
@@ -101,7 +117,7 @@ export function RoleBand({ live }: { live: Record<JobRole, number> }) {
               </span>
               <span className="gv-jk-plate-n"><b>{n.toLocaleString('en-US')}</b> live</span>
             </div>
-          </div>
+          </Tile>
         );
       })}
     </div>
@@ -187,6 +203,11 @@ export const JOB_KIT_CSS = `
 .gv-jk-band{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:0 0 18px}
 .gv-jk-band-tile{position:relative;overflow:hidden;border-radius:14px;height:clamp(104px,9vw,140px);background:#EDE7D8}
 .gv-jk-band-tile img{z-index:0}
+.gv-jk-band-btn{display:block;width:100%;padding:0;border:none;cursor:pointer;text-align:left;font:inherit}
+.gv-jk-band-btn:focus{outline:none}
+.gv-jk-band-btn:focus-visible{outline:2px solid #1B3828;outline-offset:2px}
+.gv-jk-band-on{box-shadow:0 0 0 3px #1B3828}
+.gv-jk-band-on .gv-jk-plate{background:#1B3828}
 .gv-jk-band-bar{position:absolute;left:0;right:0;bottom:0;height:4px;z-index:1}
 .gv-jk-plate{position:absolute;left:8px;bottom:10px;z-index:1;max-width:calc(100% - 16px);display:flex;flex-direction:column;gap:1px;padding:6px 10px 6px 9px;border-radius:10px;border-left:3px solid;background:rgba(28,20,16,0.86);color:#FFFFFF;font-family:${FONT}}
 .gv-jk-plate-word{display:inline-flex;align-items:center;gap:5px;font-size:13px;font-weight:700;line-height:1.25;overflow-wrap:anywhere}

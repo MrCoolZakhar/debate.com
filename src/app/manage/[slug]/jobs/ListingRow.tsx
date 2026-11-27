@@ -50,7 +50,9 @@ function closingSoon(listing: OrgListing): boolean {
   return Number.isFinite(left) && left >= 0 && left <= SOON_DAYS * 86_400_000;
 }
 
-export default function ListingRow({ listing, canPromote, onEdit, onPromote, onChanged, draftedForYou = false, onCopy }: {
+export default function ListingRow({ listing, canPromote, onEdit, onPromote, onChanged, draftedForYou = false, onCopy, onOpenPeople }: {
+  /** Opens the people behind Started or Applied (prompt 72, ListingPeoplePopup in the panel). */
+  onOpenPeople?: (stage: 'started' | 'applied') => void;
   /** A chair draft the database wrote when chair applications opened (prompt 44). */
   draftedForYou?: boolean;
   /** "Copy to other listings"; only when there is another listing that is not closed. */
@@ -165,6 +167,7 @@ export default function ListingRow({ listing, canPromote, onEdit, onPromote, onC
             funnel={listing.funnel}
             fallback={{ views: listing.views, clicks: listing.clicks, applicants: listing.applicants }}
             outside={listing.kind === 'outside'}
+            onOpen={listing.kind === 'outside' ? undefined : onOpenPeople}
           />
         </div>
 

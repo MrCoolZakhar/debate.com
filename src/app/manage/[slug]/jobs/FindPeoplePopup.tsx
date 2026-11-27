@@ -8,12 +8,17 @@
 //            "Show more" pages by 24.
 //   Invite   one person: which live Gavelling listing, an optional note,
 //            the price (talent_search's `price`), "Send invite".
-// Back from Invite keeps the search and its scroll position. Short on
+//   CV       (prompt 72) a click on a card shows the person's whole public CV
+//            (get_public_cv, read once per person), grouped by role, with
+//            "Invite to a listing" at the bottom.
+// Several countries can be picked (chips under the field), sent joined with
+// '|' as talent_search's p_country.
+// Back from Invite and from CV keeps the search and its scroll position. Short on
 // credits hands the SAME call (p_top_up true) to the page, which closes
 // this pop-up before the credits pop-up opens (never a pop-up on a pop-up).
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Ban, CheckCircle2, Clock, Search, Send, XCircle } from 'lucide-react';
+import { ArrowLeft, Ban, CheckCircle2, Clock, Search, Send, X, XCircle } from 'lucide-react';
 import { PurchaseShell, PURCHASE_CSS } from '@/components/purchase/purchaseKit';
 import GSelect from '@/components/GSelect';
 import { CountryField } from '@/components/CountryField';
@@ -24,8 +29,8 @@ import { notifyOk } from '@/lib/appNotify';
 import { POSTING_CSS } from './PostingPopup';
 import { PersonAvatar } from './SentInvitesCard';
 import {
-  sendInvite, talentSearch,
-  type JobPanel, type Refusal, type TalentPage, type TalentPerson,
+  readPublicCv, sendInvite, talentSearch,
+  type JobPanel, type PublicCv, type PublicCvEntry, type Refusal, type TalentPage, type TalentPerson,
 } from './jobsApi';
 
 const FONT = "var(--font-brand), sans-serif";
@@ -97,6 +102,20 @@ export default function FindPeoplePopup({ confId, panel, onClose, onShort, onSen
   const [query, setQuery] = useState('');
   const [role, setRole] = useState<Role | null>(null);
   const [countryText, setCountryText] = useState('');
+  // Picked countries (chips). A pick is an exact country name that arrived in one jump
+  // (a suggestion chosen) or again unchanged (Enter on it); typing letter by letter never adds one.
+  const [countries, setCountries] = useState<string[]>([]);
+  const onCountryText = (next: string) => {
+    const exact = getCountryByName(next);
+    const picked = exact && exact.name.toLowerCase() === next.trim().toLowerCase()
+      && (next.length - countryText.length > 1 || next === countryText);
+    if (picked) {
+      setCountries((cur) => (cur.includes(exact.name) ? cur : [...cur, exact.name]));
+      setCountryText('');
+      return;
+    }
+    setCountryText(next);
+  };
   const [level, setLevel] = useState('');
   const [results, setResults] = useState<Results | null>(null);
   const [searchErr, setSearchErr] = useState<{ key: string; message: string } | null>(null);
@@ -104,7 +123,7 @@ export default function FindPeoplePopup({ confId, panel, onClose, onShort, onSen
   const [moreBusy, setMoreBusy] = useState(false);
   const moreRef = useRef(false);
 
-  const country = useMemo(() => (countryText.trim() ? getCountryByName(countryText)?.name ?? null : null), [countryText]);
+  const country = useMemo(() => (countries.length ? countries.join('|') : null), [countries]);
   const key = JSON.stringify([query, role, country, level, attempt]);
 
   useEffect(() => {
@@ -158,8 +177,30 @@ export default function FindPeoplePopup({ confId, panel, onClose, onShort, onSen
   const restoreRef = useRef(false);
   const scroller = () => rootRef.current?.closest('.gv-buy-body') as HTMLElement | null;
 
-  const openInvite = (p: TalentPerson) => {
+  // ── CV step: the whole public CV of one person ──
+  const [cvPerson, setCvPerson] = useState<TalentPerson | null>(null);
+  const [cvs, setCvs] = useState<Record<string, PublicCv>>({});
+  const [cvErr, setCvErr] = useState<{ id: string; message: string } | null>(null);
+  const openCv = (p: TalentPerson) => {
     scrollRef.current = scroller()?.scrollTop ?? 0;
+    setCvPerson(p);
+    setCvErr(null);
+  };
+  useEffect(() => {
+    // A failed read waits for Try again (which clears cvErr), never loops.
+    if (!cvPerson || cvs[cvPerson.user_id] || cvErr?.id === cvPerson.user_id) return;
+    let cancelled = false;
+    const id = cvPerson.user_id;
+    void readPublicCv(id).then((r) => {
+      if (cancelled) return;
+      if (r.ok) setCvs((cur) => ({ ...cur, [id]: r.cv })); else setCvErr({ id, message: r.message });
+    });
+    return () => { cancelled = true; };
+  }, [cvPerson, cvs, cvErr]);
+
+  const openInvite = (p: TalentPerson) => {
+    if (!cvPerson) scrollRef.current = scroller()?.scrollTop ?? 0;
+    setCvPerson(null);
     setPerson(p);
     setListingId(live.length === 1 ? live[0].id : '');
     setNote('');
@@ -168,18 +209,19 @@ export default function FindPeoplePopup({ confId, panel, onClose, onShort, onSen
   const backToSearch = () => {
     restoreRef.current = true;
     setPerson(null);
+    setCvPerson(null);
     setInviteErr('');
   };
 
   useLayoutEffect(() => {
     const el = scroller();
     if (!el) return;
-    if (person) { el.scrollTop = 0; return; }
+    if (person || cvPerson) { el.scrollTop = 0; return; }
     if (restoreRef.current) {
       restoreRef.current = false;
       el.scrollTop = scrollRef.current;
     }
-  }, [person]);
+  }, [person, cvPerson]);
 
   const price = current?.price ?? results?.price ?? 0;
   const canPay = current?.can_pay ?? results?.can_pay ?? true;
@@ -223,7 +265,17 @@ export default function FindPeoplePopup({ confId, panel, onClose, onShort, onSen
     <PurchaseShell tone="light" label="Find people" onClose={onClose} panelClass="gv-st-pop gv-jp gv-fp" testId="job-find-people">
       <style>{PURCHASE_CSS}{POSTING_CSS}{FIND_CSS}</style>
       <div className="gv-jp-col" ref={rootRef}>
-        {person ? (
+        {cvPerson && !person ? (
+          <CvView
+            person={cvPerson}
+            cv={cvs[cvPerson.user_id] ?? null}
+            err={cvErr && cvErr.id === cvPerson.user_id ? cvErr.message : null}
+            onRetry={() => setCvErr(null)}
+            onBack={backToSearch}
+            canInvite={(current?.can_pay ?? true) && live.length > 0}
+            onInvite={() => openInvite(cvPerson)}
+          />
+        ) : person ? (
           <>
             <header className="gv-jp-head">
               <div className="gv-jp-headrow">
@@ -309,8 +361,8 @@ export default function FindPeoplePopup({ confId, panel, onClose, onShort, onSen
                 <div className="gv-fp-country">
                   <CountryField
                     value={countryText}
-                    onChange={setCountryText}
-                    placeholder="Any country"
+                    onChange={onCountryText}
+                    placeholder={countries.length ? 'Add another country' : 'Any country'}
                     ariaLabel="Country"
                     id="gv-fp-country"
                     circleFlag
@@ -321,6 +373,20 @@ export default function FindPeoplePopup({ confId, panel, onClose, onShort, onSen
                 </div>
               </div>
             </div>
+
+            {countries.length > 0 && (
+              <ul className="gv-fp-chips" aria-label="Countries">
+                {countries.map((c) => (
+                  <li key={c} className="gv-fp-chip">
+                    <CircleFlag country={c} size={16} decorative />
+                    <span>{c}</span>
+                    <button type="button" className="gv-fp-chip-x" aria-label={`Remove ${c}`} onClick={() => setCountries((cur) => cur.filter((x) => x !== c))}>
+                      <X size={13} strokeWidth={1.5} aria-hidden />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
 
             <p className="gv-jp-line gv-jp-soft">Only people open to team roles appear here. Each person gets at most 3 invites a week from all conferences.</p>
             {!canPay && <p className="gv-jp-line gv-jp-soft">Inviting uses conference credits, which needs the Store permission</p>}
@@ -339,7 +405,7 @@ export default function FindPeoplePopup({ confId, panel, onClose, onShort, onSen
               <>
                 <ul className="gv-fp-grid">
                   {current.people.map((p) => (
-                    <PersonCard key={p.user_id} person={p} canPay={current.can_pay} onInvite={() => openInvite(p)} />
+                    <PersonCard key={p.user_id} person={p} canPay={current.can_pay} onInvite={() => openInvite(p)} onOpen={() => openCv(p)} />
                   ))}
                 </ul>
                 {current.people.length < current.total && (
@@ -358,12 +424,24 @@ export default function FindPeoplePopup({ confId, panel, onClose, onShort, onSen
   );
 }
 
-function PersonCard({ person: p, canPay, onInvite }: { person: TalentPerson; canPay: boolean; onInvite: () => void }) {
+function PersonCard({ person: p, canPay, onInvite, onOpen }: { person: TalentPerson; canPay: boolean; onInvite: () => void; onOpen: () => void }) {
   const state = p.invite ? (INVITE_STATE[String(p.invite.status)] ?? INVITE_STATE.sent) : null;
   const line = experienceLine(p);
   const levelLabel = p.level ? (LEVEL_LABEL[p.level] ?? p.level.charAt(0).toUpperCase() + p.level.slice(1)) : null;
+  // The whole card opens the CV, except the Invite button.
+  const open = (e: React.MouseEvent<HTMLElement>) => {
+    if ((e.target as HTMLElement).closest('button, a')) return;
+    onOpen();
+  };
   return (
-    <li className="gv-fp-card">
+    <li
+      className="gv-fp-card gv-fp-card-open"
+      role="button"
+      tabIndex={0}
+      aria-label={`See ${p.name || 'this member'}'s MUN CV`}
+      onClick={open}
+      onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onOpen(); } }}
+    >
       <div className="gv-fp-top">
         <PersonAvatar name={p.name} url={p.avatar_url} size={48} />
         <div className="gv-fp-id">
@@ -419,7 +497,108 @@ function PersonCard({ person: p, canPay, onInvite }: { person: TalentPerson; can
   );
 }
 
+const CV_GROUPS: { key: string; label: string }[] = [
+  { key: 'chair', label: 'Chair' },
+  { key: 'secretariat', label: 'Secretariat' },
+  { key: 'delegate', label: 'Delegate' },
+  { key: 'faculty-advisor', label: 'Faculty Advisor' },
+  { key: 'other', label: 'Other' },
+];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function monthYear(d: string | null): string {
+  const m = d ? /^(\d{4})-(\d{2})/.exec(d) : null;
+  return m ? `${MONTHS[Number(m[2]) - 1] ?? ''} ${m[1]}`.trim() : '';
+}
+
+/** One person's whole public CV, newest first inside each role group. */
+function CvView({ person, cv, err, onRetry, onBack, canInvite, onInvite }: {
+  person: TalentPerson; cv: PublicCv | null; err: string | null; onRetry: () => void; onBack: () => void; canInvite: boolean; onInvite: () => void;
+}) {
+  const levelLabel = person.level ? (LEVEL_LABEL[person.level] ?? person.level) : null;
+  const name = cv?.profile?.display_name || person.name || 'A Gavelling member';
+  const nationality = cv?.profile?.nationality ?? person.nationality;
+  const groups = CV_GROUPS.map((g) => ({
+    ...g,
+    rows: (cv?.entries ?? [])
+      .filter((e: PublicCvEntry) => (e.entry_type ?? 'other') === g.key || (g.key === 'other' && !CV_GROUPS.some((x) => x.key === e.entry_type)))
+      .sort((a, b) => (b.event_date ?? '').localeCompare(a.event_date ?? '')),
+  })).filter((g) => g.rows.length > 0);
+  return (
+    <>
+      <header className="gv-jp-head">
+        <div className="gv-jp-headrow">
+          <button type="button" className="gv-jp-back" onClick={onBack} aria-label="Back">
+            <ArrowLeft size={18} strokeWidth={2.4} aria-hidden />
+          </button>
+        </div>
+      </header>
+      <div className="gv-fp-who">
+        <PersonAvatar name={name} url={cv?.profile?.avatar_url ?? person.avatar_url} size={56} />
+        <div style={{ minWidth: 0 }}>
+          <p className="gv-fp-name gv-fp-name-big">{name}</p>
+          {(nationality || levelLabel) && (
+            <p className="gv-fp-meta">
+              {nationality && <CircleFlag country={nationality} size={16} decorative />}
+              {nationality && <span>{nationality}</span>}
+              {nationality && levelLabel && <span aria-hidden>·</span>}
+              {levelLabel && <span>{levelLabel}</span>}
+            </p>
+          )}
+        </div>
+      </div>
+      {err ? (
+        <p className="gv-jp-err gv-jp-err-block" role="alert">{err} <button type="button" className="gv-jp-a" onClick={onRetry}>Try again</button></p>
+      ) : !cv ? (
+        <div className="flex flex-col gap-3" aria-busy="true" aria-label="Loading the CV">
+          {[0, 1, 2].map((i) => <span key={i} className="gv-fp-skel" style={{ minHeight: 64 }} />)}
+        </div>
+      ) : cv.private ? (
+        <p className="gv-fp-empty">This MUN CV is private</p>
+      ) : groups.length === 0 ? (
+        <p className="gv-fp-empty">No conferences on this MUN CV yet</p>
+      ) : (
+        groups.map((g) => (
+          <section key={g.key} className="gv-fp-cvgroup">
+            <h3 className="gv-fp-cvh">{g.label}</h3>
+            <ul className="gv-fp-recent" style={{ borderTop: 'none', paddingTop: 0 }}>
+              {g.rows.map((e) => (
+                <li key={e.id}>
+                  <span className="gv-fp-conf">
+                    {e.conference_name || g.label}
+                    {e.source === 'gavelling_verified' && <VerifiedCheck verified size={13} style={{ marginLeft: 5, verticalAlign: '-2px' }} />}
+                  </span>
+                  {(e.committee || e.allocation || e.event_date) && (
+                    <span className="gv-fp-sub">{[e.committee, e.allocation, monthYear(e.event_date)].filter(Boolean).join(' · ')}</span>
+                  )}
+                  {(e.awards ?? []).filter(Boolean).length > 0 && <span className="gv-fp-sub">{(e.awards ?? []).filter(Boolean).join(', ')}</span>}
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))
+      )}
+      <div className="gv-jp-actions">
+        <button type="button" className="gv-jp-main" onClick={onInvite} disabled={!canInvite}>
+          <Send size={16} strokeWidth={2.4} aria-hidden /> Invite to a listing
+        </button>
+      </div>
+    </>
+  );
+}
+
 const FIND_CSS = `
+.gv-fp-card-open{cursor:pointer}
+.gv-fp-card-open:hover{box-shadow:0 1px 2px rgba(27,56,40,0.06),0 8px 22px rgba(27,56,40,0.10)}
+.gv-fp-card-open:focus{outline:none}
+.gv-fp-card-open:focus-visible{outline:2px solid ${FOREST};outline-offset:2px}
+.gv-fp-chips{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px}
+.gv-fp-chip{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:0 6px 0 10px;border-radius:999px;background:#FFFFFF;border:1.5px solid rgba(28,20,16,0.12);font-family:${FONT};font-size:13.5px;font-weight:600;color:${INK}}
+.gv-fp-chip-x{width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;border:none;border-radius:999px;background:none;cursor:pointer;color:${INK_SOFT}}
+.gv-fp-chip-x:hover{background:rgba(28,20,16,0.06);color:${INK}}
+.gv-fp-chip-x:focus{outline:none}
+.gv-fp-chip-x:focus-visible{outline:2px solid ${FOREST};outline-offset:1px}
+.gv-fp-cvgroup{display:flex;flex-direction:column;gap:8px}
+.gv-fp-cvh{margin:0;font-family:${FONT};font-size:15px;font-weight:800;color:${INK}}
 .gv-buy-panel.gv-jp.gv-fp{max-width:960px}
 .gv-fp-filters{display:flex;flex-direction:column;gap:12px}
 .gv-fp-search{position:relative;display:block}

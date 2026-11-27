@@ -11,8 +11,14 @@
 //
 // Used by the organizer rows (manage/[slug]/jobs/ListingRow.tsx) and Your
 // Listings on /jobs. Gavelling colours. Presentational only.
+//
+// `onOpen` (prompt 72, the organizer rows only): Started, Applied and the
+// screened-out count become buttons that open the people behind them, each
+// number with its word beside it and more room between them. Views and clicks
+// stay plain (counted anonymously). Without onOpen nothing changes.
 
 import { ChevronRight } from 'lucide-react';
+import { HoverHint } from '@/components/HoverHint';
 import type { JobFunnel } from '@/lib/jobBoard';
 
 const FONT = "var(--font-brand), sans-serif";
@@ -24,27 +30,29 @@ function share(next: number, prev: number): string | null {
   return `${Math.round((next / prev) * 100)}%`;
 }
 
-export default function ListingFunnel({ funnel, fallback, outside }: {
+export default function ListingFunnel({ funnel, fallback, outside, onOpen }: {
   funnel: JobFunnel | null | undefined;
   /** Used when the server sent no funnel (older rows). */
   fallback: { views: number; clicks: number; applicants?: number };
   outside: boolean;
+  /** Opens the people behind Started or Applied (the organizer rows). */
+  onOpen?: (stage: 'started' | 'applied') => void;
 }) {
   const f: JobFunnel = funnel ?? {
     views: fallback.views, clicks: fallback.clicks, started: 0, screened_out: 0,
     submitted: fallback.applicants ?? 0, views_7d: 0, clicks_7d: 0,
   };
-  const steps: { n: number; word: string; note?: string }[] = outside
+  const steps: { n: number; word: string; note?: string; open?: 'started' | 'applied' }[] = outside
     ? [{ n: f.views, word: 'Views' }, { n: f.clicks, word: 'Clicked their link' }]
     : [
       { n: f.views, word: 'Views' },
       { n: f.clicks, word: 'Clicked Apply' },
-      { n: f.started, word: 'Started', note: f.screened_out > 0 ? `${f.screened_out.toLocaleString('en-US')} stopped by an Essential question` : undefined },
-      { n: f.submitted, word: 'Applied' },
+      { n: f.started, word: 'Started', note: f.screened_out > 0 ? `${f.screened_out.toLocaleString('en-US')} stopped by an Essential question` : undefined, open: 'started' },
+      { n: f.submitted, word: 'Applied', open: 'applied' },
     ];
 
   return (
-    <div className="gv-fn" style={{ fontFamily: FONT }}>
+    <div className={`gv-fn${onOpen ? ' gv-fn-open' : ''}`} style={{ fontFamily: FONT }}>
       <style>{CSS}</style>
       <ol className="gv-fn-steps" aria-label="How people moved through this listing">
         {steps.map((s, i) => {
@@ -57,11 +65,30 @@ export default function ListingFunnel({ funnel, fallback, outside }: {
                   {pct && <span className="gv-fn-pct">{pct}</span>}
                 </span>
               )}
+              {onOpen && s.open ? (
+                <span className="gv-fn-cell">
+                  <button type="button" className="gv-fn-btn" onClick={() => onOpen(s.open!)} aria-label={`${s.n.toLocaleString('en-US')} ${s.word}, see who`}>
+                    <span className="gv-fn-n">{s.n.toLocaleString('en-US')}</span>
+                    <span className="gv-fn-word">{s.word}</span>
+                  </button>
+                  {s.note && (
+                    <button type="button" className="gv-fn-btn gv-fn-note" onClick={() => onOpen('started')}>{s.note}</button>
+                  )}
+                </span>
+              ) : onOpen && i === 0 ? (
+                <HoverHint text="Views and clicks are counted without knowing who they are">
+                  <span className="gv-fn-cell">
+                    <span className="gv-fn-n">{s.n.toLocaleString('en-US')}</span>
+                    <span className="gv-fn-word">{s.word}</span>
+                  </span>
+                </HoverHint>
+              ) : (
               <span className="gv-fn-cell">
                 <span className="gv-fn-n">{s.n.toLocaleString('en-US')}</span>
                 <span className="gv-fn-word">{s.word}</span>
                 {s.note && <span className="gv-fn-note">{s.note}</span>}
               </span>
+              )}
             </li>
           );
         })}
@@ -81,5 +108,14 @@ const CSS = `
 .gv-fn-n{font-size:22px;font-weight:800;letter-spacing:-0.02em;line-height:1.1;color:${INK};font-variant-numeric:tabular-nums}
 .gv-fn-word{font-size:12.5px;font-weight:600;color:${INK_SOFT}}
 .gv-fn-note{margin-top:2px;font-size:11.5px;line-height:1.35;color:${INK_SOFT};overflow-wrap:anywhere}
+.gv-fn-open .gv-fn-steps{gap:10px 0}
+.gv-fn-open .gv-fn-join{min-width:56px}
+.gv-fn-open .gv-fn-cell{max-width:220px}
+.gv-fn-open .gv-fn-cell, .gv-fn-open .gv-fn-btn{flex-direction:row;flex-wrap:wrap;align-items:baseline;gap:0 6px}
+.gv-fn-btn{display:inline-flex;align-items:baseline;gap:0 6px;flex-wrap:wrap;padding:2px 4px;margin:-2px -4px;border:none;background:none;cursor:pointer;font:inherit;text-align:left;border-radius:8px}
+.gv-fn-btn:hover .gv-fn-word, .gv-fn-btn.gv-fn-note:hover{text-decoration:underline;text-underline-offset:3px}
+.gv-fn-btn:focus{outline:none}
+.gv-fn-btn:focus-visible{outline:2px solid #1B3828;outline-offset:2px}
+.gv-fn-open .gv-fn-note{flex-basis:100%}
 .gv-fn-week{margin:6px 0 0;font-size:12.5px;color:${INK_SOFT};font-variant-numeric:tabular-nums}
 `;
