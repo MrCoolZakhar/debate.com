@@ -9,6 +9,11 @@ export const metadata = pageMetadata({
   description:
     'Seven Model UN questions a day. Name a UN member, a committee, a clause, a resolution or a MUN conference: the rarer your answer, the more points you score.',
   path: '/games',
+  // Its own share card (owner, 27 Nov 2026: WhatsApp showed no preview). Drawn from the pixel hall;
+  // 1200x630 JPG under 300 KB so WhatsApp, iMessage and LinkedIn all show it.
+  image: 'https://gavelling.com/games/munillion-og.jpg?v=1',
+  imageAlt: 'MUNillion: a pixel UN General Assembly hall and a delegate raising a placard that reads The Gavel, +100 points',
+  imageSize: { width: 1200, height: 630 },
 });
 
 // The game fills exactly one screen (owner, 26 Nov 2026); the top bar floats over the hall.
