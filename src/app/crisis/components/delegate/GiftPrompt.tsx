@@ -110,14 +110,17 @@ export function GiftCard({ code, activate, onLater, platform }: {
   }, []);
   const shown = !gone;
   const boxRef = useRef<HTMLDivElement>(null);
-  const cvRef = useRef<HTMLCanvasElement>(null);
+  // The scratch canvas as STATE, not a ref: Portal mounts its children a microtask after the first commit, so a ref is
+  // still null when the effect first runs. Keyed on the element, the scratch layer is set up once the card is in the DOM
+  // (before this, no foil was painted, scratching did nothing and Activate never unlocked; 25 Nov 2026).
+  const [cv, setCv] = useState<HTMLCanvasElement | null>(null);
   const coinRef = useRef<HTMLDivElement>(null);
   const fxRef = useRef<HTMLCanvasElement>(null);
 
   // The scratch layer, the coin hint, the falling foil and the confetti. Canvas only, no React state per frame.
   useEffect(() => {
     if (!shown) return undefined;
-    const cv = cvRef.current, box = boxRef.current, coin = coinRef.current, fx = fxRef.current;
+    const box = boxRef.current, coin = coinRef.current, fx = fxRef.current;
     if (!cv || !box || !coin || !fx) return undefined;
     const ctx = cv.getContext('2d'), fc = fx.getContext('2d');
     if (!ctx || !fc) return undefined;
@@ -201,7 +204,7 @@ export function GiftCard({ code, activate, onLater, platform }: {
       cv.removeEventListener('pointerdown', onDown); cv.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp); window.removeEventListener('resize', onResize);
     };
-  }, [shown]);
+  }, [shown, cv]);
 
   const onActivate = useCallback(async () => {
     if (busy) return;
@@ -257,7 +260,7 @@ export function GiftCard({ code, activate, onLater, platform }: {
               <div className="cg-coin" ref={coinRef} aria-hidden>
                 <svg viewBox="0 0 44 44" width="44" height="44"><defs><radialGradient id="cg-coin" cx=".35" cy=".3"><stop offset="0" stopColor="#FFF6CF" /><stop offset=".6" stopColor="#E3C562" /><stop offset="1" stopColor="#A9852A" /></radialGradient></defs><circle cx="22" cy="22" r="20" fill="url(#cg-coin)" stroke="#8E6E1E" strokeWidth="1.5" /><circle cx="22" cy="22" r="14" fill="none" stroke="#8E6E1E" strokeWidth="1" opacity=".6" /><text x="22" y="28" textAnchor="middle" fontFamily="Inter,sans-serif" fontWeight="800" fontSize="16" fill="#6E1A1A">G</text></svg>
               </div>
-              <canvas ref={cvRef} className="cg-scratch" aria-label="Scratch to reveal your voucher" />
+              <canvas ref={setCv} className="cg-scratch" aria-label="Scratch to reveal your voucher" />
             </div>
             <p className="cg-hint">{revealed ? (platform ? `${platform.length} of Unlimited ${/^1 /.test(platform.length) ? 'is' : 'are'} yours` : 'Two months of Unlimited are yours') : 'Scratch the gold to reveal your voucher'}</p>
             {!platform && <div className="cg-row">
