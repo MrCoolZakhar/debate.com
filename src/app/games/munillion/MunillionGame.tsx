@@ -22,7 +22,7 @@ import { openAuth } from '@/lib/authModal';
 import { friendlyError } from '@/lib/friendlyError';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { ArmSprite, TierIcon } from '@/components/munillion/PixelArt';
-import { HoverHint } from '@/components/HoverHint';
+import CountryFlag from './Flag';
 import {
   ADD_CONFERENCE_HREF,
   MAX_POINTS,
@@ -42,7 +42,6 @@ import {
   type MunQuestion,
   type MunReveal,
   type MunToday,
-  type MunSource,
 } from '@/lib/munillion';
 import { isBlockedText } from '@/lib/munillionProfanity';
 import RevealList from './RevealList';
@@ -62,7 +61,7 @@ interface ResultView {
   slug: string | null;
   typed: string | null;
   reason: 'correct' | 'late' | 'skipped';
-  source: MunSource | null;
+  country: string | null;
 }
 
 interface Bit { bx: string; by: string; br: string; c: string; delay: string }
@@ -383,7 +382,7 @@ export default function MunillionGame({ header }: { header?: ReactNode }) {
     }));
     setSuggestion(null);
     setMsg(null);
-    setResult({ position, tier, label: r.label ?? null, sub: r.sub ?? null, slug: r.slug ?? null, typed, reason, source: r.source ?? null });
+    setResult({ position, tier, label: r.label ?? null, sub: r.sub ?? null, slug: r.slug ?? null, typed, reason, country: r.country ?? null });
     pendingRef.current = { total: newTotal, tier };
     growTargetRef.current = { total: newTotal, tier };
     setGrowKey((k) => k + 1);
@@ -771,20 +770,15 @@ export default function MunillionGame({ header }: { header?: ReactNode }) {
         <p className="mn-line mn-tx">
           {result.reason === 'late' ? 'Out of time' : result.reason === 'skipped' ? 'You passed on this one' : (
             <>
+              <CountryFlag country={result.country} />
               {result.slug ? <><a href={conferenceHref(result.slug)} target="_blank" rel="noopener noreferrer">{result.label}</a>{result.sub ? ` · ${result.sub}` : ''}</> : null}
               {!result.slug ? `${result.label ?? ''}${result.sub ? ` · ${result.sub}` : ''}` : null}
+              {result.slug && result.country ? ` · ${result.country}` : null}
               <br />{meta.line}
             </>
           )}
         </p>
-        {result.source ? (
-          <p className="mn-source mn-tx">
-            <HoverHint text={result.source.note}>
-              <button type="button" className="mn-info mn-px focus:outline-none" aria-label="Where these answers come from">i</button>
-            </HoverHint>
-            <span>Where these answers come from</span>
-          </p>
-        ) : null}
+
       </div>
     );
     bar = (

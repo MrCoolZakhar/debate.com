@@ -153,6 +153,9 @@ export const MUNILLION_CSS = `
 .mn-info { flex: none; width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; border: 2px solid #EED98A; background: rgba(14,18,26,.8);
   color: #EED98A; font-size: 9px; line-height: 1; cursor: pointer; padding: 0; }
 
+.mn-flag { display: inline-block; vertical-align: -3px; margin-right: 6px; object-fit: contain; image-rendering: auto; }
+.mn-round-a .mn-flag, .mn-a .mn-flag { vertical-align: -2px; }
+
 /* the answer bar */
 .mn-bar-zone { width: min(100%, 720px); justify-self: center; position: relative; z-index: 2; }
 .mn-answer-row { display: flex; gap: 8px; align-items: stretch; }

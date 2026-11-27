@@ -806,3 +806,9 @@ grant execute on function public.munillion_reset_preview_play(text) to anon, aut
 -- conf_country_tiers, munillion_conf_index.country, _munillion_conf_tier), source notes (_munillion_source).
 -- Full text: the migration of that name in the project. Game 2 was seeded unpublished by munillion_seed_game_2_a
 -- and munillion_seed_game_2_wars, dated 2026-11-28.
+
+-- ── 28 Nov 2026: munillion_answer_countries + munillion_game_2_retier ──
+-- munillion_answers.country and munillion_play_answers.answer_country (filled by trigger
+-- munillion_play_answer_country); munillion_answer, munillion_history and munillion_reveal return the country so
+-- the page draws a flag. Game 2 re-scored to about 3 x 10, 5 x 30, the rest 60 and mostly 85 per question;
+-- the conference question scores the US and India 60 and everywhere else 85.
