@@ -34,6 +34,7 @@ import MoreFromConference from './MoreFromConference';
 import { useAuth } from '@/components/AuthProvider';
 import { isUnlimited, useUnlimitedStatus } from '@/lib/unlimitedStatus';
 import { openAuth } from '@/lib/authModal';
+import ProfileLink from '@/components/ProfileLink';
 import { notifyErr } from '@/lib/appNotify';
 import {
   fetchJobListing, jobAppliesOutside, jobContinuePath, recordJobEvent, saveJob,
@@ -100,7 +101,7 @@ export default function JobListing({
   onChanged?: () => void;
   /** This visit came from an invite (prompt 11): "<short> invited you to apply". */
   /** Opened from an invite: one small line, the note having been shown in the invite pop-up. */
-  inviteNote?: { short: string; by: string | null } | null;
+  inviteNote?: { short: string; by: string | null; avatar?: string | null; byId?: string | null } | null;
   /** Opens another listing in this pane (More from this conference). */
   onSelectListing?: (id: string) => void;
   /** Closes the listing and shows the board (See all roles on an unavailable listing). */
@@ -352,7 +353,11 @@ export default function JobListing({
 
       {inviteNote && (
         <div className="gv-jl-invite" role="note" style={{ alignItems: 'center' }}>
-          {inviteNote.by ? <Avatar name={inviteNote.by} src={null} size={28} /> : <Mail size={16} strokeWidth={2.4} aria-hidden style={{ flexShrink: 0 }} />}
+          {inviteNote.by ? (
+            <ProfileLink userId={inviteNote.byId ?? null} name={inviteNote.by} style={{ display: 'inline-flex', borderRadius: 9999, flexShrink: 0 }}>
+              <Avatar name={inviteNote.by} src={inviteNote.avatar ?? null} size={28} />
+            </ProfileLink>
+          ) : <Mail size={16} strokeWidth={2.4} aria-hidden style={{ flexShrink: 0 }} />}
           <p style={{ margin: 0, minWidth: 0, fontSize: 14, fontWeight: 600, color: INK, overflowWrap: 'anywhere' }}>
             Invited by {inviteNote.by || 'the organizers'} at {inviteNote.short}
           </p>

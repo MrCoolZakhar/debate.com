@@ -443,7 +443,7 @@ export default function JobBoardClient({ initialQuery, initialPage, initialError
       onSeeAll={back}
       inviteNote={(() => {
         const inv = invites.find((i) => i.id === selectedId && ((!!inviteParam && i.invite_id === inviteParam) || i.id === inviteListing)) ?? null;
-        return inv ? { short: inv.conference.short || inv.conference.name || 'a conference', by: inv.invited_by } : null;
+        return inv ? { short: inv.conference.short || inv.conference.name || 'a conference', by: inv.invited_by, avatar: inv.invited_by_avatar ?? null, byId: inv.invited_by_id ?? null } : null;
       })()}
     />
   ) : null;

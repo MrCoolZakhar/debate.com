@@ -24,6 +24,7 @@ import { openAuth } from '@/lib/authModal';
 import { fetchJobListing, jobAppliesOutside, recordJobEvent, respondToInvite, type JobInvite, type JobListingDetail } from '@/lib/jobBoard';
 import { JobLogo, OfferChips } from './JobCard';
 import { Avatar, requestJobApply } from './JobListing';
+import ProfileLink from '@/components/ProfileLink';
 
 const FONT = "var(--font-brand), sans-serif";
 const INK = '#1C1410';
@@ -144,7 +145,9 @@ export default function InvitePopup({ invite, onClose, onViewListing, onDeclined
                 <blockquote>&ldquo;{note}&rdquo;</blockquote>
                 {by && (
                   <figcaption>
-                    <Avatar name={by} src={null} size={30} />
+                    <ProfileLink userId={invite.invited_by_id ?? null} name={by} style={{ display: 'inline-flex', borderRadius: 9999 }}>
+                      <Avatar name={by} src={invite.invited_by_avatar ?? null} size={30} />
+                    </ProfileLink>
                     <span>{by}</span>
                   </figcaption>
                 )}

@@ -587,6 +587,10 @@ export interface JobInvite extends JobCard {
   message: string | null;
   invited_at: string | null;
   invited_by: string | null;
+  /** The inviter's profiles.avatar_url, or null (prompt 79). */
+  invited_by_avatar?: string | null;
+  /** The inviter's profiles.id, for their MUN CV link. */
+  invited_by_id?: string | null;
   open: boolean;
 }
 
