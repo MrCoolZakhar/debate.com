@@ -76,7 +76,8 @@ export const MUNILLION_CSS = `
 @keyframes mn-spin-y { to { transform: rotateY(360deg); } }
 .mn-spin-once { animation: mn-spin-y .9s steps(9, end) 1; }
 @media (max-width: 760px) {
-  .mn-climb { width: 46px; left: 6px; top: 24%; bottom: 22%; }
+  /* below the answer and result cards, which fill the top half on a phone */
+  .mn-climb { width: 46px; left: 6px; top: 47%; bottom: 13%; }
   .mn-climb-name { display: none; }
   .mn-climb-rail { left: 15px; }
   .mn-climb-icon { width: 32px; height: 32px; }
