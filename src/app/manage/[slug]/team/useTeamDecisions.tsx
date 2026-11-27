@@ -449,6 +449,8 @@ export function useTeamDecisions({
       onAccept={(picked, title) => accept(openApplicant, picked, title)}
       onReject={() => reject(openApplicant)}
       onClose={() => { setSwap(null); setConfirmed(null); setTickets(null); setOpen(null); }}
+      // Accept inside the review step runs the same swap question first as the row's Accept (prompt 84).
+      onStartAccept={() => { void preCheck(openApplicant.application_id); }}
       swap={swap && swap.appId === openApplicant.application_id ? (
         <RoleSwapPanel
           ask={swap.ask}

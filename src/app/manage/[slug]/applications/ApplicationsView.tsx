@@ -54,7 +54,7 @@ import { rejectUpdates, writeReject, rejectFollowUps, acceptFollowUps } from './
 import { useConferenceMoney, moneyState, moneyLabel, moneyOwing, type MoneyRow, type MoneyState, type LivePay } from '@/lib/applicationMoney';
 import { formatCents } from '../financials/shared';
 import { checkRoleSwap, askFor, runRoleSwap, goneAfterSwap, type SwapAsk } from './roleSwap';
-import RoleSwapPanel from './RoleSwapPanel';
+import RoleSwapPanel, { useLeaderTickets } from './RoleSwapPanel';
 import { useJobBoardApplicantExtras } from './useJobBoardApplicantExtras';
 import { useNoteCounts } from './useNoteCounts';
 import TeamApplicantsLine from './TeamApplicantsLine';
@@ -2710,6 +2710,8 @@ export default function ApplicationsView({ scope }: { scope: 'participants' | 't
   // the same post-accept steps for the application that now holds the role.
   const [swapAsk, setSwapAsk] = useState<{ appId: string; ask: SwapAsk; busy: boolean; error: string } | null>(null);
   const swapBusyRef = useRef(false);
+  // A leader holding their delegation's tickets: prompt 80's ticket choices (prompt 84).
+  const leaderTickets = useLeaderTickets();
 
   async function openRoleSwap(appId: string, race = false): Promise<void> {
     if (!session) return;
@@ -2718,9 +2720,11 @@ export default function ApplicationsView({ scope }: { scope: 'participants' | 't
     setActionError('');
     setSwapAsk({ appId, ask: { phase: 'checking' }, busy: false, error: '' });
     try {
-      const check = await checkRoleSwap(getAuthedClient(session.access_token), appId);
+      const client = getAuthedClient(session.access_token);
+      const check = await checkRoleSwap(client, appId);
       const ask = askFor(check);
-      if (ask) { setSwapAsk({ appId, ask, busy: false, error: '' }); return; }
+      if (ask) { setSwapAsk({ appId, ask, busy: false, error: '' }); void leaderTickets.read(client, ask); return; }
+      leaderTickets.reset();
       if (race) {
         // The accept was refused for a role the check no longer sees: say so, never loop.
         setSwapAsk({ appId, ask: { phase: 'blocked', message: 'Could not accept the application. Please try again.' }, busy: false, error: '' });
@@ -2775,15 +2779,35 @@ export default function ApplicationsView({ scope }: { scope: 'participants' | 't
     }
   }
 
+  /** A ticket choice in the panel; once it landed the check runs again, and the accept carries on when it passes. */
+  async function ticketChoice(appId: string, run: (client: ReturnType<typeof getAuthedClient>) => Promise<string | null>): Promise<void> {
+    if (!session || swapBusyRef.current) return;
+    swapBusyRef.current = true;
+    setSwapAsk(prev => prev && prev.appId === appId ? { ...prev, busy: true, error: '' } : prev);
+    let problem: string | null = null;
+    try {
+      problem = await run(getAuthedClient(session.access_token));
+    } finally {
+      swapBusyRef.current = false;
+    }
+    if (problem) { setSwapAsk(prev => prev && prev.appId === appId ? { ...prev, busy: false, error: problem } : prev); return; }
+    await openRoleSwap(appId);
+  }
+
   function renderRoleSwap(app: Application) {
     if (!swapAsk || swapAsk.appId !== app.id) return null;
+    const t = leaderTickets.tickets;
+    const held = t?.state === 'ready' ? t.hold : null;
     return (
       <RoleSwapPanel
         ask={swapAsk.ask}
         busy={swapAsk.busy}
         error={swapAsk.error}
         onConfirm={() => { void confirmRoleSwap(app.id); }}
-        onCancel={() => { if (!swapAsk.busy) setSwapAsk(null); }}
+        onCancel={() => { if (!swapAsk.busy) { setSwapAsk(null); leaderTickets.reset(); } }}
+        tickets={leaderTickets.tickets}
+        onMoveTickets={held ? (toApp, toName) => { void ticketChoice(app.id, (c) => leaderTickets.move(c, held.leaderAppId, toApp, toName)); } : undefined}
+        onRemoveUnpaid={(ids) => { void ticketChoice(app.id, (c) => leaderTickets.remove(c, ids)); }}
       />
     );
   }

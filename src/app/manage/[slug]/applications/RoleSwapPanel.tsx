@@ -15,13 +15,61 @@
 // tickets to another leader, remove the unpaid ones (asked in place), or write
 // to Gavelling. Close sits on the right. Without `tickets` it draws as before.
 
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import GSelect from '@/components/GSelect';
 import { NEU, OUTFIT } from '@/components/neu';
-import { heldFacts, heldWords, ticketSummary, type SwapAsk, type TicketHold } from './roleSwap';
+import { heldFacts, heldWords, ticketSummary, loadTicketHold, moveLeaderTickets, removeUnpaidTickets, type SwapAsk, type TicketHold } from './roleSwap';
+import type { getAuthedClient } from '@/lib/supabase-auth';
+import { notifyErr, notifyOk } from '@/lib/appNotify';
+import { friendlyError } from '@/lib/friendlyError';
 
 export type TicketHoldState = { state: 'loading' } | { state: 'ready'; hold: TicketHold } | { state: 'error'; message: string };
+
+type Client = ReturnType<typeof getAuthedClient>;
+
+/**
+ * The ticket choices of a 'leader_tickets' refusal (prompt 80's, for any page
+ * that shows RoleSwapPanel; prompt 84). `read` loads the tickets and the other
+ * leaders after the check refuses; `move` and `remove` run prompt 80's writes
+ * and answer null when they landed (the caller then runs its check again) or
+ * the sentence to show in the panel.
+ */
+export function useLeaderTickets() {
+  const [tickets, setTickets] = useState<TicketHoldState | null>(null);
+  const read = useCallback(async (client: Client, ask: SwapAsk) => {
+    if (ask.phase !== 'blocked' || ask.code !== 'leader_tickets' || !ask.check) { setTickets(null); return; }
+    setTickets({ state: 'loading' });
+    try {
+      const hold = await loadTicketHold(client, ask.check);
+      setTickets(hold ? { state: 'ready', hold } : null);
+    } catch (e) {
+      setTickets({ state: 'error', message: friendlyError(e, 'Could not read their tickets. Please try again.') });
+    }
+  }, []);
+  const move = useCallback(async (client: Client, fromApp: string, toApp: string, toName: string): Promise<string | null> => {
+    try {
+      const r = await moveLeaderTickets(client, fromApp, toApp);
+      if (!r.ok) return r.message;
+      notifyOk(`${r.moved} ${r.moved === 1 ? 'ticket' : 'tickets'} moved to ${toName}`);
+      return null;
+    } catch (e) {
+      return friendlyError(e, 'Could not move the tickets. Please try again.');
+    }
+  }, []);
+  const remove = useCallback(async (client: Client, ids: string[]): Promise<string | null> => {
+    try {
+      const removed = await removeUnpaidTickets(client, ids);
+      if (removed > 0) notifyOk(`${removed} unpaid ${removed === 1 ? 'ticket' : 'tickets'} removed`);
+      else notifyErr('No tickets could be removed. Please try again.');
+      return null;
+    } catch (e) {
+      return friendlyError(e, 'Could not remove the tickets. Please try again.');
+    }
+  }, []);
+  const reset = useCallback(() => setTickets(null), []);
+  return { tickets, read, move, remove, reset };
+}
 
 const INK = '#1C1410';
 const FOREST = '#1B3828';
