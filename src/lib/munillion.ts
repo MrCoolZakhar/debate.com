@@ -23,7 +23,7 @@ export interface TierMeta {
 
 export const TIERS: Record<TierValue, TierMeta> = {
   100: { value: 100, name: 'The Gavel', line: 'Only one answer on the list wins The Gavel, and you found it' },
-  85: { value: 85, name: 'Best Delegate', line: 'Almost nobody goes there' },
+  85: { value: 85, name: 'Best Delegate', line: 'A very niche pick' },
   60: { value: 60, name: 'Outstanding Delegate', line: 'A strong pick most people miss' },
   30: { value: 30, name: 'Honourable Mention', line: 'A solid answer plenty of people give' },
   10: { value: 10, name: 'Participation Certificate', line: 'The answer everyone gives' },
