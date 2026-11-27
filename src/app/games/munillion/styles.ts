@@ -14,13 +14,14 @@ export const MUNILLION_CSS = `
 .mn-shell { position: relative; }
 .mn-stage {
   position: relative; overflow: hidden; isolation: isolate;
-  height: 100vh; height: 100dvh; min-height: 520px;
+  /* the Motion to Save bar (SaleBar, 40px, --gv-sale-bar-offset) sits above the page while a sale runs */
+  height: calc(100vh - var(--gv-sale-bar-offset, 0px)); height: calc(100dvh - var(--gv-sale-bar-offset, 0px)); min-height: 480px;
   display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; gap: clamp(6px, 1.2vh, 12px);
   padding: 76px clamp(12px, 2vw, 24px) clamp(10px, 1.8vh, 18px);
 }
 /* below 1024px the site's bottom tab bar (62px, MobileTabBar) takes the bottom of the screen */
 @media (max-width: 1023px) {
-  .mn-stage { padding-top: 70px; height: calc(100vh - 62px); height: calc(100dvh - 62px - env(safe-area-inset-bottom, 0px)); min-height: 460px; }
+  .mn-stage { padding-top: 70px; height: calc(100vh - 62px - var(--gv-sale-bar-offset, 0px)); height: calc(100dvh - 62px - env(safe-area-inset-bottom, 0px) - var(--gv-sale-bar-offset, 0px)); min-height: 420px; }
 }
 .mn-bg { position: absolute; inset: -2%; z-index: -4; background: #1A2230 url('/games/munillion-hall.jpg') center 35% / cover no-repeat;
   image-rendering: pixelated; animation: mn-drift 40s ease-in-out infinite alternate; }
