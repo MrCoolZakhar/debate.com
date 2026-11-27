@@ -19,6 +19,8 @@ export interface ApplyListing {
   title: string;
   committee: string | null;
   committeeId: string | null;
+  /** The conference's short name (else its name), for "Applying for {title} at {conference}". */
+  conferenceShort: string | null;
 }
 
 /** The listing behind ?listing=<id>, or null (no param, failed read, or a
@@ -34,7 +36,8 @@ export function useListingForApply(listingId: string | null, slug: string, role:
       if (cancelled || !res.ok) return;
       const l = res.listing;
       if (!l || l.conference?.slug !== slug || l.role !== role) return;
-      setFound({ key, listing: { id: l.id, title: l.title, committee: l.committee, committeeId: l.committee_id } });
+      const conferenceShort = l.conference?.short?.trim() || l.conference?.name?.trim() || null;
+      setFound({ key, listing: { id: l.id, title: l.title, committee: l.committee, committeeId: l.committee_id, conferenceShort } });
     }).catch(() => { /* silent: the line is a courtesy */ });
     return () => { cancelled = true; };
   }, [listingId, slug, role, key]);
@@ -82,9 +85,10 @@ export function ListingApplyLine({ listing }: { listing: ApplyListing | null }) 
           className="[overflow-wrap:anywhere]"
           style={{ margin: 0, fontFamily: 'var(--font-brand), sans-serif', fontSize: 13, lineHeight: 1.45, color: 'var(--gv-on-surface)' }}
         >
+          {/* The conference, never the committee: "UNSC Chair in UNSC" said nothing (26 Nov 2026). */}
           Applying for <strong style={{ fontWeight: 700, color: 'var(--gv-main)' }}>{listing.title}</strong>
-          {listing.committee && (
-            <span style={{ color: 'var(--gv-muted)' }}> in {listing.committee}</span>
+          {listing.conferenceShort && (
+            <> at <strong style={{ fontWeight: 700, color: 'var(--gv-main)' }}>{listing.conferenceShort}</strong></>
           )}
         </p>
       </div>

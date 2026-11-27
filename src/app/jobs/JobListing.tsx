@@ -28,7 +28,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ChevronLeft, Bookmark, BookmarkCheck, Check, ExternalLink, ListChecks, Loader2, Mail, Share2, X } from 'lucide-react';
+import { ChevronLeft, Bookmark, BookmarkCheck, Check, ExternalLink, ListChecks, Loader2, Mail, Share2 } from 'lucide-react';
 import ShareCardPopup from './ShareCardPopup';
 import MoreFromConference from './MoreFromConference';
 import { useAuth } from '@/components/AuthProvider';
@@ -267,8 +267,6 @@ export default function JobListing({
     primary = <span className="gv-jl-main gv-jl-main-wait" aria-hidden><Loader2 size={17} className="animate-spin" /></span>;
   } else if (mine?.status === 'started' && slug) {
     primary = <Link href={jobContinuePath(slug, listing.role, listing.id)} className="gv-jl-main">Continue application</Link>;
-  } else if (mine?.status === 'stopped') {
-    primary = <span className="gv-jl-state"><X size={16} strokeWidth={2.6} aria-hidden /> Not a match for this role</span>;
   } else if (mine && (mine.status === 'submitted' || mine.status === 'accepted' || mine.status === 'rejected')) {
     const lead = mine.status === 'accepted' ? 'Accepted. ' : mine.status === 'rejected' ? 'Not accepted this time. ' : '';
     primary = (

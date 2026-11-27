@@ -41,7 +41,7 @@ type Phase =
   | { k: 'loading' }
   | { k: 'questions' }
   | { k: 'continue' }
-  | { k: 'final'; title: string; message: string; good: boolean };
+  | { k: 'final'; title: string; message: string; good: boolean; retry?: boolean };
 
 export default function JobApplyPopup({ listing, onClose, onSettled, onNeedSignIn }: {
   listing: JobListingDetail;
@@ -116,7 +116,7 @@ export default function JobApplyPopup({ listing, onClose, onSettled, onNeedSignI
         const check = await checkJobScreening(listing.id, given);
         if (!check.ok) {
           if (check.stopped) {
-            setPhase({ k: 'final', title: 'Not a Match for This Role', message: check.message, good: false });
+            setPhase({ k: 'final', title: 'Not a Match for This Role', message: check.message, good: false, retry: true });
           } else if (check.field && questions.some((q) => q.id === check.field)) {
             setBad({ id: check.field, message: check.message });
             setPhase({ k: 'questions' });
@@ -139,7 +139,7 @@ export default function JobApplyPopup({ listing, onClose, onSettled, onNeedSignI
       if (!res.ok) {
         if (res.stopped) {
           onSettled();
-          setPhase({ k: 'final', title: 'Not a Match for This Role', message: res.message, good: false });
+          setPhase({ k: 'final', title: 'Not a Match for This Role', message: res.message, good: false, retry: true });
         } else if (res.field && questions.some((q) => q.id === res.field)) {
           setBad({ id: res.field, message: res.message });
           setPhase({ k: 'questions' });
@@ -219,7 +219,7 @@ export default function JobApplyPopup({ listing, onClose, onSettled, onNeedSignI
         {phase.k === 'continue' && (
           <>
             <p className="gv-japply-line">
-              Next you finish your {roleWord} application at {short}. Your profile and MUN CV fill in what they can
+              Next you finish your {roleWord} application at {short}. Your profile and MUN CV fill in what they can.
             </p>
             {err && <p role="alert" className="gv-japply-err">{err}</p>}
             <div className="gv-japply-actions">
@@ -255,6 +255,18 @@ export default function JobApplyPopup({ listing, onClose, onSettled, onNeedSignI
             <h2 className="gv-japply-title">{phase.title}</h2>
             <p className="gv-japply-line">{phase.message}</p>
             <div className="gv-japply-actions">
+              {/* A miss is not final (26 Nov 2026): back to the questions, every answer kept; the same check runs again. */}
+              {phase.retry && questions.length > 0 && (
+                <button
+                  type="button"
+                  className="gv-japply-back"
+                  onClick={() => { if (busyRef.current) return; setErr(''); setBad(null); setPhase({ k: 'questions' }); }}
+                  disabled={busy || leaving}
+                >
+                  <ArrowLeft size={16} strokeWidth={2.4} aria-hidden />
+                  Change my answers
+                </button>
+              )}
               <button type="button" className="gv-japply-main" onClick={onClose}>Close</button>
             </div>
           </div>
