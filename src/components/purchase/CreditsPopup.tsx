@@ -32,6 +32,7 @@ import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { closePurchasePopup, swapToUnlimited, type CreditsPopupRequest } from '@/lib/purchasePopup';
 import { EMBEDDED_CHECKOUT_AVAILABLE, checkoutErrorText, startCreditsCheckout } from '@/lib/purchaseCheckout';
 import { notifyOk } from '@/lib/appNotify';
+import { useRunningSale } from '@/lib/storeSale';
 import { StripeEmbeddedForm } from './StripeEmbedded';
 import { BenefitList, BrandTitle, ErrorLine, Eyebrow, FOREST, GoldButton, INK, PurchaseShell, SwapLine, type Benefit } from './purchaseKit';
 
@@ -85,6 +86,9 @@ export default function CreditsPopup({ request }: { request: CreditsPopupRequest
   const nudge = custom && table ? nextTierNudge(qty, table) : null;
 
   const uses = USES;
+  // Motion to Save (prompt 87): buy one, get one free. The price never changes;
+  // the database adds the free credits after the purchase. Display only.
+  const bogo = !!useRunningSale()?.credits_bogo;
 
   function pick(n: number) {
     setCustom(false);
@@ -134,6 +138,7 @@ export default function CreditsPopup({ request }: { request: CreditsPopupRequest
   const onComplete = useCallback(() => {
     const q = checkout?.quantity ?? qty;
     const prev = balanceRef.current;
+    const free = bogo;
     closePurchasePopup();
     notifyOk(`Payment received. Adding ${q} ${plural(q)} to your account.`, 'purchase');
     void pollCreditsUntilChanged(prev).then(async (now) => {
@@ -150,12 +155,14 @@ export default function CreditsPopup({ request }: { request: CreditsPopupRequest
           notifyOk(`${q} ${plural(q)} are in your account. Move them into the conference with Transfer.`, 'purchase');
         }
         refreshCreditsEverywhere();
+      } else if (free) {
+        notifyOk(`${q * 2} credits added. ${q} of them are free and never expire.`, 'purchase');
       } else if (now !== null) {
         notifyOk(`${q} ${plural(q)} added. You now have ${now}.`, 'purchase');
       }
       request.onComplete?.();
     });
-  }, [checkout, qty, request, destination, dest]);
+  }, [checkout, qty, request, destination, dest, bogo]);
 
   // The table can only fail on a network hiccup; try once more by itself.
   useEffect(() => {
@@ -181,6 +188,14 @@ export default function CreditsPopup({ request }: { request: CreditsPopupRequest
             ? <>For your application to <strong style={{ fontWeight: 600, color: INK }}>{conferenceName}</strong></>
             : undefined}
         />
+        {bogo ? (
+          <span
+            data-testid="credits-sale-chip"
+            style={{ alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', padding: '7px 12px', borderRadius: 999, background: '#0E0F0D', color: '#F6F2E8', fontSize: 11.5, fontWeight: 800, letterSpacing: '0.12em', marginTop: -6 }}
+          >
+            MOTION TO SAVE · BUY ONE, GET ONE FREE
+          </span>
+        ) : null}
         <div>
           <Eyebrow>What they&apos;re for</Eyebrow>
           <BenefitList items={uses} tone="light" />
@@ -194,7 +209,7 @@ export default function CreditsPopup({ request }: { request: CreditsPopupRequest
             </div>
             <ArrowRight size={24} strokeWidth={2.4} className="gv-buy-balance-arrow" style={{ color: FOREST }} aria-hidden />
             <div className="gv-buy-balance-cell">
-              <span className="gv-buy-balance-big gv-buy-after">{balance === null ? '…' : balance + qty}</span>
+              <span className="gv-buy-balance-big gv-buy-after">{balance === null ? '…' : balance + qty * (bogo ? 2 : 1)}</span>
               <span className="gv-buy-balance-cap">after this purchase</span>
             </div>
           </div>
@@ -212,7 +227,7 @@ export default function CreditsPopup({ request }: { request: CreditsPopupRequest
           <>
             <h3 className="gv-buy-rtitle">Pay with Card</h3>
             <div className="gv-buy-change">
-              <span><strong>{checkout.quantity} {plural(checkout.quantity)}</strong> for <strong>{formatUsd(checkout.amountCents)}</strong></span>
+              <span><strong>{checkout.quantity} {plural(checkout.quantity)}{bogo ? ` + ${checkout.quantity} free` : ''}</strong> for <strong>{formatUsd(checkout.amountCents)}</strong></span>
               <button type="button" className="gv-buy-changebtn" onClick={() => { setStage('choose'); setCheckout(null); }}>Change</button>
             </div>
             <div className="gv-buy-formwell">
@@ -246,7 +261,7 @@ export default function CreditsPopup({ request }: { request: CreditsPopupRequest
                   <button key={n} type="button" role="radio" aria-checked={on} className="gv-buy-chip" onClick={() => pick(n)}>
                     {p > 0 && <span className="gv-buy-save">Save {p}%</span>}
                     <span className="gv-buy-chip-qty">{n}</span>
-                    <span className="gv-buy-chip-unit">{plural(n)}</span>
+                    <span className="gv-buy-chip-unit">{bogo ? `+ ${n} free` : plural(n)}</span>
                     <span className="gv-buy-chip-price">{table ? formatUsd(priceCentsFor(n, table)) : '…'}</span>
                   </button>
                 );
@@ -278,7 +293,7 @@ export default function CreditsPopup({ request }: { request: CreditsPopupRequest
 
             <div className="gv-buy-total" aria-live="polite">
               <div>
-                <div className="gv-buy-total-label">{qty} {plural(qty)}</div>
+                <div className="gv-buy-total-label">{qty} {plural(qty)}{bogo ? ` + ${qty} free` : ''}</div>
                 {saving > 0 && <div className="gv-buy-total-saving">Save {formatUsd(saving)} ({pct}% off)</div>}
               </div>
               <div className="gv-buy-total-amount">{price === null ? '…' : formatUsd(price)}</div>

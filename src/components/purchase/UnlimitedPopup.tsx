@@ -31,6 +31,7 @@ import { waitForUnlimited } from '@/lib/unlimitedStatus';
 import { formatPlanDate, useMySubscription } from '@/lib/mySubscription';
 import { refreshCreditsEverywhere } from '@/hooks/useCredits';
 import { notifyOk } from '@/lib/appNotify';
+import { useRunningSale } from '@/lib/storeSale';
 import { StripeEmbeddedForm } from './StripeEmbedded';
 import { BenefitList, BrandTitle, ErrorLine, Eyebrow, GOLD, GoldButton, PurchaseShell, SwapLine, type Benefit } from './purchaseKit';
 
@@ -79,6 +80,12 @@ export default function UnlimitedPopup({ request }: { request: UnlimitedPopupReq
   const price = unlimitedPricing(null);
   const monthlyCents = Math.round(price.monthly * 100);
   const yearlyCents = Math.round(price.yearly * 100);
+  // Motion to Save (prompt 87): the first year of the yearly plan at the sale
+  // price. Display only: create-subscription-checkout reads the same sale and
+  // charges it; nothing about the price is sent from here. Never on renewOnce.
+  const sale = useRunningSale();
+  const saleFirst = sale?.unlimited_year_first_cents ?? null;
+  const firstYearCents = !renewOnce && saleFirst !== null && saleFirst < yearlyCents ? saleFirst : null;
 
   const [plan, setPlan] = useState<UnlimitedPlan>(request.plan ?? 'yearly');
   const [stage, setStage] = useState<'choose' | 'pay'>('choose');
@@ -121,7 +128,7 @@ export default function UnlimitedPopup({ request }: { request: UnlimitedPopupReq
   }
 
   const effectivePlan: UnlimitedPlan = renewOnce ? 'yearly' : plan;
-  const amountCents = effectivePlan === 'monthly' ? monthlyCents : yearlyCents;
+  const amountCents = effectivePlan === 'monthly' ? monthlyCents : (firstYearCents ?? yearlyCents);
 
   async function pay() {
     if (busy) return;
@@ -241,7 +248,9 @@ export default function UnlimitedPopup({ request }: { request: UnlimitedPopupReq
             <div className="gv-buy-change">
               <span>
                 <strong>Unlimited, {checkout.plan === 'monthly' ? 'monthly' : 'yearly'}</strong> for <strong>{formatUsd(amountCents)}</strong>
-                {checkout.recurring ? (checkout.plan === 'monthly' ? ' a month' : ' a year') : ', once'}
+                {checkout.recurring
+                  ? (checkout.plan === 'monthly' ? ' a month' : firstYearCents !== null ? ' for your first year' : ' a year')
+                  : ', once'}
               </span>
               <button type="button" className="gv-buy-changebtn" onClick={() => { setStage('choose'); setCheckout(null); }}>Change</button>
             </div>
@@ -275,9 +284,22 @@ export default function UnlimitedPopup({ request }: { request: UnlimitedPopupReq
               <button type="button" role="radio" aria-checked={plan === 'yearly'} className="gv-buy-plan" onClick={() => { setPlan('yearly'); setErr(''); }}>
                 <span className="gv-buy-plan-badge">2 months free</span>
                 <span className="gv-buy-plan-name">Yearly</span>
-                <span className="gv-buy-plan-price">{formatUsd(yearlyCents)}</span>
-                <span className="gv-buy-plan-per">a year</span>
-                <span className="gv-buy-plan-note">{formatUsd(Math.round(yearlyCents / 12))} a month, paid once a year</span>
+                {firstYearCents !== null ? (
+                  <>
+                    <span className="gv-buy-plan-price">
+                      {formatUsd(firstYearCents)}{' '}
+                      <s style={{ fontSize: '0.55em', fontWeight: 600, opacity: 0.6 }} aria-label={`normally ${formatUsd(yearlyCents)}`}>{formatUsd(yearlyCents)}</s>
+                    </span>
+                    <span className="gv-buy-plan-per">your first year</span>
+                    <span className="gv-buy-plan-note">First year, then {formatUsd(yearlyCents)} a year</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="gv-buy-plan-price">{formatUsd(yearlyCents)}</span>
+                    <span className="gv-buy-plan-per">a year</span>
+                    <span className="gv-buy-plan-note">{formatUsd(Math.round(yearlyCents / 12))} a month, paid once a year</span>
+                  </>
+                )}
               </button>
               <button type="button" role="radio" aria-checked={plan === 'monthly'} className="gv-buy-plan" onClick={() => { setPlan('monthly'); setErr(''); }}>
                 <span className="gv-buy-plan-name">Monthly</span>
@@ -287,12 +309,16 @@ export default function UnlimitedPopup({ request }: { request: UnlimitedPopupReq
               </button>
             </div>
             <p className="gv-buy-renew">
-              Renews {plan === 'yearly' ? 'every year' : 'every month'} until you cancel. <strong>Cancel any time</strong> and keep Unlimited until the end of the period you paid for.
+              {plan === 'yearly' && firstYearCents !== null
+                ? <>Renews every year at {formatUsd(yearlyCents)} until you cancel. <strong>Cancel any time</strong> and keep Unlimited until the end of the period you paid for.</>
+                : <>Renews {plan === 'yearly' ? 'every year' : 'every month'} until you cancel. <strong>Cancel any time</strong> and keep Unlimited until the end of the period you paid for.</>}
             </p>
             {trialLine}
             {err ? <ErrorLine>{err}</ErrorLine> : null}
             <GoldButton onClick={pay} busy={busy} busyText="PREPARING YOUR PAYMENT…" testId="unlimited-pay">
-              {plan === 'yearly' ? `PAY ${formatUsd(yearlyCents)} A YEAR` : `PAY ${formatUsd(monthlyCents)} A MONTH`}
+              {plan === 'yearly'
+                ? (firstYearCents !== null ? `PAY ${formatUsd(firstYearCents)} FOR YOUR FIRST YEAR` : `PAY ${formatUsd(yearlyCents)} A YEAR`)
+                : `PAY ${formatUsd(monthlyCents)} A MONTH`}
             </GoldButton>
             {busy && !EMBEDDED_CHECKOUT_AVAILABLE ? <p className="gv-buy-wait"><Loader2 size={15} className="animate-spin" aria-hidden /> Taking you to Stripe…</p> : null}
             <SwapLine lead="Looking for credits?" action="Top up here" onClick={() => swapToCredits('header')} />

@@ -238,7 +238,8 @@ export default function SiteNav(props: SiteNavProps = {}) {
   const desktopPill = (
     <div
       className="hidden lg:flex fixed top-0 left-1/2 -translate-x-1/2 items-center pointer-events-none"
-      style={{ zIndex: 40, height: 72 }}
+      // The Motion to Save bar (src/components/store/SaleBar.tsx) publishes how much of it is on screen.
+      style={{ zIndex: 40, height: 72, top: 'var(--gv-sale-bar-offset, 0px)' }}
     >
         <div
           className="rounded-full pointer-events-auto"
