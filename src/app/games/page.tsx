@@ -36,7 +36,7 @@ const FAQ: { q: string; a: string }[] = [
   },
   {
     q: 'When is there a new game?',
-    a: 'A new set of seven questions goes live every day at midnight UTC. Play every day to build your streak.',
+    a: 'A new set of seven questions goes live every day at 06:00 UTC. Play every day to build your streak.',
   },
   {
     q: 'Is MUNillion related to Krillion?',

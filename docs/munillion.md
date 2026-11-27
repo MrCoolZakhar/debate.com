@@ -41,9 +41,17 @@ The daily MUN trivia game (owner, 26 Nov 2026). It's modelled on Krillion's mech
 - **New-conference email.** When 3 different players type the same conference that isn't on Gavelling, one email goes to info@gavelling.com (`_munillion_conf_alert`): once per name, at most 10 a day.
 - **The clock lives in the database.** `munillion_open` stamps `opened_at`, and an answer more than `seconds + 3` after it is Absent. A reload never resets a question.
 - **Players.** A player is `u:<user id>` when signed in, otherwise `d:<sha256 of the browser token>` (`localStorage gavelling-munillion-token`). Signing in moves the browser's plays onto the account (`_munillion_claim`, run inside `munillion_today` and `munillion_history`).
-- **Today's game** is the newest published game dated today or earlier, in UTC. The streak is the number of consecutive published games finished, counted back from the newest.
+- **Today's game** is the newest published game dated today or earlier. The game day switches at **06:00 UTC** (owner, 27 Nov 2026: later than midnight so more time zones get a full day): `_munillion_game_day()`, mirrored by `SWITCH_HOUR_UTC` in `MunillionGame.tsx`; change both together. The streak is the number of consecutive published games finished, counted back from the newest.
 - **The answer key** is only returned by `munillion_reveal` once the player has finished.
 - **The preview is open to anyone** (owner, 26 Nov 2026: not behind a staff account). `/games?preview=1` plays the newest game, published or not, signed in or not. `munillion_reset_preview_play` lets anyone clear their own play of an unpublished game to try again (migration `munillion_open_preview`). A preview play counts as that player's real play once the game is published.
+
+## Game 2 additions (owner, 27 Nov 2026, migration `munillion_day2_features`)
+
+- **Auto-add.** A list question with `auto_add_after` set (game 2's points and motions: 5) adds an answer typed by more than that many different players at 85, if it matches `auto_add_pattern`. The player who crosses the line scores it at once, earlier players' 0 on that question is re-scored, and info@gavelling.com gets one email (`_munillion_auto_add`). Added rows have `auto_added = true`; remove a wrong one in /admin/munillion.
+- **Suggest-only aliases.** `munillion_answers.suggest_aliases` are never accepted as typed, only offered as "Did you mean". Game 2's committee-without-E question uses them so a full name with an E (Security Council) suggests its E-free acronym (UNSC).
+- **Country-limited conference questions.** `conf_countries` limits a conference question to those countries (from `conferences.country`, copied into `munillion_conf_index.country`), and `conf_country_tiers` gives a tier per country. A real conference elsewhere answers `reason: 'wrong_country'`, and the page says where it is.
+- **Source notes.** `source_note` / `source_url` on a question are returned once the question is over (`correct`, `late`, `skipped`, `done`) and in the reveal. The page shows them as a pixel "i" on the result card and as a line in the reveal.
+- **Game 2 lists** were researched on 27 Nov 2026: presidents (verified against news to 27 Nov 2026), points and motions from published ROPs, about 440 wars, the UN M49 Western Asia region plus Egypt and Iran, UN admission dates, and UN World Population Prospects 2024 for countries over 100 million people.
 
 ## Where things live
 

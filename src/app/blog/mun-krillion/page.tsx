@@ -116,7 +116,7 @@ export default function Article() {
         <H2>How MUNillion Applies It</H2>
         <p>
           MUNillion gives everyone the same seven questions each day, with 30 seconds for each, and a new game at
-          midnight UTC. You type one answer per question. A correct answer lands in a tier named after MUN recognition,
+          06:00 UTC. You type one answer per question. A correct answer lands in a tier named after MUN recognition,
           and the tier depends on rarity:
         </p>
         <ul>
