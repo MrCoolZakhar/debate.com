@@ -677,7 +677,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
             {/* PRICING, with the plan badge; on Free, an arrow to go Unlimited */}
             <div className="flex items-center">
               <Link
-                href="/pricing/credits"
+                href="/store/credits"
                 onClick={() => setOpen(false)}
                 className="flex flex-1 min-w-0 items-center gap-2.5 pl-4 py-2 font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-inset"
                 style={{

@@ -53,7 +53,7 @@ export default function ManageAccount({ focus }: { focus?: ManageFocus }) {
         line="Your balance, your plan and promo codes, in one place"
         emoji="Coin"
         fallback={Coins}
-        aside={<Link href="/pricing/credits" className="gv-acct-btn2">See pricing</Link>}
+        aside={<Link href="/store/credits" className="gv-acct-btn2">See pricing</Link>}
       />
       <CreditsSection plan={<SubscriptionSection />} promo={<PromoSection />} />
       <div className="px-2 sm:px-4 md:px-6"><HelpLine /></div>

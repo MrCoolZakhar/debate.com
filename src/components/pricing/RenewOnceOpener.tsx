@@ -1,6 +1,6 @@
 'use client';
 
-// ── /pricing/subscription?renew=once ─────────────────────────────────────────
+// ── ?renew=once (/store/credits; /pricing/subscription redirects there) ─────
 // The failed-renewal email links here. On mount, once, open the Unlimited
 // pop-up in its one-time-year form and take `renew` out of the URL so a
 // reload or a shared link does not open it again. Mounted inside a Suspense

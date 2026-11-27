@@ -85,9 +85,13 @@ const nextConfig: NextConfig = {
       { source: '/account/manage', destination: '/account/manage/credits', permanent: true },
       // The conference calendar became My conferences (26 Sep 2026).
       { source: '/account/calendar', destination: '/account/conferences', permanent: false },
-      { source: '/account/unlimited', destination: '/pricing/subscription', permanent: true },
+      { source: '/account/unlimited', destination: '/store/credits?plan=unlimited', permanent: true },
       { source: '/my-conferences', destination: '/account/conferences', permanent: true },
-      { source: '/pricing', destination: '/pricing/credits', permanent: true },
+      // Pricing became the Store (prompt 85, 27 Nov 2026). A redirect cannot carry a hash, so
+      // Unlimited is ?plan=unlimited (prompt 86 scrolls to it); ?renew=once rides along.
+      { source: '/pricing', destination: '/store/credits', permanent: true },
+      { source: '/pricing/credits', destination: '/store/credits', permanent: true },
+      { source: '/pricing/subscription', destination: '/store/credits?plan=unlimited', permanent: true },
       // The conference map is archived (src/app/_archive/conferences-map, 25 Sep 2026).
       { source: '/conferences/map', destination: '/conferences/explore', permanent: false },
       // Financial aid moved inside Financials (9 Oct 2026). The query is kept;

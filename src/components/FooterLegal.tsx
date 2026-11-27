@@ -103,10 +103,10 @@ export default function FooterLegal({
           For organisers
         </Link>
         <span aria-hidden="true" style={{ color: t.text, opacity: 0.5 }}>·</span>
-        {/* Pricing and the help center are public, indexable pages; this is
+        {/* The Store and the help center are public, indexable pages; this is
             their plain server-rendered crawl path from every public footer. */}
-        <Link href="/pricing/credits" className={hubLink}>
-          Pricing
+        <Link href="/store" className={hubLink}>
+          Store
         </Link>
         <span aria-hidden="true" style={{ color: t.text, opacity: 0.5 }}>·</span>
         <Link href="/help" className={hubLink}>

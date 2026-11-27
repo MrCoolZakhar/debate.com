@@ -105,6 +105,7 @@ Two products in one Next.js codebase, one Supabase project (`luruhkwrgisytejswla
 - **Premium guides.** `src/lib/premiumGuides/index.ts` is `server-only`; locked content is never in the HTML or the bundle; `/api/guides/[slug]` answers 200 only on `guide_access().can_read`. No guide promises a result or names an author.
 - **No third-party analytics or tracking**, by policy. The one exception is the anonymous view counter (`/api/conference-view`, `/api/site-view`): no cookie, per-visitor id, IP, user agent, full referrer URL or third party, ever. A visit is judged by where it BEGAN (`classifyLanding`, `src/lib/trafficSource.ts`); first touch is kept 90 days and written to `applications.traffic_source` / `traffic_detail` on insert, never changeable afterwards. Limits: 30 a minute per IP on conference views, 60 on site views, 20,000 views per conference per day, 200,000 per page per day. Admin user-origin estimates are never written to `profiles`.
 - **Ambassadors** are added in `src/app/about/ambassadors.ts`.
+- Store sales: store_sales + store_sale_now() (null when none runs), read by src/lib/storeSale.ts; ?sale_preview=<key> previews the look only.
 - **Job Board homepage hide list:** job_homepage_hidden(conference_id, reason) keeps a conference out of the homepage six (its listings stay on /jobs; paid homepage promotions still show). Rows are added by the chat (first: CIVIL2027, 18 Nov 2026).
 
 ---
@@ -136,11 +137,11 @@ Two products in one Next.js codebase, one Supabase project (`luruhkwrgisytejswla
 ```
 src/app/
   (sessions)    create, join, chair/[code], delegate/[code], advisor (the board; advisor/[code] redirects to it), voting/[code]
-  (public)      /, sessions, about, contact, blog/*, guides/*, [slug] (vanity), conferences/{explore,all,in,roles,new,[slug]/*}
+  (public)      /, sessions, about, contact, store, store/credits, blog/*, guides/*, [slug] (vanity), conferences/{explore,all,in,roles,new,[slug]/*}
   (participant) conferences/[slug]/{apply,pay,role/[role],papers,awards,press}, drafts/[token], invites/*, r/[token]/[key]
   (organiser)   manage/[slug]/{committees,applications,allocations,documents,communications,financials (financials/aid, /invoices, /documents, /history),settings,store,team (Team Applications, Job Board in jobs/JobBoardPanel.tsx, Team Members),import,live,scoreboard}; /jobs redirects to team?tab=jobs
   (account)     account/{profile,cv,conferences,manage/{credits,subscription,promo}}, auth/*, cv/[id]
-  redirects     /account, /account/unlimited, /account/calendar, /my-conferences, /pricing, /conferences/map, manage/[slug]/{awards,financial-aid}
+  redirects     /account, /account/unlimited, /account/calendar, /my-conferences, /pricing/* (to store/credits), /conferences/map, manage/[slug]/{awards,financial-aid}
   api/          ambassador, conference-view, contact, emails, geo, gifs, guides, indexnow, og, site-view
 src/lib/
   sessions      types.ts, committeeService.ts (all session DB I/O + realtime), sessionSync.ts, scoring.ts, sessionScoreboard.ts, settingsStore.ts, committeeFlags.ts, docNames.ts
@@ -212,6 +213,7 @@ The rest is in `AGENTS.md`.
 **Style sheet (the rules that won the taste boards: https://claude.ai/artifact/9CDYVLCgb7h8apgaDPEyad, https://claude.ai/artifact/X9Lue9qkskg41q1z6GT78c, https://claude.ai/artifact/HHtzZWT6bPBkp3vif7fUgV, https://claude.ai/artifact/Q5WEk2qYtNsJWpCc9uEYMm; the direction is Airbnb).**
 1. Tokens in `src/components/neu.tsx`: ivory `#EDE7D8` page, `#F0EBDD` surface, forest `#1B3828`, gold `#EED98A`, ink `#1C1410`; shadows forest-tinted, never neutral; `muted` fails contrast for body text, use `inkSoft`.
 2. Pages are ivory and white only; forest is an accent (the main button, text, a small mark), never a band or a card background. No ivory-to-white fades.
+   Exception (owner, 27 Nov 2026): /store and /store/credits are black (#0E0F0D) with forest and cream accents and capitals Inter 900 titles; no ivory, no gold.
 3. Cards: white with a soft shadow, or the raised / pressed 3D cards (NeuCard), which stay across the organiser tools. Never a forest card or a flat hairline card.
 4. Never paint a square-cornered tinted band behind a sticky header, tab row or filter bar; at rest a sticky header has no background of its own.
 5. The typeface is Inter everywhere, loaded once by `next/font` as `var(--font-brand)`; never name a family that is not loaded. Outside Sessions every weight reads one step lighter (`LIGHTER_WEIGHTS_SCRIPT`). Playfair Display italic only for the gold accent word.

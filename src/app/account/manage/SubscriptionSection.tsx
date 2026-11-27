@@ -155,7 +155,7 @@ export default function SubscriptionSection() {
                 onCancel={() => setCancelOpen(true)}
                 onResume={() => { void handleResume(); }}
               />
-              {/* What Unlimited adds, as on /pricing/subscription */}
+              {/* What Unlimited adds, as on /store/credits */}
               <div className="mt-6 pt-5" style={{ borderTop: '1px solid rgba(27,56,40,0.10)' }}>
                 <p style={{ margin: 0, fontFamily: OUTFIT, fontWeight: W.title, fontSize: 17, color: INK }}>
                   Everything in Unlimited
@@ -171,7 +171,7 @@ export default function SubscriptionSection() {
                   ))}
                 </ul>
                 <p style={{ margin: '14px 0 0', fontFamily: OUTFIT, fontSize: T.body, color: INK_SOFT }}>
-                  <TextLink href="/pricing/subscription">Find out more</TextLink>
+                  <TextLink href="/store/credits?plan=unlimited">Find out more</TextLink>
                 </p>
               </div>
             </>

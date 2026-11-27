@@ -144,7 +144,7 @@ export default function SubscriptionPage() {
             ))}
           </ul>
           <p style={{ margin: '22px 0 0', fontFamily: OUTFIT, fontSize: T.body, color: 'rgba(250,248,243,0.85)' }}>
-            <TextLink href="/pricing/subscription" onDark>Find out more</TextLink>
+            <TextLink href="/store/credits?plan=unlimited" onDark>Find out more</TextLink>
           </p>
         </ForestCard>
       </div>
