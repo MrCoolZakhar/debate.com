@@ -14,20 +14,40 @@
 // promotion from job_prices. The counts in the copy (1 credit an application,
 // 100 emails for 1 credit) are the product's rules as the prompt wrote them.
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
 import { MotionPlacards } from '@/components/store/MotionPlacards';
-import { ComingSoon, Countdown, StoreBar, StoreSectionHead, WaitlistButton, type WaitlistItem } from '@/components/store/storeKit';
+import { ComingSoon, Countdown, HeroScrollCue, StoreBar, StoreSectionHead, WaitlistButton, type WaitlistItem } from '@/components/store/storeKit';
+import OrganiserConferencePicker, { type OrganiserAction } from '@/components/store/OrganiserConferencePicker';
 import { openAuth } from '@/lib/authModal';
 import { formatUsd } from '@/lib/creditPricing';
 import { unlimitedPricing } from '@/lib/payments';
+import { openCreditsPopup, openUnlimitedPopup } from '@/lib/purchasePopup';
 import { saleEndLabel, useRunningSale } from '@/lib/storeSale';
 import { supabase } from '@/lib/supabase';
+import { isUnlimited, useUnlimitedStatus } from '@/lib/unlimitedStatus';
 import { PLACEMENTS, type Placement, type PlacementPrice } from '@/app/manage/[slug]/store/storeApi';
+import { useJobTopUp } from '@/app/manage/[slug]/jobs/useJobTopUp';
 
-const ORGANISER_HOME = '/account/conferences';
+/** An organiser action pressed while signed out, carried on after sign-in (this tab only). */
+const PENDING_KEY = 'gavelling-store-pending-action';
+interface Pick { action: OrganiserAction; eyebrow: string }
+
+function readPendingPick(): Pick | null {
+  try {
+    const raw = window.sessionStorage.getItem(PENDING_KEY);
+    window.sessionStorage.removeItem(PENDING_KEY);
+    const p = raw ? (JSON.parse(raw) as Pick) : null;
+    return p && p.action && typeof p.eyebrow === 'string' ? p : null;
+  } catch { return null; }
+}
+
+function writePendingPick(p: Pick) {
+  try { window.sessionStorage.setItem(PENDING_KEY, JSON.stringify(p)); } catch { /* the action is simply not carried on */ }
+}
 
 // ── Prices read once per page ───────────────────────────────────────────────
 
@@ -64,12 +84,10 @@ function spotlightUnit(p: PlacementPrice | undefined): { n: string; unit: string
 
 // ── Pieces ──────────────────────────────────────────────────────────────────
 
-/** Signed in: a link to the organiser's conferences. Signed out: the auth pop-up, then there. */
-function OrganiserAction({ label, variant }: { label: string; variant: 'link' | 'button' }) {
-  const { user } = useAuth();
+/** An organiser action: opens Pick a Conference (after sign-in when signed out). */
+function OrganiserButton({ label, variant, onClick }: { label: string; variant: 'link' | 'button'; onClick: () => void }) {
   const cls = variant === 'link' ? 'gv-s-a gv-st-linkbtn' : 'gv-s-btn gv-s-small gv-s-cream';
-  if (user) return <Link href={ORGANISER_HOME} className={cls}>{label}</Link>;
-  return <button type="button" className={cls} onClick={() => openAuth({ next: ORGANISER_HOME })}>{label}</button>;
+  return <button type="button" className={cls} onClick={onClick}>{label}</button>;
 }
 
 function Price({ n, unit }: { n: ReactNode; unit?: string }) {
@@ -129,6 +147,31 @@ function Waitlist({ item }: { item: WaitlistItem }) {
 export default function StoreClient() {
   const sale = useRunningSale();
   const { prices, promoFrom } = useStorePrices();
+  const router = useRouter();
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
+  const onUnlimited = isUnlimited(useUnlimitedStatus());
+  // Kept here, not in the pop-up: a Job Board top-up retries after the pop-up has closed.
+  const jobTopUp = useJobTopUp();
+  const [pick, setPick] = useState<Pick | null>(null);
+
+  const organiser = useCallback((p: Pick) => {
+    if (!userId) { writePendingPick(p); openAuth({}); return; }
+    setPick(p);
+  }, [userId]);
+
+  // Signed in from the auth pop-up after pressing an organiser action: carry on with it.
+  useEffect(() => {
+    if (!userId) return;
+    const id = window.setTimeout(() => { const p = readPendingPick(); if (p) setPick(p); }, 0);
+    return () => window.clearTimeout(id);
+  }, [userId]);
+
+  const buyCredits = () => openCreditsPopup({ context: 'pricing' });
+  const goUnlimited = () => {
+    if (onUnlimited) { router.push('/account/manage/subscription'); return; }
+    openUnlimitedPopup({ plan: 'yearly' });
+  };
 
   const yearlyCents = unlimitedPricing(null).yearly * 100;
   const firstCents = sale?.unlimited_year_first_cents ?? null;
@@ -153,23 +196,24 @@ export default function StoreClient() {
       <style>{CSS}</style>
 
       {sale ? (
-        <section className="gv-st-hero" aria-labelledby="gv-st-h1">
+        <section id="gv-st-hero" className="gv-st-hero" aria-labelledby="gv-st-h1">
           <span className="gv-st-hero-glow" aria-hidden />
           <div className="gv-s-wrap gv-st-hero-in">
             <div className="gv-st-hero-copy">
               <p className="gv-s-label">{sale.title || 'Black Friday'} · Until {ends}</p>
-              <h1 id="gv-st-h1" className="gv-s-caps gv-st-h1">Motion<br />to save</h1>
+              <h1 id="gv-st-h1" className="gv-s-caps gv-st-h1"><span className="gv-st-h1-line">Motion</span><span className="gv-st-h1-line">to save</span></h1>
               <p className="gv-s-line" style={{ fontSize: 19, color: '#F6F2E8' }}>Discounts all weekend on Gavelling</p>
               <Countdown endsAt={sale.ends_at} />
               <div className="gv-st-hero-cta">
-                {bogo && <Link href="/store/credits" className="gv-s-btn gv-s-big gv-s-cream">Double my credits</Link>}
-                <Link href="/store/credits#unlimited" className="gv-s-btn gv-s-big gv-s-outline">Get a year for {yearPrice}</Link>
+                {bogo && <button type="button" className="gv-s-btn gv-s-big gv-s-cream" onClick={buyCredits}>Double my credits</button>}
+                <button type="button" className="gv-s-btn gv-s-big gv-s-outline" onClick={goUnlimited}>Get a year for {yearPrice}</button>
               </div>
             </div>
             <div className="gv-st-hero-art">
               <MotionPlacards right={yearPrice} label={`Two placards raised: double credits and a year of Unlimited for ${yearPrice}`} />
             </div>
           </div>
+          <HeroScrollCue heroId="gv-st-hero" />
         </section>
       ) : (
         <header className="gv-s-wrap gv-st-head">
@@ -192,29 +236,30 @@ export default function StoreClient() {
       <div className="gv-s-wrap gv-st-body">
         {/* ── The two offers ── */}
         <section className="gv-st-offers" aria-label="Offers">
-          <article className="gv-st-offer">
-            <div className="gv-st-offer-in">
-              <p className="gv-s-label">{bogo ? 'Credits · Buy one, get one free' : 'Gavelling credits'}</p>
-              <h2 className="gv-s-caps gv-st-offer-t">{bogo ? <>Double<br />your MUN</> : <>One credit,<br />one application</>}</h2>
-              <p className="gv-st-offer-line">{bogo ? 'Buy one, get one free on all credit purchases, with no expiry on usage.' : 'Bigger bundles cost less a credit.'}</p>
-            </div>
-            <Link href="/store/credits" className="gv-s-a gv-st-offer-a">Pick a bundle</Link>
-          </article>
-          <article className="gv-st-offer gv-st-offer-photo">
+          {/* Each card is one button: the whole card opens the pop-up (prompt 90). */}
+          <button type="button" className="gv-st-offer" onClick={buyCredits}>
+            <span className="gv-st-offer-in">
+              <span className="gv-s-label">{bogo ? 'Credits · Buy one, get one free' : 'Gavelling credits'}</span>
+              <span className="gv-s-caps gv-st-offer-t">{bogo ? <>Double<br />your MUN</> : <>One credit,<br />one application</>}</span>
+              <span className="gv-st-offer-line">{bogo ? 'Buy one, get one free on all credit purchases, with no expiry on usage.' : 'Bigger bundles cost less a credit.'}</span>
+            </span>
+            <span className="gv-s-a gv-st-offer-a">Pick a bundle</span>
+          </button>
+          <button type="button" className="gv-st-offer gv-st-offer-photo" onClick={goUnlimited}>
             <Image src="/onboarding/hall-01.jpg" alt="" fill sizes="(max-width: 1023px) 100vw, 50vw" style={{ objectFit: 'cover' }} />
             <span className="gv-st-offer-glass" aria-hidden />
-            <div className="gv-st-offer-in">
-              <p className="gv-s-label">Gavelling Unlimited · Yearly</p>
-              <h2 className="gv-s-caps gv-st-offer-t">
+            <span className="gv-st-offer-in">
+              <span className="gv-s-label">Gavelling Unlimited · Yearly</span>
+              <span className="gv-s-caps gv-st-offer-t">
                 {yearPrice}
                 {saleYear && <s className="gv-st-was"><span className="sr-only">instead of </span>{yearlyPrice}</s>}
-              </h2>
-              <p className="gv-st-offer-line">
+              </span>
+              <span className="gv-st-offer-line">
                 Unlimited applications. Unlimited guides. Unlimited MUN. Never spend a credit to apply again{saleYear ? `, now ${yearPrice} for your first year.` : '.'}
-              </p>
-            </div>
-            <Link href="/store/credits#unlimited" className="gv-s-a gv-st-offer-a">Go Unlimited</Link>
-          </article>
+              </span>
+            </span>
+            <span className="gv-s-a gv-st-offer-a">{onUnlimited ? "You're on Unlimited" : 'Go Unlimited'}</span>
+          </button>
         </section>
 
         {/* ── For delegates ── */}
@@ -238,6 +283,7 @@ export default function StoreClient() {
           <div className="gv-st-grid4">
             {spotSorted.map((s) => {
               const u = spotlightUnit(prices[s.key]);
+              const eyebrow = u ? `${s.name} Spotlight · ${u.n} ${u.unit}` : `${s.name} Spotlight`;
               return (
                 <PhotoCard
                   key={s.key}
@@ -245,7 +291,7 @@ export default function StoreClient() {
                   img={s.img}
                   line={s.line}
                   price={u ? <Price n={u.n} unit={u.unit} /> : <span className="gv-st-price-skel" aria-hidden />}
-                  action={<OrganiserAction label="Book" variant="link" />}
+                  action={<OrganiserButton label="Book" variant="link" onClick={() => organiser({ action: { kind: 'spotlight', placement: s.key }, eyebrow })} />}
                 />
               );
             })}
@@ -255,7 +301,7 @@ export default function StoreClient() {
               name="Job Board Promotion"
               line="Your chair and staff roles first on the Job Board and in job alerts."
               price={promoFrom !== null ? <Price n={`From ${promoFrom.toLocaleString('en-US')}`} unit={promoFrom === 1 ? 'credit' : 'credits'} /> : <span className="gv-st-price-skel" aria-hidden />}
-              action={<Link href="/jobs" className="gv-s-btn gv-s-small gv-s-cream">Pick a listing</Link>}
+              action={<OrganiserButton label="Pick a listing" variant="button" onClick={() => organiser({ action: { kind: 'jobs' }, eyebrow: promoFrom !== null ? `Job Board Promotion · From ${promoFrom} ${promoFrom === 1 ? 'credit' : 'credits'}` : 'Job Board Promotion' })} />}
             />
             <DarkCard name="Social Media Feature" soon line="A post or story about your conference on our Instagram and LinkedIn." price={<Price n="Price at launch" />} action={<Waitlist item="social_feature" />} />
             <DarkCard name="Email Feature" soon line="Your conference in front of our whole mailing list." price={<Price n="Price at launch" />} action={<Waitlist item="email_feature" />} />
@@ -266,31 +312,36 @@ export default function StoreClient() {
         <section aria-labelledby="gv-st-org">
           <StoreSectionHead id="gv-st-org" title="For organisers" line="Paid from your conference's credits" />
           <div className="gv-st-grid3">
-            <DarkCard name="Delegate Sponsorship" line="Your conference pays applicants' credit, so applying is free for them." price={<Price n="1" unit="credit each" />} action={<OrganiserAction label="Add credits" variant="button" />} />
-            <DarkCard name="Emails" line="1,000 free per conference. After that, buy a pack." price={<Price n="100" unit="for 1 credit" />} action={<OrganiserAction label="Buy emails" variant="button" />} />
+            <DarkCard name="Delegate Sponsorship" line="Your conference pays applicants' credit, so applying is free for them." price={<Price n="1" unit="credit each" />} action={<OrganiserButton label="Add credits" variant="button" onClick={() => organiser({ action: { kind: 'sponsorship' }, eyebrow: 'Delegate Sponsorship · 1 credit each' })} />} />
+            <DarkCard name="Emails" line="1,000 free per conference. After that, buy a pack." price={<Price n="100" unit="for 1 credit" />} action={<OrganiserButton label="Buy emails" variant="button" onClick={() => organiser({ action: { kind: 'emails' }, eyebrow: 'Emails · 100 for 1 credit' })} />} />
             <DarkCard name="External Applications" soon line="Keep your conference page on Gavelling and send applicants to your own form or website to apply." price={<Price n="Price at launch" />} action={<Waitlist item="external_applications" />} />
           </div>
         </section>
       </div>
+
+      {pick && userId && (
+        <OrganiserConferencePicker action={pick.action} eyebrow={pick.eyebrow} onClose={() => setPick(null)} jobTopUp={jobTopUp} />
+      )}
     </>
   );
 }
 
 const CSS = `
 .gv-st-head{display:flex;flex-direction:column;gap:16px;padding-top:clamp(40px,5vw,72px);padding-bottom:clamp(32px,4vw,56px)}
-.gv-st-h1{font-size:clamp(84px,9vw,148px)}
+.gv-st-h1{font-size:clamp(64px,7.4vw,124px)}
+.gv-st-h1-line{display:block;white-space:nowrap}
 .gv-st-h1-plain{font-size:clamp(56px,7.4vw,124px)}
 
 .gv-st-hero{position:relative;overflow:hidden;border-top:1px solid #22251F;border-bottom:1px solid #22251F}
 .gv-st-hero-glow{position:absolute;right:-10%;bottom:-40%;width:70%;height:90%;pointer-events:none;background:radial-gradient(closest-side,rgba(42,90,60,0.55),rgba(27,56,40,0.18) 55%,rgba(14,15,13,0) 100%)}
 .gv-st-hero-in{position:relative;display:grid;grid-template-columns:1fr;gap:24px}
-.gv-st-hero-copy{display:flex;flex-direction:column;gap:22px;padding-top:clamp(40px,5vw,72px);padding-bottom:8px;min-width:0}
+.gv-st-hero-copy{display:flex;flex-direction:column;gap:16px;padding-top:clamp(28px,3.4vw,48px);padding-bottom:8px;min-width:0}
 .gv-st-hero-cta{display:flex;flex-wrap:wrap;gap:12px}
-.gv-st-hero-art{height:340px;display:flex;align-items:flex-end;justify-content:center;min-width:0}
+.gv-st-hero-art{height:300px;display:flex;align-items:flex-end;justify-content:center;min-width:0}
 @media (min-width:1024px){
   .gv-st-hero-in{grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:40px;align-items:end}
-  .gv-st-hero-copy{padding-bottom:clamp(48px,5vw,80px)}
-  .gv-st-hero-art{height:560px}
+  .gv-st-hero-copy{padding-bottom:clamp(64px,5vw,76px)}
+  .gv-st-hero-art{height:clamp(360px,30vw,440px)}
 }
 
 .gv-st-ticker{overflow:hidden;background:#F6F2E8;color:#0E0F0D;white-space:nowrap;border-bottom:1px solid #22251F}
@@ -303,8 +354,13 @@ const CSS = `
 
 .gv-st-offers{display:grid;grid-template-columns:1fr;gap:20px}
 @media (min-width:1024px){.gv-st-offers{grid-template-columns:1fr 1fr}}
-.gv-st-offer{position:relative;overflow:hidden;display:flex;flex-direction:column;justify-content:space-between;gap:20px;min-height:280px;padding:36px;border-radius:18px;background:#1B3828;border:1px solid #0E0F0D;box-shadow:0 0 0 1px #2A5A3C inset;box-sizing:border-box}
+.gv-st-offer{position:relative;overflow:hidden;width:100%;text-align:left;font:inherit;color:inherit;cursor:pointer;display:flex;flex-direction:column;justify-content:space-between;gap:20px;min-height:280px;padding:36px;border-radius:18px;background:#1B3828;border:1px solid #0E0F0D;box-shadow:0 0 0 1px #2A5A3C inset;box-sizing:border-box}
 .gv-st-offer-photo{background:#1B3828}
+.gv-st-offer:focus{outline:none}
+.gv-st-offer:focus-visible{outline:2px solid #F6F2E8;outline-offset:3px}
+.gv-st-offer:hover .gv-st-offer-a{color:#FFFFFF}
+.gv-st-offer-in>span{display:block}
+.gv-st-offer-in>.gv-st-offer-t{display:flex}
 .gv-st-offer-glass{position:absolute;inset:0;background:linear-gradient(180deg,rgba(27,56,40,0.78),rgba(27,56,40,0.9));backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);box-shadow:0 0 0 1px #2A5A3C inset;border-radius:inherit}
 .gv-st-offer-in{position:relative;display:flex;flex-direction:column;gap:14px}
 .gv-st-offer-t{font-size:clamp(40px,4.4vw,64px);line-height:.9;display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 16px}

@@ -787,7 +787,7 @@ export function SuggestionCard({ sug, busy, locked, expanded, onToggle, history,
           </span>
         )}
         <NeuButton onClick={onAssign} disabled={busy || locked} style={{ padding: '8px 16px', fontSize: 11, letterSpacing: 0 }}>
-          {busy ? '…' : 'Assign'}
+          {busy ? 'Allocating' : 'Allocate'}
         </NeuButton>
       </div>
       {/* Row 2 — committee + reason tags. The committee chip keeps

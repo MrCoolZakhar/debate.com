@@ -12,19 +12,18 @@
 // .premium-body. The route asks the database again with the caller's own JWT,
 // so this component deciding "can read" is a hint, never the permission.
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Coins, Loader2, Lock, RotateCcw } from 'lucide-react';
 import { GoldButton, GoldButtonStyles } from '@/components/GoldButton';
 import { useAuth } from '@/components/AuthProvider';
 import { openAuth } from '@/lib/authModal';
-import { openCreditsPopup, openUnlimitedPopup } from '@/lib/purchasePopup';
+import { openUnlimitedPopup } from '@/lib/purchasePopup';
 import { primeGuideAccess } from '@/lib/useGuideAccess';
 import { notifyUnlimitedChanged, useUnlimitedStatus } from '@/lib/unlimitedStatus';
-import { refreshCreditsEverywhere } from '@/hooks/useCredits';
-import { notifyOk } from '@/lib/appNotify';
-import { friendlyError, plainOrFallback } from '@/lib/friendlyError';
-import { fetchGuideAccess, unlockGuide, type GuideAccess } from '@/lib/guideAccess';
+import { friendlyError } from '@/lib/friendlyError';
+import { fetchGuideAccess, type GuideAccess } from '@/lib/guideAccess';
+import { useGuideUnlock } from '@/lib/useGuideUnlock';
 import type { Block } from '@/lib/premiumGuides/types';
 import GuideBlocks from './GuideBlocks';
 
@@ -52,12 +51,6 @@ export default function PremiumBody({
   const [access, setAccess] = useState<GuideAccess | null>(null);
   const [load, setLoad] = useState<Load>({ kind: 'idle' });
   const [attempt, setAttempt] = useState(0);
-  const [unlockBusy, setUnlockBusy] = useState(false);
-  const [unlockError, setUnlockError] = useState('');
-  // The unlock to run again once the credits pop-up completes. Consumed
-  // exactly once, so a second onComplete can never take a second credit.
-  const pendingUnlockRef = useRef(false);
-  const unlockRef = useRef<(() => Promise<void>) | null>(null);
 
   // Who may read: guide_access, re-read when the account or the plan changes.
   useEffect(() => {
@@ -105,39 +98,8 @@ export default function PremiumBody({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug, canRead, userId, attempt]);
 
-  const unlock = async () => {
-    if (unlockBusy) return;
-    setUnlockBusy(true);
-    setUnlockError('');
-    try {
-      const a = await unlockGuide(slug);
-      if (a.ok) {
-        refreshCreditsEverywhere();
-        notifyOk(plainOrFallback(a.message, 'Guide unlocked. It is yours to keep.'), 'guide');
-        setAttempt(n => n + 1);
-        return;
-      }
-      if (a.need_credits && a.need_credits > 0) {
-        pendingUnlockRef.current = true;
-        openCreditsPopup({
-          context: 'header',
-          preselect: a.need_credits,
-          onComplete: () => {
-            if (!pendingUnlockRef.current) return;
-            pendingUnlockRef.current = false;
-            void unlockRef.current?.();
-          },
-        });
-        return;
-      }
-      setUnlockError(plainOrFallback(a.message, 'This guide could not be unlocked just now. Try again in a moment.'));
-    } catch (e) {
-      setUnlockError(friendlyError(e, 'This guide could not be unlocked just now. Try again in a moment.'));
-    } finally {
-      setUnlockBusy(false);
-    }
-  };
-  unlockRef.current = unlock;
+  // "Unlock this guide · 1 credit": the shared flow (src/lib/useGuideUnlock.ts), also on the /guides cards.
+  const { unlock, busy: unlockBusy, error: unlockError } = useGuideUnlock(slug, () => setAttempt(n => n + 1));
 
   const next = `/guides/${slug}`;
 

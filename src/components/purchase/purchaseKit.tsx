@@ -20,9 +20,9 @@
 // Icons are Microsoft Fluent 3D emoji through Emoji3D, each with a lucide
 // fallback. Titles are plain sans (the gold italic word is for a page's main heading only).
 
-import { useEffect, useRef } from 'react';
+import { createContext, useContext, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X } from 'lucide-react';
+import { ArrowLeft, X } from 'lucide-react';
 import { Emoji3D } from '@/components/neu';
 import { useModalEscape } from '@/components/ModalOverlay';
 import { useScrollLock } from '@/hooks/useScrollLock';
@@ -55,6 +55,11 @@ const LINE_DARK = 'rgba(255,255,255,0.22)';
 
 type LucideIcon = React.ComponentType<{ size?: number; strokeWidth?: number; style?: React.CSSProperties }>;
 
+/** A back arrow for a pop-up that REPLACED another one's content (prompt 90: /store's
+ *  Pick a Conference, then the conference Store's own pop-up). Unset everywhere else,
+ *  so no other pop-up changes. */
+export const PurchaseBackContext = createContext<(() => void) | null>(null);
+
 /** The dialog: backdrop, panel, close. `label` is its accessible name. */
 export function PurchaseShell({
   tone, label, onClose, children, testId, panelClass, aside,
@@ -66,6 +71,7 @@ export function PurchaseShell({
   aside?: React.ReactNode;
 }) {
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const onBack = useContext(PurchaseBackContext);
   useModalEscape(onClose, true);
   useScrollLock(true);
   useEffect(() => {
@@ -88,6 +94,11 @@ export function PurchaseShell({
         data-tone={tone}
         data-testid={testId}
       >
+        {onBack && (
+          <button type="button" onClick={onBack} aria-label="Back" className="gv-buy-x gv-buy-back">
+            <ArrowLeft size={18} strokeWidth={2.2} />
+          </button>
+        )}
         <button type="button" onClick={onClose} aria-label="Close" className="gv-buy-x">
           <X size={18} strokeWidth={2.2} />
         </button>
@@ -199,6 +210,7 @@ export const PURCHASE_CSS = `
 /* The X is an ivory disc with a soft shadow, so it reads on cream AND on forest. */
 .gv-buy-x{position:absolute;top:14px;right:14px;z-index:5;width:36px;height:36px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;border:none;background:${IVORY};color:${INK};cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,0.18),0 0 0 1px rgba(28,20,16,0.06);transition:background-color 160ms ease}
 .gv-buy-x:hover{background:#FFFFFF}
+.gv-buy-x.gv-buy-back{right:58px}
 .gv-buy-body{overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;min-height:0}
 .gv-buy-left{padding:30px 28px 26px;background:${CREAM};display:flex;flex-direction:column;gap:22px}
 .gv-buy-dark .gv-buy-left{background:${FOREST_DEEP}}

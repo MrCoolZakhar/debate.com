@@ -85,18 +85,21 @@ export interface ConfPromoteGroup {
   listings: { id: string; title: string; ends_on: string | null }[];
 }
 
+/** One organised conference's live listings (drafts never count), through job_conference_panel.
+ *  'refused' when the read failed or this person cannot promote there. Also used by /store (prompt 90). */
+export async function readConferencePromoteGroup(conf: OrganizedConference): Promise<ConfPromoteGroup | 'refused'> {
+  const p = await readPanel(conf.id);
+  if (!p.ok || !p.can_promote) return 'refused';
+  const live = p.listings.filter((l) => l.shown === 'live').map((l) => ({ id: l.id, title: l.title, ends_on: l.promotion?.ends_on ?? null }));
+  return { conference: conf, credits: p.conference_credits, listings: live };
+}
+
 /** Every organised conference's live listings, through job_conference_panel. Null when nothing could be read. */
-async function readConferenceGroups(userId: string): Promise<ConfPromoteGroup[] | null> {
+export async function readConferenceGroups(userId: string): Promise<ConfPromoteGroup[] | null> {
   const confs = await readOrganizedConferences(userId);
   if (!confs) return null;
-  const panels = await Promise.all(confs.map((c) => readPanel(c.id)));
-  const out: ConfPromoteGroup[] = [];
-  panels.forEach((p, i) => {
-    if (!p.ok || !p.can_promote) return;
-    const live = p.listings.filter((l) => l.shown === 'live').map((l) => ({ id: l.id, title: l.title, ends_on: l.promotion?.ends_on ?? null }));
-    if (live.length > 0) out.push({ conference: confs[i], credits: p.conference_credits, listings: live });
-  });
-  return out;
+  const groups = await Promise.all(confs.map((c) => readConferencePromoteGroup(c)));
+  return groups.filter((g): g is ConfPromoteGroup => g !== 'refused' && g.listings.length > 0);
 }
 
 export function useStandalonePosting({ onChanged, onPosted, myListings = null }: {
