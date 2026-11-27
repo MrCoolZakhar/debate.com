@@ -19,7 +19,7 @@ import Link from 'next/link';
 import { ArrowRight, Check } from 'lucide-react';
 import { MotionPlacard } from '@/components/store/MotionPlacards';
 import StoreBundlePicker from '@/components/store/StoreBundlePicker';
-import { Countdown, StoreBar } from '@/components/store/storeKit';
+import { Countdown, HeroScrollCue, StoreBar } from '@/components/store/storeKit';
 import FaqList from '@/components/pricing/FaqList';
 import RenewOnceOpener from '@/components/pricing/RenewOnceOpener';
 import { formatUsd } from '@/lib/creditPricing';
@@ -81,12 +81,12 @@ export default function CreditsUnlimitedClient() {
       </Suspense>
 
       {sale && bogo ? (
-        <section className="gv-cu-hero" aria-labelledby="gv-cu-h1">
+        <section id="gv-cu-hero" className="gv-cu-hero" aria-labelledby="gv-cu-h1">
           <span className="gv-cu-hero-glow" aria-hidden />
           <div className="gv-s-wrap gv-cu-hero-in">
             <div className="gv-cu-hero-copy">
               <p className="gv-s-label">Motion to save · {sale.title || 'Black Friday'}</p>
-              <h1 id="gv-cu-h1" className="gv-s-caps gv-cu-h1">Double<br />your MUN</h1>
+              <h1 id="gv-cu-h1" className="gv-s-caps gv-cu-h1"><span className="gv-cu-h1-line">Double</span><span className="gv-cu-h1-line">your MUN</span></h1>
               <p className="gv-s-line" style={{ fontSize: 19, color: '#F6F2E8', maxWidth: 560 }}>
                 Buy one, get one free on all credit purchases, with no expiry on usage. Until {ends}.
               </p>
@@ -96,6 +96,7 @@ export default function CreditsUnlimitedClient() {
               <MotionPlacard text="×2" sub="CREDITS" label="A placard raised: double credits" />
             </div>
           </div>
+          <HeroScrollCue heroId="gv-cu-hero" />
         </section>
       ) : (
         <header className="gv-s-wrap gv-cu-head">
@@ -118,9 +119,9 @@ export default function CreditsUnlimitedClient() {
       <div className="gv-s-wrap gv-cu-body">
         {/* ── Pick your bundle ── */}
         <section aria-labelledby="gv-cu-bundle">
-          <div className="gv-s-head">
+          <div className="gv-s-head gv-cu-head-stack">
             <h2 id="gv-cu-bundle" className="gv-s-caps gv-s-h2">Pick your bundle</h2>
-            <p className="gv-s-line" style={{ maxWidth: 520 }}>
+            <p className="gv-s-line gv-cu-head-line">
               {bogo
                 ? <>Bigger bundles cost less a credit, and every bundle is doubled this weekend. Use them in the <Link href="/store" className="gv-s-a">Gavelling Store</Link>.</>
                 : <>Bigger bundles cost less a credit. Use them in the <Link href="/store" className="gv-s-a">Gavelling Store</Link>.</>}
@@ -134,7 +135,7 @@ export default function CreditsUnlimitedClient() {
           <div className="gv-s-head">
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
               <h2 id="gv-cu-unl" className="gv-s-caps gv-s-h2">Gavelling Unlimited</h2>
-              <p className="gv-s-line">{saleYear ? 'Never spend a credit to apply again. Now at a discount.' : 'Never spend a credit to apply again.'}</p>
+              <p className="gv-s-line gv-cu-head-line">{saleYear ? 'Never spend a credit to apply again. Now at a discount.' : 'Never spend a credit to apply again.'}</p>
             </div>
             <div className="gv-cu-switch" role="radiogroup" aria-label="Billing period">
               {(['yearly', 'monthly'] as Period[]).map((p) => (
@@ -254,18 +255,21 @@ export default function CreditsUnlimitedClient() {
 
 const CSS = `
 .gv-cu-head{display:flex;flex-direction:column;gap:16px;padding-top:clamp(40px,5vw,72px);padding-bottom:clamp(32px,4vw,56px)}
-.gv-cu-h1{font-size:clamp(84px,9vw,148px)}
+.gv-cu-h1{font-size:clamp(64px,7.4vw,124px)}
+.gv-cu-h1-line{display:block;white-space:nowrap}
+.gv-cu-head-stack{flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:12px}
+.gv-cu-head-line{max-width:60ch;text-align:left}
 .gv-cu-h1-plain{font-size:clamp(56px,7.4vw,124px)}
 
 .gv-cu-hero{position:relative;overflow:hidden;border-top:1px solid #22251F;border-bottom:1px solid #22251F}
 .gv-cu-hero-glow{position:absolute;right:-10%;bottom:-40%;width:70%;height:90%;pointer-events:none;background:radial-gradient(closest-side,rgba(42,90,60,0.55),rgba(27,56,40,0.18) 55%,rgba(14,15,13,0) 100%)}
 .gv-cu-hero-in{position:relative;display:grid;grid-template-columns:1fr;gap:24px}
-.gv-cu-hero-copy{display:flex;flex-direction:column;gap:22px;padding-top:clamp(40px,5vw,72px);padding-bottom:8px;min-width:0}
+.gv-cu-hero-copy{display:flex;flex-direction:column;gap:16px;padding-top:clamp(28px,3.4vw,48px);padding-bottom:8px;min-width:0}
 .gv-cu-hero-art{height:300px;display:flex;align-items:flex-end;justify-content:center;min-width:0}
 @media (min-width:1024px){
-  .gv-cu-hero-in{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:40px;align-items:end}
-  .gv-cu-hero-copy{padding-bottom:clamp(48px,5vw,80px)}
-  .gv-cu-hero-art{height:420px}
+  .gv-cu-hero-in{grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:40px;align-items:end}
+  .gv-cu-hero-copy{padding-bottom:clamp(64px,5vw,76px)}
+  .gv-cu-hero-art{height:clamp(360px,30vw,420px)}
 }
 
 .gv-cu-ticker{overflow:hidden;background:#F6F2E8;color:#0E0F0D;white-space:nowrap;border-bottom:1px solid #22251F}

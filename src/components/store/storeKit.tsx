@@ -15,6 +15,7 @@
 
 import { useCallback, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
 import Link from 'next/link';
+import { ArrowDown } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
 import { useCredits } from '@/hooks/useCredits';
@@ -68,6 +69,15 @@ export const STORE_CSS = `
 .gv-s-soon{display:inline-flex;align-items:center;height:26px;padding:0 10px;border-radius:8px;background:${S.cream};color:${S.black};font-size:11.5px;font-weight:900;letter-spacing:.12em;text-transform:uppercase}
 
 .gv-s-bar{position:sticky;top:0;z-index:20;background:${S.black};border-bottom:1px solid ${S.edge}}
+@media (min-width:1024px){.gv-s-bar{top:calc(var(--gv-sale-bar-offset, 0px) + 72px)}}
+.gv-s-cue{position:absolute;right:52px;bottom:20px;z-index:2;display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:0 14px;border-radius:12px;border:none;background:rgba(14,15,13,0.55);color:${S.cream};box-shadow:inset 0 0 0 1.5px rgba(246,242,232,.55);font:inherit;font-size:13.5px;font-weight:800;cursor:pointer;transition:opacity 200ms ease-out,box-shadow 160ms ease-out}
+.gv-s-cue:hover{box-shadow:inset 0 0 0 1.5px ${S.cream}}
+.gv-s-cue:focus{outline:none}
+.gv-s-cue:focus-visible{outline:2px solid ${S.cream};outline-offset:3px}
+.gv-s-cue[data-hidden="true"]{opacity:0;pointer-events:none}
+@media (max-width:1023px){.gv-s-cue{right:32px}}
+@media (max-width:639px){.gv-s-cue{right:20px;bottom:14px}}
+@media (prefers-reduced-motion:reduce){.gv-s-cue{transition:none}}
 .gv-s-bar-in{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:76px;flex-wrap:wrap;padding-top:12px;padding-bottom:12px}
 .gv-s-tabs{display:inline-flex;gap:4px;padding:4px;border-radius:14px;border:1px solid ${S.line};background:${S.card}}
 .gv-s-tab{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 18px;border-radius:10px;font-size:13px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;text-decoration:none;color:${S.soft};transition:background-color 160ms ease-out,color 160ms ease-out}
@@ -119,10 +129,15 @@ export function StoreTabs() {
   );
 }
 
+const TABS_ANCHOR = 'gv-store-tabs';
+
 export function StoreBar() {
   const { user } = useAuth();
   const { balance } = useCredits();
   return (
+    <>
+    {/* Where the bar sits before it sticks: the hero's scroll cue lands here. */}
+    <div id={TABS_ANCHOR} aria-hidden />
     <div className="gv-s-bar">
       <div className="gv-s-wrap gv-s-bar-in">
         <StoreTabs />
@@ -135,6 +150,37 @@ export function StoreBar() {
         )}
       </div>
     </div>
+    </>
+  );
+}
+
+/** "See the whole store" at the bottom right of a hero (prompt 90): scrolls to the
+ *  tabs (smoothly unless reduced motion is asked for) and hides once the hero is
+ *  scrolled out of view. Mount it inside the hero (position: relative). */
+export function HeroScrollCue({ heroId }: { heroId: string }) {
+  const [hidden, setHidden] = useState(false);
+  useEffect(() => {
+    const hero = document.getElementById(heroId);
+    if (!hero || typeof IntersectionObserver === 'undefined') return;
+    // Hidden as soon as the hero's bottom part has left the screen.
+    const io = new IntersectionObserver(([e]) => setHidden(!e.isIntersecting), { rootMargin: '0px 0px -85% 0px' });
+    io.observe(hero);
+    return () => io.disconnect();
+  }, [heroId]);
+  const go = () => {
+    const anchor = document.getElementById(TABS_ANCHOR);
+    if (!anchor) return;
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const pill = window.matchMedia('(min-width: 1024px)').matches ? 72 : 0;
+    const offset = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--gv-sale-bar-offset')) || 0;
+    const top = anchor.getBoundingClientRect().top + window.scrollY - pill - offset;
+    window.scrollTo({ top, behavior: reduce ? 'auto' : 'smooth' });
+  };
+  return (
+    <button type="button" className="gv-s-cue" onClick={go} data-hidden={hidden ? 'true' : undefined} tabIndex={hidden ? -1 : undefined} aria-hidden={hidden || undefined}>
+      See the whole store
+      <ArrowDown size={16} strokeWidth={1.75} aria-hidden />
+    </button>
   );
 }
 

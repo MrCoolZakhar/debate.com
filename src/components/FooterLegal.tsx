@@ -10,7 +10,7 @@ import { companyLegalLines, TRADING_NAME } from '@/lib/companyDetails';
  *
  * Only links to routes that exist: the public hubs (/conferences/explore,
  * /conferences/all, /blog), the organiser landing page (/organisers), the two
- * session tools (/create, /join), /terms, /privacy (and its #your-rights
+ * session tools (/create, /join), /store, /games, /terms, /privacy (and its #your-rights
  * anchor). Do NOT add a /cookies link here until that page actually exists.
  *
  * Information links only (CLAUDE.md §4): never a list of conferences and never
@@ -130,6 +130,11 @@ export default function FooterLegal({
         <span aria-hidden="true" style={{ color: t.text, opacity: 0.5 }}>·</span>
         <Link href="/join" className={hubLink}>
           Join a session
+        </Link>
+        <span aria-hidden="true" style={{ color: t.text, opacity: 0.5 }}>·</span>
+        {/* MUNillion, the daily MUN game (prompt 91, 27 Nov 2026). */}
+        <Link href="/games" className={hubLink}>
+          Games
         </Link>
         <span aria-hidden="true" style={{ color: t.text, opacity: 0.5 }}>·</span>
         <Link href="/terms" className={hubLink}>

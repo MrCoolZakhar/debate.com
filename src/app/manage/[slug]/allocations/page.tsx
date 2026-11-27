@@ -97,7 +97,7 @@ interface PendingChairInvite {
 
 
 // ── PointsInfo ───────────────────────────────────────────────────────────────
-// Hover-only neumorphic info affordance next to "Suggested Assignments". The
+// Hover-only neumorphic info affordance next to "Suggested Allocations". The
 // copy mirrors the real scoring in scorePrefAndExp + scoreSlot exactly.
 function PointsInfo() {
   const [open, setOpen] = useState(false);
@@ -3482,7 +3482,7 @@ export default function AssignmentPage() {
               <div className="flex items-center gap-2 mb-3.5">
                 <NeuIconDisc gradient={NEU_GRADIENTS.gold} icon={Sparkles} size={26} iconColor={NEU.forest} />
                 <p style={{ fontSize: 12, color: NEU.forest, fontFamily: MONO, letterSpacing: '0.12em', fontWeight: 800 }}>
-                  SUGGESTED ASSIGNMENTS
+                  SUGGESTED ALLOCATIONS
                 </p>
                 <PointsInfo />
                 <p className="hidden sm:block" style={{ fontSize: 10.5, color: NEU.muted, fontFamily: OUTFIT, marginLeft: 'auto' }}>

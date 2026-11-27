@@ -107,7 +107,7 @@ export default async function GuidePage({ params }: { params: Promise<{ slug: st
             <p className="gvg-lead">{meta.description}</p>
             <div className="gvg-meta">
               <span><Clock size={16} strokeWidth={2.2} aria-hidden="true" />{meta.readingMinutes} min read</span>
-              <span><Lock size={16} strokeWidth={2.2} aria-hidden="true" /><strong>Included with Unlimited</strong></span>
+              <span><Lock size={16} strokeWidth={2.2} aria-hidden="true" /><strong>Included with Unlimited, or 1 credit</strong></span>
               <span>Updated {formatDate(meta.updated)}</span>
               {/* Contributor credits appear only when the owner supplies real ones. */}
               {meta.authors.length > 0 ? (

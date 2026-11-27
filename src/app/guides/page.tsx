@@ -47,7 +47,7 @@ export default function GuidesIndexPage() {
           <h1 className="gvg-h1" style={{ marginTop: 20 }}>Premium MUN Guides</h1>
           <p className="gvg-lead">
             Each guide is a complete playbook for one job at a conference. The opening sections are free to read. The
-            rest comes with Gavelling Unlimited.
+            rest comes with Gavelling Unlimited, or is yours forever for 1 credit.
           </p>
           <GuideCardGrid guides={guides} headingLevel={2} />
           <p className="gvg-lead" style={{ fontSize: 16 }}>
