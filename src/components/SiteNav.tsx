@@ -11,6 +11,8 @@ import { isSessionsPath } from '@/lib/sessionRoutes';
 import ProfileAvatarMenu from '@/components/ProfileAvatar';
 import BrandLogo from '@/components/BrandLogo';
 import MobileTabBar from '@/components/MobileTabBar';
+import NavBubble, { type NavBubbleTone } from '@/components/NavBubble';
+import { useRunningSale } from '@/lib/storeSale';
 import AuthLink from '@/components/auth/AuthLink';
 import { useCredits } from '@/hooks/useCredits';
 import { CreditCoin } from '@/components/CreditCoin';
@@ -35,6 +37,8 @@ import { useMyActivity, useOpenSeenState, markActivitySeen, attentionRows, endAc
 const NAV_LINKS_CONFIG: ReadonlyArray<{
   en: string; es: string; fr: string; ar: string; pt: string;
   kicker?: { en: string; es: string; fr: string; ar: string; pt: string };
+  /** A small pixel bubble over the item (owner, 27 Nov 2026): Daily on Games, Black Friday on the Store. */
+  bubble?: { tone: NavBubbleTone; en: string; es: string; fr: string; ar: string; pt: string };
   href: string;
 }> = [
   { en: 'Session', es: 'Sesión', fr: 'Session', ar: 'جلسة', pt: 'Sessão', kicker: { en: 'Start', es: 'Iniciar', fr: 'Lancer', ar: 'ابدأ', pt: 'Iniciar' }, href: '/sessions' },
@@ -43,9 +47,11 @@ const NAV_LINKS_CONFIG: ReadonlyArray<{
   // The cross-conference job board (prompt 1, 19 Oct 2026). Plain like Explore.
   { en: 'Job Board', es: 'Bolsa de Trabajo', fr: 'Offres', ar: 'الوظائف', pt: 'Vagas', href: '/jobs' },
   // MUNillion, the daily MUN game (prompt 91, 27 Nov 2026).
-  { en: 'Games',    es: 'Juegos',   fr: 'Jeux',     ar: 'ألعاب', pt: 'Jogos',  href: '/games' },
+  { en: 'Games',    es: 'Juegos',   fr: 'Jeux',     ar: 'ألعاب', pt: 'Jogos',  href: '/games',
+    bubble: { tone: 'daily', en: 'Daily', es: 'Diario', fr: 'Du jour', ar: 'يومي', pt: 'Diário' } },
   // Pricing became the Store (prompt 85, 27 Nov 2026).
-  { en: 'Store',    es: 'Tienda',   fr: 'Boutique', ar: 'المتجر', pt: 'Loja',   href: '/store' },
+  { en: 'Store',    es: 'Tienda',   fr: 'Boutique', ar: 'المتجر', pt: 'Loja',   href: '/store',
+    bubble: { tone: 'sale', en: 'Black Friday', es: 'Black Friday', fr: 'Black Friday', ar: 'Black Friday', pt: 'Black Friday' } },
   // Reads Contact and opens the contact page; the help desk is linked from
   // there and from every footer (owner, 18 Oct 2026).
   { en: 'Contact',  es: 'Contacto', fr: 'Contact',  ar: 'اتصل بنا', pt: 'Contato', href: '/contact' },
@@ -144,9 +150,12 @@ export default function SiteNav(props: SiteNavProps = {}) {
     [activity, sheetSeen],
   );
   const t = useT();
+  // The Black Friday bubble shows only while the Store's sale is running (the same read as the Motion to Save bar).
+  const runningSale = useRunningSale();
   const navLinks = NAV_LINKS_CONFIG.map(l => ({
     label: l[language],
     kicker: l.kicker ? l.kicker[language] : null,
+    bubble: l.bubble && (l.bubble.tone !== 'sale' || runningSale) ? { tone: l.bubble.tone, text: l.bubble[language] } : null,
     href: l.href,
   }));
 
@@ -335,6 +344,7 @@ export default function SiteNav(props: SiteNavProps = {}) {
                   <span style={{ fontSize: '10.5px', fontWeight: 600, color: 'rgba(28, 20, 16, 0.5)', letterSpacing: 0 }}>{link.kicker}</span>
                 )}
                 {link.label}
+                {link.bubble && <NavBubble floating tone={link.bubble.tone} text={link.bubble.text} />}
                 {underline}
               </Link>
             );
@@ -613,6 +623,7 @@ export default function SiteNav(props: SiteNavProps = {}) {
                 style={rowStyle}
               >
                 {link.kicker ? `${link.kicker} ${link.label.toLowerCase()}` : link.label}
+                {link.bubble && <NavBubble tone={link.bubble.tone} text={link.bubble.text} />}
               </Link>
             );
           })}
