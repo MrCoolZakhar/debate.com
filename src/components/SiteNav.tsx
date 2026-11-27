@@ -42,6 +42,8 @@ const NAV_LINKS_CONFIG: ReadonlyArray<{
   { en: 'Explore',  es: 'Explorar', fr: 'Explorer', ar: 'استكشف', pt: 'Explorar', href: '/conferences/explore' },
   // The cross-conference job board (prompt 1, 19 Oct 2026). Plain like Explore.
   { en: 'Job Board', es: 'Bolsa de Trabajo', fr: 'Offres', ar: 'الوظائف', pt: 'Vagas', href: '/jobs' },
+  // MUNillion, the daily MUN game (prompt 91, 27 Nov 2026).
+  { en: 'Games',    es: 'Juegos',   fr: 'Jeux',     ar: 'ألعاب', pt: 'Jogos',  href: '/games' },
   // Pricing became the Store (prompt 85, 27 Nov 2026).
   { en: 'Store',    es: 'Tienda',   fr: 'Boutique', ar: 'المتجر', pt: 'Loja',   href: '/store' },
   // Reads Contact and opens the contact page; the help desk is linked from
@@ -53,7 +55,7 @@ const NAV_LINKS_CONFIG: ReadonlyArray<{
  *  chooser and the creator under it, EXPLORE on /conferences/explore only
  *  (owner, 12 Oct 2026: it stayed lit on a conference's own page; a
  *  conference page, /conferences/all and /conferences/in/* light nothing),
- *  JOB BOARD on /jobs and everything under it, STORE on /store and /store/credits,
+ *  JOB BOARD on /jobs and everything under it, GAMES on /games and under it, STORE on /store and /store/credits,
  *  CONTACT on /contact only. */
 function isExplorePath(pathname: string): boolean {
   return pathname === '/conferences/explore' || pathname.startsWith('/conferences/explore/');
@@ -65,6 +67,7 @@ function isNavLinkActive(pathname: string | null, href: string | null): boolean 
   if (href === '/conferences/new') return pathname.startsWith('/conferences/new');
   if (href === '/conferences/explore') return isExplorePath(pathname);
   if (href === '/jobs') return pathname === '/jobs' || pathname.startsWith('/jobs/');
+  if (href === '/games') return pathname === '/games' || pathname.startsWith('/games/');
   if (href === '/store') return pathname === '/store' || pathname.startsWith('/store/');
   if (href === '/contact') return pathname === '/contact';
   return pathname === href;
@@ -274,6 +277,11 @@ export default function SiteNav(props: SiteNavProps = {}) {
             // (264px group), 85px clear. 1440: 15px / 10px. 1920: 15px / 13px.
             // Never wrap. Spanish ("Bolsa de Trabajo", sessions paths only) is
             // the widest label and is tight below 1440.
+            // Seven items since prompt 91 (Games, 27 Nov 2026): the side padding
+            // is a little smaller (about 4px at 1024, 7px at 1280, 9px at 1440,
+            // 14px at 1920), the type unchanged, so the pill is about 548px at
+            // 1024, 652px at 1280 (326 from the centre against 376 free) and
+            // 737px at 1440, still one line.
             const itemStyle: CSSProperties = {
               display: 'inline-flex',
               alignItems: 'center',
@@ -283,7 +291,7 @@ export default function SiteNav(props: SiteNavProps = {}) {
               position: 'relative',
               whiteSpace: 'nowrap',
               minHeight: 36,
-              padding: '4px clamp(6px, 0.7vw, 14px)',
+              padding: '4px clamp(4px, calc(1.1vw - 7px), 14px)',
               fontSize: 'clamp(12px, 1.05vw, 15px)',
               fontWeight: active ? 800 : 600,
               letterSpacing: '0',
