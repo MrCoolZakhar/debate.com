@@ -460,7 +460,7 @@ export default function JobListing({
           ) : about && (about.about?.trim() || about.slug) ? (
             <section className="gv-jl-card gv-jl-a-conf">
               <h3 className="gv-jl-h gv-jl-h-sm">About the Conference</h3>
-              {about.about?.trim() && <p className="gv-jl-text gv-jl-text-sm">{about.about}</p>}
+              {about.about?.trim() && <AboutText text={about.about} />}
               {about.slug && (
                 <Link href={`/conferences/${encodeURIComponent(about.slug)}`} className="gv-jl-link" style={{ marginTop: about.about?.trim() ? 12 : 0 }}>
                   See the conference page
@@ -509,6 +509,53 @@ export function Avatar({ name, src, size = 56 }: { name: string; src: string | n
     <span aria-hidden style={{ width: size, height: size, borderRadius: 9999, flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(238,217,138,0.55)', color: '#4A3410', fontSize: Math.round(size * 0.3), fontWeight: 800 }}>
       {initials}
     </span>
+  );
+}
+
+/** The listing read caps a conference's description at 600 characters
+ *  (job_listing_get). A capped text is trimmed back to its last whole sentence,
+ *  or its last whole word, so it never stops mid-word or mid-name. */
+const ABOUT_CAP = 600;
+function wholeAbout(raw: string): string {
+  const t = raw.trim();
+  if (raw.length < ABOUT_CAP) return t;
+  const sentence = Math.max(t.lastIndexOf('. '), t.lastIndexOf('! '), t.lastIndexOf('? '));
+  if (sentence > ABOUT_CAP * 0.6) return t.slice(0, sentence + 1);
+  const space = t.lastIndexOf(' ');
+  const cut = (space > 0 ? t.slice(0, space) : t).replace(/[\s(,;:\-]+$/, '');
+  return `${cut}…`;
+}
+
+/** About the Conference (prompt 83): whole when short; long, about 6 lines with
+ *  a soft fade and "Read more" that opens it in place ("Show less" folds it). */
+function AboutText({ text }: { text: string }) {
+  const body = wholeAbout(text);
+  const ref = useRef<HTMLParagraphElement | null>(null);
+  const [long, setLong] = useState(false);
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => {
+      if (open) return;
+      const next = el.scrollHeight - el.clientHeight > 2;
+      setLong((v) => (v === next ? v : next));
+    };
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [open, body]);
+  return (
+    <>
+      <p ref={ref} className={`gv-jl-text gv-jl-text-sm${open ? '' : ' gv-jl-about-clamp'}${long && !open ? ' gv-jl-about-fade' : ''}`}>{body}</p>
+      {(long || open) && (
+        <div style={{ marginTop: 8 }}>
+          <button type="button" className="gv-jl-link" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+            {open ? 'Show less' : 'Read more'}
+          </button>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -597,13 +644,15 @@ const LISTING_CSS = `
 .gv-jl-h-sm{font-size:16px;margin-bottom:10px}
 .gv-jl-text{margin:0;font-size:15.5px;line-height:1.65;color:#2E271F;white-space:pre-line;overflow-wrap:anywhere;max-width:75ch}
 .gv-jl-text-sm{font-size:14.5px;line-height:1.6}
+.gv-jl-about-clamp{max-height:calc(1.6em * 6);overflow:hidden}
+.gv-jl-about-fade{-webkit-mask-image:linear-gradient(to bottom,#000 65%,transparent 100%);mask-image:linear-gradient(to bottom,#000 65%,transparent 100%)}
 .gv-jl-link{display:inline-flex;align-items:center;gap:5px;background:none;border:none;padding:0;cursor:pointer;font-family:${FONT};font-size:14.5px;font-weight:700;color:${INK};text-decoration:underline;text-underline-offset:3px}
 .gv-jl-link:hover{color:${FOREST}}
 .gv-jl-qcount{display:flex;align-items:center;gap:14px}
 .gv-jl-qicon{width:46px;height:46px;border-radius:9999px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;color:${FOREST};background:linear-gradient(180deg,#FFFFFF 0%,#F2EDE2 100%);border:1px solid rgba(27,56,40,0.16);box-shadow:inset 0 1px 0 #FFFFFF,0 2px 6px rgba(27,56,40,0.14)}
 .gv-jl-back{align-self:flex-start;display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 4px;background:none;border:none;cursor:pointer;font-family:${FONT};font-size:15px;font-weight:700;color:${INK}}
 .gv-jl-bar{position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:-80px;min-height:64px;padding:8px 10px 8px 20px;border-radius:16px;
-  background:rgba(255,255,255,0.96);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1.5px solid rgba(27,56,40,0.35);box-shadow:0 2px 4px rgba(27,56,40,0.1),0 10px 26px rgba(27,56,40,0.22);
+  background:rgba(255,255,255,0.96);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid var(--gv-main, ${FOREST});box-shadow:0 2px 4px rgba(27,56,40,0.1),0 10px 26px rgba(27,56,40,0.22);
   opacity:0;transform:translateY(-8px);pointer-events:none;transition:opacity 180ms ease,transform 220ms cubic-bezier(0.22,1,0.36,1)}
 .gv-jl-bar-page{top:calc(8px + env(safe-area-inset-top,0px))}
 .gv-jl-bar-on{opacity:1;transform:none;pointer-events:auto}

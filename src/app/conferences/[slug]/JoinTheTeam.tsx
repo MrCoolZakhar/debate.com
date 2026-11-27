@@ -141,8 +141,8 @@ export default function JoinTheTeam({ conferenceId }: { conferenceId: string }) 
     <section
       className="mb-6"
       aria-labelledby="join-the-team-title"
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      onPointerEnter={() => setHovered(true)}
+      onPointerLeave={() => setHovered(false)}
       onFocus={() => setFocused(true)}
       onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setFocused(false); }}
     >
@@ -162,7 +162,7 @@ export default function JoinTheTeam({ conferenceId }: { conferenceId: string }) 
           ))}
         </ul>
       ) : (
-        <div className="gv-jt-row">
+        <div className={`gv-jt-row${sliding ? ' gv-jt-row-arrows' : ''}`}>
           {sliding && (
             <button type="button" className="gv-jt-arrow gv-jt-prev" onClick={prev} aria-label="Previous roles">
               <ChevronLeft size={20} strokeWidth={2.2} aria-hidden />
@@ -271,16 +271,16 @@ function TeamCard({ card, link }: { card: JobCard; link: { url: string | null; p
           <button
             type="button"
             onClick={() => { recordJobEvent(card.id, 'click'); window.open(outsideUrl, '_blank', 'noopener,noreferrer'); }}
-            className="gv-cf-main gv-lift inline-flex items-center justify-center rounded-xl px-4 py-2 text-[13px] font-bold focus:outline-none border-0 cursor-pointer"
-            style={{ fontFamily: FONT }}
+            className="gv-cf-main gv-jt-apply inline-flex items-center justify-center rounded-xl px-4 py-2 text-[13px] font-bold focus:outline-none border-0 cursor-pointer"
+            style={{ fontFamily: FONT, ...APPLY_STYLE }}
           >
             Apply on their site
           </button>
         ) : (
           <Link
             href={href}
-            className="gv-cf-main gv-lift inline-flex items-center justify-center rounded-xl px-4 py-2 text-[13px] font-bold focus:outline-none"
-            style={{ fontFamily: FONT, textDecoration: 'none' }}
+            className="gv-cf-main gv-jt-apply inline-flex items-center justify-center rounded-xl px-4 py-2 text-[13px] font-bold focus:outline-none"
+            style={{ fontFamily: FONT, textDecoration: 'none', ...APPLY_STYLE }}
           >
             {outside ? 'Apply on their site' : 'Apply'}
           </Link>
@@ -290,7 +290,19 @@ function TeamCard({ card, link }: { card: JobCard; link: { url: string | null; p
   );
 }
 
+// The Apply button in the conference's own colours only (prompt 83): its main
+// colour, its on-main text and a shadow tinted by it, never Gavelling forest.
+const APPLY_STYLE: React.CSSProperties = {
+  backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)',
+  boxShadow: '0 1px 2px color-mix(in srgb, var(--gv-main) 18%, transparent), 0 4px 10px color-mix(in srgb, var(--gv-main) 24%, transparent)',
+};
+
 const CSS = `
+.gv-jt-apply{transition:transform 180ms cubic-bezier(0.22,1,0.36,1),filter 150ms ease}
+.gv-jt-apply:hover{transform:translateY(-1px)}
+/* With arrows the track is inset by an arrow plus a gap on each side and the
+   arrows sit in that gutter, so they never cover a card (prompt 83). */
+.gv-jt-row-arrows{padding:0 50px}
 .gv-jt-card{height:100%;width:100%;display:flex;flex-direction:column;gap:6px;min-width:0;border-radius:16px;padding:14px 16px;
   background-color:var(--gv-surface);border:1px solid var(--gv-border);box-shadow:0 8px 24px color-mix(in srgb, var(--gv-main) 8%, transparent)}
 .gv-jt-row{position:relative}
@@ -303,8 +315,8 @@ const CSS = `
 .gv-jt-arrow:hover{background:color-mix(in srgb, var(--gv-main-light) 12%, var(--gv-surface))}
 .gv-jt-arrow:focus{outline:none}
 .gv-jt-arrow:focus-visible{outline:2px solid var(--gv-main);outline-offset:2px}
-.gv-jt-prev{left:6px}
-.gv-jt-next{right:6px}
+.gv-jt-prev{left:0}
+.gv-jt-next{right:0}
 .gv-jt-swipe{list-style:none;margin:0 -4px;padding:4px 4px 10px;display:flex;gap:${GAP}px;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none}
 .gv-jt-swipe::-webkit-scrollbar{display:none}
 .gv-jt-swipe-cell{flex:0 0 min(78vw,290px);scroll-snap-align:start;display:flex}

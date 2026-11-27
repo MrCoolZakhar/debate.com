@@ -15,7 +15,7 @@ import { HOLDING_STATUSES, LIVE_STATUSES, roleWithArticle } from '@/lib/roleComb
 
 const FONT = 'var(--font-brand), sans-serif';
 
-export default function OtherRolesBlock({ slug, apps, tiles, primaryRole, onPick }: {
+export default function OtherRolesBlock({ slug, apps, tiles, primaryRole, onPick, tone = 'main' }: {
   slug: string;
   /** Every application of this person at this conference. */
   apps: { role: string; status: string }[];
@@ -24,7 +24,11 @@ export default function OtherRolesBlock({ slug, apps, tiles, primaryRole, onPick
   /** The application the card above already shows. */
   primaryRole: string;
   onPick: (role: string) => void;
+  /** 'main' on the conference-colour You card (default); 'light' on a white
+   *  card, such as the role page after a turn-down (prompt 83). */
+  tone?: 'main' | 'light';
 }) {
+  const light = tone === 'light';
   const live = apps.filter(a => LIVE_STATUSES.has(a.status));
   const appliedRoles = new Set(live.map(a => a.role));
   // One application per (conference, person, role): a role applied to in any
@@ -47,9 +51,9 @@ export default function OtherRolesBlock({ slug, apps, tiles, primaryRole, onPick
   const labelOf = (role: string) => tiles.find(t => t.role === role)?.label ?? role.replace(/-/g, ' ');
 
   return (
-    <div className="mt-4 pt-4 flex flex-col gap-2.5" style={{ borderTop: '1px solid color-mix(in srgb, var(--gv-on-main) 18%, transparent)' }}>
+    <div className="mt-4 pt-4 flex flex-col gap-2.5" style={{ borderTop: light ? '1px solid var(--gv-border)' : '1px solid color-mix(in srgb, var(--gv-on-main) 18%, transparent)' }}>
       {line && (
-        <p className="text-xs [overflow-wrap:anywhere]" style={{ margin: 0, color: 'color-mix(in srgb, var(--gv-on-main) 78%, transparent)', fontFamily: FONT, lineHeight: 1.55 }}>
+        <p className="text-xs [overflow-wrap:anywhere]" style={{ margin: 0, color: light ? '#6B5F52' : 'color-mix(in srgb, var(--gv-on-main) 78%, transparent)', fontFamily: FONT, lineHeight: 1.55 }}>
           {line}
         </p>
       )}
@@ -58,7 +62,9 @@ export default function OtherRolesBlock({ slug, apps, tiles, primaryRole, onPick
           key={r}
           href={`/conferences/${slug}/role/${encodeURIComponent(r)}`}
           className="flex items-center justify-between gap-2 rounded-xl px-3 py-2 focus:outline-none"
-          style={{ backgroundColor: 'color-mix(in srgb, var(--gv-accent-light) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--gv-accent-light) 22%, transparent)', color: 'var(--gv-on-main)', textDecoration: 'none', fontFamily: FONT }}
+          style={light
+            ? { backgroundColor: '#FFFFFF', border: '1px solid var(--gv-border)', color: 'var(--gv-main)', textDecoration: 'none', fontFamily: FONT }
+            : { backgroundColor: 'color-mix(in srgb, var(--gv-accent-light) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--gv-accent-light) 22%, transparent)', color: 'var(--gv-on-main)', textDecoration: 'none', fontFamily: FONT }}
         >
           <span className="text-sm font-bold [overflow-wrap:anywhere]">{labelOf(r)}</span>
           <span className="text-xs font-semibold">Applied</span>

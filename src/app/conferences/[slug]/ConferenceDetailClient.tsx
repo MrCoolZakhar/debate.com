@@ -1821,6 +1821,30 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
     return s === 'open' || s === 'open-always';
   }
 
+  // The other roles this person can still apply for (OtherRolesBlock), on the
+  // You card and, after a turn-down, on the role page's You view (prompt 83).
+  const otherRolesFor = (primaryRole: string, tone: 'main' | 'light') => (
+    <OtherRolesBlock
+      slug={slug}
+      apps={myApplications}
+      primaryRole={primaryRole}
+      tone={tone}
+      tiles={enabledRoles.map((r): RoleTile => {
+        const windowStatus = getRoleWindowStatus(r);
+        return {
+          role: r.role,
+          label: roleLabel(r.role),
+          state: windowStatus === 'closed' ? 'closed' : windowStatus === 'opens-soon' ? 'opens-soon' : 'open',
+          price: delegatePriceLabel(displayRolePrice(r, conference.fee_currency, now)),
+          opensLabel: windowStatus === 'opens-soon' && r.applications_open_at
+            ? `Opens ${fmtWindowDate(r.applications_open_at)}`
+            : null,
+        };
+      })}
+      onPick={(role) => { router.push(`/conferences/${slug}/apply?role=${role}`); }}
+    />
+  );
+
   const openRoles = enabledRoles.filter(isRoleOpen);
   const hasOpenRoles = openRoles.length > 0;
 
@@ -2615,6 +2639,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                   // Patch in place rather than refetching the conference: the
                   // RPC has already committed, and this is the only row that
                   // changed.
+                  otherRoles={(role) => otherRolesFor(role, 'light')}
                   onApplicationWithdrawn={(applicationId) => {
                     setMyApplications(prev => prev.map(a => (
                       a.id === applicationId ? { ...a, status: 'withdrawn' } : a
@@ -2921,24 +2946,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                               View your dashboard
                             </a>
                             {/* Several roles per person (9 Nov 2026): the other roles they can still apply for. */}
-                            <OtherRolesBlock
-                              slug={slug}
-                              apps={myApplications}
-                              primaryRole={myApp.role}
-                              tiles={enabledRoles.map((r): RoleTile => {
-                                const windowStatus = getRoleWindowStatus(r);
-                                return {
-                                  role: r.role,
-                                  label: roleLabel(r.role),
-                                  state: windowStatus === 'closed' ? 'closed' : windowStatus === 'opens-soon' ? 'opens-soon' : 'open',
-                                  price: delegatePriceLabel(displayRolePrice(r, conference.fee_currency, now)),
-                                  opensLabel: windowStatus === 'opens-soon' && r.applications_open_at
-                                    ? `Opens ${fmtWindowDate(r.applications_open_at)}`
-                                    : null,
-                                };
-                              })}
-                              onPick={(role) => { router.push(`/conferences/${slug}/apply?role=${role}`); }}
-                            />
+                            {otherRolesFor(myApp.role, 'main')}
                           </>
                         );
                       })()

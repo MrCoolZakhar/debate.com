@@ -165,6 +165,9 @@ function pickDefault(apps: ParticipantApplication[]): ParticipantApplication {
 }
 
 export interface ParticipantViewProps {
+  /** The other roles still open to this person (the conference page's
+   *  OtherRolesBlock, light tone), shown under a turn-down (prompt 83). */
+  otherRoles?: (primaryRole: string) => React.ReactNode;
   conferenceId: string;
   conferenceSlug: string;
   conferenceStartDate: string | null;
@@ -222,7 +225,7 @@ export interface ParticipantViewProps {
 export default function ParticipantView({
   conferenceId, conferenceSlug, conferenceStartDate, conferenceName, myApplications, roleConfigs, myAllocation, committees, allocationSwapMode, isOrganizer = false,
   initialRole, onResolveRole, onSelectRole, participantDataLoading, justClaimedCount,
-  onApplicationWithdrawn, openSupportRequest = 0, onSupportRequestHandled,
+  onApplicationWithdrawn, openSupportRequest = 0, onSupportRequestHandled, otherRoles,
 }: ParticipantViewProps) {
   const { user, session } = useAuth();
   const holdsInitialRole = !!initialRole && myApplications.some(a => a.role === initialRole);
@@ -700,7 +703,6 @@ export default function ParticipantView({
                 key={app.id}
                 onClick={() => selectApplication(app)}
                 aria-pressed={active}
-                title={st.word}
                 className="inline-flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-accent)]"
                 style={{
                   minHeight: 44, padding: '0 16px', borderRadius: 999, cursor: 'pointer',
@@ -712,8 +714,10 @@ export default function ParticipantView({
                 }}
               >
                 <StIcon size={15} strokeWidth={2.2} aria-hidden style={{ color: st.color }} />
+                {/* The role and its state, both read (prompt 83): "Chair · Not accepted". */}
                 {roleLabel(app.role)}
-                <span className="sr-only">, {st.word}</span>
+                <span aria-hidden style={{ color: 'rgba(28,20,16,0.3)' }}>·</span>
+                <span style={{ fontWeight: 600, color: st.color }}>{st.word}</span>
               </button>
             );
           })}
@@ -738,6 +742,10 @@ export default function ParticipantView({
               allowResubmission={(roleConfig?.allow_resubmission ?? false) && (selected.rejection_count ?? 0) < 3}
             />
           )}
+          {/* After a turn-down: the roles still open to them that they have
+              not applied for (never the one they were turned down for), the
+              same OtherRolesBlock as Overview (prompt 83). */}
+          {selected.status === 'rejected' && otherRoles?.(selected.role)}
           <RequestsPanel conferenceId={conferenceId} applicationId={selected.id} myApplications={myApplications} activeRole={selected.role} />
         </>
       ) : (
