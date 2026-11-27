@@ -662,7 +662,7 @@ export default function MunillionGame({ header }: { header?: ReactNode }) {
     centre = (
       <div className="mn-panel mn-card">
         <h2 className="mn-h2 mn-px">The First MUNillion Is Almost Here</h2>
-        <p className="mn-p mn-tx">Seven questions go live at midnight UTC. Come back and grow your placard</p>
+        <p className="mn-p mn-tx">7 questions go live at midnight UTC. Come back and grow your placard</p>
         <Countdown prefix="Next check in" />
       </div>
     );
@@ -671,8 +671,11 @@ export default function MunillionGame({ header }: { header?: ReactNode }) {
     centre = (
       <div className="mn-panel mn-card">
         <div className="mn-kicker mn-px">MUNillion #{game.number} · {formatDate(game.date)}</div>
-        <h2 className="mn-h2 mn-px" style={{ marginTop: '1vh' }}>{started ? 'Pick Up Where You Left Off' : "Today's Seven Questions"}</h2>
-        <p className="mn-p mn-tx">Thirty seconds each, one answer per question. Rare answers make your placard grow, and one answer on every list wins The Gavel</p>
+        <h2 className="mn-h2 mn-px" style={{ marginTop: '1vh' }}>{started ? 'Pick Up Where You Left Off' : "Today's 7 Questions"}</h2>
+        <p className="mn-p mn-tx">
+          <span className="mn-wide-only">Thirty seconds each, one answer per question. Rare answers make your placard grow, and one answer on every list wins The Gavel</span>
+          <span className="mn-phone-only">Thirty seconds each. One answer on every list wins The Gavel</span>
+        </p>
         {!signedIn ? (
           <p className="mn-p mn-tx">
             <button type="button" className="mn-link mn-tx focus:outline-none" style={{ background: 'none', border: 0, padding: 0, cursor: 'pointer', fontSize: 'inherit' }} onClick={() => openAuth({ next: '/games' })}>
@@ -809,7 +812,8 @@ export default function MunillionGame({ header }: { header?: ReactNode }) {
   }
 
   return (
-    <div className="mn-stage" ref={stageRef}>
+    // phones: before the first answer the empty Points and Streak boxes step aside to give the card room
+    <div className={`mn-stage${phase === 'intro' && streak === 0 && answeredCount === 0 ? ' is-quiet-hud' : ''}`} ref={stageRef}>
       <div className="mn-bg" aria-hidden />
       <div className="mn-shade" aria-hidden />
       <div className="mn-motes" aria-hidden>
