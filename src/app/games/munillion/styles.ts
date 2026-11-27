@@ -147,6 +147,12 @@ export const MUNILLION_CSS = `
 .mn-mini .mn-num.is-now { background: #7BC9A0; color: #0B0E13; border-color: #7BC9A0; }
 .mn-mini .is-muted { color: #8D846F; }
 
+/* where a question's answers come from: an "i" on the result card and in the reveal */
+.mn-source { display: flex; align-items: flex-start; justify-content: center; gap: 8px; margin: .8vh 0 0; color: #B9B09A; font-size: 17px; text-align: left; }
+.mn-result .mn-source { align-items: center; }
+.mn-info { flex: none; width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; border: 2px solid #EED98A; background: rgba(14,18,26,.8);
+  color: #EED98A; font-size: 9px; line-height: 1; cursor: pointer; padding: 0; }
+
 /* the answer bar */
 .mn-bar-zone { width: min(100%, 720px); justify-self: center; position: relative; z-index: 2; }
 .mn-answer-row { display: flex; gap: 8px; align-items: stretch; }

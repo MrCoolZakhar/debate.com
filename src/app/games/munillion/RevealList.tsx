@@ -79,6 +79,15 @@ function Round({ q, open, onToggle }: { q: MunRevealQuestion; open: boolean; onT
 
       {open ? (
         <div id={bodyId} className="mn-round-body">
+          {q.source ? (
+            <p className="mn-source mn-tx" style={{ margin: '0 0 8px' }}>
+              <span className="mn-info mn-px" aria-hidden>i</span>
+              <span>
+                {q.source.note}
+                {q.source.url ? <> <a className="mn-link" href={q.source.url} target="_blank" rel="noopener noreferrer">Source</a></> : null}
+              </span>
+            </p>
+          ) : null}
           <div className="mn-filters" role="group" aria-label="Show answers by score">
             <button type="button" className={`mn-filter mn-px focus:outline-none${filter === 'all' ? ' is-on' : ''}`} onClick={() => { setFilter('all'); setShown(PAGE); }}>
               All {q.answers.length}

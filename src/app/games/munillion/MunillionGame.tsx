@@ -22,6 +22,7 @@ import { openAuth } from '@/lib/authModal';
 import { friendlyError } from '@/lib/friendlyError';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { ArmSprite, TierIcon } from '@/components/munillion/PixelArt';
+import { HoverHint } from '@/components/HoverHint';
 import {
   ADD_CONFERENCE_HREF,
   MAX_POINTS,
@@ -41,6 +42,7 @@ import {
   type MunQuestion,
   type MunReveal,
   type MunToday,
+  type MunSource,
 } from '@/lib/munillion';
 import { isBlockedText } from '@/lib/munillionProfanity';
 import RevealList from './RevealList';
@@ -60,6 +62,7 @@ interface ResultView {
   slug: string | null;
   typed: string | null;
   reason: 'correct' | 'late' | 'skipped';
+  source: MunSource | null;
 }
 
 interface Bit { bx: string; by: string; br: string; c: string; delay: string }
@@ -85,9 +88,15 @@ function formatDate(iso: string | undefined): string {
   return new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 }
 
-function msToNextUtcMidnight(now: number): number {
+// A new game opens at 06:00 UTC (owner, 27 Nov 2026: later than midnight so more time zones get a full day).
+// The database twin is _munillion_game_day().
+const SWITCH_HOUR_UTC = 6;
+
+function msToNextGame(now: number): number {
   const d = new Date(now);
-  return Math.max(0, Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1) - now);
+  let next = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), SWITCH_HOUR_UTC);
+  if (next <= now) next += 24 * 3600 * 1000;
+  return Math.max(0, next - now);
 }
 
 function hms(ms: number): string {
@@ -101,7 +110,7 @@ function Countdown({ prefix }: { prefix: string }) {
     const id = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(id);
   }, []);
-  return <p className="mn-countdown mn-px">{prefix} {hms(msToNextUtcMidnight(now))}</p>;
+  return <p className="mn-countdown mn-px">{prefix} {hms(msToNextGame(now))}</p>;
 }
 
 /** Points that count up when a result lands. */
@@ -374,7 +383,7 @@ export default function MunillionGame({ header }: { header?: ReactNode }) {
     }));
     setSuggestion(null);
     setMsg(null);
-    setResult({ position, tier, label: r.label ?? null, sub: r.sub ?? null, slug: r.slug ?? null, typed, reason });
+    setResult({ position, tier, label: r.label ?? null, sub: r.sub ?? null, slug: r.slug ?? null, typed, reason, source: r.source ?? null });
     pendingRef.current = { total: newTotal, tier };
     growTargetRef.current = { total: newTotal, tier };
     setGrowKey((k) => k + 1);
@@ -432,6 +441,7 @@ export default function MunillionGame({ header }: { header?: ReactNode }) {
         playBuzz();
         if (r.not_listed && !isBlockedText(text)) setConfMisses((m) => (m.some((x) => x.toLowerCase() === text.toLowerCase()) ? m : [...m, text]));
         if (r.reason === 'blocked') setMsg("Let's keep it clean. Try another answer");
+        else if (r.reason === 'wrong_country' && r.conference) setMsg(`${r.conference.label} is ${r.conference.country ? `in ${r.conference.country}` : 'online'}, which doesn't count here`);
         else if ((r.attempts_left ?? 1) <= 0) setMsg("That's every try for this one");
         else if (q.kind === 'conference') setMsg('Not on Gavelling yet. Try another, or add yours with the plus');
         else if (q.kind === 'number') setMsg('Type a resolution number, like 242');
@@ -662,7 +672,7 @@ export default function MunillionGame({ header }: { header?: ReactNode }) {
     centre = (
       <div className="mn-panel mn-card">
         <h2 className="mn-h2 mn-px">The First MUNillion Is Almost Here</h2>
-        <p className="mn-p mn-tx">7 questions go live at midnight UTC. Come back and grow your placard</p>
+        <p className="mn-p mn-tx">7 questions go live at 06:00 UTC. Come back and grow your placard</p>
         <Countdown prefix="Next check in" />
       </div>
     );
@@ -767,6 +777,14 @@ export default function MunillionGame({ header }: { header?: ReactNode }) {
             </>
           )}
         </p>
+        {result.source ? (
+          <p className="mn-source mn-tx">
+            <HoverHint text={result.source.note}>
+              <button type="button" className="mn-info mn-px focus:outline-none" aria-label="Where these answers come from">i</button>
+            </HoverHint>
+            <span>Where these answers come from</span>
+          </p>
+        ) : null}
       </div>
     );
     bar = (

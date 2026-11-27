@@ -70,6 +70,9 @@ export interface MunToday {
   signed_in?: boolean;
 }
 
+/** Where a question's answers come from, shown as an "i" once the question is over. */
+export interface MunSource { note: string; url: string | null }
+
 export interface MunAnswerResult {
   ok: boolean;
   reason?: string;
@@ -85,6 +88,9 @@ export interface MunAnswerResult {
   total?: number;
   finished?: boolean;
   attempts_left?: number;
+  source?: MunSource | null;
+  /** reason 'wrong_country': a real conference, in a country that doesn't count on this question. */
+  conference?: { label: string; country: string | null };
 }
 
 export interface MunOpenResult {
@@ -105,6 +111,7 @@ export interface MunRevealQuestion {
   number_max: number | null;
   mine: { typed: string | null; label: string | null; sub: string | null; slug: string | null; tier: number | null } | null;
   gavel: MunRevealAnswer | null;
+  source?: MunSource | null;
   /** Conference question: names this player typed that aren't on Gavelling (for "Add <name>"). */
   missed?: string[];
   /** Every answer, best tier first (the conference question lists every conference on Gavelling). */

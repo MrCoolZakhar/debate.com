@@ -53,7 +53,7 @@ const FAQ: FaqItem[] = [
   {
     question: 'How many questions are there each day?',
     answer:
-      'Seven questions, the same for everyone, with 30 seconds for each one. A new game starts at midnight UTC.',
+      'Seven questions, the same for everyone, with 30 seconds for each one. A new game starts at 06:00 UTC.',
   },
   {
     question: 'What is the highest score in MUNillion?',
@@ -97,7 +97,7 @@ export default function Article() {
         <p>
           MUNillion is made by Gavelling, the free platform for running MUN committees and conferences. It lives at{' '}
           <Link href="/games">gavelling.com/games</Link>. There is nothing to download and you do not need an account to
-          play. Everyone gets the same seven questions on the same day, and a new game opens at midnight UTC, so you can
+          play. Everyone gets the same seven questions on the same day, and a new game opens at 06:00 UTC, so you can
           compare notes with your club or your whole committee afterwards.
         </p>
         <p>

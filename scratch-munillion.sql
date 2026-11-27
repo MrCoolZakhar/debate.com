@@ -799,3 +799,10 @@ grant execute on function public.munillion_reset_preview_play(text) to anon, aut
 --   munillion_clean_and_did_you_mean / munillion_clean_fix_niger: _munillion_is_blocked_text, table munillion_conf_adds, munillion_conf_add,
 --     did-you-mean for every non-exact answer, munillion_reveal returns 'missed' conference names
 --   munillion_sim_whole_words, munillion_conf_suggest_distinct_words: whole-word partial matches, _munillion_conf_core
+
+-- ── 27 Nov 2026: munillion_day2_features (applied from Claude Code under the MUNillion one-off approval) ──
+-- Game day switches at 06:00 UTC (_munillion_game_day), auto-add (_munillion_auto_add), suggest-only aliases
+-- (munillion_answers.suggest_aliases / suggest_keys), country-limited conference questions (conf_countries,
+-- conf_country_tiers, munillion_conf_index.country, _munillion_conf_tier), source notes (_munillion_source).
+-- Full text: the migration of that name in the project. Game 2 was seeded unpublished by munillion_seed_game_2_a
+-- and munillion_seed_game_2_wars, dated 2026-11-28.
