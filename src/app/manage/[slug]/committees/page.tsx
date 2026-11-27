@@ -43,6 +43,8 @@ import {
 interface DisplayChair {
   name: string;
   avatar_url: string | null;
+  /** The account behind an entry (sync_display_chairs, 26 Nov 2026). Absent on a chair typed in by name. */
+  user_id?: string | null;
   /** Display-only title from the trigger (src/lib/chairTitles.ts); absent on old rows. */
   title?: string | null;
 }
@@ -199,7 +201,7 @@ function ViewToggle({ value, onChange }: { value: 'cards' | 'list'; onChange: (v
 // conference_chair_invites rows and never reach display_chairs, which is what
 // the public conference page prints.
 type DaisMember =
-  | { kind: 'chair'; key: string; name: string; avatarUrl: string | null; userId: string | null; index: number; title: string | null }
+  | { kind: 'chair'; key: string; name: string; avatarUrl: string | null; userId: string | null; index: number; title: string | null; typed: boolean }
   | { kind: 'invite'; key: string; name: string; avatarUrl: string | null; invite: PendingChairInvite; title: string | null };
 
 /** Merges the seated dais and this committee's pending invites into one
@@ -216,9 +218,11 @@ function buildDaisMembers(
     key: `chair-${i}-${ch.name}`,
     name: ch.name,
     avatarUrl: ch.avatar_url,
-    userId: linkable ? (chairIds[i] ?? null) : null,
+    userId: ch.user_id ?? (linkable && i < chairIds.length ? chairIds[i] : null),
     index: i,
     title: chairTitleLabel(ch.title),
+    // Past the account chairs: a chair typed in by name (no account, nothing to remove from chair_user_ids).
+    typed: !ch.user_id && i >= chairIds.length,
   }));
   const pending: DaisMember[] = invites.map(inv => ({
     kind: 'invite',
@@ -657,6 +661,7 @@ function DaisRow({ members, size, showNames, onAdd, onRemoveChair, onResendInvit
                       Not linked to a Gavelling account.
                     </p>
                   )}
+                  {!open.typed && (
                   <button
                     type="button"
                     onClick={() => { setOpenKey(null); onRemoveChair(open.index, open.name); }}
@@ -667,6 +672,7 @@ function DaisRow({ members, size, showNames, onAdd, onRemoveChair, onResendInvit
                     <X size={13} strokeWidth={2.6} />
                     Remove from dais
                   </button>
+                  )}
                 </>
               )}
             </div>
@@ -1169,16 +1175,35 @@ export default function CommitteesPage() {
   // is recomputed by the DB trigger; never written client-side. The avatar→user_id
   // mapping relies on the trigger keeping display_chairs index-aligned with
   // chair_user_ids; on a mismatch (hand-seeded demo dais) fall back to profiles.
+  /** The dais the database will write (sync_display_chairs, 26 Nov 2026): the account chairs in
+   *  chair_user_ids order (by user_id when an entry has one, else by its old position), then every
+   *  chair typed in by name, kept in order. */
+  function optimisticDais(prevDc: DisplayChair[], prevIds: string[], nextIds: string[], added?: DisplayChair & { user_id: string }): DisplayChair[] {
+    const accountAt = (id: string): DisplayChair | null => {
+      const byId = prevDc.find(e => e.user_id === id);
+      if (byId) return byId;
+      const pos = prevIds.indexOf(id);
+      if (pos >= 0 && pos < prevDc.length && !prevDc[pos].user_id) return prevDc[pos];
+      return added && added.user_id === id ? added : null;
+    };
+    const accounts = nextIds.map(accountAt).filter((e): e is DisplayChair => !!e);
+    const typed = prevDc.filter((e, i) => !e.user_id && i >= prevIds.length);
+    return [...accounts, ...typed];
+  }
+
   async function handleRemoveChair(c: Committee, index: number, name: string) {
     if (!session || !conference || busyIds.has(c.id)) return;
     if (!window.confirm(`Remove ${name} from the ${c.abbreviation || c.name} dais?`)) return;
     const supabase = getAuthedClient(session.access_token);
     const ids = c.chair_user_ids ?? [];
     const dc = c.display_chairs ?? [];
-    let userId: string | null = null;
-    if (ids.length === dc.length) {
+    let userId: string | null = dc[index]?.user_id ?? null;
+    if (userId) {
+      // The entry names its account.
+    } else if (dc.length >= ids.length && index < ids.length) {
+      // Account chairs come first, in chair_user_ids order; typed chairs follow.
       userId = ids[index] ?? null;
-    } else if (ids.length > 0) {
+    } else if (ids.length > 0 && index < ids.length) {
       const { data } = await supabase.from('profiles').select('id, display_name').in('id', ids);
       userId = ((data ?? []) as { id: string; display_name: string }[]).find(p => p.display_name === name)?.id ?? null;
     }
@@ -1191,7 +1216,7 @@ export default function CommitteesPage() {
     const prevIds = c.chair_user_ids;
     const prevDisplay = c.display_chairs;
     const nextIds = ids.filter(id => id !== userId);
-    const nextDisplay = ids.length === dc.length ? dc.filter((_, i) => i !== index) : dc.filter(ch => ch.name !== name);
+    const nextDisplay = optimisticDais(dc, ids, nextIds);
     setCommittees(prev => prev.map(x => x.id === c.id ? { ...x, chair_user_ids: nextIds, display_chairs: nextDisplay } : x));
     setActionError('');
     markBusy(c.id, true);
@@ -1301,9 +1326,10 @@ export default function CommitteesPage() {
     const prevDisplay = c.display_chairs;
     const nextIds = Array.from(new Set([...(c.chair_user_ids ?? []), app.user_id]));
     const alreadyOnDais = (c.chair_user_ids ?? []).includes(app.user_id);
+    // Typed chairs stay after the account chairs (sync_display_chairs, 26 Nov 2026).
     const nextDisplay = alreadyOnDais
       ? (c.display_chairs ?? [])
-      : [...(c.display_chairs ?? []), { name: app.profiles?.display_name ?? 'Unknown', avatar_url: app.profiles?.avatar_url ?? null }];
+      : optimisticDais(c.display_chairs ?? [], c.chair_user_ids ?? [], nextIds, { name: app.profiles?.display_name ?? 'Unknown', avatar_url: app.profiles?.avatar_url ?? null, user_id: app.user_id });
     setCommittees(prev => prev.map(x => x.id === c.id ? { ...x, chair_user_ids: nextIds, display_chairs: nextDisplay } : x));
     setAddChairTarget(null);
     setActionError('');
@@ -1336,8 +1362,9 @@ export default function CommitteesPage() {
   // The server said open at load; a chair account added since closes it here
   // at once, without waiting for the refetch. Never opens what the server gated.
   // A pending invite never hides it: invited is not joined (owner, 28 Oct 2026).
-  const chairCodeFor = (c: { id: string; chair_user_ids: string[] | null }) =>
-    (c.chair_user_ids?.length ?? 0) === 0 ? openDaisCodes[c.id] ?? null : null;
+  // Since 26 Nov 2026 (owner) the chair password works with chairs seated too
+  // (an emergency chair), so it shows whenever the server gave one.
+  const chairCodeFor = (c: { id: string }) => openDaisCodes[c.id] ?? null;
 
   let sortedCommittees = committees;
   if (sortKey) {
@@ -1492,7 +1519,9 @@ export default function CommitteesPage() {
               // index i could point at the wrong person. Same guard as
               // ConferenceDetailClient.tsx and handleRemoveChair above.
               const daisIds = c.chair_user_ids ?? [];
-              const daisLinkable = daisIds.length === dais.length;
+              // Account chairs first, typed chairs after (26 Nov 2026): the first
+              // chair_user_ids.length entries line up with the accounts.
+              const daisLinkable = dais.length >= daisIds.length;
               // A room with no countries yet (13 Oct 2026): slotCount 0 used to fall back to
               // total_slots (1) and read "1 seat".
               const seatLabel = c.slotCount === 0
@@ -1670,7 +1699,8 @@ export default function CommitteesPage() {
               // index i could point at the wrong person. Same guard as
               // ConferenceDetailClient.tsx and handleRemoveChair above.
               const daisIds = c.chair_user_ids ?? [];
-              const daisLinkable = daisIds.length === dais.length;
+              // Account chairs first, typed chairs after (26 Nov 2026).
+              const daisLinkable = dais.length >= daisIds.length;
               return (
                 <article
                   key={c.id}
