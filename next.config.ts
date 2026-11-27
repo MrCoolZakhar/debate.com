@@ -97,6 +97,9 @@ const nextConfig: NextConfig = {
       // into /manage/<slug>/team. The query string is carried over (?promote=,
       // ?highlight=<organizer id>); the Team page reads its tab from any tab value.
       { source: '/manage/:slug/jobs', destination: '/manage/:slug/team?tab=jobs', permanent: false },
+      // Assignment became Allocations (owner, 26 Nov 2026); the query string carries over (?pay=unpaid and the like).
+      { source: '/manage/:slug/assignment', destination: '/manage/:slug/allocations', permanent: true },
+      { source: '/manage/:slug/assignment/:path*', destination: '/manage/:slug/allocations/:path*', permanent: true },
       { source: '/manage/:slug/settings', has: [{ type: 'query', key: 'tab', value: '(team|organizers)' }], destination: '/manage/:slug/team?tab=members', permanent: false },
       { source: '/manage/:slug/settings', has: [{ type: 'query', key: 'highlight' }], destination: '/manage/:slug/team?tab=members', permanent: false },
       // The software comparison moved to its 2027 edition (14 Nov 2026); the

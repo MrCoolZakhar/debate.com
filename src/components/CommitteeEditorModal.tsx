@@ -1016,7 +1016,7 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
         .eq('country_name', from);
       if (aErr) {
         console.error('[committee-editor] rename allocations', aErr);
-        setError(`"${from}" was renamed, but its delegate could not be moved with it. Please check Assignment.`);
+        setError(`"${from}" was renamed, but its delegate could not be moved with it. Please check Allocations.`);
         return 'fail';
       }
       const { error: apErr } = await supabase.from('applications')

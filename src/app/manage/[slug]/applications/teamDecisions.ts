@@ -24,7 +24,7 @@ import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
 import { queueEventEmail, notifyIfNeeded, heldUnresolvedMessage, fallbackDefaultMessage } from '@/lib/emailEvents';
 import { notifyErr } from '@/lib/appNotify';
 import { UserFacingError } from '@/lib/friendlyError';
-import { poolForRole, fillFreeSpots } from '@/app/manage/[slug]/assignment/delegationShared';
+import { poolForRole, fillFreeSpots } from '@/app/manage/[slug]/allocations/delegationShared';
 import { runRoleSwap } from './roleSwap';
 
 type Client = ReturnType<typeof getAuthedClient>;

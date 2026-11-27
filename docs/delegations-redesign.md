@@ -53,7 +53,7 @@ authenticated users insert. There is no organiser INSERT/DELETE path in the UI.
 
 ### Surfaces
 
-- **Assignment → DELEGATIONS tab** (`assignment/page.tsx:4699-4721`, `:5201`, `DelegationsView.tsx`).
+- **Assignment → DELEGATIONS tab** (`allocations/page.tsx:4699-4721`, `:5201`, `DelegationsView.tsx`).
   The only real delegation screen. A card grid; each card opens to advisors, head delegates, pledges
   with MARK RECEIVED, add-by-search, drag-to-swap spots, waived and not-attending lists, delete when
   empty. Loads only `accepted` / `assigned` members (`DelegationsView.tsx:229`), so a delegation
@@ -193,7 +193,7 @@ Each row:
 Expanding a row opens its panel:
 - actions: **Message delegation** (the page's existing one-off composer, frozen recipients),
   **Remind to pay** (the page's `handleBulkRemindPay`, 24h cooldown, to the people who owe),
-  **Open in Assignment** (`/manage/[slug]/assignment?mode=delegations&delegation=<id>`);
+  **Open in Assignment** (`/manage/[slug]/allocations?mode=delegations&delegation=<id>`);
 - a pledge line when there is one ("Pledged 12 spots and 1 advisor ticket", "Waiting for payment"
   or "Received");
 - members: avatar, name, head-delegate crown, role, status, allocation (committee acronym + round
@@ -237,7 +237,7 @@ actions wrap, member rows drop the payment column into the second line. Laptop: 
 - `src/app/manage/[slug]/applications/DelegationsBoard.tsx`: the list, counts, filters, rows, panel.
 - `src/app/manage/[slug]/applications/page.tsx`: the switch, mounting, the popup removed, the name
   link repointed, and the mark-unpaid spot bug fixed (only a self-funded paid spot leaves the pool).
-- `src/app/manage/[slug]/assignment/page.tsx` + `DelegationsView.tsx`: `?mode=` and `?delegation=`
+- `src/app/manage/[slug]/allocations/page.tsx` + `DelegationsView.tsx`: `?mode=` and `?delegation=`
   deep links.
 - No migration. No RLS change: organisers already read `societies`, `invoices`, `payments`.
 
@@ -245,7 +245,7 @@ actions wrap, member rows drop the payment column into the second line. Laptop: 
 
 - `tsc --noEmit` clean; eslint clean on the new files (the only errors in touched files are
   pre-existing `set-state-in-effect` findings at `DelegationsView.tsx:279` and
-  `assignment/page.tsx:995, :2760`).
+  `allocations/page.tsx:995, :2760`).
 - The derivation was run, as the real TypeScript, against live data exported read-only for two
   conferences, and matched independent SQL figure for figure:
   - Stonehill ISMUN (7 delegations, 130 members): e.g. Canadian International School Bangalore

@@ -268,7 +268,7 @@ const NAV_SECTIONS = (slug: string, badges: NavBadges = NO_BADGES): NavSection[]
     items: [
       { icon: Building2, label: 'Committees',   href: `/manage/${slug}/committees`,   external: false, badge: 0 },
       { icon: Users,     label: 'Applications', href: `/manage/${slug}/applications`, external: false, badge: badges.applications },
-      { icon: MapPin,    label: 'Assignment',   href: `/manage/${slug}/assignment`,   external: false, badge: badges.assignment },
+      { icon: MapPin,    label: 'Allocations',   href: `/manage/${slug}/allocations`,   external: false, badge: badges.assignment },
       { icon: FileText,  label: 'Documents',    href: `/manage/${slug}/documents`,    external: false, badge: 0 },
       // Scoreboard is deliberately NOT a nav item. Delegate performance is a
       // property of a committee, not of the dashboard, so it opens from a
@@ -1183,7 +1183,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
   }
 
   const SECTION_PERMS: Record<string, string> = {
-    committees: 'committees', applications: 'applications', import: 'import', assignment: 'assignment',
+    committees: 'committees', applications: 'applications', import: 'import', allocations: 'assignment',
     documents: 'documents',
     // The scoreboard is no longer a nav section, but the route is still
     // reachable by URL — so its permission mapping MUST stay. Deleting it would

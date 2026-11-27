@@ -62,7 +62,7 @@ Owner: Peter, 19 Oct 2026. The decisions below came out of a Q&A before the rebu
 - Unused RPCs: `delegation_portal_overview`, `delegation_transfer_head`, `delegation_promote_to_advisor` (head delegate only today), `delegation_assign_seat`.
 - `perform_delegation_swap` already honours `conferences.allocation_swap_mode` (`self_serve` lets leaders swap): the reshuffle setting builds on it, plus a deadline.
 - Delegates see their delegation's names and roles (`my_delegation_roster`) and only their double-delegation partner in the committee (`CoDelegateCard`). A committee list is new.
-- Leader card: `participant/DelegationPanel.tsx`. Organiser: `applications/DelegationsBoard.tsx` (in Applications), `assignment/DelegationsView.tsx`.
+- Leader card: `participant/DelegationPanel.tsx`. Organiser: `applications/DelegationsBoard.tsx` (in Applications), `allocations/DelegationsView.tsx`.
 - "Pledge" copy: `pay/payPanels.tsx`, `DelegationPanel.tsx`, `DelegationsBoard.tsx`, `DelegationsView.tsx`, `applications/page.tsx:4311`, `settings/delegationsUi.tsx`, `financials/shared.tsx`, `ApplicantsDial.tsx`, the emails (`defaultEmails.ts`, `emailEvents.ts`, `emailCard.ts`) and two database error strings.
 
 ## The database side (20 Oct 2026, after Christian's answers)
@@ -124,7 +124,7 @@ Taste board: https://claude.ai/artifact/CAVUg2YLKyTj5Y6yuVmLup
 
 ## Round 7: the new seat board (Peter, 21 Oct 2026)
 
-- Delegates mode of /manage/<slug>/assignment opens on the seat board (`SeatBoard.tsx`, design on the Assignment Taste Board, "Final Direction"): left, waiting people oldest accepted first (`decided_at`, else submitted) with filters and People / Delegations tabs; middle (the only scrolling column), the suggested seats feed, or the opened person with preferences and best three seats ("Back to suggestions"; after an assignment it returns to suggestions); right, committees as ring tiles whose pop-up (`SeatBoardPopup.tsx`) lists every country A to Z with the best waiting people per open seat, or, with a person open, "Seat <Name> in <Committee>" ranked by fit. Drag a person onto a ring to open that pop-up. "Classic view" keeps the old board. The fit engine is `src/lib/assignmentFit.ts` (pure, shared).
+- Delegates mode of /manage/<slug>/allocations opens on the seat board (`SeatBoard.tsx`, design on the Assignment Taste Board, "Final Direction"): left, waiting people oldest accepted first (`decided_at`, else submitted) with filters and People / Delegations tabs; middle (the only scrolling column), the suggested seats feed, or the opened person with preferences and best three seats ("Back to suggestions"; after an assignment it returns to suggestions); right, committees as ring tiles whose pop-up (`SeatBoardPopup.tsx`) lists every country A to Z with the best waiting people per open seat, or, with a person open, "Seat <Name> in <Committee>" ranked by fit. Drag a person onto a ring to open that pop-up. "Classic view" keeps the old board. The fit engine is `src/lib/assignmentFit.ts` (pure, shared).
 - Delegations tab (`SeatBoardDelegations.tsx`, `SeatBoardGivePopup.tsx`): One country (every committee where it is free), Best seat in each room (`rankSeatsForSociety`), and Custom (default: a committee pop-up where each tap gives a country and stays open, with Undo and a tally). Writes through `giveExactSeats` / `takeBackOneSeat`. Known limit: undoing a double whose first seat was already held takes back both seats.
 - The Applications applicant pop-up shows Best Seats (`applications/ApplicantBestSeats.tsx`): preferences and the best three seats; Assign opens the seat board with that person (`?person=<id>`).
 
@@ -161,7 +161,7 @@ Taste board: https://claude.ai/artifact/CAVUg2YLKyTj5Y6yuVmLup
 
 ## Round 12: seat board (Peter, 22 Oct 2026)
 
-- The assignment page opens on the Classic view by default for about two weeks (`CLASSIC_BY_DEFAULT` in assignment/page.tsx: flip to false then), with an introduction card beside the switch (`SeatBoardIntro.tsx`, "Try it" / "Not now" per browser); a browser's own choice and `?person=` links still open the seat board.
+- The assignment page opens on the Classic view by default for about two weeks (`CLASSIC_BY_DEFAULT` in allocations/page.tsx: flip to false then), with an introduction card beside the switch (`SeatBoardIntro.tsx`, "Try it" / "Not now" per browser); a browser's own choice and `?person=` links still open the seat board.
 - Committee pop-up rows are one height; a double held by one delegation reads "<Delegation> ×2"; an open seat opens an anchored dropdown of best-fit people, the other seat's delegation first on a gold tint (or a line saying nobody from it is waiting).
 - Allocation emails read "Automatic | Manual" with "Send N waiting". The 1st choice sort is gone. The opened delegation card shows "N delegate spots paid · M given".
 - Give pop-up: tapping a given row takes it back; give and take back share one queue and late results never overwrite a newer tap.
@@ -176,7 +176,7 @@ Taste board: https://claude.ai/artifact/CAVUg2YLKyTj5Y6yuVmLup
 
 ## Round 14: the classic committee pop-up everywhere (Peter, 22 Oct 2026)
 
-- "It needs to be similar to BEFORE in a committee, I liked it that way." The classic board's committee pop-up moved unchanged into `assignment/CommitteeDetailModal.tsx` (`CommitteeOverviewModal`, with the importance dashes, `TierBadge`, the modal card and the row menu page.tsx shares). The seat board opens THIS pop-up for a committee (the page renders it, same handlers: + Assign through the classic assign flow, Change seat, Deallocate, a person's detail). `SeatBoardPopup.tsx` (its dropdown and in-row expansion) is gone; this supersedes the pop-up parts of Rounds 7, 9, 10 and 12.
+- "It needs to be similar to BEFORE in a committee, I liked it that way." The classic board's committee pop-up moved unchanged into `allocations/CommitteeDetailModal.tsx` (`CommitteeOverviewModal`, with the importance dashes, `TierBadge`, the modal card and the row menu page.tsx shares). The seat board opens THIS pop-up for a committee (the page renders it, same handlers: + Assign through the classic assign flow, Change seat, Deallocate, a person's detail). `SeatBoardPopup.tsx` (its dropdown and in-row expansion) is gone; this supersedes the pop-up parts of Rounds 7, 9, 10 and 12.
 - With a person open in the middle, or a person dropped on a ring, the same pop-up's open seats read "Seat <First name>" and seat that person in that exact seat (`Suggestion.seat`, honoured by `quickAssign` while the seat is still open) through `requestQuickAssign`, then close.
 - The Delegations tab's give pop-up (`SeatBoardGivePopup.tsx`) is the same pop-up in give mode: the same card, header, seats-filled bar and rows by importance; "Giving to <Delegation>" with the tally above the bar; an open seat the delegation can take reads "Give" (gives the country, the pop-up stays open), a country given here reads "Given · Undo" and a second tap takes it back; Done closes. Its write queue is unchanged.
 

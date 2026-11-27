@@ -1,7 +1,7 @@
 'use client';
 
 // ============================================================
-// src/app/manage/[slug]/assignment/displayNames.tsx
+// src/app/manage/[slug]/allocations/displayNames.tsx
 //
 // Names that fit without an ellipsis on the allocation portal (owner, 23 Sep
 // 2026: "a lot of things get cropped").

@@ -46,7 +46,7 @@ export interface OrganizerSection {
 export const ORGANIZER_SECTIONS: OrganizerSection[] = [
   { key: 'committees',    label: 'Committees',   icon: Building2,  blurb: 'Create committees, edit topics and seats, open the live scoreboard.' },
   { key: 'applications',  label: 'Applications', icon: Users,      blurb: 'Read, accept and reject delegate and chair applications.' },
-  { key: 'assignment',    label: 'Assignment',   icon: MapPin,     blurb: 'Allocate accepted applicants to committees and country seats.' },
+  { key: 'assignment',    label: 'Allocations',   icon: MapPin,     blurb: 'Allocate accepted applicants to committees and country seats.' },
   { key: 'documents',     label: 'Documents',    icon: FileText,   blurb: 'Study guides, position papers and their release schedule.' },
   { key: 'email_builder', label: 'Email',        icon: Mail,       blurb: 'Compose and send conference emails from the builder.' },
   { key: 'financials',    label: 'Financials',   icon: CreditCard, blurb: 'Fees, add-ons, vouchers, invoices, payouts and financial aid.' },

@@ -39,7 +39,7 @@ import {
 import { matchPresetEmblem } from '@/lib/presetNames';
 import {
   poolForRole, releasePoolSpot, MemberAvatar, markNotAttending, undoNotAttending,
-} from '@/app/manage/[slug]/assignment/delegationShared';
+} from '@/app/manage/[slug]/allocations/delegationShared';
 import { LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
 import { type CustomQuestion, type CustomAnswers, normalizeBlocks, questionsOf, displayAnswer } from '@/lib/customQuestions';
 import { useScrollLock } from '@/hooks/useScrollLock';
@@ -48,7 +48,7 @@ import DelegationsTab from './delegations/DelegationsTab';
 import DelegationPopupLink from '@/app/manage/[slug]/DelegationPopupLink';
 import { useDelegationSummaries } from './DelegationAvatar';
 import { RowDelegation, ROW_DELEGATION_PILL, rowDelegationTitle, type RowDelegationProps } from './RowDelegation';
-import { countryShortName } from '../assignment/displayNames';
+import { countryShortName } from '../allocations/displayNames';
 import OpenDelegateApplications from './OpenDelegateApplications';
 import { rejectUpdates, writeReject, rejectFollowUps, acceptFollowUps } from './teamDecisions';
 import { useConferenceMoney, moneyState, moneyLabel, moneyOwing, type MoneyRow, type MoneyState, type LivePay } from '@/lib/applicationMoney';
@@ -302,7 +302,7 @@ type LucideGlyph = React.ComponentType<{ size?: number; strokeWidth?: number; st
 const STATUS_PILL: Record<string, { tone: MarkTone; label: string; icon: LucideGlyph }> = {
   submitted:    { tone: 'pending', label: 'Submitted',  icon: Clock },
   accepted:     { tone: 'done',    label: 'Accepted',   icon: CheckCircle2 },
-  assigned:     { tone: 'done',    label: 'Assigned',   icon: BadgeCheck },
+  assigned:     { tone: 'done',    label: 'Allocated',  icon: BadgeCheck },
   'checked-in': { tone: 'done',    label: 'Checked in', icon: UserRoundCheck },
   rejected:     { tone: 'danger',  label: 'Rejected',   icon: XCircle },
   withdrawn:    { tone: 'neutral', label: 'Withdrawn',  icon: LogOut },
@@ -1164,7 +1164,7 @@ function CountryFlag({ name, code, size = 14 }: { name: string | null | undefine
 const STATUS_OPTIONS = [
   { label: 'Submitted', value: 'submitted' },
   { label: 'Accepted', value: 'accepted' },
-  { label: 'Assigned', value: 'assigned' },
+  { label: 'Allocated', value: 'assigned' },
   { label: 'Checked In', value: 'checked-in' },
   { label: 'Rejected', value: 'rejected' },
   { label: 'Withdrawn', value: 'withdrawn' },
@@ -5568,11 +5568,11 @@ export default function ApplicationsView({ scope }: { scope: 'participants' | 't
                     {isDelegate && (
                       <span style={notAttendingLock}>
                         <Link
-                          href={`/manage/${conference.slug}/assignment`}
+                          href={`/manage/${conference.slug}/allocations`}
                           className="inline-flex items-center gap-2 focus:outline-none"
                           style={primaryBtn}
                         >
-                          Assign
+                          Allocate
                           <ArrowRight size={16} strokeWidth={2.6} />
                         </Link>
                       </span>

@@ -39,8 +39,8 @@ import type { FreeSlot } from '@/app/manage/[slug]/applications/delegations/soci
 import {
   buildGridRows, committeeEmblemSrc, committeeShort, initialsOf, orderRows, paidSpotsBySociety, rowOrderFor, seatsHeldBy,
   type GridAllocation, type GridCommittee, type GridRow, type GridSociety, type PaidApp, type SeatCell,
-} from '@/app/manage/[slug]/assignment/delegationSeatsGrid';
-import { giveSeats, takeBackSeats } from '@/app/manage/[slug]/assignment/delegationSeatWrites';
+} from '@/app/manage/[slug]/allocations/delegationSeatsGrid';
+import { giveSeats, takeBackSeats } from '@/app/manage/[slug]/allocations/delegationSeatWrites';
 import DelegationPopupLink from '@/app/manage/[slug]/DelegationPopupLink';
 import { keepIfSame, useLiveRefresh } from '@/app/manage/[slug]/applications/delegations/useLiveRefresh';
 

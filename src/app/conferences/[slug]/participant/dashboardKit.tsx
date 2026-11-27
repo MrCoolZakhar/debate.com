@@ -146,7 +146,7 @@ export function IconWord({ icon: Icon, word, color = INK, size = 'md' }: {
 const APP_STATUS: Record<string, { icon: LucideIcon; word: string; color: string }> = {
   submitted: { icon: Clock, word: 'Under review', color: '#8A6614' },
   accepted: { icon: CheckCircle2, word: 'Accepted', color: 'var(--gv-main-mid)' },
-  assigned: { icon: BadgeCheck, word: 'Assigned', color: 'var(--gv-main-mid)' },
+  assigned: { icon: BadgeCheck, word: 'Allocated', color: 'var(--gv-main-mid)' },
   'checked-in': { icon: DoorOpen, word: 'Checked in', color: 'var(--gv-main-mid)' },
   withdrawn: { icon: MinusCircle, word: 'Withdrawn', color: INK_SOFT },
   rejected: { icon: MinusCircle, word: 'Not accepted', color: '#8B2020' },

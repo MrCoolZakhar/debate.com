@@ -161,7 +161,7 @@ export function OverviewTab({
             <SectionTitle
               icon={ListOrdered}
               aside={accepted && isDelegate ? (
-                <Link href={`/manage/${conferenceSlug}/assignment`} className="inline-flex items-center gap-1 focus:outline-none" style={{ color: C.forest, fontWeight: 800, textDecoration: 'underline', textUnderlineOffset: 2 }}>
+                <Link href={`/manage/${conferenceSlug}/allocations`} className="inline-flex items-center gap-1 focus:outline-none" style={{ color: C.forest, fontWeight: 800, textDecoration: 'underline', textUnderlineOffset: 2 }}>
                   Allocate
                 </Link>
               ) : 'Not allocated yet'}

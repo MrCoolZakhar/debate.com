@@ -521,7 +521,7 @@ function ConferenceDescription({ text }: { text: string }) {
 const APP_STATUS_MARK: Record<string, { word: string; icon: LucideIcon }> = {
   submitted: { word: 'Submitted', icon: Clock },
   accepted: { word: 'Accepted', icon: CheckCircle2 },
-  assigned: { word: 'Assigned', icon: CheckCircle2 },
+  assigned: { word: 'Allocated', icon: CheckCircle2 },
   'checked-in': { word: 'Checked in', icon: CheckCircle2 },
   waitlisted: { word: 'Waitlisted', icon: Hourglass },
   rejected: { word: 'Not accepted', icon: XCircle },

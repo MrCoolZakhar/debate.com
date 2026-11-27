@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { ChevronLeft, Check, CheckCircle2, CircleDashed, Clock, Trash2 } from 'lucide-react';
-import MoneyMark from '@/app/manage/[slug]/assignment/MoneyMark';
+import MoneyMark from '@/app/manage/[slug]/allocations/MoneyMark';
 import { useConferenceMoney, moneyState } from '@/lib/applicationMoney';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
@@ -17,10 +17,10 @@ import {
   markNotAttending, undoNotAttending, removeFromDelegation, pledgeSatisfied, eligibleTransferRecipients,
   SectionLabel, DraggableChip, WaivedChip, NotAttendingChip, PaidSlotChip, OpenSlot, SwapConfirmModal, ModalOverlay, pledgeText,
   type PoolMember, type SearchApp,
-} from '@/app/manage/[slug]/assignment/delegationShared';
-import { PersonAvatar } from '@/app/manage/[slug]/assignment/assignmentKit';
+} from '@/app/manage/[slug]/allocations/delegationShared';
+import { PersonAvatar } from '@/app/manage/[slug]/allocations/assignmentKit';
 import { NEU, NEU_GRADIENTS, NeuCard, NeuInset, NeuButton, NeuIconDisc } from '@/components/neu';
-import { StackedName, committeeShortName, byAppliedAt } from '@/app/manage/[slug]/assignment/displayNames';
+import { StackedName, committeeShortName, byAppliedAt } from '@/app/manage/[slug]/allocations/displayNames';
 import { Users } from 'lucide-react';
 import DelegationPopupLink from '@/app/manage/[slug]/DelegationPopupLink';
 import { keepIfSame, useLiveRefresh } from '@/app/manage/[slug]/applications/delegations/useLiveRefresh';
@@ -185,7 +185,7 @@ function AdvisorTransferModal({
 interface DelegationsViewProps {
   conference: Conference;
   showFlash: (kind: 'ok' | 'err', msg: string) => void;
-  /** Open this delegation on arrival (Applications → "Open in Assignment"). */
+  /** Open this delegation on arrival (Applications → "Open in Allocations"). */
   initialSocietyId?: string | null;
 }
 
@@ -580,7 +580,7 @@ export default function DelegationsView({ conference, showFlash, initialSocietyI
     const { confirmed } = await confirm({
       title: `Mark ${name} as Not Attending?`,
       body: hasAllocation
-        ? 'Their delegation spot stays with the delegation. Their committee assignment will be removed.'
+        ? 'Their delegation spot stays with the delegation. Their committee allocation will be removed.'
         : 'Their delegation spot stays with the delegation.',
       confirmLabel: 'Mark not attending',
       danger: true,

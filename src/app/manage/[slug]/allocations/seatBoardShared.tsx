@@ -22,12 +22,12 @@ import {
   NEEDS_DELEGATES_REASON, PAIR_BONUS, PREF_POINTS, ROOM_FILL_MAX, SWAP_REASON, fitPercent, groupAllocationsByCountry, roomFill,
   type ImportanceTier,
 } from '@/lib/assignmentFit';
-import { FitTip, explainReason, missingSignals } from '@/app/manage/[slug]/assignment/fitReasons';
-import { CountryName } from '@/app/manage/[slug]/assignment/displayNames';
+import { FitTip, explainReason, missingSignals } from '@/app/manage/[slug]/allocations/fitReasons';
+import { CountryName } from '@/app/manage/[slug]/allocations/displayNames';
 import {
   type AcceptedApp, type AllocationRow, type CommitteeData, type SlotRow, type Suggestion,
   CommitteeLogo, CountryFlag, PersonAvatar, ageOf, committeeLabels, FIT_LIGHT_COLORS, fitLightColors, fitPctLabel, reasonContext, slotLogoUrl, OUTFIT,
-} from '@/app/manage/[slug]/assignment/assignmentKit';
+} from '@/app/manage/[slug]/allocations/assignmentKit';
 
 export const CARD_SHADOW = '0 1px 2px rgba(27,56,40,0.06), 0 8px 24px rgba(27,56,40,0.08)';
 export const HAIRLINE = '#EFEAE0';
@@ -939,7 +939,7 @@ export function ImportanceDisc({ tier, size = 26 }: { tier: ImportanceTier; size
 
 export function seatHolderName(a: AllocationRow): string {
   if (a.society_id && !a.application_id && !a.user_id) return a.delegation?.name?.trim() || 'Delegation';
-  return a.profiles?.display_name?.trim() || a.applications?.invited_name?.trim() || a.profiles?.email?.trim() || 'Assigned';
+  return a.profiles?.display_name?.trim() || a.applications?.invited_name?.trim() || a.profiles?.email?.trim() || 'Allocated';
 }
 
 const CHIP_SHADOW = '0 1px 2px rgba(27,56,40,0.10), 0 0 0 1px rgba(27,56,40,0.06)';

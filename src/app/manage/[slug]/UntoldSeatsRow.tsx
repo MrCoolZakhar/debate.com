@@ -46,7 +46,7 @@ export default function UntoldSeatsRow({ conferenceId, slug }: { conferenceId: s
   }, [conferenceId, token]);
 
   if (count === 0) return null;
-  const open = () => router.push(`/manage/${slug}/assignment?release=unsent`);
+  const open = () => router.push(`/manage/${slug}/allocations?release=unsent`);
   // A warning, not a set-up step (prompt 81): it follows the pending steps as
   // one quieter amber line, never in the checklist's order or count.
   return (

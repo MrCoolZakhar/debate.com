@@ -55,7 +55,7 @@ type SeriesKey = 'total' | 'accepted' | 'assigned' | 'paid';
 const SERIES: { key: SeriesKey; label: string; color: string }[] = [
   { key: 'total', label: 'Total', color: FUNNEL_RAMP[0] },
   { key: 'accepted', label: 'Accepted', color: FUNNEL_RAMP[1] },
-  { key: 'assigned', label: 'Assigned', color: FUNNEL_RAMP[2] },
+  { key: 'assigned', label: 'Allocated', color: FUNNEL_RAMP[2] },
   { key: 'paid', label: 'Paid', color: FUNNEL_RAMP[3] },
 ];
 

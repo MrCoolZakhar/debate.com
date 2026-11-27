@@ -46,7 +46,7 @@ import {
   type DelegationMemberLite, type DelegationRow, type InvoiceLite, type PaymentLite, type SocietyLite,
 } from '../delegationRows';
 import { societySeatCounts, type SeatCommittee } from './societySeats';
-import { paidSpotsBySociety } from '@/app/manage/[slug]/assignment/delegationSeatsGrid';
+import { paidSpotsBySociety } from '@/app/manage/[slug]/allocations/delegationSeatsGrid';
 import { keepIfSame, useLiveRefresh } from './useLiveRefresh';
 import { delegationExpected } from '@/lib/delegationExpected';
 

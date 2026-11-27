@@ -12,7 +12,7 @@ import { queueEventEmail, type QueueEventEmailResult } from '@/lib/emailEvents';
 import { ConfirmModal } from '@/components/ConfirmModal';
 import { ModalOverlay as SharedModalOverlay } from '@/components/ModalOverlay';
 import ProfileLink from '@/components/ProfileLink';
-import { committeeShortName } from '@/app/manage/[slug]/assignment/displayNames';
+import { committeeShortName } from '@/app/manage/[slug]/allocations/displayNames';
 
 // ── Shared bits (matches the visual language of the rest of this page) ─────────
 

@@ -15,17 +15,17 @@
 import type { ReactNode } from 'react';
 import { Check, Star } from 'lucide-react';
 import { NEU } from '@/components/neu';
-import { CountryName, committeeShortName } from '@/app/manage/[slug]/assignment/displayNames';
+import { CountryName, committeeShortName } from '@/app/manage/[slug]/allocations/displayNames';
 import {
   type AcceptedApp, type CommitteeData, type SlotRow,
   CommitteeLogo, CountryFlag, LevelBadge, effectiveLevel, slotLogoUrl,
-} from '@/app/manage/[slug]/assignment/assignmentKit';
+} from '@/app/manage/[slug]/allocations/assignmentKit';
 import {
   FitBadge, ImportanceDisc, PersonIdentity, RankNumber, SoftButton, WELL,
-} from '@/app/manage/[slug]/assignment/seatBoardShared';
+} from '@/app/manage/[slug]/allocations/seatBoardShared';
 import {
   LIGHT_OPEN_ROW, LIGHT_PRIMARY, LIGHT_ROW, LightModalCard, LightModalHeader, ModalOverlay,
-} from '@/app/manage/[slug]/assignment/CommitteeDetailModal';
+} from '@/app/manage/[slug]/allocations/CommitteeDetailModal';
 
 /** Who to seat: the best fit gets a quiet "Best" mark (the old threshold, 20
  *  of the old scale, is 15 out of 100). */
@@ -81,7 +81,7 @@ export default function AssignSeatPanel({
   return (
     <ModalOverlay onClose={onClose}>
       <LightModalCard width={520}>
-        <LightModalHeader committee={committee} eyebrow={moving ? 'Move Delegate' : 'Assign Delegate'} onClose={onClose} />
+        <LightModalHeader committee={committee} eyebrow={moving ? 'Move Delegate' : 'Allocate Delegate'} onClose={onClose} />
 
         {/* Who */}
         <SectionTitle trailing={!preSelectedApp && scored.length > 0 ? <span style={{ fontSize: 12.5, color: NEU.inkSoft }}>Best fit first</span> : undefined}>
@@ -240,7 +240,7 @@ export default function AssignSeatPanel({
             className="focus:outline-none focus-visible:ring-2 transition-transform duration-150 enabled:active:scale-[0.96]"
             style={canAssign ? LIGHT_PRIMARY : { ...LIGHT_PRIMARY, background: WELL, color: NEU.inkSoft, boxShadow: 'none', cursor: 'default' }}
           >
-            {saving ? 'Assigning' : 'Assign'}
+            {saving ? 'Allocating' : 'Allocate'}
           </button>
         </div>
       </LightModalCard>

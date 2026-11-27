@@ -1,7 +1,7 @@
 'use client';
 
 // ============================================================
-// src/app/manage/[slug]/assignment/fitReasons.tsx
+// src/app/manage/[slug]/allocations/fitReasons.tsx
 //
 // The WHY behind every fit indicator on the allocation portal.
 //

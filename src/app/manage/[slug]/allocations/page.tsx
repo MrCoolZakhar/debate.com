@@ -12,50 +12,50 @@ import { getAuthedClient } from '@/lib/supabase-auth';
 import { reportBlocked } from '@/lib/reportCrash';
 import { useAuth } from '@/components/AuthProvider';
 import { getCountryByName } from '@/lib/countries';
-import { explainReason, missingSignals } from '@/app/manage/[slug]/assignment/fitReasons';
-import { CountryName, StackedName, committeeShortName, byAppliedAt } from '@/app/manage/[slug]/assignment/displayNames';
+import { explainReason, missingSignals } from '@/app/manage/[slug]/allocations/fitReasons';
+import { CountryName, StackedName, committeeShortName, byAppliedAt } from '@/app/manage/[slug]/allocations/displayNames';
 import { parseGroups, type SlotGroup } from '@/lib/slotGroups';
 import { friendlyError } from '@/lib/friendlyError';
-import DelegationsView from '@/app/manage/[slug]/assignment/DelegationsView';
-import IndependentsView from '@/app/manage/[slug]/assignment/IndependentsView';
-import DelegationSeatsView from '@/app/manage/[slug]/assignment/DelegationSeatsView';
+import DelegationsView from '@/app/manage/[slug]/allocations/DelegationsView';
+import IndependentsView from '@/app/manage/[slug]/allocations/IndependentsView';
+import DelegationSeatsView from '@/app/manage/[slug]/allocations/DelegationSeatsView';
 import DelegationPopupLink from '@/app/manage/[slug]/DelegationPopupLink';
 import { replaceUrlInPlace } from '@/lib/replaceUrlInPlace';
 import { queueEventEmail, notifyIfNeeded, turnOnDefaultEmail } from '@/lib/emailEvents';
-import { AssignConfirmDialog, assignIntroSeen, markAssignIntroSeen } from '@/app/manage/[slug]/assignment/AssignConfirmDialog';
-import { useBoardDrag, DragGrip, dropAttr, type BoardDragPayload, type BoardDropTarget } from '@/app/manage/[slug]/assignment/boardDrag';
-import { RailPreferenceFilter, matchesRailFilter, type RailFilter } from '@/app/manage/[slug]/assignment/RailPreferenceFilter';
-import { RailPaymentFilter, matchesRailPay, railPayFromUrl, type RailPay } from '@/app/manage/[slug]/assignment/RailPaymentFilter';
-import MoneyMark from '@/app/manage/[slug]/assignment/MoneyMark';
+import { AssignConfirmDialog, assignIntroSeen, markAssignIntroSeen } from '@/app/manage/[slug]/allocations/AssignConfirmDialog';
+import { useBoardDrag, DragGrip, dropAttr, type BoardDragPayload, type BoardDropTarget } from '@/app/manage/[slug]/allocations/boardDrag';
+import { RailPreferenceFilter, matchesRailFilter, type RailFilter } from '@/app/manage/[slug]/allocations/RailPreferenceFilter';
+import { RailPaymentFilter, matchesRailPay, railPayFromUrl, type RailPay } from '@/app/manage/[slug]/allocations/RailPaymentFilter';
+import MoneyMark from '@/app/manage/[slug]/allocations/MoneyMark';
 import { useConferenceMoney, moneyState } from '@/lib/applicationMoney';
 import { allocationBufferSendAfter, cancelBufferedAllocationEmails } from '@/lib/allocationEmail';
 import { serverNow, ensureServerClock } from '@/lib/serverClock';
 import {
   queueAllocationEmails, allocationSendMessage, AllocationEmailBar, saveAllocationEmailAuto, type AllocationTarget,
-} from '@/app/manage/[slug]/assignment/allocationEmails';
+} from '@/app/manage/[slug]/allocations/allocationEmails';
 import { sendChairInvite, findChairInviteRoleConflict } from '@/lib/chairInvites';
 import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
 import { useConfirmModal } from '@/components/ConfirmModal';
-import { NotRegisteredChip } from '@/app/manage/[slug]/assignment/delegationShared';
+import { NotRegisteredChip } from '@/app/manage/[slug]/allocations/delegationShared';
 import ProfileLink from '@/components/ProfileLink';
 import {
   NEU, NEU_GRADIENTS, NeuCard, NeuInset, NeuButton, NeuIconDisc, NeuProgress,
 } from '@/components/neu';
 import Portal from '@/components/Portal';
 import { notifyOk, notifyErr } from '@/lib/appNotify';
-import SeatBoard from '@/app/manage/[slug]/assignment/SeatBoard';
-import AssignSeatPanel from '@/app/manage/[slug]/assignment/AssignSeatPanel';
-import SeatBoardIntro, { CLASSIC_BY_DEFAULT } from '@/app/manage/[slug]/assignment/SeatBoardIntro';
+import SeatBoard from '@/app/manage/[slug]/allocations/SeatBoard';
+import AssignSeatPanel from '@/app/manage/[slug]/allocations/AssignSeatPanel';
+import SeatBoardIntro, { CLASSIC_BY_DEFAULT } from '@/app/manage/[slug]/allocations/SeatBoardIntro';
 import {
   allocationToApp, allocateeName, TIER_RANK, TierBadge, ModalOverlay, NeuModalCard, CommitteeOverviewModal,
-} from '@/app/manage/[slug]/assignment/CommitteeDetailModal';
-import { firstName, personName } from '@/app/manage/[slug]/assignment/seatBoardShared';
+} from '@/app/manage/[slug]/allocations/CommitteeDetailModal';
+import { firstName, personName } from '@/app/manage/[slug]/allocations/seatBoardShared';
 import {
   type AcceptedApp, type AllocationRow, type SlotRow, type CommitteeData, type UserHistory, type Suggestion,
   slotLogoUrl, committeeSeatLogo, reasonContext, fitColor, fitPctLabel, OUTFIT, MONO, FLAG_SHADOW, PersonAvatar, DelegationAvatar,
   CountryFlag, effectiveLevel, ageOf, committeeLabels, CommitteeLogo, CommitteeDifficultyBadge, PrefRankBadge, ReasonChip,
   LevelTag, DelegationChip, DelegateDetail, SuggestionCard,
-} from '@/app/manage/[slug]/assignment/assignmentKit';
+} from '@/app/manage/[slug]/allocations/assignmentKit';
 import {
   groupAllocationsByCountry, isSlotFull, lowestOpenSeat, allocationSocietyId, siblingSeatAllocation,
   distinctCountryFilled, difficultyRank, allocationScore, ROOM_FILL_MAX, scorePrefAndExp, spreadSocieties, buildSuggestions,
@@ -314,7 +314,7 @@ function alreadySeatedMessage(held: { label: string; country: string | null } | 
 
 /** Same person, same committee: almost always the organiser's own double click. */
 const ALREADY_IN_COMMITTEE_MESSAGE =
-  'They are already seated in this committee. If you just placed them, that assignment went through.';
+  'They are already seated in this committee. If you just placed them, that allocation went through.';
 
 // Single write path for every allocation on this page: insert into
 // conference_allocations (incl. conference_id), friendly duplicate errors,
@@ -428,7 +428,7 @@ async function insertAllocation(
         .eq('country_code', slot.country_code)
         .eq('seat', seat);
     }
-    return 'Could not finish this assignment, so the seat was rolled back. Nothing was half saved. Try again.';
+    return 'Could not finish this allocation, so the seat was rolled back. Nothing was half saved. Try again.';
   }
 
   // Strictly AFTER the applications update: queueEventEmail resolves the
@@ -1414,7 +1414,7 @@ function CountrySlotGrid({
                     <button
                       key={seatNum}
                       onClick={e => { e.stopPropagation(); onAssignSlot(slot, seatNum); }}
-                      title={`Assign seat ${seatNum} of ${slot.country_name}`}
+                      title={`Allocate seat ${seatNum} of ${slot.country_name}`}
                       className="focus:outline-none rounded-full"
                       style={{ border: 'none', backgroundColor: NEU.base, padding: '4px 9px', cursor: 'pointer', opacity: 0.65 }}
                     >
@@ -1456,7 +1456,7 @@ function CountrySlotGrid({
             <button
               key={slot.id}
               onClick={e => { e.stopPropagation(); onAssignSlot(slot, 1); }}
-              title={`Assign ${slot.country_name}`}
+              title={`Allocate ${slot.country_name}`}
               className="focus:outline-none"
               style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', lineHeight: 0, borderRadius: 9999 }}
             >
@@ -2099,7 +2099,7 @@ function mergeLocalMutations(
 // Delegates board. The other three views are still here and reachable ONLY by
 // link: ?mode=chairs (chairs are also managed on the Committees page),
 // ?mode=delegations[&delegation=<society id>] (Applications → Delegations →
-// "Open in Assignment") and ?mode=independents (no link points at it).
+// "Open in Allocations") and ?mode=independents (no link points at it).
 /** localStorage: '1' keeps this browser on the classic board, '0' on the seat
  *  board. No value = the default (CLASSIC_BY_DEFAULT, SeatBoardIntro.tsx). */
 // Renamed 22 Oct 2026 (was 'gavelling-assignment-classic') so every browser,
@@ -2159,7 +2159,7 @@ export default function AssignmentPage() {
     url.searchParams.delete('release');
     window.history.replaceState({}, '', url.toString());
   }, []);
-  // Deep link from Applications → Delegations ("Open in Assignment"):
+  // Deep link from Applications → Delegations ("Open in Allocations"):
   // ?mode=delegations&delegation=<society id>. Read once after mount, so the
   // server render and the first client render agree.
   const [deepDelegationId, setDeepDelegationId] = useState<string | null>(null);
@@ -2658,7 +2658,7 @@ export default function AssignmentPage() {
     // With the buffer on, "emailed" is stamped by the database when the email
     // actually leaves, so the optimistic row does not claim it yet.
     const tempRow = applyLocalAllocation(sug.committee, sug.app, sug.slot, seat, emailNow && !allocationBufferSendAfter(0));
-    showFlash('ok', `${sug.app.profiles?.display_name ?? sug.app.invited_name} assigned to ${sug.slot.country_name} in ${committeeShortName(sug.committee)}.`);
+    showFlash('ok', `${sug.app.profiles?.display_name ?? sug.app.invited_name} allocated to ${sug.slot.country_name} in ${committeeShortName(sug.committee)}.`);
 
     (async () => {
       const err = await insertAllocation(
@@ -2691,7 +2691,7 @@ export default function AssignmentPage() {
       reportBlocked('assign delegate to committee', e, {
         conferenceId, committeeId: sug.committee.id, applicationId: sug.app.id, slotId: sug.slot.id,
       });
-      showFlash('err', 'Could not save this assignment.');
+      showFlash('err', 'Could not save this allocation.');
       // The other half of the branch above: the insert may still have landed
       // before it threw, so the rollback we just did is a guess. Go and look.
       scheduleReconcile();
@@ -2725,7 +2725,7 @@ export default function AssignmentPage() {
       const res = await saveAllocationEmailAuto(supabase, conference.id, false, false);
       if (!res.ok) {
         setPendingAuto(null);
-        showFlash('err', 'Could not switch to manual release. Nothing was assigned.');
+        showFlash('err', 'Could not switch to manual release. Nothing was allocated.');
         return;
       }
       if (dontShowAgain) markAssignIntroSeen(session.user.id);
@@ -2736,7 +2736,7 @@ export default function AssignmentPage() {
       setPendingAuto(null);
     })().catch(() => {
       setPendingAuto(null);
-      showFlash('err', 'Could not switch to manual release. Nothing was assigned.');
+      showFlash('err', 'Could not switch to manual release. Nothing was allocated.');
     }).finally(() => setIntroSwitching(false));
   }
 
@@ -3245,7 +3245,7 @@ export default function AssignmentPage() {
       <DelegationSeatsView
         conference={conference}
         initialSocietyId={deepDelegationId}
-        onSingleDelegates={() => { setMode('delegates'); replaceUrlInPlace(`/manage/${conference.slug}/assignment`); }}
+        onSingleDelegates={() => { setMode('delegates'); replaceUrlInPlace(`/manage/${conference.slug}/allocations`); }}
       />
     );
   }
@@ -3393,9 +3393,9 @@ export default function AssignmentPage() {
       <div className="flex items-center justify-between gap-4 mb-4 flex-wrap flex-none">
         <div>
           <p style={{ color: NEU.inkSoft, fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, letterSpacing: '0.06em', marginBottom: 6 }}>
-            {conference.acronym} / Assignment
+            {conference.acronym} / Allocations
           </p>
-          <h1 style={{ color: NEU.ink, fontFamily: OUTFIT, fontWeight: 900, fontSize: 'clamp(32px, 3.4vw, 42px)', letterSpacing: '-0.025em', lineHeight: 1.05, margin: 0 }}>Seat <GoldWord>Assignment</GoldWord></h1>
+          <h1 style={{ color: NEU.ink, fontFamily: OUTFIT, fontWeight: 900, fontSize: 'clamp(32px, 3.4vw, 42px)', letterSpacing: '-0.025em', lineHeight: 1.05, margin: 0 }}><GoldWord>Allocations</GoldWord></h1>
         </div>
         {mode === 'delegates' && (
           <div className="flex items-center gap-5 flex-wrap">
@@ -3442,7 +3442,7 @@ export default function AssignmentPage() {
               <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={Layers} size={48} />
             </div>
             <p className="font-black text-base mb-1" style={{ color: NEU.ink, fontFamily: OUTFIT }}>No committees yet</p>
-            <p className="text-sm" style={{ color: NEU.muted, fontFamily: OUTFIT }}>Add committees first before assigning delegates.</p>
+            <p className="text-sm" style={{ color: NEU.muted, fontFamily: OUTFIT }}>Add committees first before allocating delegates.</p>
           </div>
         </NeuCard>
       )}

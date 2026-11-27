@@ -81,7 +81,7 @@ export function AssignConfirmDialog({
       >
         <div className="flex items-start justify-between gap-3">
           <p id="assign-confirm-title" style={{ fontFamily: OUTFIT, fontSize: 18, fontWeight: 800, color: NEU.ink, lineHeight: 1.3 }}>
-            Assign and Email
+            Allocate and Email
           </p>
           <button
             type="button"
@@ -96,7 +96,7 @@ export function AssignConfirmDialog({
 
         <p id="assign-confirm-body" className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 14, color: NEU.inkSoft, lineHeight: 1.5 }}>
           <strong style={{ color: NEU.ink }}>{delegateName}</strong> is emailed their seat,{' '}
-          <strong style={{ color: NEU.ink }}>{countryName}</strong> in <strong style={{ color: NEU.ink }}>{committeeLabel}</strong>, as soon as you assign.
+          <strong style={{ color: NEU.ink }}>{countryName}</strong> in <strong style={{ color: NEU.ink }}>{committeeLabel}</strong>, as soon as you allocate.
         </p>
 
         <button
@@ -111,7 +111,7 @@ export function AssignConfirmDialog({
             opacity: switching ? 0.6 : 1,
           }}
         >
-          Assign and email
+          Allocate and email
         </button>
 
         <div className="flex items-center justify-between gap-3 flex-wrap">

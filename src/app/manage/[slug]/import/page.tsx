@@ -847,7 +847,7 @@ interface ImportedDelegateRow {
 }
 
 const STATUS_LABEL: Record<string, string> = {
-  accepted: 'Accepted', assigned: 'Assigned', rejected: 'Rejected',
+  accepted: 'Accepted', assigned: 'Allocated', rejected: 'Rejected',
   'not-attending': 'Not attending', waitlisted: 'Waitlisted', submitted: 'Submitted',
 };
 

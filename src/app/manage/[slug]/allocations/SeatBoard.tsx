@@ -34,21 +34,21 @@ import { seatFitFontPx } from '@/lib/seatName';
 import GSelect, { type GSelectOption } from '@/components/GSelect';
 import { NEU } from '@/components/neu';
 import { buildSuggestions, rankSeatsForPerson, type SeatedIdentities } from '@/lib/assignmentFit';
-import { useBoardDrag, dropAttr } from '@/app/manage/[slug]/assignment/boardDrag';
-import { CountryName, committeeShortName } from '@/app/manage/[slug]/assignment/displayNames';
-import { NotRegisteredChip } from '@/app/manage/[slug]/assignment/delegationShared';
+import { useBoardDrag, dropAttr } from '@/app/manage/[slug]/allocations/boardDrag';
+import { CountryName, committeeShortName } from '@/app/manage/[slug]/allocations/displayNames';
+import { NotRegisteredChip } from '@/app/manage/[slug]/allocations/delegationShared';
 import DelegationPopupLink from '@/app/manage/[slug]/DelegationPopupLink';
 import { replaceUrlInPlace } from '@/lib/replaceUrlInPlace';
 import {
   type AcceptedApp, type CommitteeData, type Suggestion, type UserHistory,
   CountryFlag, CommitteeLogo, committeeLabels, committeeSeatLogo, effectiveLevel,
   LevelBadge, LevelDisc, LevelHero, fitPctLabel, slotLogoUrl, OUTFIT,
-} from '@/app/manage/[slug]/assignment/assignmentKit';
+} from '@/app/manage/[slug]/allocations/assignmentKit';
 import {
   AvatarWithFlag, BigCount, CARD_SHADOW, CommitteeLevelMark, CommitteeRing, FitPills, NameAge, PersonIdentity, RankNumber, RingTally, ScoreHover, ScoringHint,
   SoftButton, WELL, acceptedAt, choicesPhrase, committeeLevelTint, delegationOf, firstName, fmtDay, nationalityOf, personName,
   prefOrdersByCommittee, schoolName, seatCounts,
-} from '@/app/manage/[slug]/assignment/seatBoardShared';
+} from '@/app/manage/[slug]/allocations/seatBoardShared';
 
 // The smart allocations are the board's main event and must POP (owner, 21
 // Oct 2026: "they used to pop more"): white cards with a gold top edge, a thin
@@ -598,7 +598,7 @@ function SmartAllocationCard({ sug, busy, locked, onOpenPerson, onAssign }: {
             <span className="[overflow-wrap:anywhere]" style={{ fontWeight: 600, color: NEU.ink }}>{labels.big}</span>
           </span>
         </span>
-        <SoftButton onClick={onAssign} disabled={busy || locked}>{busy ? 'Saving' : 'Assign'}</SoftButton>
+        <SoftButton onClick={onAssign} disabled={busy || locked}>{busy ? 'Saving' : 'Allocate'}</SoftButton>
       </div>
 
       <FitPills sug={sug} max={4} />
@@ -744,7 +744,7 @@ function PersonPanel({
                       </span>
                     </span>
                     <SoftButton onClick={() => onAssign(sug)} disabled={busyKey === key || locked} size="sm">
-                      {busyKey === key ? 'Saving' : 'Assign'}
+                      {busyKey === key ? 'Saving' : 'Allocate'}
                     </SoftButton>
                   </div>
                   {(sug.reasons.length > 0 || sug.swap) && <span className="flex min-w-0" style={{ paddingLeft: 40 }}><FitPills sug={sug} max={4} size="sm" /></span>}

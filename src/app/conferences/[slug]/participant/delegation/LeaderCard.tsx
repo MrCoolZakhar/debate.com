@@ -43,7 +43,7 @@ import { committeeDisplayName } from '@/lib/presetNames';
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { friendlyError, plainOrFallback } from '@/lib/friendlyError';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
-import type { PoolMember } from '@/app/manage/[slug]/assignment/delegationShared';
+import type { PoolMember } from '@/app/manage/[slug]/allocations/delegationShared';
 import DelegationInviteLink from '../DelegationInviteLink';
 import AddDelegatePanel from './overview/AddDelegatePanel';
 import { announceDelegationChanged } from './delegationEvents';

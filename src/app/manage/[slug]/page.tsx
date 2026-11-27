@@ -1715,7 +1715,7 @@ export default function DashboardPage() {
             <h2 className="min-w-0" style={{ fontFamily: OUTFIT, fontSize: 15, fontWeight: 900, color: NEU.ink, lineHeight: 1.2 }}>
               Applicants Against Target
             </h2>
-            <UnallocatedBadge count={unallocated} href={`/manage/${slug}/assignment`} />
+            <UnallocatedBadge count={unallocated} href={`/manage/${slug}/allocations`} />
           </div>
           <div ref={dialCardRef} className="flex items-center" style={{ flex: 1, minHeight: 0 }}>
             <ApplicantsDial

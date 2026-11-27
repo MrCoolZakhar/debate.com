@@ -11,7 +11,7 @@
 import { useState } from 'react';
 import { Sparkles } from 'lucide-react';
 import { NEU, OUTFIT } from '@/components/neu';
-import { SoftButton } from '@/app/manage/[slug]/assignment/seatBoardShared';
+import { SoftButton } from '@/app/manage/[slug]/allocations/seatBoardShared';
 
 /** The delegates board opens on the classic view unless this browser chose. */
 export const CLASSIC_BY_DEFAULT = true;

@@ -27,15 +27,15 @@ import {
 } from 'lucide-react';
 import { NEU } from '@/components/neu';
 import { ModalOverlay as SharedModalOverlay } from '@/components/ModalOverlay';
-import { CountryName } from '@/app/manage/[slug]/assignment/displayNames';
+import { CountryName } from '@/app/manage/[slug]/allocations/displayNames';
 import {
   type AcceptedApp, type AllocationRow, type SlotRow, type CommitteeData, type UserHistory,
   slotLogoUrl, OUTFIT, MONO, CountryFlag, effectiveLevel,
   committeeLabels, DelegateDetail, LevelBadge,
-} from '@/app/manage/[slug]/assignment/assignmentKit';
+} from '@/app/manage/[slug]/allocations/assignmentKit';
 import {
   AvatarWithFlag, CommitteeLevelMark, ImportanceDisc, NameAge, POPUP_RING_INSET, POPUP_RING_RISE, PopupRingBadge, WELL, nationalityOf,
-} from '@/app/manage/[slug]/assignment/seatBoardShared';
+} from '@/app/manage/[slug]/allocations/seatBoardShared';
 import {
   type ImportanceTier, distinctCountryFilled, groupAllocationsByCountry, isSlotFull,
 } from '@/lib/assignmentFit';
@@ -89,7 +89,7 @@ export const TIER_META: Record<ImportanceTier, { label: string; color: string; b
 // but the name was never set), and `??` would let that empty string through and
 // render a nameless chip — so every source is trimmed and skipped when empty,
 // falling back display_name → application invited_name → email → a neutral
-// 'Assigned', never blank.
+// 'Allocated', never blank.
 export function allocateeName(alloc: AllocationRow): string {
   const dn = alloc.profiles?.display_name?.trim();
   if (dn) return dn;
@@ -97,7 +97,7 @@ export function allocateeName(alloc: AllocationRow): string {
   if (inv) return inv;
   const email = alloc.profiles?.email?.trim();
   if (email) return email;
-  return 'Assigned';
+  return 'Allocated';
 }
 
 // ── Importance dashes ──────────────────────────────────────────────────────────
@@ -516,7 +516,7 @@ export function CommitteeOverviewModal({
                     {flag(0.6)}
                     {countryLine(seatNum)}
                     <ImportanceDisc tier={slot.importance} />
-                    <PillLook><Plus size={13} strokeWidth={1.75} aria-hidden /> {person ? `Seat ${person.firstName}` : 'Assign'}</PillLook>
+                    <PillLook><Plus size={13} strokeWidth={1.75} aria-hidden /> {person ? `Seat ${person.firstName}` : 'Allocate'}</PillLook>
                   </button>
                 );
               }

@@ -4,7 +4,7 @@ import { Suspense, useState, useEffect, useCallback, useMemo, useRef } from 'rea
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { PillToggle } from '@/app/account/accountUi';
-import { saveAllocationEmailAuto } from '@/app/manage/[slug]/assignment/allocationEmails';
+import { saveAllocationEmailAuto } from '@/app/manage/[slug]/allocations/allocationEmails';
 import {
   Mail, AlertTriangle, Send, Bell, Copy, X, ChevronDown,
   BadgeCheck, MessageSquare, ArrowRight, Compass, Wrench,
@@ -367,7 +367,7 @@ const ATTENDANCE_OPTIONS = [
 
 const APP_STATUS_OPTIONS = [
   { value: 'accepted', label: 'Accepted' },
-  { value: 'assigned', label: 'Assigned' },
+  { value: 'assigned', label: 'Allocated' },
   { value: 'submitted', label: 'Submitted' },
 ];
 
@@ -708,7 +708,7 @@ function formatFilter(filter: Record<string, unknown> | null, societies: Society
       return c ? c.name : 'Committee';
     }
     if (audience === 'status' && filter.status) {
-      const labels: Record<string, string> = { submitted: 'Submitted', accepted: 'Accepted', assigned: 'Assigned', paid: 'Paid', unpaid: 'Unpaid' };
+      const labels: Record<string, string> = { submitted: 'Submitted', accepted: 'Accepted', assigned: 'Allocated', paid: 'Paid', unpaid: 'Unpaid' };
       return `${labels[filter.status as string] ?? filter.status} applicants`;
     }
     if (audience === 'unpaid') return 'Unpaid';
@@ -4508,7 +4508,7 @@ function CommunicationsPageInner() {
                   {!allocationAuto && (
                     <p className="text-xs mt-2" style={{ color: SOFT, fontFamily: OUTFIT, lineHeight: 1.5, textWrap: 'pretty' }}>
                       Allocation emails go out when you release them from the{' '}
-                      <Link href={`/manage/${conference.slug}/assignment`} style={{ color: '#1B3828', fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>Allocation tab</Link>
+                      <Link href={`/manage/${conference.slug}/allocations`} style={{ color: '#1B3828', fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>Allocations tab</Link>
                     </p>
                   )}
                 </div>

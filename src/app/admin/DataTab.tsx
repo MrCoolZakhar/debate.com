@@ -838,7 +838,7 @@ export default function DataTab() {
             {([
               ['Submitted', f.submitted, FUNNEL_RAMP[0]],
               ['Accepted', f.accepted, FUNNEL_RAMP[1]],
-              ['Assigned', f.assigned, FUNNEL_RAMP[2]],
+              ['Allocated', f.assigned, FUNNEL_RAMP[2]],
               ['Checked in', f.checked_in, FUNNEL_RAMP[3]],
             ] as [string, number, string][]).map(([label, n, color], i) => (
               <div key={label} className="flex items-center gap-2.5">

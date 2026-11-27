@@ -50,7 +50,7 @@ import { DatePicker } from '@/components/DatePicker';
 import GSelect from '@/components/GSelect';
 import { CircleFlag } from '@/components/CircleFlag';
 import { getCountryByCode } from '@/lib/countries';
-import { countryShortName } from '@/app/manage/[slug]/assignment/displayNames';
+import { countryShortName } from '@/app/manage/[slug]/allocations/displayNames';
 import DelegationCrest from '@/components/DelegationCrest';
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { friendlyError } from '@/lib/friendlyError';
@@ -334,7 +334,7 @@ export default function DelegationsTab<M extends DelegationMemberLite>(props: De
                       {r.needSeats > 0 && <> · <b style={{ color: INK, fontWeight: 600 }}>{r.needSeats}</b> to give</>}
                     </span>
                     {giveSeats && (
-                      <Link href={`/manage/${conference.slug}/assignment?mode=delegation-seats&society=${encodeURIComponent(r.id)}`}
+                      <Link href={`/manage/${conference.slug}/allocations?mode=delegation-seats&society=${encodeURIComponent(r.id)}`}
                         className={`${BTN_CLASS} self-start`} style={{ ...linkStyle, fontSize: 13 }}
                         onClick={e => e.stopPropagation()}>
                         Give allocations

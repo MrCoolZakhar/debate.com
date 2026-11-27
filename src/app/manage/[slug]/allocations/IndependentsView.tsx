@@ -12,7 +12,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { CircleDashed, UserX } from 'lucide-react';
-import MoneyMark from '@/app/manage/[slug]/assignment/MoneyMark';
+import MoneyMark from '@/app/manage/[slug]/allocations/MoneyMark';
 import { useConferenceMoney, moneyState, type MoneyRow } from '@/lib/applicationMoney';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
@@ -25,10 +25,10 @@ import {
   fetchSearchPool, performSwap, markNotAttending, undoNotAttending, eligibleTransferRecipients,
   ModalOverlay,
   type PoolMember, type SearchApp,
-} from '@/app/manage/[slug]/assignment/delegationShared';
-import { PersonAvatar } from '@/app/manage/[slug]/assignment/assignmentKit';
+} from '@/app/manage/[slug]/allocations/delegationShared';
+import { PersonAvatar } from '@/app/manage/[slug]/allocations/assignmentKit';
 import { NEU, NeuCard, NeuInset, NeuButton } from '@/components/neu';
-import { StackedName, committeeShortName, byAppliedAt } from '@/app/manage/[slug]/assignment/displayNames';
+import { StackedName, committeeShortName, byAppliedAt } from '@/app/manage/[slug]/allocations/displayNames';
 
 // ── Transfer / give-spot picker ─────────────────────────────────────────────
 // Searchable list of the conference's accepted/assigned delegates and head
@@ -327,7 +327,7 @@ export default function IndependentsView({ conference, showFlash }: Independents
     const isPaid = app.payment_status === 'paid';
     const bodyParts: string[] = [];
     if (isPaid) bodyParts.push("Their paid spot stays theirs until you transfer it to someone else.");
-    if (hasAllocation) bodyParts.push('Their committee assignment will be removed.');
+    if (hasAllocation) bodyParts.push('Their committee allocation will be removed.');
     const { confirmed } = await confirm({
       title: `Mark ${name} as Not Attending?`,
       body: bodyParts.length > 0 ? bodyParts.join(' ') : `${name} will be marked not attending.`,
