@@ -275,6 +275,15 @@ export const MUNILLION_CSS = `
   html.mn-playing body { padding-bottom: 0 !important; }
   html.mn-playing .mn-stage { padding-top: max(14px, env(safe-area-inset-top, 0px)); height: 100vh; height: 100dvh; padding-bottom: max(12px, env(safe-area-inset-bottom, 0px)); }
 }
+/* phones: less on the first screen (owner, 27 Nov 2026: "quite crammed on the phone") */
+.mn-phone-only { display: none; }
+@media (max-width: 760px) {
+  .mn-wide-only { display: none; }
+  .mn-phone-only { display: inline; }
+  .mn-title { font-size: clamp(22px, 8.4vw, 40px); }
+  .mn-card { padding: 14px 16px; }
+  .mn-stage.is-quiet-hud > .mn-hud { visibility: hidden; height: 0; overflow: hidden; }
+}
 @media (max-height: 640px) {
   .mn-tagline { display: none; }
   .mn-hint { display: none; }

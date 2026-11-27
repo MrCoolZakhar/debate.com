@@ -75,6 +75,8 @@ const BAR_CSS = `
 .gv-salebar-x:focus-visible{outline:2px solid #F6F2E8}
 @media (max-width:1099px){.gv-salebar-line{display:none}}
 @media (max-width:639px){.gv-salebar{font-size:12.5px;padding:0 40px 0 12px}.gv-salebar-in{gap:10px}.gv-salebar-brand{letter-spacing:.1em}}
+.gv-salebar-short{display:none}
+@media (max-width:479px){.gv-salebar-long,.gv-salebar-secs{display:none}.gv-salebar-short{display:inline}}
 `;
 
 export default function SaleBar() {
@@ -118,8 +120,9 @@ export default function SaleBar() {
         <span className="gv-salebar-line">
           {first ? `Double your credits and a year of Unlimited for ${first}` : 'Double your credits'}
         </span>
-        <span className="gv-salebar-cd" role="timer">Ends in {Number(cd.d)}d {cd.h}h {cd.m}m {cd.s}s</span>
-        <Link href="/store" className="gv-salebar-a">Go to the Store</Link>
+        {/* phones: no "Ends in", no seconds and a shorter link, so nothing slides under the X */}
+        <span className="gv-salebar-cd" role="timer"><span className="gv-salebar-long">Ends in </span>{Number(cd.d)}d {cd.h}h {cd.m}m<span className="gv-salebar-secs"> {cd.s}s</span></span>
+        <Link href="/store" className="gv-salebar-a"><span className="gv-salebar-long">Go to the </span><span className="gv-salebar-short">To the </span>Store</Link>
       </div>
       <button type="button" className="gv-salebar-x" aria-label="Hide" onClick={() => hide(sale.key)}>
         <X size={15} strokeWidth={2.2} aria-hidden />
