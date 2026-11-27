@@ -2,7 +2,7 @@
 
 import { sortCvEntries } from '@/lib/cvOrder';
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, Share2, Check, ScrollText, EyeOff, Download, Loader2 } from 'lucide-react';
+import { Plus, Share2, Check, ScrollText, EyeOff, Download, Loader2, Upload } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { syncExperienceLevel } from '@/lib/munExperience';
@@ -19,7 +19,9 @@ import VerifiedCheck from '@/components/VerifiedCheck';
 import { getCountryByName } from '@/lib/countries';
 import { experienceProgress } from '@/lib/munExperience';
 import CVPrivacyPanel, { type CvPrivacy } from './CVPrivacyPanel';
-import { friendlyError } from '@/lib/friendlyError';
+import { friendlyError, UserFacingError } from '@/lib/friendlyError';
+import CvImportPopup from '@/components/cv/CvImportPopup';
+import { draftToInsert, type CvDraft } from '@/lib/cvImport';
 import TalentPrompt from '@/components/TalentPrompt';
 import { downloadCvPdf, CV_PDF_FAILED } from '@/components/cv/downloadCvPdf';
 import { notifyErr } from '@/lib/appNotify';
@@ -43,6 +45,26 @@ export default function CVPage() {
   const [privError, setPrivError] = useState<string | null>(null);
   // Shown on the person card only (the owner's own view).
   const [nationality, setNationality] = useState<string | null>(null);
+
+  // Import from a template (prompt 70): one insert for every row, then the timeline shows them.
+  const [importOpen, setImportOpen] = useState(false);
+  const importDrafts = async (drafts: CvDraft[]): Promise<number> => {
+    if (!user || !session) throw new UserFacingError('Your session has expired, please refresh and sign in again.');
+    const supabase = getAuthedClient(session.access_token);
+    // is_private is not sent: each entry follows the CV's own privacy, as one added by hand does.
+    const rows = drafts.map(d => ({ ...draftToInsert(d), user_id: user.id }));
+    const { data, error } = await supabase
+      .from('mun_cv_entries')
+      .insert(rows)
+      .select('id, entry_type, conference_name, committee, allocation, expertise_level, award, awards, photos, description, logo_url, conference_id, event_date, source, created_at, is_private');
+    if (error) throw error;
+    if (!data || data.length !== rows.length) throw new UserFacingError('Could not add your conferences. Please try again');
+    const added = (data as CVEntry[]).map(r => ({ ...r, entry_type: r.entry_type ?? 'delegate', awards: r.awards ?? [], photos: r.photos ?? [] }));
+    const next = sortCvEntries([...entries, ...added]);
+    setEntries(next);
+    syncExperienceLevel(supabase, user.id, next.length);
+    return added.length;
+  };
 
   const fetchEntries = useCallback(async () => {
     if (!user || !session) return;
@@ -250,6 +272,10 @@ export default function CVPage() {
                 Download PDF
               </button>
             )}
+            <button type="button" onClick={() => setImportOpen(true)} className="gv-acct-btn2" aria-label="Import conferences from a template">
+              <Upload size={16} strokeWidth={1.5} aria-hidden />
+              Import
+            </button>
             <button type="button" onClick={openAdd} className="gv-acct-btn" aria-label="Add a conference to your CV">
               <Plus size={18} strokeWidth={2.6} aria-hidden />
               Add conference
@@ -393,6 +419,10 @@ export default function CVPage() {
           onSaved={handleSaved}
           onDelete={handleDelete}
         />
+      )}
+
+      {importOpen && user && (
+        <CvImportPopup theme="gavelling" existing={entries} onImport={importDrafts} onClose={() => setImportOpen(false)} />
       )}
 
       {/* Spotify-Wrapped celebration — opens only after a NEW conference is added */}
