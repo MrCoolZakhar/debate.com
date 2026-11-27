@@ -394,3 +394,15 @@ export async function readPublicCv(userId: string): Promise<{ ok: true; cv: Publ
     return { ok: false, message: friendlyError(e, fallback) };
   }
 }
+
+// ── Prompt 76: a listing's views and clicks, day by day ────────────────────
+export interface ListingDay { day: string; views: number; clicks: number }
+
+/** job_listing_daily: the last `days` days (oldest first), anonymous counts. Organisers only. */
+export function jobListingDaily(listingId: string, days = 30) {
+  return call<{ days: ListingDay[] }>('job_listing_daily', { p_listing: listingId, p_days: days }, 'We could not load the daily numbers for this listing. Try again.')
+    .then((r) => (r.ok ? {
+      ...r,
+      days: Array.isArray(r.days) ? r.days.map((d) => ({ day: String(d.day), views: Number(d.views ?? 0), clicks: Number(d.clicks ?? 0) })) : [],
+    } : r));
+}

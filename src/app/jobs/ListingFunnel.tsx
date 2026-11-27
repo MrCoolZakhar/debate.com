@@ -30,23 +30,25 @@ function share(next: number, prev: number): string | null {
   return `${Math.round((next / prev) * 100)}%`;
 }
 
+export type FunnelOpen = 'views' | 'clicks' | 'started' | 'applied';
+
 export default function ListingFunnel({ funnel, fallback, outside, onOpen }: {
   funnel: JobFunnel | null | undefined;
   /** Used when the server sent no funnel (older rows). */
   fallback: { views: number; clicks: number; applicants?: number };
   outside: boolean;
-  /** Opens the people behind Started or Applied (the organizer rows). */
-  onOpen?: (stage: 'started' | 'applied') => void;
+  /** Opens the people behind Started or Applied, or the daily graph for Views and Clicks (the organizer rows). */
+  onOpen?: (stage: FunnelOpen) => void;
 }) {
   const f: JobFunnel = funnel ?? {
     views: fallback.views, clicks: fallback.clicks, started: 0, screened_out: 0,
     submitted: fallback.applicants ?? 0, views_7d: 0, clicks_7d: 0,
   };
-  const steps: { n: number; word: string; note?: string; open?: 'started' | 'applied' }[] = outside
-    ? [{ n: f.views, word: 'Views' }, { n: f.clicks, word: 'Clicked their link' }]
+  const steps: { n: number; word: string; note?: string; open?: FunnelOpen }[] = outside
+    ? [{ n: f.views, word: 'Views', open: 'views' }, { n: f.clicks, word: 'Clicked their link', open: 'clicks' }]
     : [
-      { n: f.views, word: 'Views' },
-      { n: f.clicks, word: 'Clicked Apply' },
+      { n: f.views, word: 'Views', open: 'views' },
+      { n: f.clicks, word: 'Clicked Apply', open: 'clicks' },
       { n: f.started, word: 'Started', note: f.screened_out > 0 ? `${f.screened_out.toLocaleString('en-US')} stopped by an Essential question` : undefined, open: 'started' },
       { n: f.submitted, word: 'Applied', open: 'applied' },
     ];
@@ -67,21 +69,24 @@ export default function ListingFunnel({ funnel, fallback, outside, onOpen }: {
               )}
               {onOpen && s.open ? (
                 <span className="gv-fn-cell">
-                  <button type="button" className="gv-fn-btn" onClick={() => onOpen(s.open!)} aria-label={`${s.n.toLocaleString('en-US')} ${s.word}, see who`}>
+                  {s.open === 'views' ? (
+                    // Views keep their hint: counted without knowing who (26 Nov 2026).
+                    <HoverHint text="Views and clicks are counted without knowing who they are">
+                      <button type="button" className="gv-fn-btn" onClick={() => onOpen('views')} aria-label={`${s.n.toLocaleString('en-US')} ${s.word}, see them day by day`}>
+                        <span className="gv-fn-n">{s.n.toLocaleString('en-US')}</span>
+                        <span className="gv-fn-word">{s.word}</span>
+                      </button>
+                    </HoverHint>
+                  ) : (
+                  <button type="button" className="gv-fn-btn" onClick={() => onOpen(s.open!)} aria-label={`${s.n.toLocaleString('en-US')} ${s.word}, ${s.open === 'clicks' ? 'see them day by day' : 'see who'}`}>
                     <span className="gv-fn-n">{s.n.toLocaleString('en-US')}</span>
                     <span className="gv-fn-word">{s.word}</span>
                   </button>
+                  )}
                   {s.note && (
                     <button type="button" className="gv-fn-btn gv-fn-note" onClick={() => onOpen('started')}>{s.note}</button>
                   )}
                 </span>
-              ) : onOpen && i === 0 ? (
-                <HoverHint text="Views and clicks are counted without knowing who they are">
-                  <span className="gv-fn-cell">
-                    <span className="gv-fn-n">{s.n.toLocaleString('en-US')}</span>
-                    <span className="gv-fn-word">{s.word}</span>
-                  </span>
-                </HoverHint>
               ) : (
               <span className="gv-fn-cell">
                 <span className="gv-fn-n">{s.n.toLocaleString('en-US')}</span>

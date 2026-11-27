@@ -1,28 +1,24 @@
 'use client';
 
-// ── Invites: who this conference invited from Find people ──────────────────
+// ── Your Invites: who this conference invited from Find people ─────────────
 //
-// job_conference_invites (newest first). Drawn only when there is at least
-// one invite; a failed read draws nothing (the card is a record, not a step).
-// Status is an icon and a word, never a pill (CLAUDE.md §8 rule 9).
+// job_conference_invites (newest first). Since prompt 76 (26 Nov 2026) a
+// compact card in the right column, under Applicant Emails: how many were
+// sent, how many applied and how many are waiting, and "Check invite status",
+// which opens every invite in InvitesPopup. No invites: one line and Find
+// people. A failed read draws nothing (the card is a record, not a step).
 
 import { useEffect, useState } from 'react';
-import { Ban, CheckCircle2, Clock, Send, XCircle } from 'lucide-react';
-import { CARD_ACCENT, ICON_STROKE, BoardCard } from './jobKit';
-import { conferenceInvites, dayLabel, type InviteStatus, type SentInvite } from './jobsApi';
+import { Send } from 'lucide-react';
+import type { JobRole } from '@/lib/jobBoard';
+import { CARD_ACCENT, BoardCard, JobCount } from './jobKit';
+import InvitesPopup from './InvitesPopup';
+import { conferenceInvites, type SentInvite } from './jobsApi';
 
 const FONT = "var(--font-brand), sans-serif";
-const INK = '#1C1410';
 const INK_SOFT = '#5C5140';
 const FOREST = '#1B3828';
 
-const STATUS: Record<InviteStatus, { label: string; icon: typeof Send; color: string }> = {
-  queued: { label: 'Waiting to be delivered', icon: Clock, color: INK_SOFT },
-  sent: { label: 'Sent', icon: Send, color: FOREST },
-  applied: { label: 'Applied', icon: CheckCircle2, color: FOREST },
-  not_interested: { label: 'Not interested', icon: XCircle, color: INK_SOFT },
-  cancelled: { label: 'Cancelled', icon: Ban, color: INK_SOFT },
-};
 
 export function initialsOf(name: string | null | undefined): string {
   const words = (name ?? '').trim().split(/\s+/).filter(Boolean);
@@ -49,8 +45,14 @@ export function PersonAvatar({ name, url, size = 40 }: { name: string | null; ur
   return <span style={box} aria-hidden>{initialsOf(name)}</span>;
 }
 
-export default function SentInvitesCard({ confId, refreshKey }: { confId: string; refreshKey: number }) {
+export default function SentInvitesCard({ confId, refreshKey, listings, onFindPeople }: {
+  confId: string;
+  refreshKey: number;
+  listings: { id: string; title: string; role: JobRole }[];
+  onFindPeople: () => void;
+}) {
   const [invites, setInvites] = useState<SentInvite[] | null>(null);
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -61,51 +63,43 @@ export default function SentInvitesCard({ confId, refreshKey }: { confId: string
     return () => { cancelled = true; };
   }, [confId, refreshKey]);
 
-  if (!invites || invites.length === 0) return null;
+  if (!invites) return null;
+  const applied = invites.filter((i) => i.status === 'applied').length;
+  const waiting = invites.filter((i) => i.status === 'sent' || i.status === 'queued' || (i.status as string) === 'opened').length;
 
   return (
     <BoardCard
-      title="Invites"
+      title="Your Invites"
       hint="People you invited from Find people to apply to one of your listings. An invite reaches them by email and on Gavelling"
       icon={Send}
       accent={CARD_ACCENT.blue}
     >
       <style>{INVITES_CSS}</style>
-      <ul className="gv-si-list">
-        {invites.map((i) => {
-          const s = STATUS[i.status] ?? STATUS.sent;
-          const Icon = s.icon;
-          return (
-            <li key={i.id} className="gv-si-row">
-              <PersonAvatar name={i.name} url={i.avatar_url} size={40} />
-              <div className="gv-si-who">
-                <p className="gv-si-name">{i.name || 'A Gavelling member'}</p>
-                <p className="gv-si-sub">{i.title || 'A listing'}</p>
-              </div>
-              <div className="gv-si-meta">
-                <span className="gv-si-status" style={{ color: s.color }}>
-                  <Icon size={15} strokeWidth={ICON_STROKE} aria-hidden /> {s.label}
-                </span>
-                <span className="gv-si-sub">
-                  {dayLabel(i.created_at)}{i.invited_by ? ` · by ${i.invited_by}` : ''}
-                </span>
-              </div>
-            </li>
-          );
-        })}
-      </ul>
+      {invites.length === 0 ? (
+        <div className="gv-si-empty">
+          <p className="gv-si-line">No invites yet. Use Find people to invite someone</p>
+          <button type="button" className="gv-st-btn gv-st-outline" onClick={onFindPeople}>Find people</button>
+        </div>
+      ) : (
+        <div className="gv-si-empty">
+          <JobCount n={invites.length} word={invites.length === 1 ? 'invite' : 'invites'} icon={Send} />
+          <p className="gv-si-line">{applied.toLocaleString('en-US')} applied, {waiting.toLocaleString('en-US')} waiting</p>
+          <button type="button" className="gv-st-btn gv-st-outline" onClick={() => setOpen(true)}>Check invite status</button>
+        </div>
+      )}
+      {open && (
+        <InvitesPopup
+          invites={invites}
+          listings={listings}
+          onClose={() => setOpen(false)}
+          onFindPeople={() => { setOpen(false); onFindPeople(); }}
+        />
+      )}
     </BoardCard>
   );
 }
 
 const INVITES_CSS = `
-.gv-si-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
-.gv-si-row{display:flex;align-items:center;gap:12px;padding:12px 0;border-top:1px solid #EFEAE0}
-.gv-si-row:first-child{border-top:none;padding-top:4px}
-.gv-si-who{flex:1 1 auto;min-width:0}
-.gv-si-name{margin:0;font-family:${FONT};font-size:15px;font-weight:700;line-height:1.3;color:${INK};overflow-wrap:anywhere}
-.gv-si-sub{margin:2px 0 0;font-family:${FONT};font-size:13px;line-height:1.4;color:${INK_SOFT};overflow-wrap:anywhere}
-.gv-si-meta{display:flex;flex-direction:column;align-items:flex-end;text-align:right;flex-shrink:0;max-width:45%}
-.gv-si-status{display:inline-flex;align-items:center;gap:6px;font-family:${FONT};font-size:13.5px;font-weight:700}
-@media (max-width:600px){.gv-si-row{flex-wrap:wrap}.gv-si-meta{align-items:flex-start;text-align:left;max-width:none;padding-left:52px}}
+.gv-si-empty{display:flex;flex-direction:column;align-items:flex-start;gap:10px}
+.gv-si-line{margin:0;font-family:${FONT};font-size:14.5px;line-height:1.45;color:${INK_SOFT}}
 `;

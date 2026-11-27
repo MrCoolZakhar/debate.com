@@ -13,7 +13,11 @@
 //            "Invite to a listing" at the bottom.
 // Several countries can be picked (chips under the field), sent joined with
 // '|' as talent_search's p_country.
-// Back from Invite and from CV keeps the search and its scroll position. Short on
+// Back from Invite and from CV keeps the search and its scroll position.
+// Invites are free since 26 Nov 2026 (talent_search's price 0): no cost line,
+// no credit check and nothing handed to the credits pop-up; a price above 0
+// still works as before. Find people always shows (prompt 76): with no live
+// Gavelling listing, Invite says to publish one first. Short on
 // credits hands the SAME call (p_top_up true) to the page, which closes
 // this pop-up before the credits pop-up opens (never a pop-up on a pop-up).
 
@@ -89,13 +93,15 @@ export interface FindPeopleShort {
 
 interface Results extends TalentPage { key: string }
 
-export default function FindPeoplePopup({ confId, panel, onClose, onShort, onSent }: {
+export default function FindPeoplePopup({ confId, panel, onClose, onShort, onSent, onPostListing }: {
   confId: string;
   slug: string;
   panel: JobPanel;
   onClose: () => void;
   onShort: (req: FindPeopleShort) => void;
   onSent: () => void;
+  /** Opens Post a listing (no live Gavelling listing to invite to yet). */
+  onPostListing?: () => void;
 }) {
   // ── Search state (kept while the Invite step is open) ──
   const [text, setText] = useState('');
@@ -224,7 +230,9 @@ export default function FindPeoplePopup({ confId, panel, onClose, onShort, onSen
   }, [person, cvPerson]);
 
   const price = current?.price ?? results?.price ?? 0;
-  const canPay = current?.can_pay ?? results?.can_pay ?? true;
+  const free = price <= 0;
+  // A free invite needs no credits, so the Store permission does not matter.
+  const canPay = free || (current?.can_pay ?? results?.can_pay ?? true);
 
   const send = async () => {
     if (busyRef.current || !person) return;
@@ -246,7 +254,7 @@ export default function FindPeoplePopup({ confId, panel, onClose, onShort, onSen
         backToSearch();
         return;
       }
-      if (r.code === 'short' || (r.need_credits ?? 0) > 0) {
+      if (!free && (r.code === 'short' || (r.need_credits ?? 0) > 0)) {
         onShort({
           need: Math.max(1, r.need_credits ?? 1),
           retry: () => sendInvite(chosen, user, message, true),
@@ -272,7 +280,7 @@ export default function FindPeoplePopup({ confId, panel, onClose, onShort, onSen
             err={cvErr && cvErr.id === cvPerson.user_id ? cvErr.message : null}
             onRetry={() => setCvErr(null)}
             onBack={backToSearch}
-            canInvite={(current?.can_pay ?? true) && live.length > 0}
+            canInvite={canPay}
             onInvite={() => openInvite(cvPerson)}
           />
         ) : person ? (
@@ -294,6 +302,13 @@ export default function FindPeoplePopup({ confId, panel, onClose, onShort, onSen
               </div>
             </div>
 
+            {live.length === 0 ? (
+              <p className="gv-jp-line">
+                Publish a listing first, then invite people to it.{' '}
+                {onPostListing && <button type="button" className="gv-jp-a" onClick={onPostListing}>Post a listing</button>}
+              </p>
+            ) : (
+            <>
             <div className="gv-jp-field">
               <span className="gv-jp-label">Listing</span>
               <GSelect
@@ -319,13 +334,15 @@ export default function FindPeoplePopup({ confId, panel, onClose, onShort, onSen
               <span className="gv-jp-hint">{note.length}/{NOTE_MAX}</span>
             </label>
 
-            <p className="gv-jp-line">Costs {price} {price === 1 ? 'credit' : 'credits'} from your conference credits</p>
+            {!free && <p className="gv-jp-line">Costs {price} {price === 1 ? 'credit' : 'credits'} from your conference credits</p>}
             {inviteErr && <p className="gv-jp-err gv-jp-err-block" role="alert">{inviteErr}</p>}
             <div className="gv-jp-actions">
               <button type="button" className="gv-jp-main" onClick={() => { void send(); }} disabled={busy || !canPay} aria-busy={busy || undefined}>
                 <Send size={16} strokeWidth={2.4} aria-hidden /> {busy ? 'Sending…' : 'Send invite'}
               </button>
             </div>
+            </>
+            )}
           </>
         ) : (
           <>
@@ -405,7 +422,7 @@ export default function FindPeoplePopup({ confId, panel, onClose, onShort, onSen
               <>
                 <ul className="gv-fp-grid">
                   {current.people.map((p) => (
-                    <PersonCard key={p.user_id} person={p} canPay={current.can_pay} onInvite={() => openInvite(p)} onOpen={() => openCv(p)} />
+                    <PersonCard key={p.user_id} person={p} canPay={canPay} onInvite={() => openInvite(p)} onOpen={() => openCv(p)} />
                   ))}
                 </ul>
                 {current.people.length < current.total && (

@@ -19,6 +19,7 @@ import Link from 'next/link';
 import { BarChart3, Briefcase, Eye, Layers, Mail, Megaphone, MousePointerClick, Plus, UserSearch } from 'lucide-react';
 import { GoldButton, GoldButtonStyles } from '@/components/GoldButton';
 import ListingPeoplePopup from './ListingPeoplePopup';
+import ListingTrafficPopup from './ListingTrafficPopup';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
 import { GoldWord } from '@/components/BrandHeading';
@@ -47,7 +48,8 @@ const INK_SOFT = '#5C5140';
 const FOREST = '#1B3828';
 
 type Popup = { kind: 'post'; listing: OrgListing | null } | { kind: 'promote'; listing: OrgListing } | { kind: 'pack' } | { kind: 'find' } | { kind: 'copy'; listing: OrgListing }
-  | { kind: 'people'; listing: OrgListing; stage: 'started' | 'applied' } | null;
+  | { kind: 'people'; listing: OrgListing; stage: 'started' | 'applied' }
+  | { kind: 'traffic'; listing: OrgListing; metric: 'views' | 'clicks' } | null;
 
 /** A draft the database wrote by itself when chair applications opened (prompt 44):
  *  a chair draft with no offers, no screening questions and no deadline. */
@@ -200,16 +202,13 @@ export default function JobBoardPanel({ embedded = false }: { embedded?: boolean
                 <Megaphone size={17} strokeWidth={ICON_STROKE} aria-hidden /> Promote a listing
               </GoldButton>
             )}
-            {panel.listings.some((l) => l.shown === 'live' && l.kind === 'gavelling') && (
-              <button type="button" className="gv-st-btn gv-st-outline gv-jb-post" onClick={() => setPopup({ kind: 'find' })}>
-                <UserSearch size={17} strokeWidth={ICON_STROKE} aria-hidden /> Find people
-              </button>
-            )}
-            {panel.committees.length > 0 && panel.roles.some((r) => r.role === 'chair' && r.enabled) && (
-              <button type="button" className="gv-st-btn gv-st-outline gv-jb-post" onClick={() => setPopup({ kind: 'pack' })}>
-                <Layers size={17} strokeWidth={ICON_STROKE} aria-hidden /> Post chair roles for every committee
-              </button>
-            )}
+            {/* Always there (prompt 76): each pop-up says what has to come first. */}
+            <button type="button" className="gv-st-btn gv-st-outline gv-jb-post" onClick={() => setPopup({ kind: 'find' })}>
+              <UserSearch size={17} strokeWidth={ICON_STROKE} aria-hidden /> Find people
+            </button>
+            <button type="button" className="gv-st-btn gv-st-outline gv-jb-post" onClick={() => setPopup({ kind: 'pack' })}>
+              <Layers size={17} strokeWidth={ICON_STROKE} aria-hidden /> Post chair roles for every committee
+            </button>
           </div>
         )}
       </header>
@@ -310,7 +309,9 @@ export default function JobBoardPanel({ embedded = false }: { embedded?: boolean
                     onEdit={() => setPopup({ kind: 'post', listing: l })}
                     onPromote={() => setPopup({ kind: 'promote', listing: l })}
                     onChanged={(m) => { notifyOk(m, 'jobs'); void reload(); }}
-                    onOpenPeople={(stage) => setPopup({ kind: 'people', listing: l, stage })}
+                    onOpenPeople={(stage) => setPopup(stage === 'views' || stage === 'clicks'
+                      ? { kind: 'traffic', listing: l, metric: stage }
+                      : { kind: 'people', listing: l, stage })}
                   />
                 ))}
               </ul>
@@ -318,7 +319,6 @@ export default function JobBoardPanel({ embedded = false }: { embedded?: boolean
               </>
             )}
           </BoardCard>
-          <SentInvitesCard confId={conference.id} refreshKey={invitesKey} />
           </div>
 
           <div className="gv-jb-side">
@@ -327,6 +327,13 @@ export default function JobBoardPanel({ embedded = false }: { embedded?: boolean
               confId={conference.id}
               settings={panel.settings}
               onSaved={(s) => setPanel((p) => (p ? { ...p, settings: s } : p))}
+            />
+            {/* Your Invites lives on the right under the emails card (prompt 76). */}
+            <SentInvitesCard
+              confId={conference.id}
+              refreshKey={invitesKey}
+              listings={panel.listings.map((l) => ({ id: l.id, title: l.title, role: l.role }))}
+              onFindPeople={() => setPopup({ kind: 'find' })}
             />
           </div>
         </div>
@@ -338,6 +345,14 @@ export default function JobBoardPanel({ embedded = false }: { embedded?: boolean
           title={popup.listing.title}
           slug={slug}
           initial={popup.stage}
+          onClose={() => setPopup(null)}
+        />
+      )}
+      {popup?.kind === 'traffic' && (
+        <ListingTrafficPopup
+          listingId={popup.listing.id}
+          title={popup.listing.title}
+          initial={popup.metric}
           onClose={() => setPopup(null)}
         />
       )}
@@ -370,6 +385,7 @@ export default function JobBoardPanel({ embedded = false }: { embedded?: boolean
           onClose={() => setPopup(null)}
           onShort={handOffShort}
           onSent={() => setInvitesKey((k) => k + 1)}
+          onPostListing={() => setPopup({ kind: 'post', listing: null })}
         />
       )}
       {popup?.kind === 'post' && panel && (

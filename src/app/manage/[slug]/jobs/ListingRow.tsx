@@ -22,7 +22,7 @@ import Portal from '@/components/Portal';
 import { JOB_ROLE_LABEL } from '@/lib/jobBoard';
 import { InfoHint } from '../settings/applicationsUi';
 import { closeListing, dayLabel, type OrgListing, type ShownState } from './jobsApi';
-import ListingFunnel from '@/app/jobs/ListingFunnel';
+import ListingFunnel, { type FunnelOpen } from '@/app/jobs/ListingFunnel';
 import ShareCardPopup from '@/app/jobs/ShareCardPopup';
 import { lastDayIso, useConferenceTimeZone } from './PostingPopup';
 import { ICON_STROKE, ROLE_THEME, RoleThumb, STATUS_TONE } from './jobKit';
@@ -53,7 +53,7 @@ function closingSoon(listing: OrgListing): boolean {
 
 export default function ListingRow({ listing, canPromote, onEdit, onPromote, onChanged, draftedForYou = false, onCopy, onOpenPeople }: {
   /** Opens the people behind Started or Applied (prompt 72, ListingPeoplePopup in the panel). */
-  onOpenPeople?: (stage: 'started' | 'applied') => void;
+  onOpenPeople?: (stage: FunnelOpen) => void;
   /** A chair draft the database wrote when chair applications opened (prompt 44). */
   draftedForYou?: boolean;
   /** "Copy to other listings"; only when there is another listing that is not closed. */
@@ -188,7 +188,8 @@ export default function ListingRow({ listing, canPromote, onEdit, onPromote, onC
             funnel={listing.funnel}
             fallback={{ views: listing.views, clicks: listing.clicks, applicants: listing.applicants }}
             outside={listing.kind === 'outside'}
-            onOpen={listing.kind === 'outside' ? undefined : onOpenPeople}
+            // Views and clicks open the daily graph for every listing; Started and Applied exist only on Gavelling listings.
+            onOpen={onOpenPeople}
           />
         </div>
 

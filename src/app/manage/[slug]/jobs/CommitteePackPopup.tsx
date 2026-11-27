@@ -13,6 +13,7 @@
 // Nothing is saved before step 3; the pack is free.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { PurchaseShell, PURCHASE_CSS } from '@/components/purchase/purchaseKit';
 import { DatePicker } from '@/components/DatePicker';
@@ -90,6 +91,9 @@ export default function CommitteePackPopup({
   const index = STEPS.indexOf(step);
   const pickedList = panel.committees.filter((c) => picked.has(c.id));
   const full = picked.size >= MAX_PACK;
+  // The button always shows on the Job Board (prompt 76): say what has to come first.
+  const chairOn = panel.roles.some((r) => r.role === 'chair' && r.enabled);
+  const blocked = panel.committees.length === 0 || !chairOn;
   const markOf = (field: string) => (bad && bad.field === field ? bad.message : null);
 
   // The description is prefilled from the conference page when the details step opens empty.
@@ -251,11 +255,18 @@ export default function CommitteePackPopup({
         {step === 'committees' && (
           <>
             {panel.committees.length === 0 ? (
-              <p className="gv-jp-line gv-jp-soft">Add committees first, then post a chair listing for each</p>
+              <p className="gv-jp-line">
+                Add your committees first.{' '}
+                <Link href={`/manage/${conference.slug}/committees`} className="gv-jp-a">Go to Committees</Link>
+              </p>
+            ) : !chairOn ? (
+              <p className="gv-jp-line">
+                Open chair applications first.{' '}
+                <Link href={`/manage/${conference.slug}/settings?tab=applications&role=chair`} className="gv-jp-a">Open chair applications</Link>
+              </p>
             ) : (
               <>
                 <div className="gv-pk-tools">
-                  <p className="gv-jp-line"><strong>{picked.size}</strong> picked</p>
                   <button type="button" className="gv-jp-a" onClick={() => { setErr(''); setBad(null); setPicked(new Set(open.slice(0, MAX_PACK).map((c) => c.id))); }} disabled={open.length === 0}>Select all</button>
                   <button type="button" className="gv-jp-a" onClick={() => setPicked(new Set())} disabled={picked.size === 0}>Clear</button>
                 </div>
@@ -271,11 +282,12 @@ export default function CommitteePackPopup({
                     return (
                       <li key={c.id}>
                         <label className={`gv-pk-row${on ? ' gv-pk-row-on' : ''}${locked ? ' gv-pk-row-off' : ''}`}>
-                          <input type="checkbox" checked={on} disabled={locked} onChange={() => toggle(c.id)} />
+                          {/* A committee that already has a listing stays visible, aria-disabled (never a silent dead click). */}
+                          <input type="checkbox" checked={on} aria-disabled={locked || undefined} onChange={() => { if (!locked) toggle(c.id); }} />
                           <span className="gv-pk-text">
                             <span className="gv-pk-name">{abbr || c.name}</span>
                             {abbr && abbr !== c.name && <span className="gv-pk-sub">{c.name}</span>}
-                            {has && <span className="gv-pk-sub">Already has a chair listing</span>}
+                            {has && <span className="gv-pk-sub">Already has a listing</span>}
                           </span>
                         </label>
                       </li>
@@ -336,8 +348,9 @@ export default function CommitteePackPopup({
         {err && <p role="alert" className="gv-jp-err gv-jp-err-block">{err}</p>}
 
         <div className="gv-jp-actions">
+          {step === 'committees' && !blocked && <span className="gv-pk-count">{plural(picked.size, 'committee')} picked</span>}
           {step !== 'review' ? (
-            <button type="button" className="gv-jp-main" onClick={() => go(STEPS[index + 1])} disabled={busy || (step === 'committees' && picked.size === 0)}>
+            <button type="button" className="gv-jp-main" onClick={() => go(STEPS[index + 1])} disabled={busy || blocked || (step === 'committees' && picked.size === 0)}>
               Continue
             </button>
           ) : (
@@ -354,14 +367,16 @@ export default function CommitteePackPopup({
 const PACK_CSS = `
 .gv-pk-tools{display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px}
 .gv-pk-tools .gv-jp-a:disabled{opacity:0.45;cursor:default}
-.gv-pk-list{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}
-.gv-pk-row{display:flex;align-items:flex-start;gap:12px;min-height:56px;padding:12px 14px;border-radius:14px;border:1.5px solid rgba(28,20,16,0.12);background:#FFFFFF;cursor:pointer;font-family:${FONT}}
+.gv-pk-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.gv-pk-count{margin-right:auto;font-family:${FONT};font-size:14px;font-weight:700;color:${INK}}
+.gv-pk-row{display:flex;align-items:flex-start;gap:12px;min-height:52px;padding:12px 14px;border-radius:14px;border:1.5px solid rgba(28,20,16,0.12);background:#FFFFFF;cursor:pointer;font-family:${FONT}}
 .gv-pk-row-on{border-color:${FOREST};background:#EEF3EC}
-.gv-pk-row-off{cursor:default;opacity:0.6}
+.gv-pk-row-off{cursor:not-allowed;opacity:0.6}
+.gv-pk-row-off input{cursor:not-allowed}
 .gv-pk-row input{flex-shrink:0;width:18px;height:18px;margin-top:2px;accent-color:${FOREST}}
 .gv-pk-text{display:flex;flex-direction:column;gap:2px;min-width:0}
-.gv-pk-name{font-size:15px;font-weight:700;color:${INK};overflow-wrap:anywhere}
-.gv-pk-sub{font-size:13px;color:${INK_SOFT};overflow-wrap:anywhere}
+.gv-pk-name{font-size:15px;font-weight:700;color:${INK};overflow-wrap:break-word}
+.gv-pk-sub{font-size:13px;color:${INK_SOFT};overflow-wrap:break-word}
 .gv-pk-res{display:flex;flex-direction:column;gap:2px;padding:12px 14px;border-radius:14px;background:#FFFFFF;box-shadow:0 1px 2px rgba(27,56,40,0.05),0 4px 14px rgba(27,56,40,0.06)}
 .gv-pk-h{margin:6px 0 0;font-size:17px;font-weight:700;color:${INK}}
 .gv-pk-sum{margin:0;font-size:16px;font-weight:700;line-height:1.5;color:${INK};overflow-wrap:anywhere}
