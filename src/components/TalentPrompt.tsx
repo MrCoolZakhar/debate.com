@@ -111,7 +111,7 @@ export default function TalentPrompt({ className, style }: { className?: string;
       <div className="min-w-0" style={{ flex: '1 1 260px' }}>
         <p style={{ margin: 0, fontSize: 15, fontWeight: 600, color: INK, lineHeight: 1.4 }}>
           {phase === 'done'
-            ? "You're open to team roles. Change it any time in your CV settings."
+            ? "You're open to team roles. Change it any time in Settings on your MUN CV"
             : 'Want conferences to invite you to chair or join their team?'}
         </p>
         {phase === 'ask' && error && (

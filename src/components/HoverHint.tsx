@@ -76,18 +76,20 @@ function useHint(side: 'top' | 'bottom') {
       hide();
     };
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') hide(); };
-    const onMove = () => place();
+    // A scroll or a resize closes the hint (prompt 83): it never floats over
+    // the top bar after the page moved. The next hover or focus opens it again.
+    const onMove = () => hide();
     document.addEventListener('pointerdown', onDown);
     document.addEventListener('keydown', onKey);
-    window.addEventListener('scroll', onMove, true);
+    window.addEventListener('scroll', onMove, { capture: true, passive: true });
     window.addEventListener('resize', onMove);
     return () => {
       document.removeEventListener('pointerdown', onDown);
       document.removeEventListener('keydown', onKey);
-      window.removeEventListener('scroll', onMove, true);
+      window.removeEventListener('scroll', onMove, { capture: true });
       window.removeEventListener('resize', onMove);
     };
-  }, [open, place, hide]);
+  }, [open, hide]);
 
   useEffect(() => () => { if (closeTimer.current) window.clearTimeout(closeTimer.current); }, []);
 

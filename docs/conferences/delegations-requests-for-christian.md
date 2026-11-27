@@ -120,7 +120,7 @@ What we ask for: `organiser_add_to_delegation(p_application uuid, p_society uuid
 
 ### Paid delegate spots count a head delegate's own ticket twice
 
-The "delegate spots paid" number (settled Delegate Tickets of the delegation's leaders, plus delegates who paid their own fee or were waived) counts a head delegate who has paid their own Delegate Ticket 1 twice: once as a settled leader ticket and once as a delegate who paid their own fee. VUBMUN shows 15 paid for 14 tickets. It happens in the database function and in the client twin under `src/app/manage/[slug]/assignment/**`. Please fix the database side; we will mirror the client twin to match whatever you decide (one count per person, the leader's own ticket counted once).
+The "delegate spots paid" number (settled Delegate Tickets of the delegation's leaders, plus delegates who paid their own fee or were waived) counts a head delegate who has paid their own Delegate Ticket 1 twice: once as a settled leader ticket and once as a delegate who paid their own fee. VUBMUN shows 15 paid for 14 tickets. It happens in the database function and in the client twin under `src/app/manage/[slug]/allocations/**`. Please fix the database side; we will mirror the client twin to match whatever you decide (one count per person, the leader's own ticket counted once).
 
 ### Expected size: one rule everywhere (Peter, 22 Oct 2026)
 

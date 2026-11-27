@@ -32,6 +32,7 @@ import ApplicantsDial from '@/components/conferences/ApplicantsDial';
 import { applicationsByRole, INVITE_ROLE_LABEL, type ChairInviteRow } from '@/components/conferences/InviteAcceptance';
 import TrafficSourcesCard from '@/components/conferences/TrafficSourcesCard';
 import UntoldSeatsRow from './UntoldSeatsRow';
+import PrioRowsScroll from './PrioRowsScroll';
 import { fetchAllRows } from '@/lib/fetchAllRows';
 import { BENTO_BORDER, BENTO_WASH_FOREST } from '@/components/conferences/bento';
 import { conferencePaymentsReady } from '@/lib/payments';
@@ -1642,9 +1643,10 @@ export default function DashboardPage() {
           {/* The rows scroll inside the card in the one-screen grid, so a long
               list never pushes the feed below the fold. Finished rows are gone,
               not greyed; the share row is always last. */}
-          <div className="gv-dash-prio-rows flex flex-col" style={{ gap: 5 }}>
-            {/* Work, not set-up: outside `checklist`, so the ring never counts it. */}
-            <UntoldSeatsRow conferenceId={conference.id} slug={slug} />
+          {/* Pending checkmark steps first, in checklist order; warnings that are
+              not steps follow them (prompt 81). The rows scroll inside the card
+              with a fade and a chevron while there is more below. */}
+          <PrioRowsScroll>
             {pendingChecklist.length === 0 ? (
               /* Every stage is done but the checkmark has not landed yet (the
                  database recomputes it on this visit). The share row below is
@@ -1689,8 +1691,10 @@ export default function DashboardPage() {
                 ))}
               </>
             )}
+            {/* Work, not set-up: outside `checklist`, so the ring never counts it. */}
+            <UntoldSeatsRow conferenceId={conference.id} slug={slug} />
             <ShareLinkRow conference={conference} />
-          </div>
+          </PrioRowsScroll>
         </NeuCard>
         )}
 
@@ -1711,7 +1715,7 @@ export default function DashboardPage() {
             <h2 className="min-w-0" style={{ fontFamily: OUTFIT, fontSize: 15, fontWeight: 900, color: NEU.ink, lineHeight: 1.2 }}>
               Applicants Against Target
             </h2>
-            <UnallocatedBadge count={unallocated} href={`/manage/${slug}/assignment`} />
+            <UnallocatedBadge count={unallocated} href={`/manage/${slug}/allocations`} />
           </div>
           <div ref={dialCardRef} className="flex items-center" style={{ flex: 1, minHeight: 0 }}>
             <ApplicantsDial

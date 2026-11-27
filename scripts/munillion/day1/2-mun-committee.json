@@ -1,0 +1,1206 @@
+{
+  "position": 2,
+  "prompt": "Name a committee you could find at a MUN conference",
+  "hint": "Real UN bodies, crisis and specialised committees all count",
+  "kind": "list",
+  "default_tier": null,
+  "number_max": null,
+  "answers": [
+    {
+      "answer": "UNSC",
+      "tier": 10,
+      "aliases": [
+        "Security Council",
+        "United Nations Security Council",
+        "UN Security Council"
+      ]
+    },
+    {
+      "answer": "DISEC",
+      "tier": 10,
+      "aliases": [
+        "First Committee",
+        "GA1",
+        "GA First Committee",
+        "General Assembly First Committee",
+        "Disarmament and International Security Committee",
+        "Disarmament and International Security"
+      ]
+    },
+    {
+      "answer": "UNHRC",
+      "tier": 10,
+      "aliases": [
+        "Human Rights Council",
+        "United Nations Human Rights Council",
+        "UN Human Rights Council",
+        "HRC"
+      ]
+    },
+    {
+      "answer": "WHO",
+      "tier": 10,
+      "aliases": [
+        "World Health Organization",
+        "World Health Organisation"
+      ]
+    },
+    {
+      "answer": "SOCHUM",
+      "tier": 10,
+      "aliases": [
+        "Third Committee",
+        "GA3",
+        "GA Third Committee",
+        "General Assembly Third Committee",
+        "Social, Humanitarian and Cultural Committee",
+        "Social Humanitarian and Cultural"
+      ]
+    },
+    {
+      "answer": "ECOFIN",
+      "tier": 10,
+      "aliases": [
+        "Second Committee",
+        "GA2",
+        "GA Second Committee",
+        "General Assembly Second Committee",
+        "Economic and Financial Committee"
+      ]
+    },
+    {
+      "answer": "SPECPOL",
+      "tier": 10,
+      "aliases": [
+        "Fourth Committee",
+        "GA4",
+        "GA Fourth Committee",
+        "General Assembly Fourth Committee",
+        "Special Political and Decolonization Committee",
+        "Special Political and Decolonisation Committee",
+        "Special Political and Decolonization",
+        "Special Political and Decolonisation"
+      ]
+    },
+    {
+      "answer": "Legal Committee",
+      "tier": 10,
+      "aliases": [
+        "Legal",
+        "Sixth Committee",
+        "GA6",
+        "GA Sixth Committee",
+        "General Assembly Sixth Committee",
+        "UN Legal Committee"
+      ]
+    },
+    {
+      "answer": "ECOSOC",
+      "tier": 10,
+      "aliases": [
+        "Economic and Social Council",
+        "United Nations Economic and Social Council",
+        "UN ECOSOC"
+      ]
+    },
+    {
+      "answer": "UNESCO",
+      "tier": 10,
+      "aliases": [
+        "United Nations Educational, Scientific and Cultural Organization",
+        "United Nations Educational, Scientific and Cultural Organisation"
+      ]
+    },
+    {
+      "answer": "UNEP",
+      "tier": 10,
+      "aliases": [
+        "United Nations Environment Programme",
+        "UN Environment Programme",
+        "UN Environment",
+        "United Nations Environment Program"
+      ]
+    },
+    {
+      "answer": "UNICEF",
+      "tier": 10,
+      "aliases": [
+        "United Nations Children's Fund",
+        "UN Children's Fund"
+      ]
+    },
+    {
+      "answer": "General Assembly",
+      "tier": 10,
+      "aliases": [
+        "UNGA",
+        "UN General Assembly",
+        "United Nations General Assembly",
+        "GA Plenary",
+        "General Assembly Plenary"
+      ]
+    },
+    {
+      "answer": "Historical Security Council",
+      "tier": 30,
+      "aliases": [
+        "HSC",
+        "Historic Security Council",
+        "Historical UNSC",
+        "Historical Security Council (HSC)"
+      ]
+    },
+    {
+      "answer": "Joint Crisis Committee",
+      "tier": 30,
+      "aliases": [
+        "JCC",
+        "Joint Crisis Cabinet"
+      ]
+    },
+    {
+      "answer": "Crisis Committee",
+      "tier": 30,
+      "aliases": [
+        "Crisis",
+        "Crisis Cabinet",
+        "Specialized Crisis",
+        "Specialised Crisis"
+      ]
+    },
+    {
+      "answer": "International Court of Justice",
+      "tier": 30,
+      "aliases": [
+        "ICJ",
+        "World Court"
+      ]
+    },
+    {
+      "answer": "UNHCR",
+      "tier": 30,
+      "aliases": [
+        "United Nations High Commissioner for Refugees",
+        "UN Refugee Agency",
+        "Office of the United Nations High Commissioner for Refugees",
+        "High Commissioner for Refugees"
+      ]
+    },
+    {
+      "answer": "UNDP",
+      "tier": 30,
+      "aliases": [
+        "United Nations Development Programme",
+        "UN Development Programme",
+        "United Nations Development Program"
+      ]
+    },
+    {
+      "answer": "UN Women",
+      "tier": 30,
+      "aliases": [
+        "United Nations Entity for Gender Equality and the Empowerment of Women"
+      ]
+    },
+    {
+      "answer": "Commission on the Status of Women",
+      "tier": 30,
+      "aliases": [
+        "CSW",
+        "UN CSW"
+      ]
+    },
+    {
+      "answer": "IAEA",
+      "tier": 30,
+      "aliases": [
+        "International Atomic Energy Agency"
+      ]
+    },
+    {
+      "answer": "NATO",
+      "tier": 30,
+      "aliases": [
+        "North Atlantic Treaty Organization",
+        "North Atlantic Treaty Organisation",
+        "North Atlantic Council"
+      ]
+    },
+    {
+      "answer": "European Parliament",
+      "tier": 30,
+      "aliases": [
+        "EP",
+        "EU Parliament"
+      ]
+    },
+    {
+      "answer": "Council of the European Union",
+      "tier": 30,
+      "aliases": [
+        "EU Council",
+        "Council of the EU",
+        "Council of Ministers",
+        "European Union Council"
+      ]
+    },
+    {
+      "answer": "African Union",
+      "tier": 30,
+      "aliases": [
+        "AU"
+      ]
+    },
+    {
+      "answer": "ASEAN",
+      "tier": 30,
+      "aliases": [
+        "Association of Southeast Asian Nations"
+      ]
+    },
+    {
+      "answer": "Arab League",
+      "tier": 30,
+      "aliases": [
+        "League of Arab States"
+      ]
+    },
+    {
+      "answer": "G20",
+      "tier": 30,
+      "aliases": [
+        "Group of 20",
+        "Group of Twenty"
+      ]
+    },
+    {
+      "answer": "OPEC",
+      "tier": 30,
+      "aliases": [
+        "Organization of the Petroleum Exporting Countries",
+        "Organisation of the Petroleum Exporting Countries"
+      ]
+    },
+    {
+      "answer": "World Trade Organization",
+      "tier": 30,
+      "aliases": [
+        "WTO",
+        "World Trade Organisation"
+      ]
+    },
+    {
+      "answer": "International Monetary Fund",
+      "tier": 30,
+      "aliases": [
+        "IMF"
+      ]
+    },
+    {
+      "answer": "World Bank",
+      "tier": 30,
+      "aliases": [
+        "World Bank Group",
+        "IBRD"
+      ]
+    },
+    {
+      "answer": "International Criminal Court",
+      "tier": 30,
+      "aliases": [
+        "ICC"
+      ]
+    },
+    {
+      "answer": "Ad Hoc Committee of the Secretary-General",
+      "tier": 30,
+      "aliases": [
+        "Ad Hoc",
+        "Ad Hoc Committee",
+        "Ad Hoc Committee of the SG",
+        "SG Ad Hoc"
+      ]
+    },
+    {
+      "answer": "Futuristic Security Council",
+      "tier": 30,
+      "aliases": [
+        "Futuristic UNSC",
+        "Futuristic Crisis"
+      ]
+    },
+    {
+      "answer": "UNODC",
+      "tier": 30,
+      "aliases": [
+        "United Nations Office on Drugs and Crime",
+        "UN Office on Drugs and Crime"
+      ]
+    },
+    {
+      "answer": "FAO",
+      "tier": 30,
+      "aliases": [
+        "Food and Agriculture Organization",
+        "Food and Agriculture Organisation"
+      ]
+    },
+    {
+      "answer": "WFP",
+      "tier": 30,
+      "aliases": [
+        "World Food Programme",
+        "World Food Program"
+      ]
+    },
+    {
+      "answer": "UNFCCC",
+      "tier": 30,
+      "aliases": [
+        "COP",
+        "Conference of the Parties",
+        "United Nations Framework Convention on Climate Change"
+      ]
+    },
+    {
+      "answer": "Interpol",
+      "tier": 30,
+      "aliases": [
+        "International Criminal Police Organization",
+        "International Criminal Police Organisation"
+      ]
+    },
+    {
+      "answer": "G7",
+      "tier": 60,
+      "aliases": [
+        "Group of 7",
+        "Group of Seven"
+      ]
+    },
+    {
+      "answer": "BRICS",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Organization of American States",
+      "tier": 60,
+      "aliases": [
+        "OAS",
+        "Organisation of American States"
+      ]
+    },
+    {
+      "answer": "Commonwealth",
+      "tier": 60,
+      "aliases": [
+        "Commonwealth of Nations",
+        "CHOGM",
+        "Commonwealth Heads of Government Meeting"
+      ]
+    },
+    {
+      "answer": "OSCE",
+      "tier": 60,
+      "aliases": [
+        "Organization for Security and Co-operation in Europe",
+        "Organisation for Security and Co-operation in Europe"
+      ]
+    },
+    {
+      "answer": "Council of Europe",
+      "tier": 60,
+      "aliases": [
+        "CoE"
+      ]
+    },
+    {
+      "answer": "European Commission",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "European Council",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Press Corps",
+      "tier": 60,
+      "aliases": [
+        "International Press",
+        "International Press Corps",
+        "Press",
+        "Press Room",
+        "Press Committee",
+        "IPC"
+      ]
+    },
+    {
+      "answer": "US National Security Council",
+      "tier": 60,
+      "aliases": [
+        "NSC",
+        "National Security Council",
+        "United States National Security Council"
+      ]
+    },
+    {
+      "answer": "Cabinet",
+      "tier": 60,
+      "aliases": [
+        "Cabinet Committee",
+        "Presidential Cabinet",
+        "Government Cabinet",
+        "UK Cabinet",
+        "British Cabinet",
+        "US Cabinet",
+        "Prime Minister's Cabinet"
+      ]
+    },
+    {
+      "answer": "Trusteeship Council",
+      "tier": 60,
+      "aliases": [
+        "UN Trusteeship Council",
+        "Trusteeship"
+      ]
+    },
+    {
+      "answer": "Fifth Committee",
+      "tier": 60,
+      "aliases": [
+        "GA5",
+        "GA Fifth Committee",
+        "General Assembly Fifth Committee",
+        "Administrative and Budgetary Committee"
+      ]
+    },
+    {
+      "answer": "Peacebuilding Commission",
+      "tier": 60,
+      "aliases": [
+        "PBC",
+        "UN Peacebuilding Commission"
+      ]
+    },
+    {
+      "answer": "Counter-Terrorism Committee",
+      "tier": 60,
+      "aliases": [
+        "CTC",
+        "UN Counter-Terrorism Committee"
+      ]
+    },
+    {
+      "answer": "Disarmament Commission",
+      "tier": 60,
+      "aliases": [
+        "UNDC",
+        "UN Disarmament Commission"
+      ]
+    },
+    {
+      "answer": "Conference on Disarmament",
+      "tier": 60,
+      "aliases": [
+        "CD"
+      ]
+    },
+    {
+      "answer": "Commission on Narcotic Drugs",
+      "tier": 60,
+      "aliases": [
+        "CND"
+      ]
+    },
+    {
+      "answer": "World Health Assembly",
+      "tier": 60,
+      "aliases": [
+        "WHA"
+      ]
+    },
+    {
+      "answer": "UNOOSA",
+      "tier": 60,
+      "aliases": [
+        "United Nations Office for Outer Space Affairs",
+        "UN Office for Outer Space Affairs",
+        "Office for Outer Space Affairs"
+      ]
+    },
+    {
+      "answer": "IMO",
+      "tier": 60,
+      "aliases": [
+        "International Maritime Organization",
+        "International Maritime Organisation"
+      ]
+    },
+    {
+      "answer": "ICAO",
+      "tier": 60,
+      "aliases": [
+        "International Civil Aviation Organization",
+        "International Civil Aviation Organisation"
+      ]
+    },
+    {
+      "answer": "ILO",
+      "tier": 60,
+      "aliases": [
+        "International Labour Organization",
+        "International Labor Organization",
+        "International Labour Organisation"
+      ]
+    },
+    {
+      "answer": "UNCTAD",
+      "tier": 60,
+      "aliases": [
+        "United Nations Conference on Trade and Development",
+        "UN Conference on Trade and Development"
+      ]
+    },
+    {
+      "answer": "UN-Habitat",
+      "tier": 60,
+      "aliases": [
+        "United Nations Human Settlements Programme"
+      ]
+    },
+    {
+      "answer": "UNRWA",
+      "tier": 60,
+      "aliases": [
+        "United Nations Relief and Works Agency",
+        "United Nations Relief and Works Agency for Palestine Refugees in the Near East"
+      ]
+    },
+    {
+      "answer": "OHCHR",
+      "tier": 60,
+      "aliases": [
+        "Office of the High Commissioner for Human Rights",
+        "Office of the United Nations High Commissioner for Human Rights",
+        "High Commissioner for Human Rights",
+        "UN High Commissioner for Human Rights"
+      ]
+    },
+    {
+      "answer": "IOM",
+      "tier": 60,
+      "aliases": [
+        "International Organization for Migration",
+        "International Organisation for Migration"
+      ]
+    },
+    {
+      "answer": "UNFPA",
+      "tier": 60,
+      "aliases": [
+        "United Nations Population Fund",
+        "UN Population Fund"
+      ]
+    },
+    {
+      "answer": "UNIDO",
+      "tier": 60,
+      "aliases": [
+        "United Nations Industrial Development Organization",
+        "United Nations Industrial Development Organisation"
+      ]
+    },
+    {
+      "answer": "WIPO",
+      "tier": 60,
+      "aliases": [
+        "World Intellectual Property Organization",
+        "World Intellectual Property Organisation"
+      ]
+    },
+    {
+      "answer": "ITU",
+      "tier": 60,
+      "aliases": [
+        "International Telecommunication Union",
+        "International Telecommunications Union"
+      ]
+    },
+    {
+      "answer": "CEDAW",
+      "tier": 60,
+      "aliases": [
+        "Committee on the Elimination of Discrimination against Women"
+      ]
+    },
+    {
+      "answer": "United Nations Environment Assembly",
+      "tier": 60,
+      "aliases": [
+        "UNEA"
+      ]
+    },
+    {
+      "answer": "UN Secretariat",
+      "tier": 60,
+      "aliases": [
+        "United Nations Secretariat",
+        "Secretariat"
+      ]
+    },
+    {
+      "answer": "League of Nations",
+      "tier": 60,
+      "aliases": [
+        "League of Nations Council",
+        "Council of the League of Nations"
+      ]
+    },
+    {
+      "answer": "ECOWAS",
+      "tier": 60,
+      "aliases": [
+        "Economic Community of West African States"
+      ]
+    },
+    {
+      "answer": "Ministry of Magic",
+      "tier": 60,
+      "aliases": [
+        "Wizengamot",
+        "Harry Potter Ministry of Magic"
+      ]
+    },
+    {
+      "answer": "Avengers",
+      "tier": 60,
+      "aliases": [
+        "Marvel Avengers"
+      ]
+    },
+    {
+      "answer": "Game of Thrones Small Council",
+      "tier": 60,
+      "aliases": [
+        "Small Council",
+        "Council of Westeros",
+        "Game of Thrones"
+      ]
+    },
+    {
+      "answer": "Hogwarts",
+      "tier": 60,
+      "aliases": [
+        "Hogwarts Staff",
+        "Hogwarts School of Witchcraft and Wizardry"
+      ]
+    },
+    {
+      "answer": "UNAIDS",
+      "tier": 60,
+      "aliases": [
+        "Joint United Nations Programme on HIV/AIDS"
+      ]
+    },
+    {
+      "answer": "Lok Sabha",
+      "tier": 60,
+      "aliases": [
+        "Indian Parliament",
+        "Parliament of India"
+      ]
+    },
+    {
+      "answer": "AIPPM",
+      "tier": 60,
+      "aliases": [
+        "All India Political Parties Meet"
+      ]
+    },
+    {
+      "answer": "US Senate",
+      "tier": 60,
+      "aliases": [
+        "United States Senate"
+      ]
+    },
+    {
+      "answer": "Congress of Vienna",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Supreme Court",
+      "tier": 60,
+      "aliases": [
+        "US Supreme Court",
+        "Supreme Court of the United States",
+        "SCOTUS"
+      ]
+    },
+    {
+      "answer": "Cuban Missile Crisis ExComm",
+      "tier": 85,
+      "aliases": [
+        "ExComm",
+        "Executive Committee of the National Security Council"
+      ]
+    },
+    {
+      "answer": "Rajya Sabha",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "House of Commons",
+      "tier": 85,
+      "aliases": [
+        "British Parliament",
+        "UK Parliament"
+      ]
+    },
+    {
+      "answer": "House of Representatives",
+      "tier": 85,
+      "aliases": [
+        "US House of Representatives",
+        "United States House of Representatives"
+      ]
+    },
+    {
+      "answer": "Constitutional Convention",
+      "tier": 85,
+      "aliases": [
+        "Philadelphia Convention",
+        "US Constitutional Convention"
+      ]
+    },
+    {
+      "answer": "Continental Congress",
+      "tier": 85,
+      "aliases": [
+        "Second Continental Congress",
+        "First Continental Congress"
+      ]
+    },
+    {
+      "answer": "Warsaw Pact",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Roman Senate",
+      "tier": 85,
+      "aliases": [
+        "Senate of Rome",
+        "Senate of Ancient Rome"
+      ]
+    },
+    {
+      "answer": "Star Wars Galactic Senate",
+      "tier": 85,
+      "aliases": [
+        "Galactic Senate",
+        "Star Wars Senate"
+      ]
+    },
+    {
+      "answer": "Jedi Council",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Justice League",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "OECD",
+      "tier": 85,
+      "aliases": [
+        "Organisation for Economic Co-operation and Development",
+        "Organization for Economic Cooperation and Development"
+      ]
+    },
+    {
+      "answer": "APEC",
+      "tier": 85,
+      "aliases": [
+        "Asia-Pacific Economic Cooperation"
+      ]
+    },
+    {
+      "answer": "SADC",
+      "tier": 85,
+      "aliases": [
+        "Southern African Development Community"
+      ]
+    },
+    {
+      "answer": "CARICOM",
+      "tier": 85,
+      "aliases": [
+        "Caribbean Community"
+      ]
+    },
+    {
+      "answer": "Mercosur",
+      "tier": 85,
+      "aliases": [
+        "Mercosul",
+        "Southern Common Market"
+      ]
+    },
+    {
+      "answer": "CELAC",
+      "tier": 85,
+      "aliases": [
+        "Community of Latin American and Caribbean States"
+      ]
+    },
+    {
+      "answer": "Organisation of Islamic Cooperation",
+      "tier": 85,
+      "aliases": [
+        "OIC",
+        "Organization of Islamic Cooperation",
+        "Organization of the Islamic Conference"
+      ]
+    },
+    {
+      "answer": "Gulf Cooperation Council",
+      "tier": 85,
+      "aliases": [
+        "GCC",
+        "Cooperation Council for the Arab States of the Gulf"
+      ]
+    },
+    {
+      "answer": "Shanghai Cooperation Organisation",
+      "tier": 85,
+      "aliases": [
+        "SCO",
+        "Shanghai Cooperation Organization"
+      ]
+    },
+    {
+      "answer": "Non-Aligned Movement",
+      "tier": 85,
+      "aliases": [
+        "NAM"
+      ]
+    },
+    {
+      "answer": "G77",
+      "tier": 85,
+      "aliases": [
+        "Group of 77"
+      ]
+    },
+    {
+      "answer": "Arctic Council",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Pacific Islands Forum",
+      "tier": 85,
+      "aliases": [
+        "PIF"
+      ]
+    },
+    {
+      "answer": "Nordic Council",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "African Union Peace and Security Council",
+      "tier": 85,
+      "aliases": [
+        "AUPSC",
+        "AU Peace and Security Council",
+        "Peace and Security Council"
+      ]
+    },
+    {
+      "answer": "European Court of Human Rights",
+      "tier": 85,
+      "aliases": [
+        "ECHR",
+        "ECtHR"
+      ]
+    },
+    {
+      "answer": "International Law Commission",
+      "tier": 85,
+      "aliases": [
+        "ILC"
+      ]
+    },
+    {
+      "answer": "World Economic Forum",
+      "tier": 85,
+      "aliases": [
+        "WEF"
+      ]
+    },
+    {
+      "answer": "International Olympic Committee",
+      "tier": 85,
+      "aliases": [
+        "IOC"
+      ]
+    },
+    {
+      "answer": "FIFA",
+      "tier": 85,
+      "aliases": [
+        "FIFA Council",
+        "Federation Internationale de Football Association"
+      ]
+    },
+    {
+      "answer": "World Heritage Committee",
+      "tier": 85,
+      "aliases": [
+        "UNESCO World Heritage Committee"
+      ]
+    },
+    {
+      "answer": "United Nations Commission on Human Rights",
+      "tier": 85,
+      "aliases": [
+        "Commission on Human Rights",
+        "UNCHR"
+      ]
+    },
+    {
+      "answer": "ESCAP",
+      "tier": 85,
+      "aliases": [
+        "Economic and Social Commission for Asia and the Pacific",
+        "UNESCAP"
+      ]
+    },
+    {
+      "answer": "Economic Commission for Africa",
+      "tier": 85,
+      "aliases": [
+        "UNECA",
+        "ECA"
+      ]
+    },
+    {
+      "answer": "OCHA",
+      "tier": 85,
+      "aliases": [
+        "UNOCHA",
+        "Office for the Coordination of Humanitarian Affairs",
+        "United Nations Office for the Coordination of Humanitarian Affairs"
+      ]
+    },
+    {
+      "answer": "UNDRR",
+      "tier": 85,
+      "aliases": [
+        "United Nations Office for Disaster Risk Reduction",
+        "UNISDR"
+      ]
+    },
+    {
+      "answer": "Committee on the Rights of the Child",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Special Committee on Decolonization",
+      "tier": 85,
+      "aliases": [
+        "C-24",
+        "Committee of 24"
+      ]
+    },
+    {
+      "answer": "High-Level Political Forum",
+      "tier": 85,
+      "aliases": [
+        "HLPF",
+        "High Level Political Forum on Sustainable Development"
+      ]
+    },
+    {
+      "answer": "Permanent Forum on Indigenous Issues",
+      "tier": 85,
+      "aliases": [
+        "UNPFII",
+        "United Nations Permanent Forum on Indigenous Issues"
+      ]
+    },
+    {
+      "answer": "Commission on Population and Development",
+      "tier": 85,
+      "aliases": [
+        "CPD"
+      ]
+    },
+    {
+      "answer": "Commission on Crime Prevention and Criminal Justice",
+      "tier": 85,
+      "aliases": [
+        "CCPCJ"
+      ]
+    },
+    {
+      "answer": "Commission on Science and Technology for Development",
+      "tier": 85,
+      "aliases": [
+        "CSTD"
+      ]
+    },
+    {
+      "answer": "Commission for Social Development",
+      "tier": 85,
+      "aliases": [
+        "CSocD"
+      ]
+    },
+    {
+      "answer": "UNCITRAL",
+      "tier": 85,
+      "aliases": [
+        "United Nations Commission on International Trade Law"
+      ]
+    },
+    {
+      "answer": "Paris Peace Conference",
+      "tier": 85,
+      "aliases": [
+        "Treaty of Versailles Conference",
+        "Versailles Conference"
+      ]
+    },
+    {
+      "answer": "Yalta Conference",
+      "tier": 85,
+      "aliases": [
+        "Yalta"
+      ]
+    },
+    {
+      "answer": "Council of Elrond",
+      "tier": 85,
+      "aliases": [
+        "Lord of the Rings Council",
+        "Lord of the Rings Council of Elrond"
+      ]
+    },
+    {
+      "answer": "Human Rights Committee",
+      "tier": 85,
+      "aliases": [
+        "UN Human Rights Committee",
+        "CCPR"
+      ]
+    },
+    {
+      "answer": "Berlin Conference",
+      "tier": 85,
+      "aliases": [
+        "Berlin Conference of 1884",
+        "Congress of Berlin"
+      ]
+    },
+    {
+      "answer": "Peace of Westphalia",
+      "tier": 85,
+      "aliases": [
+        "Westphalia",
+        "Congress of Westphalia"
+      ]
+    },
+    {
+      "answer": "Soviet Politburo",
+      "tier": 85,
+      "aliases": [
+        "Politburo"
+      ]
+    },
+    {
+      "answer": "British War Cabinet",
+      "tier": 85,
+      "aliases": [
+        "War Cabinet"
+      ]
+    },
+    {
+      "answer": "Asian Development Bank",
+      "tier": 85,
+      "aliases": [
+        "ADB"
+      ]
+    },
+    {
+      "answer": "African Development Bank",
+      "tier": 85,
+      "aliases": [
+        "AfDB"
+      ]
+    },
+    {
+      "answer": "Organisation of African Unity",
+      "tier": 85,
+      "aliases": [
+        "OAU",
+        "Organization of African Unity"
+      ]
+    },
+    {
+      "answer": "International Criminal Tribunal for the former Yugoslavia",
+      "tier": 85,
+      "aliases": [
+        "ICTY",
+        "Yugoslavia Tribunal"
+      ]
+    },
+    {
+      "answer": "Inter-American Court of Human Rights",
+      "tier": 85,
+      "aliases": [
+        "IACtHR",
+        "Inter-American Court"
+      ]
+    },
+    {
+      "answer": "European Central Bank",
+      "tier": 85,
+      "aliases": [
+        "ECB"
+      ]
+    },
+    {
+      "answer": "UNITAID",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Executive Board of UNICEF",
+      "tier": 85,
+      "aliases": [
+        "UNICEF Executive Board"
+      ]
+    },
+    {
+      "answer": "Committee on the Peaceful Uses of Outer Space",
+      "tier": 100,
+      "aliases": [
+        "COPUOS",
+        "UN COPUOS",
+        "Outer Space Committee"
+      ]
+    }
+  ]
+}

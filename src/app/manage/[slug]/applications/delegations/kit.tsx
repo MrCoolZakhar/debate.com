@@ -8,7 +8,7 @@
 import { CircleFlag } from '@/components/CircleFlag';
 import { committeeDisplayName } from '@/lib/presetNames';
 import { getCountryByCode } from '@/lib/countries';
-import { countryShortName } from '@/app/manage/[slug]/assignment/displayNames';
+import { countryShortName } from '@/app/manage/[slug]/allocations/displayNames';
 import { splitDelegationName } from '@/lib/delegationName';
 import {
   FONT, INK, INK_SOFT, FOREST, committeeEmblemSrc, CommitteeDisc,

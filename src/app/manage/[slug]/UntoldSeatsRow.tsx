@@ -1,6 +1,6 @@
 'use client';
 
-// "N delegates never got their allocation": a dashboard to-do row.
+// "N delegates never got their allocation": a dashboard warning line.
 //
 // A delegate seated while allocation emails were off (or on manual release and
 // never released) sits in conference_allocations with allocation_sent = false.
@@ -14,10 +14,10 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Send } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
-import { NeuChecklistRow, NEU, NEU_GRADIENTS, OUTFIT } from '@/components/neu';
+import { NEU, NEU_GRADIENTS, OUTFIT } from '@/components/neu';
 
 export default function UntoldSeatsRow({ conferenceId, slug }: { conferenceId: string; slug: string }) {
   const { session } = useAuth();
@@ -46,31 +46,21 @@ export default function UntoldSeatsRow({ conferenceId, slug }: { conferenceId: s
   }, [conferenceId, token]);
 
   if (count === 0) return null;
-  const open = () => router.push(`/manage/${slug}/assignment?release=unsent`);
+  const open = () => router.push(`/manage/${slug}/allocations?release=unsent`);
+  // A warning, not a set-up step (prompt 81): it follows the pending steps as
+  // one quieter amber line, never in the checklist's order or count.
   return (
-    <div className="flex-shrink-0">
-      <NeuChecklistRow
-        done={false}
-        icon={Send}
-        emoji="Envelope with arrow"
-        gradient={NEU_GRADIENTS.amber}
-        title={`${count} delegate${count === 1 ? '' : 's'} never got their allocation`}
-        sub="They have a committee and country but no allocation email yet."
-        onClick={open}
-        action={(
-          <button
-            onClick={(e) => { e.stopPropagation(); open(); }}
-            className="focus:outline-none"
-            style={{
-              fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800,
-              color: NEU.deepGold, background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px',
-            }}
-          >
-            Send
-          </button>
-        )}
-        dense
-      />
-    </div>
+    <button
+      type="button"
+      onClick={open}
+      className="flex items-start gap-2 flex-shrink-0 text-left rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+      style={{ padding: '7px 10px', background: 'transparent', border: 'none', cursor: 'pointer', width: '100%' }}
+    >
+      <AlertTriangle size={15} strokeWidth={2.2} aria-hidden style={{ color: NEU_GRADIENTS.amber[0], flexShrink: 0, marginTop: 1 }} />
+      <span className="min-w-0 [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 600, lineHeight: 1.4, color: NEU.ink }}>
+        {count} delegate{count === 1 ? '' : 's'} never got their allocation.{' '}
+        <span style={{ fontWeight: 800, color: NEU.deepGold, textDecoration: 'underline', textUnderlineOffset: 2 }}>Send</span>
+      </span>
+    </button>
   );
 }

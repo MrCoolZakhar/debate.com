@@ -38,7 +38,9 @@ import { dayLabel } from '@/app/manage/[slug]/jobs/jobsApi';
 import { PurchaseShell, PURCHASE_CSS } from '@/components/purchase/purchaseKit';
 import { GOLD_CTA_BG, GOLD_CTA_BG_HOVER, GOLD_CTA_INK, GOLD_CTA_SHADOW, GOLD_CTA_SHADOW_HOVER } from '@/components/GoldButton';
 import { jobDates } from './JobCard';
-import StandalonePostingPopup, { type StandaloneShortRequest } from './StandalonePostingPopup';
+import StandalonePostingPopup, { readOrganizedConferences, type OrganizedConference, type StandaloneShortRequest } from './StandalonePostingPopup';
+import { readPanel } from '@/app/manage/[slug]/jobs/jobsApi';
+import { useJobTopUp } from '@/app/manage/[slug]/jobs/useJobTopUp';
 
 const FONT = "var(--font-brand), sans-serif";
 const FOREST = '#1B3828';
@@ -72,7 +74,30 @@ type Open =
   | null
   | { kind: 'post'; listing: JobMyListing | null }
   | { kind: 'promote'; listing: JobMyListing }
+  /** A listing of a conference this person organises: the organiser's Promote. */
+  | { kind: 'promoteConf'; listing: { id: string; title: string }; credits: number }
   | { kind: 'pick' };
+
+/** The live listings of one conference this person organises and can promote (prompt 83). */
+export interface ConfPromoteGroup {
+  conference: OrganizedConference;
+  credits: number;
+  listings: { id: string; title: string; ends_on: string | null }[];
+}
+
+/** Every organised conference's live listings, through job_conference_panel. Null when nothing could be read. */
+async function readConferenceGroups(userId: string): Promise<ConfPromoteGroup[] | null> {
+  const confs = await readOrganizedConferences(userId);
+  if (!confs) return null;
+  const panels = await Promise.all(confs.map((c) => readPanel(c.id)));
+  const out: ConfPromoteGroup[] = [];
+  panels.forEach((p, i) => {
+    if (!p.ok || !p.can_promote) return;
+    const live = p.listings.filter((l) => l.shown === 'live').map((l) => ({ id: l.id, title: l.title, ends_on: l.promotion?.ends_on ?? null }));
+    if (live.length > 0) out.push({ conference: confs[i], credits: p.conference_credits, listings: live });
+  });
+  return out;
+}
 
 export function useStandalonePosting({ onChanged, onPosted, myListings = null }: {
   /** Read job_my (and the board) again. */
@@ -109,6 +134,17 @@ export function useStandalonePosting({ onChanged, onPosted, myListings = null }:
   const promote = useCallback((listing: JobMyListing) => setOpen({ kind: 'promote', listing }), []);
 
   const live = useMemo(() => (myListings ? myListings.filter((l) => l.shown === 'live') : null), [myListings]);
+  // The conferences this person organises (prompt 83): read when the picker opens.
+  const [confGroups, setConfGroups] = useState<ConfPromoteGroup[] | null>(null);
+  const confReadFor = useRef<string | null>(null);
+  const manageTopUp = useJobTopUp();
+  useEffect(() => {
+    if (open?.kind !== 'pick' || !userId || confReadFor.current === userId) return;
+    confReadFor.current = userId;
+    let cancelled = false;
+    void readConferenceGroups(userId).then((g) => { if (!cancelled) setConfGroups(g ?? []); });
+    return () => { cancelled = true; confReadFor.current = null; };
+  }, [open, userId]);
 
   /** "Promote listing": sign-in, PromotePopup for the one live listing, or the list. */
   const promoteAny = useCallback(() => {
@@ -117,17 +153,17 @@ export function useStandalonePosting({ onChanged, onPosted, myListings = null }:
       openAuth();
       return;
     }
-    if (live && live.length === 1) { setOpen({ kind: 'promote', listing: live[0] }); return; }
+    if (live && live.length === 1 && confGroups && confGroups.length === 0) { setOpen({ kind: 'promote', listing: live[0] }); return; }
     setOpen({ kind: 'pick' });
-  }, [userId, live]);
+  }, [userId, live, confGroups]);
 
   // The list was opened before job_my() answered: one live listing goes
   // straight to PromotePopup once it has.
   useEffect(() => {
-    if (open?.kind !== 'pick' || !live || live.length !== 1) return;
+    if (open?.kind !== 'pick' || !live || live.length !== 1 || !confGroups || confGroups.length > 0) return;
     const t = window.setTimeout(() => setOpen({ kind: 'promote', listing: live[0] }), 0);
     return () => window.clearTimeout(t);
-  }, [open, live]);
+  }, [open, live, confGroups]);
 
   // After signing in, a Promote press made while signed out carries on.
   useEffect(() => {
@@ -216,8 +252,10 @@ export function useStandalonePosting({ onChanged, onPosted, myListings = null }:
     node = (
       <PromotePicker
         listings={live}
+        groups={confGroups}
         onClose={close}
         onPick={(l) => setOpen({ kind: 'promote', listing: l })}
+        onPickConf={(g, l) => setOpen({ kind: 'promoteConf', listing: { id: l.id, title: l.title }, credits: g.credits })}
         onPost={() => setOpen({ kind: 'post', listing: null })}
       />
     );
@@ -248,61 +286,118 @@ export function useStandalonePosting({ onChanged, onPosted, myListings = null }:
     );
   }
 
+  else if (open?.kind === 'promoteConf') {
+    // Exactly the organiser's Promote: the conference's credits, the same RPC,
+    // Use my credits in place, and the hand-off to buy credits when short.
+    node = (
+      <PromotePopup
+        listingId={open.listing.id}
+        listingTitle={open.listing.title}
+        conferenceCredits={open.credits}
+        onClose={close}
+        onDone={promoted}
+        onShort={(req) => {
+          setOpen(null);
+          manageTopUp({
+            need: req.need,
+            retry: req.retry,
+            okMessage: (a) => `Promoted until ${dayLabel(typeof a.ends_on === 'string' ? a.ends_on : null)}`,
+            onSettled: () => changedRef.current(),
+          });
+        }}
+      />
+    );
+  }
+
   return { post, edit, promote, promoteAny, node };
 }
 
-/** "Promote a Listing": the person's live listings to pick from, or a line to post first. */
-function PromotePicker({ listings, onClose, onPick, onPost }: {
+/** "Promote a Listing": every live listing this person can promote, grouped by
+ *  conference, their own standalone ones under "Your listings" (prompt 83). */
+function PromotePicker({ listings, groups, onClose, onPick, onPickConf, onPost }: {
   listings: JobMyListing[] | null;
+  groups: ConfPromoteGroup[] | null;
   onClose: () => void;
   onPick: (l: JobMyListing) => void;
+  onPickConf: (g: ConfPromoteGroup, l: ConfPromoteGroup['listings'][number]) => void;
   onPost: () => void;
 }) {
   // One press only: the pop-up is replaced on the first.
   const done = useRef(false);
   const once = (fn: () => void) => () => { if (done.current) return; done.current = true; fn(); };
+  const loading = !listings || !groups;
+  const none = !loading && listings.length === 0 && groups.length === 0;
+
+  const row = (key: string, title: string, meta: React.ReactNode, until: string | null, onClick: () => void) => (
+    <li key={key}>
+      <button type="button" className="gv-pp-row" onClick={once(onClick)}>
+        <span style={{ minWidth: 0, flex: 1 }}>
+          <span className="gv-pp-row-title">{title}</span>
+          {meta && <span className="gv-pp-row-meta">{meta}</span>}
+          {until && (
+            <span className="gv-pp-row-until"><Sparkles size={13} strokeWidth={1.75} aria-hidden /> {until}</span>
+          )}
+        </span>
+        <ChevronRight size={18} strokeWidth={1.75} aria-hidden style={{ flexShrink: 0, color: FOREST }} />
+      </button>
+    </li>
+  );
+
   return (
     <PurchaseShell tone="light" label="Promote a Listing" onClose={onClose} testId="job-promote-pick" panelClass="gv-st-pop gv-pp-pop">
       <style>{PURCHASE_CSS}</style>
       <style>{PICKER_CSS}</style>
       <style>{BUTTON_CSS}</style>
-      <h2 className="gv-pp-title">Promote a Listing</h2>
-      {!listings ? (
-        <p className="gv-pp-line" aria-busy="true"><Loader2 size={16} className="animate-spin" aria-hidden /> Reading your listings</p>
-      ) : listings.length === 0 ? (
-        <>
-          <p className="gv-pp-line">Post a listing first, then promote it here.</p>
-          <button type="button" className="gv-jobs-post gv-pp-post" onClick={once(onPost)}>
-            <Plus size={17} strokeWidth={2.6} aria-hidden />
-            Post a listing
-          </button>
-        </>
-      ) : (
-        <ul className="gv-pp-list">
-          {listings.map((l) => {
-            const until = promotedUntil(l);
-            const short = l.conference.short || l.conference.name;
-            return (
-              <li key={l.id}>
-                <button type="button" className="gv-pp-row" onClick={once(() => onPick(l))}>
-                  <span style={{ minWidth: 0, flex: 1 }}>
-                    <span className="gv-pp-row-title">{l.title}</span>
-                    <span className="gv-pp-row-meta">
-                      {short && <span>{short}</span>}
-                      {short && <span aria-hidden className="gv-pp-dot">·</span>}
-                      <span style={{ whiteSpace: 'nowrap' }}>{jobDates(l.conference)}</span>
-                    </span>
-                    {until && (
-                      <span className="gv-pp-row-until"><Sparkles size={13} strokeWidth={1.75} aria-hidden /> {until}</span>
-                    )}
-                  </span>
-                  <ChevronRight size={18} strokeWidth={1.75} aria-hidden style={{ flexShrink: 0, color: FOREST }} />
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+      <div className="gv-pp-col">
+        <h2 className="gv-pp-title">Promote a Listing</h2>
+        {loading ? (
+          <p className="gv-pp-line" aria-busy="true"><Loader2 size={16} className="animate-spin" aria-hidden /> Reading your listings</p>
+        ) : none ? (
+          <>
+            <p className="gv-pp-line">Post a listing first, then promote it here.</p>
+            <button type="button" className="gv-jobs-post gv-pp-post" onClick={once(onPost)}>
+              <Plus size={17} strokeWidth={2.6} aria-hidden />
+              Post a listing
+            </button>
+          </>
+        ) : (
+          <div className="gv-pp-groups">
+            {groups.map((g) => {
+              const name = g.conference.acronym || g.conference.full_name || 'Your conference';
+              const full = g.conference.full_name && g.conference.full_name !== name ? g.conference.full_name : null;
+              return (
+                <section key={g.conference.id} aria-label={name}>
+                  <h3 className="gv-pp-group">{name}{full && <span className="gv-pp-group-full">{full}</span>}</h3>
+                  <ul className="gv-pp-list">
+                    {g.listings.map((l) => {
+                      const end = l.ends_on && l.ends_on.slice(0, 10) >= todayIso() ? `Promoted until ${dayLabel(l.ends_on)}` : null;
+                      return row(l.id, l.title, null, end, () => onPickConf(g, l));
+                    })}
+                  </ul>
+                </section>
+              );
+            })}
+            {listings.length > 0 && (
+              <section aria-label="Your listings">
+                <h3 className="gv-pp-group">Your listings</h3>
+                <ul className="gv-pp-list">
+                  {listings.map((l) => {
+                    const short = l.conference.short || l.conference.name;
+                    const meta = (
+                      <>
+                        {short && <span>{short}</span>}
+                        {short && <span aria-hidden className="gv-pp-dot">·</span>}
+                        <span style={{ whiteSpace: 'nowrap' }}>{jobDates(l.conference)}</span>
+                      </>
+                    );
+                    return row(l.id, l.title, meta, promotedUntil(l), () => onPick(l));
+                  })}
+                </ul>
+              </section>
+            )}
+          </div>
+        )}
+      </div>
     </PurchaseShell>
   );
 }
@@ -347,7 +442,13 @@ const BUTTON_CSS = `
 `;
 
 const PICKER_CSS = `
-.gv-pp-title{margin:0 0 10px;font-size:26px;font-weight:800;letter-spacing:-0.02em;line-height:1.1;color:${INK}}
+/* The PromotePopup shell sized to its content (prompt 83): one padded column,
+   no two-column body, no tall minimum. */
+.gv-buy-panel.gv-pp-pop{max-width:560px;min-height:0}
+.gv-buy-panel.gv-pp-pop .gv-buy-body{display:block}
+.gv-pp-col{display:flex;flex-direction:column;padding:30px 28px 26px;font-family:${FONT};color:${INK}}
+@media (max-width:743px){.gv-pp-col{padding:calc(24px + env(safe-area-inset-top)) 20px calc(24px + env(safe-area-inset-bottom))}}
+.gv-pp-title{padding-right:44px;margin:0 0 10px;font-size:26px;font-weight:800;letter-spacing:-0.02em;line-height:1.1;color:${INK}}
 .gv-pp-line{display:flex;align-items:center;gap:8px;margin:0 0 16px;font-size:15px;line-height:1.55;color:${INK_SOFT}}
 .gv-pp-list{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:10px}
 .gv-pp-row{width:100%;display:flex;align-items:center;gap:12px;min-height:60px;padding:12px 14px;border-radius:14px;border:1px solid rgba(28,20,16,0.1);background:#FFFFFF;cursor:pointer;text-align:left;font-family:${FONT};
@@ -360,4 +461,8 @@ const PICKER_CSS = `
 .gv-pp-dot{margin:0 6px;color:rgba(28,20,16,0.3)}
 .gv-pp-row-until{display:inline-flex;align-items:center;gap:5px;margin-top:5px;font-size:13px;font-weight:700;color:#8A5A12}
 .gv-pp-post{align-self:flex-start}
+.gv-pp-groups{display:flex;flex-direction:column;gap:18px;margin-top:6px}
+.gv-pp-group{margin:0 0 8px;font-size:14px;font-weight:800;color:${INK};overflow-wrap:anywhere}
+.gv-pp-group-full{display:block;margin-top:2px;font-size:12.5px;font-weight:600;color:${INK_SOFT}}
+.gv-pp-groups .gv-pp-list{margin-top:0}
 `;

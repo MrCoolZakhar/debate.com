@@ -42,7 +42,8 @@ const NAV_LINKS_CONFIG: ReadonlyArray<{
   { en: 'Explore',  es: 'Explorar', fr: 'Explorer', ar: 'استكشف', pt: 'Explorar', href: '/conferences/explore' },
   // The cross-conference job board (prompt 1, 19 Oct 2026). Plain like Explore.
   { en: 'Job Board', es: 'Bolsa de Trabajo', fr: 'Offres', ar: 'الوظائف', pt: 'Vagas', href: '/jobs' },
-  { en: 'Pricing',  es: 'Precios',  fr: 'Tarifs',   ar: 'الأسعار', pt: 'Preços', href: '/pricing/credits' },
+  // Pricing became the Store (prompt 85, 27 Nov 2026).
+  { en: 'Store',    es: 'Tienda',   fr: 'Boutique', ar: 'المتجر', pt: 'Loja',   href: '/store' },
   // Reads Contact and opens the contact page; the help desk is linked from
   // there and from every footer (owner, 18 Oct 2026).
   { en: 'Contact',  es: 'Contacto', fr: 'Contact',  ar: 'اتصل بنا', pt: 'Contato', href: '/contact' },
@@ -52,7 +53,7 @@ const NAV_LINKS_CONFIG: ReadonlyArray<{
  *  chooser and the creator under it, EXPLORE on /conferences/explore only
  *  (owner, 12 Oct 2026: it stayed lit on a conference's own page; a
  *  conference page, /conferences/all and /conferences/in/* light nothing),
- *  JOB BOARD on /jobs and everything under it, PRICING on every /pricing page,
+ *  JOB BOARD on /jobs and everything under it, STORE on /store and /store/credits,
  *  CONTACT on /contact only. */
 function isExplorePath(pathname: string): boolean {
   return pathname === '/conferences/explore' || pathname.startsWith('/conferences/explore/');
@@ -64,7 +65,7 @@ function isNavLinkActive(pathname: string | null, href: string | null): boolean 
   if (href === '/conferences/new') return pathname.startsWith('/conferences/new');
   if (href === '/conferences/explore') return isExplorePath(pathname);
   if (href === '/jobs') return pathname === '/jobs' || pathname.startsWith('/jobs/');
-  if (href === '/pricing/credits') return pathname.startsWith('/pricing');
+  if (href === '/store') return pathname === '/store' || pathname.startsWith('/store/');
   if (href === '/contact') return pathname === '/contact';
   return pathname === href;
 }
@@ -237,7 +238,8 @@ export default function SiteNav(props: SiteNavProps = {}) {
   const desktopPill = (
     <div
       className="hidden lg:flex fixed top-0 left-1/2 -translate-x-1/2 items-center pointer-events-none"
-      style={{ zIndex: 40, height: 72 }}
+      // The Motion to Save bar (src/components/store/SaleBar.tsx) publishes how much of it is on screen.
+      style={{ zIndex: 40, height: 72, top: 'var(--gv-sale-bar-offset, 0px)' }}
     >
         <div
           className="rounded-full pointer-events-auto"

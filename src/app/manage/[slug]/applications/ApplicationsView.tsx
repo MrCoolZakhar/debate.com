@@ -3,13 +3,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
-  ArrowRight, BadgeCheck, Ban, CheckCircle2, MinusCircle, XCircle, Building2, CalendarDays, Check, ChevronDown, ChevronLeft, CircleCheck, Clock,
+  ArrowRight, BadgeCheck, Ban, Briefcase, CheckCircle2, MinusCircle, XCircle, Building2, CalendarDays, Check, ChevronDown, ChevronLeft, CircleCheck, Clock,
   Download, Eye, Filter, Gavel, GraduationCap, HandCoins, Inbox, Info, Landmark, LogOut,
   Loader2, Mail, MoreHorizontal, PencilLine, Plus, RotateCcw, Search, Send, SlidersHorizontal, Trash2, Undo2, User, UserRoundCheck,
   UserX, Users, Wallet, X, UsersRound, FileSearch, StickyNote, ExternalLink,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useTeamDecisions } from '../team/useTeamDecisions';
+import { writeApplicantTab } from './ApplicantDetail/url';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
 import { fetchAllRows, chunk } from '@/lib/fetchAllRows';
@@ -38,7 +39,7 @@ import {
 import { matchPresetEmblem } from '@/lib/presetNames';
 import {
   poolForRole, releasePoolSpot, MemberAvatar, markNotAttending, undoNotAttending,
-} from '@/app/manage/[slug]/assignment/delegationShared';
+} from '@/app/manage/[slug]/allocations/delegationShared';
 import { LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
 import { type CustomQuestion, type CustomAnswers, normalizeBlocks, questionsOf, displayAnswer } from '@/lib/customQuestions';
 import { useScrollLock } from '@/hooks/useScrollLock';
@@ -47,13 +48,13 @@ import DelegationsTab from './delegations/DelegationsTab';
 import DelegationPopupLink from '@/app/manage/[slug]/DelegationPopupLink';
 import { useDelegationSummaries } from './DelegationAvatar';
 import { RowDelegation, ROW_DELEGATION_PILL, rowDelegationTitle, type RowDelegationProps } from './RowDelegation';
-import { countryShortName } from '../assignment/displayNames';
+import { countryShortName } from '../allocations/displayNames';
 import OpenDelegateApplications from './OpenDelegateApplications';
 import { rejectUpdates, writeReject, rejectFollowUps, acceptFollowUps } from './teamDecisions';
 import { useConferenceMoney, moneyState, moneyLabel, moneyOwing, type MoneyRow, type MoneyState, type LivePay } from '@/lib/applicationMoney';
 import { formatCents } from '../financials/shared';
 import { checkRoleSwap, askFor, runRoleSwap, goneAfterSwap, type SwapAsk } from './roleSwap';
-import RoleSwapPanel from './RoleSwapPanel';
+import RoleSwapPanel, { useLeaderTickets } from './RoleSwapPanel';
 import { useJobBoardApplicantExtras } from './useJobBoardApplicantExtras';
 import { useNoteCounts } from './useNoteCounts';
 import TeamApplicantsLine from './TeamApplicantsLine';
@@ -301,7 +302,7 @@ type LucideGlyph = React.ComponentType<{ size?: number; strokeWidth?: number; st
 const STATUS_PILL: Record<string, { tone: MarkTone; label: string; icon: LucideGlyph }> = {
   submitted:    { tone: 'pending', label: 'Submitted',  icon: Clock },
   accepted:     { tone: 'done',    label: 'Accepted',   icon: CheckCircle2 },
-  assigned:     { tone: 'done',    label: 'Assigned',   icon: BadgeCheck },
+  assigned:     { tone: 'done',    label: 'Allocated',  icon: BadgeCheck },
   'checked-in': { tone: 'done',    label: 'Checked in', icon: UserRoundCheck },
   rejected:     { tone: 'danger',  label: 'Rejected',   icon: XCircle },
   withdrawn:    { tone: 'neutral', label: 'Withdrawn',  icon: LogOut },
@@ -1163,7 +1164,7 @@ function CountryFlag({ name, code, size = 14 }: { name: string | null | undefine
 const STATUS_OPTIONS = [
   { label: 'Submitted', value: 'submitted' },
   { label: 'Accepted', value: 'accepted' },
-  { label: 'Assigned', value: 'assigned' },
+  { label: 'Allocated', value: 'assigned' },
   { label: 'Checked In', value: 'checked-in' },
   { label: 'Rejected', value: 'rejected' },
   { label: 'Withdrawn', value: 'withdrawn' },
@@ -1303,7 +1304,14 @@ interface FilterState {
   // header bar next to FILTERS as its own dropdown rather than inside the
   // filter popover, because it is a single-choice control, not a chip set.
   committee: string;
+  // Team Applications only (prompt 73): Job Board listing titles, plus
+  // NO_LISTING for "Not through the Job Board". Absent or empty = no
+  // constraint, so every reset that leaves it out clears it.
+  listing?: Set<string>;
 }
+
+/** The "Not through the Job Board" option of the listing filter. */
+const NO_LISTING = '__none__';
 
 function toggleIn(set: Set<string>, value: string): Set<string> {
   const next = new Set(set);
@@ -1395,13 +1403,15 @@ function FilterGroup({
 }
 
 function FilterPanel({
-  filters, setFilters, activeCount, roleOptions = ROLE_OPTIONS,
+  filters, setFilters, activeCount, roleOptions = ROLE_OPTIONS, listingOptions,
 }: {
   filters: FilterState;
   setFilters: React.Dispatch<React.SetStateAction<FilterState>>;
   activeCount: number;
   /** The role choices: ROLE_OPTIONS, or TEAM_ROLE_OPTIONS in Team Applications. */
   roleOptions?: { label: string; value: string }[];
+  /** Team Applications only: the Job Board listing choices. */
+  listingOptions?: { label: string; value: string }[];
 }) {
   const [open, setOpen] = useState(false);
   const [pinned, setPinned] = useState(false);
@@ -1499,6 +1509,14 @@ function FilterPanel({
               onAll={() => setFilters(f => ({ ...f, role: new Set(roleOptions.map(o => o.value)) }))}
               onNone={() => setFilters(f => ({ ...f, role: new Set() }))}
             />
+            {listingOptions && (
+              <FilterGroup
+                title="Job Board listing" icon={Briefcase} options={listingOptions} selected={filters.listing ?? new Set()}
+                onToggle={v => setFilters(f => ({ ...f, listing: toggleIn(f.listing ?? new Set(), v) }))}
+                onAll={() => setFilters(f => ({ ...f, listing: new Set(listingOptions.map(o => o.value)) }))}
+                onNone={() => setFilters(f => ({ ...f, listing: new Set() }))}
+              />
+            )}
             <FilterGroup
               title="Payment" icon={Wallet} options={PAYMENT_OPTIONS} selected={filters.payment}
               onToggle={v => setFilters(f => ({ ...f, payment: toggleIn(f.payment, v) }))}
@@ -2648,6 +2666,8 @@ export default function ApplicationsView({ scope }: { scope: 'participants' | 't
       applyRow(appId, { status });
       return () => restoreRow(prev);
     },
+    // A chair accept or a swap that landed: the row shows the new status and committee at once.
+    patchRow: (appId, p) => { if (applications.some(a => a.id === appId)) applyRow(appId, p); },
   });
   /** Team scope: Accept opens the pop-up's next step (the review drawer closes first: never a pop-up on a pop-up). */
   function openTeamAccept(app: Application) {
@@ -2690,6 +2710,8 @@ export default function ApplicationsView({ scope }: { scope: 'participants' | 't
   // the same post-accept steps for the application that now holds the role.
   const [swapAsk, setSwapAsk] = useState<{ appId: string; ask: SwapAsk; busy: boolean; error: string } | null>(null);
   const swapBusyRef = useRef(false);
+  // A leader holding their delegation's tickets: prompt 80's ticket choices (prompt 84).
+  const leaderTickets = useLeaderTickets();
 
   async function openRoleSwap(appId: string, race = false): Promise<void> {
     if (!session) return;
@@ -2698,9 +2720,11 @@ export default function ApplicationsView({ scope }: { scope: 'participants' | 't
     setActionError('');
     setSwapAsk({ appId, ask: { phase: 'checking' }, busy: false, error: '' });
     try {
-      const check = await checkRoleSwap(getAuthedClient(session.access_token), appId);
+      const client = getAuthedClient(session.access_token);
+      const check = await checkRoleSwap(client, appId);
       const ask = askFor(check);
-      if (ask) { setSwapAsk({ appId, ask, busy: false, error: '' }); return; }
+      if (ask) { setSwapAsk({ appId, ask, busy: false, error: '' }); void leaderTickets.read(client, ask); return; }
+      leaderTickets.reset();
       if (race) {
         // The accept was refused for a role the check no longer sees: say so, never loop.
         setSwapAsk({ appId, ask: { phase: 'blocked', message: 'Could not accept the application. Please try again.' }, busy: false, error: '' });
@@ -2755,15 +2779,35 @@ export default function ApplicationsView({ scope }: { scope: 'participants' | 't
     }
   }
 
+  /** A ticket choice in the panel; once it landed the check runs again, and the accept carries on when it passes. */
+  async function ticketChoice(appId: string, run: (client: ReturnType<typeof getAuthedClient>) => Promise<string | null>): Promise<void> {
+    if (!session || swapBusyRef.current) return;
+    swapBusyRef.current = true;
+    setSwapAsk(prev => prev && prev.appId === appId ? { ...prev, busy: true, error: '' } : prev);
+    let problem: string | null = null;
+    try {
+      problem = await run(getAuthedClient(session.access_token));
+    } finally {
+      swapBusyRef.current = false;
+    }
+    if (problem) { setSwapAsk(prev => prev && prev.appId === appId ? { ...prev, busy: false, error: problem } : prev); return; }
+    await openRoleSwap(appId);
+  }
+
   function renderRoleSwap(app: Application) {
     if (!swapAsk || swapAsk.appId !== app.id) return null;
+    const t = leaderTickets.tickets;
+    const held = t?.state === 'ready' ? t.hold : null;
     return (
       <RoleSwapPanel
         ask={swapAsk.ask}
         busy={swapAsk.busy}
         error={swapAsk.error}
         onConfirm={() => { void confirmRoleSwap(app.id); }}
-        onCancel={() => { if (!swapAsk.busy) setSwapAsk(null); }}
+        onCancel={() => { if (!swapAsk.busy) { setSwapAsk(null); leaderTickets.reset(); } }}
+        tickets={leaderTickets.tickets}
+        onMoveTickets={held ? (toApp, toName) => { void ticketChoice(app.id, (c) => leaderTickets.move(c, held.leaderAppId, toApp, toName)); } : undefined}
+        onRemoveUnpaid={(ids) => { void ticketChoice(app.id, (c) => leaderTickets.remove(c, ids)); }}
       />
     );
   }
@@ -3884,6 +3928,11 @@ export default function ApplicationsView({ scope }: { scope: 'participants' | 't
       return false;
     }
     if (filters.role.size > 0 && !filters.role.has(a.role)) return false;
+    if (filters.listing && filters.listing.size > 0) {
+      const picks = jobExtras.picksByApp.get(a.id) ?? [];
+      const hit = picks.length === 0 ? filters.listing.has(NO_LISTING) : picks.some(p => filters.listing!.has(p.title));
+      if (!hit) return false;
+    }
     if (filters.payment.size > 0) {
       // The invoices decide (src/lib/applicationMoney.ts), never payment_status.
       const st = moneyState(money.get(a.id), livePays.get(a.id));
@@ -3954,7 +4003,8 @@ export default function ApplicationsView({ scope }: { scope: 'participants' | 't
     (filters.payment.size > 0 ? 1 : 0) +
     (filters.dateFrom || filters.dateTo ? 1 : 0) +
     (filters.notAttending ? 1 : 0) +
-    (filters.committee ? 1 : 0);
+    (filters.committee ? 1 : 0) +
+    (filters.listing && filters.listing.size > 0 ? 1 : 0);
 
   // ── Selection-derived values for the bulk-action bar ──────────────────────
   // Act only on rows that are both selected AND currently visible, so a filter
@@ -4077,7 +4127,7 @@ export default function ApplicationsView({ scope }: { scope: 'participants' | 't
   const paymentTileActive = (v: string) => filters.payment.size === 1 && filters.payment.has(v) && filters.status.size === 0;
   const totalTileActive =
     filters.status.size === 0 && filters.payment.size === 0 && !filters.notAttending &&
-    !filters.dateFrom && !filters.dateTo && !filters.committee && sameSet(filters.role, DEFAULT_ROLES);
+    !filters.dateFrom && !filters.dateTo && !filters.committee && sameSet(filters.role, DEFAULT_ROLES) && !(filters.listing && filters.listing.size > 0);
   const clearToDefault = () => setFilters({ status: new Set(), role: new Set(DEFAULT_ROLES), payment: new Set(), dateFrom: '', dateTo: '', notAttending: false, committee: '' });
   const toggleStatusTile = (v: string) => setFilters(f => ({ ...f, payment: new Set(), status: (f.status.size === 1 && f.status.has(v)) ? new Set() : new Set([v]) }));
   const toggleStatusGroupTile = (group: string[]) => setFilters(f => ({ ...f, payment: new Set(), status: sameSet(f.status, group) ? new Set() : new Set(group) }));
@@ -4120,7 +4170,7 @@ export default function ApplicationsView({ scope }: { scope: 'participants' | 't
             {/* Team roles live in Team (owner, 14 Nov 2026). */}
             <p style={{ fontFamily: OUTFIT, fontSize: 13.5, color: NEU.inkSoft, margin: '4px 0 0', lineHeight: 1.5 }}>
               Applications is for delegates, head delegates, faculty advisors and observers. Chairs, secretariat and staff are in{' '}
-              <Link href={`/manage/${conference.slug}/team`} style={{ fontWeight: 700, color: NEU.ink, textDecoration: 'underline', textUnderlineOffset: 3 }}>Team</Link>.
+              <Link href={`/manage/${conference.slug}/team?tab=applications`} style={{ fontWeight: 700, color: NEU.ink, textDecoration: 'underline', textUnderlineOffset: 3 }}>Team Applications</Link>.
             </p>
           </div>
         </div>
@@ -4135,7 +4185,14 @@ export default function ApplicationsView({ scope }: { scope: 'participants' | 't
             value={filters.committee}
             onChange={id => setFilters(f => ({ ...f, committee: id }))}
           />
-          <FilterPanel filters={filters} setFilters={setFilters} activeCount={activeFilterCount} roleOptions={scope === 'team' ? TEAM_ROLE_OPTIONS : ROLE_OPTIONS} />
+          <FilterPanel filters={filters} setFilters={setFilters} activeCount={activeFilterCount} roleOptions={scope === 'team' ? TEAM_ROLE_OPTIONS : ROLE_OPTIONS}
+            listingOptions={scope === 'team' ? (() => {
+              // One option per listing title among this conference's applications, then "Not through the Job Board".
+              const titles = new Set<string>();
+              for (const a of applications) for (const p of jobExtras.picksByApp.get(a.id) ?? []) if (p.title) titles.add(p.title);
+              return [...[...titles].sort((x, y) => x.localeCompare(y)).map(t => ({ label: t, value: t })), { label: 'Not through the Job Board', value: NO_LISTING }];
+            })() : undefined}
+          />
           <button
             onClick={() => { void handleExportExcel(); }}
             disabled={exportBusy || loading}
@@ -4451,6 +4508,15 @@ export default function ApplicationsView({ scope }: { scope: 'participants' | 't
                         </ProfileLink>
                         {!app.user_id && <NotRegisteredChip />}
                       </div>
+                      {/* Team Applications: the first Job Board pick under the name. */}
+                      {scope === 'team' && (() => {
+                        const first = [...(jobExtras.picksByApp.get(app.id) ?? [])].sort((x, y) => (x.rank ?? 99) - (y.rank ?? 99))[0];
+                        return first?.title ? (
+                          <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600, color: NEU.inkSoft, margin: '2px 0 0', lineHeight: 1.35 }}>
+                            Applied for {first.title}
+                          </p>
+                        ) : null;
+                      })()}
                       {/* One quiet line: email · nationality · notes · importer.
                           The importer is keyed on the application id
                           (conference_leader_imports returns claimed rows too),
@@ -4807,7 +4873,25 @@ export default function ApplicationsView({ scope }: { scope: 'participants' | 't
                         </button>
                       )}
                       <div className="flex items-center gap-1.5 lg:justify-end">
-                        {showPayControl ? (
+                        {scope === 'team' ? (
+                          // Team Applications: no payment flag; View notes opens the review on its Notes tab.
+                          <button
+                            type="button"
+                            onClick={() => { writeApplicantTab('notes'); setReviewId(app.id); }}
+                            className="inline-flex items-center gap-1.5 focus:outline-none"
+                            style={{
+                              padding: '7px 13px', borderRadius: 999,
+                              fontFamily: OUTFIT, fontSize: 12, fontWeight: 700,
+                              color: NEU.ink, background: 'transparent', border: `1.5px solid ${NEU.ink}`, cursor: 'pointer',
+                            }}
+                          >
+                            <StickyNote size={13} strokeWidth={1.75} aria-hidden="true" />
+                            View notes
+                            {(noteCounts.get(app.id) ?? 0) > 0 && (
+                              <span style={{ fontVariantNumeric: 'tabular-nums' }}>{noteCounts.get(app.id)}</span>
+                            )}
+                          </button>
+                        ) : showPayControl ? (
                           <span style={notAttendingLock}>
                             <PaymentMenu
                               disabled={rowBusy || !app.attending}
@@ -5508,11 +5592,11 @@ export default function ApplicationsView({ scope }: { scope: 'participants' | 't
                     {isDelegate && (
                       <span style={notAttendingLock}>
                         <Link
-                          href={`/manage/${conference.slug}/assignment`}
+                          href={`/manage/${conference.slug}/allocations`}
                           className="inline-flex items-center gap-2 focus:outline-none"
                           style={primaryBtn}
                         >
-                          Assign
+                          Allocate
                           <ArrowRight size={16} strokeWidth={2.6} />
                         </Link>
                       </span>

@@ -82,7 +82,7 @@ interface AllocationRow {
 }
 
 /** Display name for a seat, in the same precedence the assignment page uses
- *  (`manage/[slug]/assignment/page.tsx:237-245`): profile display name, then the
+ *  (`manage/[slug]/allocations/page.tsx:237-245`): profile display name, then the
  *  invited name off the application, then nothing.
  *
  *  Every source is TRIMMED and skipped when blank rather than taken with `??`. A

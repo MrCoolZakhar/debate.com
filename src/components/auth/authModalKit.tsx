@@ -189,6 +189,7 @@ export const KIT_CSS = `
 .gv-dp>div>button{height:56px!important;background:#FFFFFF!important;border:1px solid ${BORDER}!important;border-radius:12px!important;font-size:16px!important;padding:0 14px!important}
 .gv-dp>div>button:focus-visible{border-color:${INK}!important;box-shadow:inset 0 0 0 1px ${INK}!important}
 .gv-hint{margin:0;font-size:12.5px;line-height:1.5;color:${INK_SOFT}}
+.gv-hint .gv-textbtn{font-size:inherit}
 .gv-err{margin:0;font-size:13.5px;line-height:1.45;color:${DANGER}}
 .gv-green{position:relative;overflow:hidden;width:100%;height:52px;padding:0 20px;border:none;border-radius:10px;cursor:pointer;color:#FFFFFF;font-family:${OUTFIT};font-size:16px;font-weight:600;background:linear-gradient(90deg,${FOREST} 0%,#24593A 45%,#2F7A4C 100%);transition:transform 120ms ease,opacity 160ms ease}
 .gv-green:active{transform:scale(0.985)}

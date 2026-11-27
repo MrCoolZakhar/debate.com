@@ -4,7 +4,7 @@
 //
 // One implementation, shared by every dimmed-backdrop dialog in the app. There
 // used to be four byte-identical copies of this (CommitteeEditorModal,
-// manage/assignment/page.tsx, manage/assignment/delegationShared.tsx,
+// manage/allocations/page.tsx, manage/allocations/delegationShared.tsx,
 // manage/documents/page.tsx); they all delegate here now so behaviour that
 // belongs to *every* modal only has to be written once.
 //

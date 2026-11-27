@@ -233,7 +233,7 @@ export default function PremiumBody({
           {action ? (
             <div className="gvg-paywall-actions">
               {action}
-              <Link href="/pricing/subscription">What Unlimited includes</Link>
+              <Link href="/store/credits?plan=unlimited">What Unlimited includes</Link>
             </div>
           ) : null}
           {unlockError ? <p className="gvg-unlock-err" role="alert">{unlockError}</p> : null}

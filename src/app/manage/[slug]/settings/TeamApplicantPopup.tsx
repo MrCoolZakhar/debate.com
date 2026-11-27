@@ -86,8 +86,11 @@ export const rejectBtn = (disabled: boolean): React.CSSProperties => ({
 });
 
 export default function TeamApplicantPopup({
-  applicant: a, initialStep, canAccept, busy, customQuestions, onAccept, onReject, onClose, committees = [], onAcceptChair, swap = null,
+  applicant: a, initialStep, canAccept, busy, customQuestions, onAccept, onReject, onClose, committees = [], onAcceptChair, swap = null, onStartAccept,
 }: {
+  /** Accept pressed in the review step (prompt 84): the parent asks the role
+   *  swap question first, exactly as the row's Accept does (prompt 80). */
+  onStartAccept?: () => void;
   /** The conference's committees, for seating a chair. */
   committees?: TeamCommittee[];
   /** A chair's accept (accept_chair_application): resolves to the sentence to show when it was refused, else null. */
@@ -394,7 +397,7 @@ export default function TeamApplicantPopup({
                     <button type="button" className="focus:outline-none" style={rejectBtn(busy)} disabled={busy} onClick={() => setAskReject(true)}>Reject</button>
                     <button type="button" className="focus:outline-none" style={primaryBtn(busy || !canAccept)} disabled={busy || !canAccept}
                       title={canAccept ? undefined : 'Adding someone to the team needs the Team permission'}
-                      onClick={() => setStep(acceptStep)}>
+                      onClick={() => { setStep(acceptStep); onStartAccept?.(); }}>
                       Accept
                     </button>
                   </>

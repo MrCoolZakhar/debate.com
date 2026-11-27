@@ -93,7 +93,11 @@ export default function GiftPrompt() {
   return <GiftCard code={gift.code} activate={activate} onLater={later} />;
 }
 
-export function GiftCard({ code, activate, onLater }: { code: string; activate: () => Promise<boolean>; onLater: () => void }) {
+/** `platform`: a platform gift (crisis_id null, owner 25 Nov 2026): Peter's headline and the gift's own length, and no
+ *  crisis or event wording. The scratch-off, Activate now and Save for later stay exactly the same. */
+export function GiftCard({ code, activate, onLater, platform }: {
+  code: string; activate: () => Promise<boolean>; onLater: () => void; platform?: { headline: string; length: string };
+}) {
   const [blocked, setBlocked] = useState(false);
   const [revealed, setRevealed] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -225,18 +229,22 @@ export function GiftCard({ code, activate, onLater }: { code: string; activate: 
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img className="cg-rocket" alt="" src={IMG.rocket} />
             <div className="cg-who"><small>From the Gavelling team</small><b>Peter Zakhar</b><span>Founder, Gavelling</span></div>
-            <p className="cg-note">Thank you for trying out Gavelling Crisis with us. We are sorry for the outages and bugs you ran into, and we are fixing every one of them. We hope you still enjoyed the race to space.</p>
-            <div className="cg-row">
+            {platform ? (
+              <p className="cg-note"><b style={{ display: 'block', marginBottom: 4, fontSize: 17, lineHeight: 1.3, color: '#1C1410' }}>{platform.headline}</b>Thank you for being part of Gavelling.</p>
+            ) : (
+              <p className="cg-note">Thank you for trying out Gavelling Crisis with us. We are sorry for the outages and bugs you ran into, and we are fixing every one of them. We hope you still enjoyed the race to space.</p>
+            )}
+            {!platform && <div className="cg-row">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img alt="" src={IMG.cal} />
               <span><b>Gavelling Crisis launches on 24 December.</b> You were one of the very first to use it.</span>
-            </div>
+            </div>}
             <div className="cg-v" ref={boxRef}>
               <div className="cg-top">
                 <div className="g">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img alt="" src={IMG.gift} />
-                  <div><small>Gavelling Unlimited</small><strong>2 months free</strong></div>
+                  <div><small>Gavelling Unlimited</small><strong>{platform ? platform.length : '2 months'} free</strong></div>
                 </div>
                 <span className="r">Use any time<br />in the next year<code>{code}</code></span>
               </div>
@@ -251,12 +259,12 @@ export function GiftCard({ code, activate, onLater }: { code: string; activate: 
               </div>
               <canvas ref={cvRef} className="cg-scratch" aria-label="Scratch to reveal your voucher" />
             </div>
-            <p className="cg-hint">{revealed ? 'Two months of Unlimited are yours' : 'Scratch the gold to reveal your voucher'}</p>
-            <div className="cg-row">
+            <p className="cg-hint">{revealed ? (platform ? `${platform.length} of Unlimited ${/^1 /.test(platform.length) ? 'is' : 'are'} yours` : 'Two months of Unlimited are yours') : 'Scratch the gold to reveal your voucher'}</p>
+            {!platform && <div className="cg-row">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img alt="" src={IMG.chat} />
               <span><b>Enjoyed it? Tell your friends.</b> If your conference wants to run a crisis on Gavelling, get in touch at <code>info@gavelling.com</code></span>
-            </div>
+            </div>}
             <div className="cg-actions">
               <button type="button" className="cg-btn main" disabled={!revealed || busy} onClick={() => void onActivate()}>Activate now</button>
               <button type="button" className="cg-btn ghost" disabled={busy} onClick={later}>Save for later</button>

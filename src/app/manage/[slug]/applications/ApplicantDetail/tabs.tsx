@@ -161,7 +161,7 @@ export function OverviewTab({
             <SectionTitle
               icon={ListOrdered}
               aside={accepted && isDelegate ? (
-                <Link href={`/manage/${conferenceSlug}/assignment`} className="inline-flex items-center gap-1 focus:outline-none" style={{ color: C.forest, fontWeight: 800, textDecoration: 'underline', textUnderlineOffset: 2 }}>
+                <Link href={`/manage/${conferenceSlug}/allocations`} className="inline-flex items-center gap-1 focus:outline-none" style={{ color: C.forest, fontWeight: 800, textDecoration: 'underline', textUnderlineOffset: 2 }}>
                   Allocate
                 </Link>
               ) : 'Not allocated yet'}
@@ -219,8 +219,14 @@ export function OverviewTab({
           </section>
         )}
 
-        {/* A chair applicant's Job Board picks, beside their answers. */}
-        {app.role === 'chair' && <JobPicksBlock picks={jobPicks} />}
+        {/* A team applicant's Job Board picks (chair, secretariat or staff),
+            beside their answers; one plain line when they did not come
+            through a listing. Delegate roles show nothing. */}
+        {(app.role === 'chair' || app.role === 'secretariat' || app.role === 'staff') && (
+          (jobPicks?.length ?? 0) > 0
+            ? <JobPicksBlock picks={jobPicks} />
+            : <p style={{ fontFamily: OUTFIT, fontSize: 13.5, color: C.inkSoft, margin: 0 }}>Did not apply through a Job Board listing</p>
+        )}
       </div>
 
       <div className="min-w-0 flex flex-col" style={{ gap: 22 }}>

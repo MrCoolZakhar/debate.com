@@ -2,7 +2,7 @@
 
 import { sortCvEntries } from '@/lib/cvOrder';
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, Share2, Check, ScrollText, EyeOff, Download, Loader2 } from 'lucide-react';
+import { Plus, Share2, Check, ScrollText, EyeOff, Download, Loader2, Upload, Lock } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { syncExperienceLevel } from '@/lib/munExperience';
@@ -19,10 +19,23 @@ import VerifiedCheck from '@/components/VerifiedCheck';
 import { getCountryByName } from '@/lib/countries';
 import { experienceProgress } from '@/lib/munExperience';
 import CVPrivacyPanel, { type CvPrivacy } from './CVPrivacyPanel';
-import { friendlyError } from '@/lib/friendlyError';
+import { friendlyError, UserFacingError } from '@/lib/friendlyError';
+import CvImportPopup from '@/components/cv/CvImportPopup';
+import { draftToInsert, type CvDraft } from '@/lib/cvImport';
 import TalentPrompt from '@/components/TalentPrompt';
 import { downloadCvPdf, CV_PDF_FAILED } from '@/components/cv/downloadCvPdf';
 import { notifyErr } from '@/lib/appNotify';
+
+// The CV header (prompt 77). AccountHero caps its text column at 62ch and puts
+// actions in a right-hand column; here the buttons sit under the line in the
+// text column, which spans the band (clear of the decorative emoji from 640px),
+// and the h1 stays on one line, its size stepping down on narrow screens.
+const CV_HERO_CSS = `
+.gv-cv-hero header>.relative>.min-w-0{max-width:none!important;flex:1 1 auto}
+@media (min-width:640px){.gv-cv-hero header>.relative>.min-w-0{padding-right:150px}}
+.gv-cv-hero header h1{white-space:nowrap;overflow-wrap:normal!important;font-size:clamp(26px,7vw,44px)!important}
+.gv-cv-hero header h1+p{max-width:none}
+`;
 
 // ── Page ───────────────────────────────────────────────────────────────────
 
@@ -43,6 +56,26 @@ export default function CVPage() {
   const [privError, setPrivError] = useState<string | null>(null);
   // Shown on the person card only (the owner's own view).
   const [nationality, setNationality] = useState<string | null>(null);
+
+  // Import from a template (prompt 70): one insert for every row, then the timeline shows them.
+  const [importOpen, setImportOpen] = useState(false);
+  const importDrafts = async (drafts: CvDraft[]): Promise<number> => {
+    if (!user || !session) throw new UserFacingError('Your session has expired, please refresh and sign in again.');
+    const supabase = getAuthedClient(session.access_token);
+    // is_private is not sent: each entry follows the CV's own privacy, as one added by hand does.
+    const rows = drafts.map(d => ({ ...draftToInsert(d), user_id: user.id }));
+    const { data, error } = await supabase
+      .from('mun_cv_entries')
+      .insert(rows)
+      .select('id, entry_type, conference_name, committee, allocation, expertise_level, award, awards, photos, description, logo_url, conference_id, event_date, source, created_at, is_private');
+    if (error) throw error;
+    if (!data || data.length !== rows.length) throw new UserFacingError('Could not add your conferences. Please try again');
+    const added = (data as CVEntry[]).map(r => ({ ...r, entry_type: r.entry_type ?? 'delegate', awards: r.awards ?? [], photos: r.photos ?? [] }));
+    const next = sortCvEntries([...entries, ...added]);
+    setEntries(next);
+    syncExperienceLevel(supabase, user.id, next.length);
+    return added.length;
+  };
 
   const fetchEntries = useCallback(async () => {
     if (!user || !session) return;
@@ -215,14 +248,19 @@ export default function CVPage() {
     <div>
       {/* "Open to team roles" nudge: renders nothing unless the server asks for it */}
       <TalentPrompt className="mb-4" />
+      {/* The header at every width (prompt 77): the title never wraps (it steps
+          down instead), the line and the one button row span the band, and
+          nothing sits pushed to the far right. Scoped to this page. */}
+      <style>{CV_HERO_CSS}</style>
+      <div className="gv-cv-hero">
       <AccountHero
         label="Delegate record"
         title={<>Your MUN <GoldWord>CV</GoldWord></>}
         line="Every Model UN conference you have taken part in, in one record"
         emoji="Scroll"
         fallback={ScrollText}
-        aside={
-          <>
+      >
+        <div className="mt-5 flex flex-wrap items-center gap-3">
             {/* Share: copies a public read-only link to this CV */}
             <button
               type="button"
@@ -250,23 +288,32 @@ export default function CVPage() {
                 Download PDF
               </button>
             )}
+            <button type="button" onClick={() => setImportOpen(true)} className="gv-acct-btn2" aria-label="Import conferences from a template">
+              <Upload size={16} strokeWidth={1.5} aria-hidden />
+              Import
+            </button>
             <button type="button" onClick={openAdd} className="gv-acct-btn" aria-label="Add a conference to your CV">
               <Plus size={18} strokeWidth={2.6} aria-hidden />
               Add conference
             </button>
-          </>
-        }
-      >
-        {/* Who can see the CV: one small toggle, the rest behind its gear */}
-        <CVPrivacyPanel
-          value={privacy}
-          onChange={changePrivacy}
-          saving={privSaving}
-          error={privError}
-          publicHref={publicHref}
-          hiddenCount={entries.filter((e) => e.is_private).length}
-        />
+            {/* Who can see the CV, the nationality and team roles: one Settings button */}
+            <CVPrivacyPanel
+              value={privacy}
+              onChange={changePrivacy}
+              saving={privSaving}
+              error={privError}
+              publicHref={publicHref}
+              hiddenCount={entries.filter((e) => e.is_private).length}
+            />
+        </div>
+        {privacy.cvPrivate && (
+          <p className="inline-flex items-center gap-1.5" style={{ margin: '12px 0 0', fontFamily: OUTFIT, fontSize: T.body, color: INK_SOFT }}>
+            <Lock size={14} strokeWidth={2.2} aria-hidden />
+            Your CV is private
+          </p>
+        )}
       </AccountHero>
+      </div>
 
       <HeroOverlap>
         {/* ── The person, with three big numbers ── */}
@@ -393,6 +440,10 @@ export default function CVPage() {
           onSaved={handleSaved}
           onDelete={handleDelete}
         />
+      )}
+
+      {importOpen && user && (
+        <CvImportPopup theme="gavelling" existing={entries} onImport={importDrafts} onClose={() => setImportOpen(false)} />
       )}
 
       {/* Spotify-Wrapped celebration — opens only after a NEW conference is added */}

@@ -337,7 +337,7 @@ function ListingRow({ listing: l, onChanged, onEdit }: { listing: AdminListing; 
           )}
         </div>
         <div className="flex items-center gap-4" style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.inkSoft, ...NUM }}>
-          <span><b style={{ color: NEU.ink, fontSize: 15 }}>{int(l.applicants)}</b> applicants</span>
+          <span><b style={{ color: NEU.ink, fontSize: 15 }}>{int(l.applicants)}</b> {Number(l.applicants) === 1 ? 'applicant' : 'applicants'}</span>
           <span><b style={{ color: NEU.ink, fontSize: 15 }}>{int(l.charged_credits)}</b> credits</span>
           <span>{fmtDate(l.created_at)}</span>
         </div>

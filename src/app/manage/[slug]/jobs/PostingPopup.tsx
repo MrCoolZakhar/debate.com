@@ -32,6 +32,7 @@ import {
   type JobPanel, type ListingPatch, type OrgListing, type OrgQuestion, type Refusal,
 } from './jobsApi';
 import { PromoteContent } from './PromotePopup';
+import { getFreshAuthedClient } from '@/lib/supabase-auth';
 
 const FONT = "var(--font-brand), sans-serif";
 const INK = '#1C1410';
@@ -74,6 +75,78 @@ export interface PostingConference {
   start_date: string | null; end_date: string | null;
 }
 
+// ── One closing date everywhere (prompt 75) ──────────────────────────────
+// A listing closes at closes_at; the last day people can apply is the day that
+// moment ends in. A picked deadline is saved as the END of that day (23:59:59)
+// in the conference's time zone (UTC when it has none), and every label shows
+// (closes_at minus one second) in that zone, so old listings saved at midnight
+// and new ones saved at end of day both show the real last day.
+
+function validZone(tz: string | null | undefined): string {
+  if (!tz) return 'UTC';
+  try { new Intl.DateTimeFormat('en-US', { timeZone: tz }); return tz; } catch { return 'UTC'; }
+}
+
+/** YYYY-MM-DD of an instant in a time zone. */
+function isoInZone(ms: number, tz: string): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(ms));
+}
+
+/** The last day to apply: (closes_at minus one second) in the zone. A date-only value is that day. */
+export function lastDayIso(value: string | null | undefined, tz: string): string | null {
+  if (!value) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const ms = Date.parse(value);
+  return Number.isNaN(ms) ? null : isoInZone(ms - 1000, validZone(tz));
+}
+
+/** The END of a picked day (23:59:59) in the zone, as an ISO instant. */
+export function endOfDayIso(day: string, tz: string): string {
+  const zone = validZone(tz);
+  const [y, m, d] = day.split('-').map(Number);
+  const wall = Date.UTC(y, m - 1, d, 23, 59, 59);
+  const offsetAt = (ms: number) => {
+    const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+      timeZone: zone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
+    }).formatToParts(new Date(ms)).map((x) => [x.type, x.value]));
+    return Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second) - ms;
+  };
+  let at = wall - offsetAt(wall);
+  at = wall - offsetAt(at); // once more across a clock change
+  return new Date(at).toISOString();
+}
+
+const zoneCache = new Map<string, string>();
+const zoneReads = new Map<string, Promise<string>>();
+
+/** The conference's time zone, read once per conference ('UTC' until it arrives or when it has none). */
+export function useConferenceTimeZone(conferenceId: string | null | undefined): { tz: string; ready: boolean } {
+  // The zone read for a conference id; the cache answers at once for one read before.
+  const [read, setRead] = useState<{ id: string; tz: string } | null>(null);
+  useEffect(() => {
+    if (!conferenceId || zoneCache.has(conferenceId)) return;
+    let cancelled = false;
+    let pending = zoneReads.get(conferenceId);
+    if (!pending) {
+      pending = (async () => {
+        try {
+          const client = await getFreshAuthedClient();
+          if (!client) return 'UTC';
+          const { data } = await client.from('conferences').select('timezone').eq('id', conferenceId).maybeSingle();
+          return validZone((data as { timezone?: string | null } | null)?.timezone ?? null);
+        } catch {
+          return 'UTC';
+        }
+      })();
+      zoneReads.set(conferenceId, pending);
+    }
+    void pending.then((z) => { zoneCache.set(conferenceId, z); if (!cancelled) setRead({ id: conferenceId, tz: z }); });
+    return () => { cancelled = true; };
+  }, [conferenceId]);
+  const tz = !conferenceId ? null : read && read.id === conferenceId ? read.tz : zoneCache.get(conferenceId) ?? null;
+  return { tz: tz ?? 'UTC', ready: tz !== null };
+}
+
 export interface ShortRequest {
   need: number;
   retry: () => Promise<{ ok: true } | Refusal>;
@@ -92,14 +165,16 @@ interface Draft {
   questions: OrgQuestion[];
   auto_reject: boolean;
   deadline: string;
+  /** The saved deadline as loaded (its last day and its instant): kept as is unless the day changes. */
+  deadlineOrig: { day: string; at: string } | null;
 }
 
-function draftOf(l: OrgListing | null, myUserId: string | null, panel: JobPanel): Draft {
+function draftOf(l: OrgListing | null, myUserId: string | null, panel: JobPanel, tz: string): Draft {
   const me = myUserId && panel.organizers.some((o) => o.user_id === myUserId) ? myUserId : panel.organizers[0]?.user_id ?? '';
   if (!l) {
     return {
       kind: 'gavelling', role: null, outside_url: '', title: '', committee_id: '', description: '',
-      poster_user_id: me, offers: { ...NO_OFFERS }, questions: [], auto_reject: false, deadline: '',
+      poster_user_id: me, offers: { ...NO_OFFERS }, questions: [], auto_reject: false, deadline: '', deadlineOrig: null,
     };
   }
   return {
@@ -113,12 +188,13 @@ function draftOf(l: OrgListing | null, myUserId: string | null, panel: JobPanel)
     offers: { ...NO_OFFERS, ...(l.offers ?? {}) },
     questions: (l.questions ?? []).map((q) => ({ ...q, options: Array.isArray(q.options) ? q.options : [], ideal: q.ideal ?? null, essential: !!q.essential })),
     auto_reject: !!l.auto_reject,
-    deadline: l.deadline ? l.deadline.slice(0, 10) : '',
+    deadline: lastDayIso(l.deadline, tz) ?? '',
+    deadlineOrig: l.deadline ? { day: lastDayIso(l.deadline, tz) ?? '', at: l.deadline } : null,
   };
 }
 
 /** The keys of a draft as job_listing_save takes them. */
-function patchOf(d: Draft): Required<Omit<ListingPatch, 'id' | 'conference_id'>> {
+function patchOf(d: Draft, tz: string): Required<Omit<ListingPatch, 'id' | 'conference_id'>> {
   return {
     kind: d.kind,
     role: (d.role ?? 'chair') as JobRole,
@@ -134,7 +210,8 @@ function patchOf(d: Draft): Required<Omit<ListingPatch, 'id' | 'conference_id'>>
       essential: q.type === 'text' ? false : q.essential,
     })) : [],
     auto_reject: d.kind === 'gavelling' ? d.auto_reject : false,
-    deadline: d.deadline || null,
+    // The picked day is the last day to apply: saved as its end in the conference's zone.
+    deadline: !d.deadline ? null : d.deadlineOrig && d.deadline === d.deadlineOrig.day ? d.deadlineOrig.at : endOfDayIso(d.deadline, tz),
     outside_url: d.kind === 'outside' ? d.outside_url.trim() || null : null,
     poster_user_id: d.poster_user_id || null,
   };
@@ -165,8 +242,20 @@ export default function PostingPopup({
 }) {
   const [id, setId] = useState<string | null>(listing?.id ?? null);
   const [shown] = useState(listing?.shown ?? 'draft');
-  const [draft, setDraft] = useState<Draft>(() => draftOf(listing, myUserId, panel));
-  const [saved, setSaved] = useState<ReturnType<typeof patchOf> | null>(() => (listing ? patchOf(draftOf(listing, myUserId, panel)) : null));
+  const { tz, ready: tzReady } = useConferenceTimeZone(conference.id);
+  const [draft, setDraft] = useState<Draft>(() => draftOf(listing, myUserId, panel, tz));
+  const [saved, setSaved] = useState<ReturnType<typeof patchOf> | null>(() => (listing ? patchOf(draftOf(listing, myUserId, panel, tz), tz) : null));
+  // The zone arrived after the draft was built: show the saved deadline's real
+  // last day, unless the organiser already picked another one.
+  useEffect(() => {
+    if (!tzReady) return;
+    setDraft((d) => {
+      if (!d.deadlineOrig) return d;
+      const day = lastDayIso(d.deadlineOrig.at, tz) ?? '';
+      if (day === d.deadlineOrig.day) return d;
+      return { ...d, deadline: d.deadline === d.deadlineOrig.day ? day : d.deadline, deadlineOrig: { ...d.deadlineOrig, day } };
+    });
+  }, [tz, tzReady]);
   const [step, setStep] = useState<Step>(listing ? 'review' : 'role');
   const [mode, setMode] = useState<'steps' | 'promote'>('steps');
   const [bad, setBad] = useState<{ field: string; message: string } | null>(null);
@@ -188,7 +277,7 @@ export default function PostingPopup({
   }, []);
 
   const roleRow = panel.roles.find((r) => r.role === draft.role) ?? null;
-  const roleCloses = roleRow?.closes_at ? roleRow.closes_at.slice(0, 10) : null;
+  const roleCloses = roleRow?.closes_at ? lastDayIso(roleRow.closes_at, tz) : null;
   const outsidePrice = panel.prices.outside_listing;
   const committeeName = panel.committees.find((c) => c.id === draft.committee_id)?.name ?? null;
 
@@ -260,7 +349,7 @@ export default function PostingPopup({
 
   /** Saves the changed keys (or creates the draft). Returns the id, or null after a refusal. */
   const persist = useCallback(async (): Promise<string | null> => {
-    const now = patchOf(draft);
+    const now = patchOf(draft, tz);
     let body: ListingPatch;
     if (!id) {
       body = { conference_id: conference.id, ...now };
@@ -278,7 +367,7 @@ export default function PostingPopup({
     setSaved(now);
     onSaved();
     return r.id;
-  }, [draft, id, saved, conference.id, onSaved, showRefusal]);
+  }, [draft, id, saved, conference.id, onSaved, showRefusal, tz]);
 
   async function go(to: Step) {
     if (busyRef.current) return;
@@ -291,9 +380,12 @@ export default function PostingPopup({
         if (problem) { setStep(s); setBad(problem); return; }
       }
     }
-    // From step 2 on (and on every step of an existing listing), leaving a
-    // step saves the draft, so closing half way keeps it.
-    if ((forward && index >= 1) || id) {
+    // From step 2 on (and on every step of an existing draft), leaving a
+    // step saves the draft, so closing half way keeps it. A PUBLISHED listing
+    // never saves on a step change (prompt 78): only Save changes saves, so the
+    // one free fix of an outside listing is spent only by that button.
+    const published = shown === 'live' || shown === 'closed' || shown === 'hidden';
+    if (!published && ((forward && index >= 1) || id)) {
       busyRef.current = true;
       setBusy('save');
       try {

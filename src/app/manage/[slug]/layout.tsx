@@ -268,7 +268,7 @@ const NAV_SECTIONS = (slug: string, badges: NavBadges = NO_BADGES): NavSection[]
     items: [
       { icon: Building2, label: 'Committees',   href: `/manage/${slug}/committees`,   external: false, badge: 0 },
       { icon: Users,     label: 'Applications', href: `/manage/${slug}/applications`, external: false, badge: badges.applications },
-      { icon: MapPin,    label: 'Assignment',   href: `/manage/${slug}/assignment`,   external: false, badge: badges.assignment },
+      { icon: MapPin,    label: 'Allocations',   href: `/manage/${slug}/allocations`,   external: false, badge: badges.assignment },
       { icon: FileText,  label: 'Documents',    href: `/manage/${slug}/documents`,    external: false, badge: 0 },
       // Scoreboard is deliberately NOT a nav item. Delegate performance is a
       // property of a committee, not of the dashboard, so it opens from a
@@ -353,6 +353,8 @@ function SideRail({
   const year = conference?.start_date ? Number(conference.start_date.slice(0, 4)) : null;
 
   return (
+    <>
+    <style>{NAV_HOVER_CSS}</style>
     <aside
       className="hidden md:flex flex-col fixed"
       onMouseEnter={() => setExpanded(true)}
@@ -468,29 +470,17 @@ function SideRail({
                   target={item.external ? '_blank' : undefined}
                   rel={item.external ? 'noopener noreferrer' : undefined}
                   title={expanded ? undefined : item.label}
-                  className="flex items-center rounded-xl transition-colors"
+                  className={`flex items-center rounded-xl transition-colors${active ? '' : ' gv-mnav-rail'}`}
                   style={{
                     gap: expanded ? '12px' : '0px',
                     padding: '0 11px',
                     height: '42px', boxSizing: 'border-box',
                     margin: '2px 0',
                     justifyContent: expanded ? 'flex-start' : 'center',
-                    backgroundColor: active ? '#1B3828' : 'transparent',
-                    color: active ? '#EED98A' : '#7A6E5E',
+                    backgroundColor: active ? '#1B3828' : undefined,
+                    color: active ? '#EED98A' : undefined,
                     textDecoration: 'none',
                     boxShadow: active ? '0 4px 14px rgba(27,56,40,0.28)' : 'none',
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!active) {
-                      (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.07)';
-                      (e.currentTarget as HTMLElement).style.color = '#1C1410';
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!active) {
-                      (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
-                      (e.currentTarget as HTMLElement).style.color = '#7A6E5E';
-                    }
                   }}
                 >
                   <span className="relative flex-shrink-0" style={{ lineHeight: 0 }}>
@@ -592,6 +582,7 @@ function SideRail({
         </div>
       )}
     </aside>
+    </>
   );
 }
 
@@ -620,6 +611,7 @@ function SidebarContent({
 
   return (
     <div className="flex flex-col h-full">
+      <style>{NAV_HOVER_CSS}</style>
       {/* Conference identity, links to the public conference page */}
       <Link
         href={`/conferences/${slug}`}
@@ -678,25 +670,13 @@ function SidebarContent({
                   target={item.external ? '_blank' : undefined}
                   rel={item.external ? 'noopener noreferrer' : undefined}
                   onClick={onNavClick}
-                  className="flex items-center gap-3 px-4 py-3 text-[15px] font-semibold transition-colors"
+                  className={`flex items-center gap-3 px-4 py-3 text-[15px] font-semibold transition-colors${active ? '' : ' gv-mnav-drawer'}`}
                   style={{
                     borderLeft: active ? '3px solid #1B3828' : '3px solid transparent',
-                    backgroundColor: active ? 'rgba(27,56,40,0.08)' : 'transparent',
-                    color: active ? '#1B3828' : '#9A8A78',
+                    backgroundColor: active ? 'rgba(27,56,40,0.08)' : undefined,
+                    color: active ? '#1B3828' : undefined,
                     textDecoration: 'none',
                     display: 'flex',
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!active) {
-                      (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)';
-                      (e.currentTarget as HTMLElement).style.color = '#1C1410';
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!active) {
-                      (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
-                      (e.currentTarget as HTMLElement).style.color = '#9A8A78';
-                    }
                   }}
                 >
                   <Icon size={19} style={{ flexShrink: 0 }} />
@@ -762,6 +742,18 @@ function SidebarContent({
     </div>
   );
 }
+
+// The nav items' hover look as CSS (prompt 73). It used to be written into
+// element.style on mouse enter and leave, and a hover left over from the click
+// survived the route change (React does not rewrite an unchanged inline style),
+// so Financials stayed lit while on Team. The resting look sits in the class
+// too; an active item sets its own colours inline, which win over both.
+const NAV_HOVER_CSS = `
+.gv-mnav-rail{background-color:transparent;color:#7A6E5E}
+.gv-mnav-rail:hover{background-color:rgba(27,56,40,0.07);color:#1C1410}
+.gv-mnav-drawer{background-color:transparent;color:#9A8A78}
+.gv-mnav-drawer:hover{background-color:rgba(27,56,40,0.04);color:#1C1410}
+`;
 
 // ── Layout ─────────────────────────────────────────────────────────────────
 
@@ -901,7 +893,17 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
     });
   }, [conferenceId, accessToken]);
 
-  useEffect(() => { loadWorkBadges(); }, [loadWorkBadges, pathname]);
+  // Re-read on every page and on every Team tab (?tab=), so a count never
+  // outlives the screen it was read on.
+  const teamTabParam = useSearchParams()?.get('tab') ?? null;
+  useEffect(() => { loadWorkBadges(); }, [loadWorkBadges, pathname, teamTabParam]);
+
+  // Every team decision that lands (useTeamDecisions) nudges the rail.
+  useEffect(() => {
+    function onTeamWaitingChanged() { void loadWorkBadges(); }
+    window.addEventListener('gv-team-waiting-changed', onTeamWaitingChanged);
+    return () => window.removeEventListener('gv-team-waiting-changed', onTeamWaitingChanged);
+  }, [loadWorkBadges]);
 
   const navBadges = useMemo(
     () => ({ ...workBadges, communications: inboxBadge }),
@@ -1181,7 +1183,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
   }
 
   const SECTION_PERMS: Record<string, string> = {
-    committees: 'committees', applications: 'applications', import: 'import', assignment: 'assignment',
+    committees: 'committees', applications: 'applications', import: 'import', allocations: 'assignment',
     documents: 'documents',
     // The scoreboard is no longer a nav section, but the route is still
     // reachable by URL — so its permission mapping MUST stay. Deleting it would

@@ -89,6 +89,9 @@ export interface RegistrationConfirmationProps {
   /** The conference's id. With it, the Pay CTA is drawn locked while the
    *  conference has not set up payments (prompt 108). */
   conferenceId?: string | null;
+  /** Accepted (or assigned, checked in). False before acceptance: "Application Sent", no
+   *  allocation or fee-held line. Defaults to true, today's behaviour for every other caller. */
+  accepted?: boolean;
   /** Rendered under the two columns (the apply page keeps its timeline). */
   children?: React.ReactNode;
   className?: string;
@@ -123,6 +126,7 @@ export default function RegistrationConfirmation({
   onContinue,
   payHref = null,
   conferenceId = null,
+  accepted = true,
   children,
   className,
 }: RegistrationConfirmationProps) {
@@ -164,10 +168,14 @@ export default function RegistrationConfirmation({
   const owesMoney = !paid && !!money;
   const pillLabel = paid ? 'Paid' : owesMoney ? 'Payment due' : 'Registered';
 
-  const headline = paid
+  const headline = !accepted
+    ? 'Application Sent'
+    : paid
     ? `You're going to ${heroLabel}`
     : "You're on the roster";
-  const sub = paid
+  const sub = !accepted
+    ? `Your application is in. The ${heroLabel} organizers will review it and let you know.`
+    : paid
     ? 'Your place is confirmed and paid. Committee allocations are not out yet, and we will email you the moment yours is ready.'
     : owesMoney
       ? 'Your registration is in. Your place is held while the fee is outstanding, and it is confirmed the moment it is paid.'
@@ -413,7 +421,10 @@ export default function RegistrationConfirmation({
               }}
             >
               <PassRow label="Committee" value={committee ?? 'Not allocated yet'} pending={!committee} />
-              <PassRow label="Delegation" value={delegation || 'Independent'} />
+              {/* A team role never travels with a delegation (26 Nov 2026). */}
+              {role !== 'chair' && role !== 'secretariat' && role !== 'staff' && (
+                <PassRow label="Delegation" value={delegation || 'Independent'} />
+              )}
               {money && (
                 <PassRow
                   label={paid ? 'Paid' : 'Due'}

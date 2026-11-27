@@ -10,6 +10,8 @@ import CompleteBasicsGate from '@/components/CompleteBasicsGate';
 import NameGate from '@/components/NameGate';
 import LiveRoomsGate from '@/components/liveRooms/LiveRoomsGate';
 import CrisisGiftGate from '@/components/CrisisGiftGate';
+import SaleBar from '@/components/store/SaleBar';
+import SalePopupGate from '@/components/store/SalePopupGate';
 import AuthModalHost from '@/components/auth/AuthModal';
 import PurchasePopupHost from '@/components/purchase/PurchasePopupHost';
 import SiteViewBeacon from '@/components/SiteViewBeacon';
@@ -174,6 +176,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <SessionsRouteFlag />
         <AuthProvider>
           <LanguageProvider>
+            {/* Motion to Save (prompt 87): the sale bar above every page's nav while a Store sale runs. */}
+            <SaleBar />
             {children}
             {/* Anonymous site-wide page counter: { page, source } once per page
                 per session, nothing else (src/lib/siteView.ts). */}
@@ -198,6 +202,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 (src/components/liveRooms). Waits for every gate above. */}
             <LiveRoomsGate />
             <CrisisGiftGate />
+            {/* The sale pop-up, once per sale, after every gate above. */}
+            <SalePopupGate />
           </LanguageProvider>
         </AuthProvider>
       </body>

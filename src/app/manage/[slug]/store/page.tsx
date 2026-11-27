@@ -30,7 +30,6 @@ import SponsorshipPopup from './SponsorshipPopup';
 import EmailsPopup from './EmailsPopup';
 import YourSpotlights from './YourSpotlights';
 import YourPurchases from './YourPurchases';
-import { IMPORTS_PAID_LAUNCH } from '../import/importQuote';
 import EmailPacks from './EmailPacks';
 import JobBoardStoreCard from './JobBoardStoreCard';
 import { openCreditsPopup } from '@/lib/purchasePopup';
@@ -240,18 +239,6 @@ export default function StorePage() {
               </div>
             </StoreCard>
 
-            <StoreCard
-              title="Bulk Import"
-              line={IMPORTS_PAID_LAUNCH ? 'Importing costs 1 credit per delegate imported, paid when you import' : 'Bring your whole roster in from a spreadsheet'}
-              hint={IMPORTS_PAID_LAUNCH
-                ? 'Bring a spreadsheet of delegates in at once and send each of them a claim link. Each imported delegate uses one conference credit at the moment you import.'
-                : 'Bring a spreadsheet of delegates in at once and send each of them a claim link'}
-            >
-              <div className="flex flex-wrap gap-2">
-                <Link href={`/manage/${conference.slug}/applications`} className="gv-st-btn gv-st-outline">Imported delegates</Link>
-                <Link href={`/manage/${conference.slug}/import`} className="gv-st-btn gv-st-forest">Go to importer</Link>
-              </div>
-            </StoreCard>
           </div>
 
           {/* Bundles */}

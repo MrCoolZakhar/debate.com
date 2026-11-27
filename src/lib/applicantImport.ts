@@ -12,6 +12,9 @@ import { matchCommitteeCell, type CommitteeMatchVia } from '@/lib/committeeMatch
 
 export const CANONICAL_HEADERS = ['email', 'name', 'role', 'delegation', 'payment', 'committee', 'country', 'seat'] as const;
 export type CanonicalHeader = (typeof CANONICAL_HEADERS)[number];
+/** The only columns a file must have. Every other column, when absent, reads
+ *  as blank in every row, exactly as if it were there with empty cells. */
+export const REQUIRED_HEADERS = ['email', 'name', 'role'] as const satisfies readonly CanonicalHeader[];
 
 export type ImportableRole = 'delegate' | 'head-delegate' | 'faculty-advisor' | 'observer';
 
@@ -93,7 +96,7 @@ export interface ParseFileResult {
 }
 
 function recordsToRows(records: Record<string, string>[]): ParseFileResult {
-  if (records.length === 0) return { rows: [], missingHeaders: [...CANONICAL_HEADERS] };
+  if (records.length === 0) return { rows: [], missingHeaders: [...REQUIRED_HEADERS] };
 
   // Map each record's own keys (whatever case/spacing) to canonical headers.
   const sampleKeys = Object.keys(records[0]);
@@ -104,7 +107,7 @@ function recordsToRows(records: Record<string, string>[]): ParseFileResult {
       keyForCanonical.set(normalized as CanonicalHeader, key);
     }
   }
-  const missingHeaders = CANONICAL_HEADERS.filter(h => !keyForCanonical.has(h));
+  const missingHeaders: CanonicalHeader[] = REQUIRED_HEADERS.filter(h => !keyForCanonical.has(h));
 
   const rows: ParsedImportRow[] = [];
   let rowNumber = 0;
@@ -297,7 +300,7 @@ export function classifyImportRows(rows: ParsedImportRow[], ctx: ClassifyContext
 
     const { role, isChair, blank: roleBlank } = mapRole(raw.role);
     if (isChair) {
-      reasons.push({ severity: 'error', message: "Chairs aren't importable. Invite chairs from Committees instead." });
+      reasons.push({ severity: 'error', message: "Chairs aren't importable. Chairs, secretariat and staff apply through Team Applications." });
     } else if (roleBlank) {
       reasons.push({ severity: 'error', message: 'Add a role: delegate, head delegate, faculty advisor or observer.' });
     } else if (!role) {

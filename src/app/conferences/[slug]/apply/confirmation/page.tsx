@@ -44,6 +44,7 @@ interface AppRow {
   payment_status: string;
   amount_paid: number | null;
   society_id: string | null;
+  status: string | null;
 }
 
 function ConfirmationInner({ conference }: { conference: ConfRow }) {
@@ -76,7 +77,7 @@ function ConfirmationInner({ conference }: { conference: ConfRow }) {
       // the filing time; an imported row with none sorts last.
       const { data, error } = await authed
         .from('applications')
-        .select('id, role, payment_status, amount_paid, society_id')
+        .select('id, role, payment_status, amount_paid, society_id, status')
         .eq('conference_id', conference.id)
         .eq('user_id', user.id)
         .eq('role', role)
@@ -202,6 +203,8 @@ function ConfirmationInner({ conference }: { conference: ConfRow }) {
         <RegistrationConfirmation
           conference={conference}
           state={paid ? 'paid' : 'due'}
+          // Only an accepted application reads as a place (26 Nov 2026); before it, "Application Sent".
+          accepted={app?.status === 'accepted' || app?.status === 'assigned' || app?.status === 'checked-in'}
           role={role}
           delegation={delegation}
           // Allocations do not exist at registration, and there is no

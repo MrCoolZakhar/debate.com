@@ -15,6 +15,6 @@ No unit or end-to-end test suite and no CI. The build, the brand-mark gate, `che
 
 `.env.local` needs `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`. Payments, email and account deletion run in Supabase edge functions with their own secrets; nothing in this repo deploys them.
 
-Largest files (Oct 2026; all conferences-side except the chair page and translations): `translations.ts` 6.7k, `settings/page.tsx` 6.7k, `ConferenceApplyClient.tsx` 6.2k, `chair/[code]/page.tsx` 6.1k, `manage/[slug]/applications/page.tsx` 5.8k, `communications/page.tsx` 5.5k, `assignment/page.tsx` 5.4k. New translation keys go in a module of their own (`src/lib/translations<Area>.ts`, spread into each locale; see `.claude/TRANSLATIONS.md`). Keep diffs in these small and self-contained; put new features in new files and mount them.
+Largest files (Oct 2026; all conferences-side except the chair page and translations): `translations.ts` 6.7k, `settings/page.tsx` 6.7k, `ConferenceApplyClient.tsx` 6.2k, `chair/[code]/page.tsx` 6.1k, `manage/[slug]/applications/page.tsx` 5.8k, `communications/page.tsx` 5.5k, `allocations/page.tsx` 5.4k. New translation keys go in a module of their own (`src/lib/translations<Area>.ts`, spread into each locale; see `.claude/TRANSLATIONS.md`). Keep diffs in these small and self-contained; put new features in new files and mount them.
 
 ---

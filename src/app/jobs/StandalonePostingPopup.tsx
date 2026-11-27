@@ -151,10 +151,10 @@ function fixUntil(publishedAt: string | null): string | null {
   return `${d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}, ${d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`;
 }
 
-interface OrganizedConference { id: string; slug: string; acronym: string | null; full_name: string | null }
+export interface OrganizedConference { id: string; slug: string; acronym: string | null; full_name: string | null }
 
 /** The conferences this person organizes that have not ended. Null when the read failed. */
-async function readOrganizedConferences(userId: string): Promise<OrganizedConference[] | null> {
+export async function readOrganizedConferences(userId: string): Promise<OrganizedConference[] | null> {
   try {
     const client = await getFreshAuthedClient();
     if (!client) return null;

@@ -6,7 +6,7 @@
 // suggestion builder and its swap-improvement pass.
 //
 // Pure on purpose: no React, no Supabase, no I/O. It was lifted out of
-// `src/app/manage/[slug]/assignment/page.tsx` unchanged (owner, 21 Oct 2026)
+// `src/app/manage/[slug]/allocations/page.tsx` unchanged (owner, 21 Oct 2026)
 // so the new seat board and, later, the Applications pop-up score a seat with
 // exactly the numbers the board ranks by. The types below are the smallest
 // shapes the engine reads; the page's own row types (AcceptedApp,

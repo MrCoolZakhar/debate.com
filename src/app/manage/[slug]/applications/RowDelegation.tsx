@@ -17,7 +17,7 @@ import DelegationCrest from '@/components/DelegationCrest';
 import { CircleFlag } from '@/components/CircleFlag';
 import { getCountryByCode } from '@/lib/countries';
 import { DelegationAvatar, delegationPlace, plural } from './DelegationAvatar';
-import { countryShortName } from '../assignment/displayNames';
+import { countryShortName } from '../allocations/displayNames';
 
 const OUTFIT = "var(--font-brand), sans-serif";
 const INK = '#1C1410';

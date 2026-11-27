@@ -1,0 +1,751 @@
+{
+  "position": 3,
+  "prompt": "Name an operative clause opener",
+  "hint": "The word or phrase that starts an operative clause, like Urges",
+  "kind": "list",
+  "default_tier": null,
+  "number_max": null,
+  "answers": [
+    {
+      "answer": "Urges",
+      "tier": 10,
+      "aliases": [
+        "Urge"
+      ]
+    },
+    {
+      "answer": "Calls upon",
+      "tier": 10,
+      "aliases": [
+        "Calls on",
+        "Call upon"
+      ]
+    },
+    {
+      "answer": "Encourages",
+      "tier": 10,
+      "aliases": [
+        "Encourage"
+      ]
+    },
+    {
+      "answer": "Requests",
+      "tier": 10,
+      "aliases": [
+        "Request"
+      ]
+    },
+    {
+      "answer": "Recommends",
+      "tier": 10,
+      "aliases": [
+        "Recommend"
+      ]
+    },
+    {
+      "answer": "Condemns",
+      "tier": 10,
+      "aliases": [
+        "Condemn"
+      ]
+    },
+    {
+      "answer": "Supports",
+      "tier": 10,
+      "aliases": [
+        "Support"
+      ]
+    },
+    {
+      "answer": "Welcomes",
+      "tier": 10,
+      "aliases": [
+        "Welcome"
+      ]
+    },
+    {
+      "answer": "Reaffirms",
+      "tier": 10,
+      "aliases": [
+        "Reaffirm"
+      ]
+    },
+    {
+      "answer": "Decides",
+      "tier": 30,
+      "aliases": [
+        "Decide"
+      ]
+    },
+    {
+      "answer": "Affirms",
+      "tier": 30,
+      "aliases": [
+        "Affirm"
+      ]
+    },
+    {
+      "answer": "Declares",
+      "tier": 30,
+      "aliases": [
+        "Declare"
+      ]
+    },
+    {
+      "answer": "Strongly condemns",
+      "tier": 30,
+      "aliases": [
+        "Strongly condemn"
+      ]
+    },
+    {
+      "answer": "Calls for",
+      "tier": 30,
+      "aliases": [
+        "Call for"
+      ]
+    },
+    {
+      "answer": "Invites",
+      "tier": 30,
+      "aliases": [
+        "Invite"
+      ]
+    },
+    {
+      "answer": "Notes",
+      "tier": 30,
+      "aliases": [
+        "Note"
+      ]
+    },
+    {
+      "answer": "Expresses its hope",
+      "tier": 30,
+      "aliases": [
+        "Expresses hope",
+        "Expresses its hopes"
+      ]
+    },
+    {
+      "answer": "Further requests",
+      "tier": 30,
+      "aliases": [
+        "Further request"
+      ]
+    },
+    {
+      "answer": "Endorses",
+      "tier": 30,
+      "aliases": [
+        "Endorse"
+      ]
+    },
+    {
+      "answer": "Demands",
+      "tier": 30,
+      "aliases": [
+        "Demand"
+      ]
+    },
+    {
+      "answer": "Emphasizes",
+      "tier": 30,
+      "aliases": [
+        "Emphasises",
+        "Emphasize",
+        "Emphasise"
+      ]
+    },
+    {
+      "answer": "Appeals",
+      "tier": 30,
+      "aliases": [
+        "Appeal",
+        "Appeals to"
+      ]
+    },
+    {
+      "answer": "Recognizes",
+      "tier": 30,
+      "aliases": [
+        "Recognises",
+        "Recognize",
+        "Recognise"
+      ]
+    },
+    {
+      "answer": "Resolves",
+      "tier": 30,
+      "aliases": [
+        "Resolve"
+      ]
+    },
+    {
+      "answer": "Takes note of",
+      "tier": 30,
+      "aliases": [
+        "Takes note",
+        "Take note of"
+      ]
+    },
+    {
+      "answer": "Commends",
+      "tier": 30,
+      "aliases": [
+        "Commend"
+      ]
+    },
+    {
+      "answer": "Further invites",
+      "tier": 30,
+      "aliases": [
+        "Further invite"
+      ]
+    },
+    {
+      "answer": "Strongly urges",
+      "tier": 30,
+      "aliases": [
+        "Strongly urge"
+      ]
+    },
+    {
+      "answer": "Expresses its appreciation",
+      "tier": 30,
+      "aliases": [
+        "Expresses appreciation",
+        "Expresses its thanks"
+      ]
+    },
+    {
+      "answer": "Authorizes",
+      "tier": 60,
+      "aliases": [
+        "Authorises",
+        "Authorize",
+        "Authorise"
+      ]
+    },
+    {
+      "answer": "Approves",
+      "tier": 60,
+      "aliases": [
+        "Approve"
+      ]
+    },
+    {
+      "answer": "Accepts",
+      "tier": 60,
+      "aliases": [
+        "Accept"
+      ]
+    },
+    {
+      "answer": "Confirms",
+      "tier": 60,
+      "aliases": [
+        "Confirm"
+      ]
+    },
+    {
+      "answer": "Congratulates",
+      "tier": 60,
+      "aliases": [
+        "Congratulate"
+      ]
+    },
+    {
+      "answer": "Deplores",
+      "tier": 60,
+      "aliases": [
+        "Deplore"
+      ]
+    },
+    {
+      "answer": "Designates",
+      "tier": 60,
+      "aliases": [
+        "Designate"
+      ]
+    },
+    {
+      "answer": "Directs",
+      "tier": 60,
+      "aliases": [
+        "Direct"
+      ]
+    },
+    {
+      "answer": "Proclaims",
+      "tier": 60,
+      "aliases": [
+        "Proclaim"
+      ]
+    },
+    {
+      "answer": "Regrets",
+      "tier": 60,
+      "aliases": [
+        "Regret"
+      ]
+    },
+    {
+      "answer": "Reminds",
+      "tier": 60,
+      "aliases": [
+        "Remind"
+      ]
+    },
+    {
+      "answer": "Stresses",
+      "tier": 60,
+      "aliases": [
+        "Stress"
+      ]
+    },
+    {
+      "answer": "Underlines",
+      "tier": 60,
+      "aliases": [
+        "Underline"
+      ]
+    },
+    {
+      "answer": "Suggests",
+      "tier": 60,
+      "aliases": [
+        "Suggest"
+      ]
+    },
+    {
+      "answer": "Asks",
+      "tier": 60,
+      "aliases": [
+        "Ask"
+      ]
+    },
+    {
+      "answer": "Expresses its concern",
+      "tier": 60,
+      "aliases": [
+        "Expresses concern",
+        "Expresses its deep concern"
+      ]
+    },
+    {
+      "answer": "Further recommends",
+      "tier": 60,
+      "aliases": [
+        "Further recommend"
+      ]
+    },
+    {
+      "answer": "Further resolves",
+      "tier": 60,
+      "aliases": [
+        "Further resolve"
+      ]
+    },
+    {
+      "answer": "Further reminds",
+      "tier": 60,
+      "aliases": [
+        "Further remind"
+      ]
+    },
+    {
+      "answer": "Further proclaims",
+      "tier": 60,
+      "aliases": [
+        "Further proclaim"
+      ]
+    },
+    {
+      "answer": "Has resolved",
+      "tier": 60,
+      "aliases": [
+        "Have resolved"
+      ]
+    },
+    {
+      "answer": "Declares accordingly",
+      "tier": 60,
+      "aliases": [
+        "Declare accordingly"
+      ]
+    },
+    {
+      "answer": "Draws the attention",
+      "tier": 60,
+      "aliases": [
+        "Draws attention",
+        "Draws the attention of"
+      ]
+    },
+    {
+      "answer": "Hopes",
+      "tier": 60,
+      "aliases": [
+        "Hope"
+      ]
+    },
+    {
+      "answer": "Instructs",
+      "tier": 60,
+      "aliases": [
+        "Instruct"
+      ]
+    },
+    {
+      "answer": "Strongly encourages",
+      "tier": 60,
+      "aliases": [
+        "Strongly encourage"
+      ]
+    },
+    {
+      "answer": "Applauds",
+      "tier": 60,
+      "aliases": [
+        "Applaud"
+      ]
+    },
+    {
+      "answer": "Reiterates",
+      "tier": 60,
+      "aliases": [
+        "Reiterate"
+      ]
+    },
+    {
+      "answer": "Underscores",
+      "tier": 60,
+      "aliases": [
+        "Underscore"
+      ]
+    },
+    {
+      "answer": "Establishes",
+      "tier": 60,
+      "aliases": [
+        "Establish"
+      ]
+    },
+    {
+      "answer": "Expresses its satisfaction",
+      "tier": 60,
+      "aliases": [
+        "Expresses satisfaction"
+      ]
+    },
+    {
+      "answer": "Notes with appreciation",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Notes with satisfaction",
+      "tier": 60,
+      "aliases": []
+    },
+    {
+      "answer": "Notes with concern",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Notes with regret",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Renews its appeal",
+      "tier": 85,
+      "aliases": [
+        "Renews appeal",
+        "Renews its call"
+      ]
+    },
+    {
+      "answer": "Strongly affirms",
+      "tier": 85,
+      "aliases": [
+        "Strongly affirm"
+      ]
+    },
+    {
+      "answer": "Trusts",
+      "tier": 85,
+      "aliases": [
+        "Trust"
+      ]
+    },
+    {
+      "answer": "Transmits",
+      "tier": 85,
+      "aliases": [
+        "Transmit"
+      ]
+    },
+    {
+      "answer": "Considers",
+      "tier": 85,
+      "aliases": [
+        "Consider"
+      ]
+    },
+    {
+      "answer": "Concurs",
+      "tier": 85,
+      "aliases": [
+        "Concur"
+      ]
+    },
+    {
+      "answer": "Admits",
+      "tier": 85,
+      "aliases": [
+        "Admit"
+      ]
+    },
+    {
+      "answer": "Advises",
+      "tier": 85,
+      "aliases": [
+        "Advise"
+      ]
+    },
+    {
+      "answer": "Commemorates",
+      "tier": 85,
+      "aliases": [
+        "Commemorate"
+      ]
+    },
+    {
+      "answer": "Deems",
+      "tier": 85,
+      "aliases": [
+        "Deem"
+      ]
+    },
+    {
+      "answer": "Determines",
+      "tier": 85,
+      "aliases": [
+        "Determine"
+      ]
+    },
+    {
+      "answer": "Entrusts",
+      "tier": 85,
+      "aliases": [
+        "Entrust"
+      ]
+    },
+    {
+      "answer": "Exhorts",
+      "tier": 85,
+      "aliases": [
+        "Exhort"
+      ]
+    },
+    {
+      "answer": "Expresses its conviction",
+      "tier": 85,
+      "aliases": [
+        "Expresses conviction"
+      ]
+    },
+    {
+      "answer": "Expresses its regret",
+      "tier": 85,
+      "aliases": [
+        "Expresses regret"
+      ]
+    },
+    {
+      "answer": "Expresses its sincere appreciation",
+      "tier": 85,
+      "aliases": [
+        "Expresses sincere appreciation"
+      ]
+    },
+    {
+      "answer": "Implores",
+      "tier": 85,
+      "aliases": [
+        "Implore"
+      ]
+    },
+    {
+      "answer": "Insists",
+      "tier": 85,
+      "aliases": [
+        "Insist"
+      ]
+    },
+    {
+      "answer": "Lauds",
+      "tier": 85,
+      "aliases": [
+        "Laud"
+      ]
+    },
+    {
+      "answer": "Notes with approval",
+      "tier": 85,
+      "aliases": []
+    },
+    {
+      "answer": "Pledges",
+      "tier": 85,
+      "aliases": [
+        "Pledge"
+      ]
+    },
+    {
+      "answer": "Praises",
+      "tier": 85,
+      "aliases": [
+        "Praise"
+      ]
+    },
+    {
+      "answer": "Proposes",
+      "tier": 85,
+      "aliases": [
+        "Propose"
+      ]
+    },
+    {
+      "answer": "Repeats",
+      "tier": 85,
+      "aliases": [
+        "Repeat"
+      ]
+    },
+    {
+      "answer": "Requires",
+      "tier": 85,
+      "aliases": [
+        "Require"
+      ]
+    },
+    {
+      "answer": "Seeks",
+      "tier": 85,
+      "aliases": [
+        "Seek"
+      ]
+    },
+    {
+      "answer": "Takes into consideration",
+      "tier": 85,
+      "aliases": [
+        "Takes into account"
+      ]
+    },
+    {
+      "answer": "Thanks",
+      "tier": 85,
+      "aliases": [
+        "Thank"
+      ]
+    },
+    {
+      "answer": "Undertakes",
+      "tier": 85,
+      "aliases": [
+        "Undertake"
+      ]
+    },
+    {
+      "answer": "Warns",
+      "tier": 85,
+      "aliases": [
+        "Warn"
+      ]
+    },
+    {
+      "answer": "Calls attention",
+      "tier": 85,
+      "aliases": [
+        "Calls the attention",
+        "Calls attention to"
+      ]
+    },
+    {
+      "answer": "Further declares",
+      "tier": 85,
+      "aliases": [
+        "Further declare"
+      ]
+    },
+    {
+      "answer": "Further decides",
+      "tier": 85,
+      "aliases": [
+        "Further decide"
+      ]
+    },
+    {
+      "answer": "Further urges",
+      "tier": 85,
+      "aliases": [
+        "Further urge"
+      ]
+    },
+    {
+      "answer": "Further encourages",
+      "tier": 85,
+      "aliases": [
+        "Further encourage"
+      ]
+    },
+    {
+      "answer": "Further condemns",
+      "tier": 85,
+      "aliases": [
+        "Further condemn"
+      ]
+    },
+    {
+      "answer": "Affirms its support",
+      "tier": 85,
+      "aliases": [
+        "Affirms support"
+      ]
+    },
+    {
+      "answer": "Extends its gratitude",
+      "tier": 85,
+      "aliases": [
+        "Extends gratitude",
+        "Expresses its gratitude"
+      ]
+    },
+    {
+      "answer": "Decrees",
+      "tier": 85,
+      "aliases": [
+        "Decree"
+      ]
+    },
+    {
+      "answer": "Enjoins",
+      "tier": 85,
+      "aliases": [
+        "Enjoin"
+      ]
+    },
+    {
+      "answer": "Solemnly affirms",
+      "tier": 100,
+      "aliases": [
+        "Solemnly affirm"
+      ]
+    }
+  ]
+}

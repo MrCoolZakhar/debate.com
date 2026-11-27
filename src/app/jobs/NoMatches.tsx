@@ -46,7 +46,8 @@ export default function NoMatches({ query, onClear, compact = false, empty = fal
       <p style={{ margin: 0, maxWidth: '46ch', fontSize: 15, lineHeight: 1.55, color: INK_SOFT }}>
         {empty ? 'Save an alert to know when new roles are posted.' : 'Save this search as an alert to know when roles that match it are posted.'}
       </p>
-      <SaveAlertAction query={query} />
+      {/* On the phone (compact) the button already sits beside the count (prompt 78): never twice. */}
+      {!compact && <SaveAlertAction query={query} />}
       {!empty && <button
         type="button"
         onClick={onClear}

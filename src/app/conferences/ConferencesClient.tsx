@@ -256,7 +256,7 @@ function FeaturedSection() {
 
 function OrganiserSection() {
   const cards = [
-    { icon: Users, title: 'Smart Assignment', desc: 'Preferences + experience scores. One-click auto-assign.' },
+    { icon: Users, title: 'Smart Allocations', desc: 'Preferences + experience scores. One-click auto-allocate.' },
     { icon: FileText, title: 'Document Portal', desc: 'Study guides, position papers, feedback, all in one place.' },
     { icon: CreditCard, title: 'Transparent Fees', desc: 'No Gavelling surcharge on your fee. You keep 100%. Gavelling runs on Credits.' },
     { icon: Zap, title: 'Automated Comms', desc: 'Acceptance emails, allocation codes, reminders, sent automatically.' },

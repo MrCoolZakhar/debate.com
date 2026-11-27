@@ -31,8 +31,8 @@ export interface FaqEntry {
 const MANAGE_SUBSCRIPTION = { kind: 'link', label: 'Manage account: Subscription', href: '/account/manage/subscription' } as const;
 const MANAGE_PROMO = { kind: 'link', label: 'Manage account: Promo code', href: '/account/manage/promo' } as const;
 const MANAGE_CREDITS = { kind: 'link', label: 'Manage account: Credits and usage', href: '/account/manage/credits' } as const;
-const PRICING_CREDITS = { kind: 'link', label: 'Credits pricing', href: '/pricing/credits' } as const;
-const PRICING_SUB = { kind: 'link', label: 'Unlimited pricing', href: '/pricing/subscription' } as const;
+const PRICING_CREDITS = { kind: 'link', label: 'Credits pricing', href: '/store/credits' } as const;
+const PRICING_SUB = { kind: 'link', label: 'Unlimited pricing', href: '/store/credits?plan=unlimited' } as const;
 
 export const PRICING_FAQ: FaqEntry[] = [
   {
@@ -145,6 +145,22 @@ export const PRICING_FAQ: FaqEntry[] = [
 
 export function faqForPage(page: 'credits' | 'subscription'): FaqEntry[] {
   return PRICING_FAQ.filter((f) => f.pages.includes(page));
+}
+
+/** Asked first on /store/credits during a buy one, get one free sale only (never in the help center). */
+const SALE_FREE_CREDITS: FaqEntry = {
+  id: 'sale-free-credits',
+  question: 'Do the free credits expire?',
+  answer: 'No. The free credits from a sale never expire, and they work everywhere credits do.',
+  actions: [],
+  pages: [],
+};
+
+/** /store/credits (prompt 86): the credits and subscription questions together,
+ *  without the renewal question (owner, 27 Nov 2026), the sale question first during a BOGO sale. */
+export function faqForStoreCredits(bogo: boolean): FaqEntry[] {
+  const list = PRICING_FAQ.filter((f) => f.id !== 'unlimited-renewal' && (f.pages.includes('credits') || f.pages.includes('subscription')));
+  return bogo ? [SALE_FREE_CREDITS, ...list] : list;
 }
 
 /**

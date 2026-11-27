@@ -55,7 +55,7 @@ type SeriesKey = 'total' | 'accepted' | 'assigned' | 'paid';
 const SERIES: { key: SeriesKey; label: string; color: string }[] = [
   { key: 'total', label: 'Total', color: FUNNEL_RAMP[0] },
   { key: 'accepted', label: 'Accepted', color: FUNNEL_RAMP[1] },
-  { key: 'assigned', label: 'Assigned', color: FUNNEL_RAMP[2] },
+  { key: 'assigned', label: 'Allocated', color: FUNNEL_RAMP[2] },
   { key: 'paid', label: 'Paid', color: FUNNEL_RAMP[3] },
 ];
 
@@ -64,6 +64,38 @@ const SERIES: { key: SeriesKey; label: string; color: string }[] = [
 const BASE_W = 1000;
 const BASE_H = 320;
 const PAD = { top: 18, right: 96, bottom: 34, left: 46 };
+
+/** Room between two end labels: one 11.5px line plus a small gap (prompt 81). */
+const LABEL_GAP = 15;
+
+/**
+ * The end labels, never text over text. Each label wants the y of its line's
+ * end; going down the chart, a label too close to the one above it moves down
+ * to LABEL_GAP below it. If that runs past the bottom, the stack moves up as
+ * far as the top allows. Only when there is still no room are labels that sit
+ * closer than LABEL_GAP joined on one line ("Accepted 12 · Assigned 9").
+ */
+function endLabels<T extends { y: number }>(wanted: T[], top: number, bottom: number): { y: number; items: T[] }[] {
+  const order = [...wanted].sort((a, b) => a.y - b.y);
+  const placed: number[] = [];
+  order.forEach((w, i) => { placed.push(i === 0 ? Math.max(top, w.y) : Math.max(w.y, placed[i - 1] + LABEL_GAP)); });
+  const over = placed.length ? placed[placed.length - 1] - bottom : 0;
+  if (over > 0) {
+    const shift = Math.min(over, placed[0] - top);
+    for (let i = 0; i < placed.length; i++) placed[i] -= shift;
+  }
+  if (!placed.length || placed[placed.length - 1] <= bottom) {
+    return order.map((w, i) => ({ y: placed[i], items: [w] }));
+  }
+  // No room to spread them: join the ones that would touch.
+  const groups: { y: number; items: T[] }[] = [];
+  for (const w of order) {
+    const g = groups[groups.length - 1];
+    if (g && w.y - g.y < LABEL_GAP) g.items.push(w);
+    else groups.push({ y: w.y, items: [w] });
+  }
+  return groups;
+}
 
 function niceCeil(v: number): number {
   if (v <= 5) return 5;
@@ -344,14 +376,18 @@ export default function ParticipantsChart({
 
           {/* Direct end-labels — the secondary encoding that makes a close ramp
               unambiguous without relying on hue. */}
-          {SERIES.map((s) => (
+          {endLabels(SERIES.map((s) => ({ s, y: y(last[s.key]) + 4, value: last[s.key] })), PAD.top + 4, PAD.top + plotH + 4).map((g) => (
             <text
-              key={s.key}
+              key={g.items.map((it) => it.s.key).join('-')}
               x={W - PAD.right + 8}
-              y={y(last[s.key]) + 4}
-              style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, fill: s.color }}
+              y={g.y}
+              style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800 }}
             >
-              {s.label}
+              {g.items.length === 1
+                ? <tspan fill={g.items[0].s.color}>{g.items[0].s.label}</tspan>
+                : g.items.map((it, k) => (
+                  <tspan key={it.s.key} fill={it.s.color}>{k > 0 ? ' · ' : ''}{it.s.label} {it.value.toLocaleString()}</tspan>
+                ))}
             </text>
           ))}
 

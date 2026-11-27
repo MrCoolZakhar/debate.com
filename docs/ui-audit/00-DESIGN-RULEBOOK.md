@@ -58,7 +58,7 @@ Fonts: **Outfit** (all UI, display 900, buttons UPPERCASE bold) + **DM Mono** (m
 
 ## 5. USUAL SUSPECTS (where AI-smell tends to hide — check these hard)
 - **DM Mono eyebrows sprawled** across a page as section labels (should be sparse Outfit or removed).
-- **Manage pages** (applications/assignment/settings/committees) still carry uppercase-mono grey pills — the "Pill" fix only landed in `/account`. Meek badges live here.
+- **Manage pages** (applications/allocations/settings/committees) still carry uppercase-mono grey pills — the "Pill" fix only landed in `/account`. Meek badges live here.
 - **Stub/plain pages** — financials (a stub), documents, communications, jobs — likely under-designed vs the polished public pages.
 - **Form pages** — new-conference creation, apply flow, settings: long, icon-light, form-heavy. Prime "big page no images" territory.
 - **Empty/loading states** — check every list for a designed empty state, not a bare sentence.

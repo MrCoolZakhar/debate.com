@@ -1,14 +1,17 @@
 'use client';
 
-// Who can read your MUN CV (24 Sep 2026), as ONE small control at the top of
-// the CV page (26 Sep 2026, owner: "the who can see your CV setting is just too
-// large, just add it as a small smart toggle at the top").
+// Who can read your MUN CV (24 Sep 2026), behind ONE "Settings" button in the
+// CV header's button row (prompt 77; the Public / Private switch is gone).
+// Its popover holds three switches, each with one plain line:
 //
-//   Public | Private      profiles.cv_private: the whole public page (/cv/[id])
-//                         is gone when Private
-//   the gear disc         a small popover holding "Show my nationality"
-//                         (profiles.cv_hide_nationality) and the link to what
-//                         visitors see
+//   Make my CV private    profiles.cv_private: the whole public page (/cv/[id])
+//                         is gone when on
+//   Hide my nationality   profiles.cv_hide_nationality
+//   Open to team roles    talent_set_open (opt-in, off by default)
+//
+// plus the link to what visitors see. ?settings=open opens it on load (the
+// links on My Applications) and the parameter is then removed in place; a
+// TALENT_CHANGED_EVENT (TalentPrompt's Turn on) sets the third switch at once.
 //   the eye on each card  mun_cv_entries.is_private, unchanged (CVTimeline.tsx)
 //
 // All three are enforced in the DATABASE, not here: get_public_cv() honours
@@ -19,7 +22,8 @@
 // rolls back on a refusal; this control only shows the state and calls it.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Globe2, Lock, Flag, ExternalLink, Settings2, Briefcase } from 'lucide-react';
+import { Lock, Flag, ExternalLink, Settings, Briefcase } from 'lucide-react';
+import { replaceUrlInPlace } from '@/lib/replaceUrlInPlace';
 import Portal from '@/components/Portal';
 import { useAuth } from '@/components/AuthProvider';
 import { fetchTalentSettings, setTalentOpen } from '@/lib/jobBoard';
@@ -31,8 +35,8 @@ export interface CvPrivacy {
   hideNationality: boolean;
 }
 
-const POP_W = 280;
-const POP_H = 330;
+const POP_W = 320;
+const POP_H = 470;
 
 export default function CVPrivacyPanel({
   value,
@@ -134,82 +138,49 @@ export default function CVPrivacyPanel({
     };
   }, [open, place]);
 
-  const segment = (isPrivate: boolean) => {
-    const on = cvPrivate === isPrivate;
-    const Icon = isPrivate ? Lock : Globe2;
-    return (
-      <button
-        type="button"
-        role="radio"
-        aria-checked={on}
-        disabled={saving}
-        onClick={() => { if (!on) onChange({ cvPrivate: isPrivate }); }}
-        title={isPrivate ? 'Only you, and organisers you apply to' : 'Anyone with the link'}
-        className="relative z-[1] inline-flex items-center justify-center gap-1.5 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
-        style={{
-          padding: '0 14px', minHeight: 36, border: 'none', background: 'transparent',
-          fontFamily: OUTFIT, fontSize: T.body, fontWeight: on ? 800 : 600,
-          color: on ? '#1B3828' : '#5A5046', cursor: saving ? 'default' : 'pointer',
-          transition: 'color 180ms ease',
-        }}
-      >
-        <Icon size={15} strokeWidth={2.2} fill={on ? 'rgba(238,217,138,0.7)' : 'none'} aria-hidden />
-        {isPrivate ? 'Private' : 'Public'}
-      </button>
-    );
-  };
+  // ?settings=open (the links on My Applications): open the panel once, then drop the parameter.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.get('settings') !== 'open') return;
+    url.searchParams.delete('settings');
+    replaceUrlInPlace(url.pathname + url.search + url.hash);
+    const raf = requestAnimationFrame(() => setOpen(true));
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  // TalentPrompt's Turn on (or another tab of this page) changed it: show it at once.
+  useEffect(() => {
+    const onChanged = (e: Event) => {
+      const open = (e as CustomEvent<{ open?: unknown }>).detail?.open;
+      if (typeof open === 'boolean') { setTalentOpenState(open); setTalentError(null); }
+    };
+    window.addEventListener(TALENT_CHANGED_EVENT, onChanged);
+    return () => window.removeEventListener(TALENT_CHANGED_EVENT, onChanged);
+  }, []);
 
   return (
-    <div className="mt-5">
-      <div className="flex flex-wrap items-center gap-2.5">
-        <span style={{ fontFamily: OUTFIT, fontSize: T.body, fontWeight: 600, color: '#5A5046' }}>Your CV is</span>
-        <div
-          role="radiogroup"
-          aria-label="Who can see your CV"
-          className="relative inline-flex items-center rounded-full p-1"
-          style={{ backgroundColor: 'rgba(27,56,40,0.05)', boxShadow: 'inset 2px 2px 5px rgba(27,56,40,0.10), inset -2px -2px 5px rgba(255,255,255,0.8)' }}
-        >
-          {/* the raised white thumb slides under the chosen side */}
-          <span
-            aria-hidden
-            className="absolute rounded-full"
-            style={{
-              top: 4, bottom: 4, left: 4, width: 'calc(50% - 4px)',
-              transform: cvPrivate ? 'translateX(100%)' : 'translateX(0)',
-              background: 'linear-gradient(180deg, #FFFFFF, #F8F4EB)',
-              boxShadow: 'inset 0 1px 0 #FFFFFF, 0 0 0 1px rgba(27,56,40,0.10), 0 4px 10px -4px rgba(27,56,40,0.35)',
-              transition: 'transform 220ms cubic-bezier(0.22,1,0.36,1)',
-            }}
-          />
-          <span className="relative grid grid-cols-2">
-            {segment(false)}
-            {segment(true)}
-          </span>
-        </div>
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        className="gv-acct-btn2"
+      >
+        <Settings size={17} strokeWidth={2.2} aria-hidden />
+        Settings
+      </button>
 
-        <button
-          ref={btnRef}
-          type="button"
-          onClick={() => setOpen((o) => !o)}
-          aria-haspopup="dialog"
-          aria-expanded={open}
-          aria-label="More privacy settings"
-          title="More privacy settings"
-          className="gv-acct-rim"
-          style={{ width: 36, height: 36 }}
-        >
-          <Settings2 size={16} strokeWidth={2.2} aria-hidden />
-        </button>
-
-        {hiddenCount > 0 && !cvPrivate && (
-          <span style={{ fontFamily: OUTFIT, fontSize: T.caption + 1, color: '#5A5046' }}>
-            <strong style={{ color: '#1C1410', fontVariantNumeric: 'tabular-nums' }}>{hiddenCount}</strong> hidden
-          </span>
-        )}
-      </div>
+      {hiddenCount > 0 && !cvPrivate && (
+        <span style={{ fontFamily: OUTFIT, fontSize: T.caption + 1, color: '#5A5046' }}>
+          <strong style={{ color: '#1C1410', fontVariantNumeric: 'tabular-nums' }}>{hiddenCount}</strong> hidden
+        </span>
+      )}
 
       {error && (
-        <p role="alert" style={{ fontFamily: OUTFIT, fontSize: T.caption + 1, fontWeight: 700, color: '#8B2020', margin: '8px 0 0' }}>
+        <p role="alert" className="basis-full" style={{ fontFamily: OUTFIT, fontSize: T.caption + 1, fontWeight: 700, color: '#8B2020', margin: 0 }}>
           {error}
         </p>
       )}
@@ -219,7 +190,7 @@ export default function CVPrivacyPanel({
           <div
             ref={popRef}
             role="dialog"
-            aria-label="Privacy settings"
+            aria-label="CV settings"
             className="rounded-[18px] p-3"
             style={{
               position: 'fixed', top: pos.top, left: pos.left, width: POP_W, zIndex: 9999,
@@ -228,85 +199,42 @@ export default function CVPrivacyPanel({
               boxShadow: '0 0 0 1px rgba(27,56,40,0.08), 0 18px 40px -10px rgba(27,56,40,0.30)',
             }}
           >
-            <label
-              className="flex items-center justify-between gap-3 rounded-[12px]"
-              style={{ padding: 10, cursor: saving || cvPrivate ? 'default' : 'pointer', opacity: cvPrivate ? 0.5 : 1 }}
-              title={cvPrivate ? 'Your CV is private, so nothing shows to visitors' : undefined}
-            >
-              <span className="inline-flex items-center gap-2.5" style={{ fontFamily: OUTFIT, fontSize: T.body, fontWeight: 600, color: '#1C1410' }}>
-                <Flag size={16} strokeWidth={2.2} style={{ color: '#5C5140' }} aria-hidden />
-                Show my nationality
-              </span>
-              <input
-                type="checkbox"
-                role="switch"
-                className="sr-only peer"
-                checked={!hideNationality}
-                disabled={saving || cvPrivate}
-                onChange={(e) => onChange({ hideNationality: !e.target.checked })}
-              />
-              <span
-                aria-hidden
-                className="relative flex-shrink-0 rounded-full peer-focus-visible:ring-2 peer-focus-visible:ring-[#B6871F]"
-                style={{ width: 40, height: 24, background: hideNationality ? 'rgba(154,138,120,0.45)' : '#1B3828', transition: 'background-color 180ms ease' }}
-              >
-                <span
-                  className="absolute rounded-full"
-                  style={{ top: 3, left: 3, width: 18, height: 18, background: '#FFFFFF', transform: hideNationality ? 'none' : 'translateX(16px)', transition: 'transform 180ms cubic-bezier(0.22,1,0.36,1)', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }}
-                />
-              </span>
-            </label>
+            <ToggleRow {...{
+              icon: Lock,
+              title: 'Make my CV private',
+              line: 'Only you, and organisers you apply to, can see it',
+              on: cvPrivate,
+              disabled: saving,
+              onToggle: (next) => onChange({ cvPrivate: next }),
+            }} />
 
-            {(() => {
-              const on = !!talentOpen;
-              const off = saving || cvPrivate || talentBusy || talentOpen === null;
-              return (
-                <div>
-                  <label
-                    className="flex items-start justify-between gap-3 rounded-[12px]"
-                    style={{ padding: 10, cursor: off ? 'default' : 'pointer', opacity: cvPrivate ? 0.5 : 1 }}
-                  >
-                    <span className="flex items-start gap-2.5 min-w-0">
-                      <Briefcase size={16} strokeWidth={2.2} style={{ color: '#5C5140', marginTop: 2, flexShrink: 0 }} aria-hidden />
-                      <span className="min-w-0">
-                        <span className="block" style={{ fontFamily: OUTFIT, fontSize: T.body, fontWeight: 600, color: '#1C1410' }}>
-                          Open to team roles
-                        </span>
-                        <span className="block" style={{ marginTop: 3, fontFamily: OUTFIT, fontSize: T.caption, color: '#6E5F4E', lineHeight: 1.45 }}>
-                          {cvPrivate
-                            ? 'Make your CV public to be found'
-                            : 'Conferences can find your chair and secretariat experience and invite you to apply. They never see your email. At most 3 invites a week.'}
-                        </span>
-                      </span>
-                    </span>
-                    <input
-                      type="checkbox"
-                      role="switch"
-                      className="sr-only peer"
-                      checked={on}
-                      disabled={off}
-                      aria-busy={talentBusy}
-                      onChange={(e) => { void changeTalent(e.target.checked); }}
-                    />
-                    <span
-                      aria-hidden
-                      className="relative flex-shrink-0 rounded-full peer-focus-visible:ring-2 peer-focus-visible:ring-[#B6871F]"
-                      style={{ width: 40, height: 24, marginTop: 1, background: on ? '#1B3828' : 'rgba(154,138,120,0.45)', transition: 'background-color 180ms ease' }}
-                    >
-                      <span
-                        className="absolute rounded-full"
-                        style={{ top: 3, left: 3, width: 18, height: 18, background: '#FFFFFF', transform: on ? 'translateX(16px)' : 'none', transition: 'transform 180ms cubic-bezier(0.22,1,0.36,1)', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }}
-                      />
-                    </span>
-                  </label>
-                  {talentError && (
-                    <p role="alert" style={{ margin: '0 10px 6px', fontFamily: OUTFIT, fontSize: T.caption, fontWeight: 700, color: '#8B2020', lineHeight: 1.45 }}>
-                      {talentError}
-                    </p>
-                  )}
-                </div>
-              );
-            })()}
+            <ToggleRow {...{
+              icon: Flag,
+              title: 'Hide my nationality',
+              line: cvPrivate ? 'Your CV is private, so nothing shows to visitors' : 'Your flag and country stay off your public CV',
+              on: hideNationality,
+              disabled: saving || cvPrivate,
+              dim: cvPrivate,
+              onToggle: (next) => onChange({ hideNationality: next }),
+            }} />
+
+            <ToggleRow {...{
+              icon: Briefcase,
+              title: 'Open to team roles',
+              line: cvPrivate
+                ? 'Make your CV public to be found'
+                : 'Conferences can see your chair and secretariat experience and invite you to apply. They never see your email. At most 3 invites a week. You need at least one conference on your MUN CV',
+              on: !!talentOpen,
+              disabled: saving || cvPrivate || talentBusy || talentOpen === null,
+              dim: cvPrivate,
+              busy: talentBusy,
+              onToggle: (next) => { void changeTalent(next); },
+            }} />
+            {talentError && (
+              <p role="alert" style={{ margin: '0 10px 6px', fontFamily: OUTFIT, fontSize: T.caption, fontWeight: 700, color: '#8B2020', lineHeight: 1.45 }}>
+                {talentError}
+              </p>
+            )}
 
             {!cvPrivate && publicHref && (
               <a
@@ -327,6 +255,47 @@ export default function CVPrivacyPanel({
           </div>
         </Portal>
       )}
-    </div>
+    </>
   );
 }
+
+/** One row of the panel: a title, one plain line under it and a switch. */
+function ToggleRow(args: {
+  icon: typeof Lock; title: string; line: string; on: boolean; disabled: boolean; dim?: boolean;
+  busy?: boolean; onToggle: (next: boolean) => void;
+}) {
+    const Icon = args.icon;
+    return (
+      <label
+        className="flex items-start justify-between gap-3 rounded-[12px]"
+        style={{ padding: 10, cursor: args.disabled ? 'default' : 'pointer', opacity: args.dim ? 0.5 : 1 }}
+      >
+        <span className="flex items-start gap-2.5 min-w-0">
+          <Icon size={16} strokeWidth={2.2} style={{ color: '#5C5140', marginTop: 2, flexShrink: 0 }} aria-hidden />
+          <span className="min-w-0">
+            <span className="block" style={{ fontFamily: OUTFIT, fontSize: T.body, fontWeight: 600, color: '#1C1410' }}>{args.title}</span>
+            <span className="block" style={{ marginTop: 3, fontFamily: OUTFIT, fontSize: T.caption, color: '#6E5F4E', lineHeight: 1.45 }}>{args.line}</span>
+          </span>
+        </span>
+        <input
+          type="checkbox"
+          role="switch"
+          className="sr-only peer"
+          checked={args.on}
+          disabled={args.disabled}
+          aria-busy={args.busy || undefined}
+          onChange={(e) => args.onToggle(e.target.checked)}
+        />
+        <span
+          aria-hidden
+          className="relative flex-shrink-0 rounded-full peer-focus-visible:ring-2 peer-focus-visible:ring-[#B6871F]"
+          style={{ width: 40, height: 24, marginTop: 1, background: args.on ? '#1B3828' : 'rgba(154,138,120,0.45)', transition: 'background-color 180ms ease' }}
+        >
+          <span
+            className="absolute rounded-full"
+            style={{ top: 3, left: 3, width: 18, height: 18, background: '#FFFFFF', transform: args.on ? 'translateX(16px)' : 'none', transition: 'transform 180ms cubic-bezier(0.22,1,0.36,1)', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }}
+          />
+        </span>
+      </label>
+    );
+  }

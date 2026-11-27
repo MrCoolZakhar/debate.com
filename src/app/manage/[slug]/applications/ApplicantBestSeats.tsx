@@ -12,7 +12,7 @@
 // Assign does not write from here. The assignment write path (pre-flight
 // seat check, seat number, the application flip, the allocation email and
 // the first-assign pop-up) lives inside the Assignment page component, so
-// Assign opens /manage/<slug>/assignment with ?person=<application id>.
+// Assign opens /manage/<slug>/allocations with ?person=<application id>.
 //
 // Reads happen when the section first mounts (the pop-up opening on
 // Overview): this person's application row, then the conference's
@@ -27,9 +27,9 @@ import { fitPercent, needyCommitteeIds, rankSeatsForPerson, spreadSocieties } fr
 import {
   type AcceptedApp, type CommitteeData, type Suggestion,
   CommitteeLogo, CountryFlag, SuggestionReasons, committeeLabels, committeeSeatLogo, fitColor, slotLogoUrl,
-} from '@/app/manage/[slug]/assignment/assignmentKit';
-import { CountryName } from '@/app/manage/[slug]/assignment/displayNames';
-import { GoldMarker } from '@/app/manage/[slug]/assignment/seatBoardShared';
+} from '@/app/manage/[slug]/allocations/assignmentKit';
+import { CountryName } from '@/app/manage/[slug]/allocations/displayNames';
+import { GoldMarker } from '@/app/manage/[slug]/allocations/seatBoardShared';
 import type { ApplicantApp } from './ApplicantDetail/data';
 import { C, OUTFIT } from './ApplicantDetail/kit';
 
@@ -119,7 +119,7 @@ function AssignLink({ href }: { href: string }) {
         boxShadow: '0 4px 12px rgba(27,56,40,0.22)',
       }}
     >
-      Assign
+      Allocate
     </Link>
   );
 }
@@ -194,7 +194,7 @@ export default function ApplicantBestSeats({ app, conferenceSlug, accessToken }:
 
   if (!shown) return null;
 
-  const boardHref = `/manage/${conferenceSlug}/assignment?person=${encodeURIComponent(app.id)}`;
+  const boardHref = `/manage/${conferenceSlug}/allocations?person=${encodeURIComponent(app.id)}`;
   const canAssign = app.status === 'accepted' && (loaded?.person.attending ?? true) !== false;
 
   // ── A seat the server holds while the row still reads 'accepted' ──
@@ -262,7 +262,7 @@ export default function ApplicantBestSeats({ app, conferenceSlug, accessToken }:
         <h3 style={titleStyle}>Best Seats</h3>
         {canAssign && (
           <Link href={boardHref} className="focus:outline-none" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: C.forest, textDecoration: 'underline' }}>
-            Open in Assignment
+            Open in Allocations
           </Link>
         )}
       </div>

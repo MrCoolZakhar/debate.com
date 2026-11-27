@@ -41,11 +41,14 @@ export interface UnlimitedDetail {
    *  'ambassador_permanent_<user_id>' rows). Derived once, here. Never shows
    *  a date, a renewal, a trial, a cancel or a Get Unlimited. */
   forever: boolean;
+  /** 'gift' when the plan came from a gift or promo code (gift_ / promo: rows), 'stripe' otherwise, null with no plan.
+   *  A label only (show "Gift" instead of "Trial"); it never changes how the status is resolved. */
+  source: 'gift' | 'stripe' | null;
 }
 
 export const NO_PLAN: UnlimitedDetail = {
   status: 'none', plan: null, current_period_end: null, on_stripe: false, renews: false,
-  cancel_at_period_end: false, can_cancel: false, can_resume: false, lapsed_plan: null, lapsed_at: null, forever: false,
+  cancel_at_period_end: false, can_cancel: false, can_resume: false, lapsed_plan: null, lapsed_at: null, forever: false, source: null,
 };
 
 export function parseUnlimitedDetail(data: unknown): UnlimitedDetail {
@@ -65,6 +68,7 @@ export function parseUnlimitedDetail(data: unknown): UnlimitedDetail {
     lapsed_plan: typeof a.lapsed_plan === 'string' ? a.lapsed_plan : null,
     lapsed_at: typeof a.lapsed_at === 'string' ? a.lapsed_at : null,
     forever: status !== 'none' && status !== 'trial' && end === null,
+    source: a.source === 'gift' || a.source === 'stripe' ? a.source : null,
   };
 }
 

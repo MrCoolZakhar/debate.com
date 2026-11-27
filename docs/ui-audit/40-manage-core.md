@@ -61,7 +61,7 @@ Dimensions: **Focal hierarchy · Border & depth · Iconography & imagery · Data
 | Uniqueness | **3** | Filter-pill row is standard; the per-status inline action morphing (reject textarea) is thoughtful. |
 **Verdict: 3.3 — the strongest of the three content pages; badges nearly right.**
 
-### `assignment/page.tsx`
+### `allocations/page.tsx`
 | Dim | Score | Note |
 |---|---|---|
 | Focal hierarchy | **4** | Suggestions strip → unassigned rail → committee board. Clear. |
@@ -114,7 +114,7 @@ Fix: Add small lucide icons to each field group; convert the mono "COMMITTEE COU
 
 ### P3 — polish
 
-**F7 · `assignment/page.tsx` — mono over-reach beyond micro-stamps**
+**F7 · `allocations/page.tsx` — mono over-reach beyond micro-stamps**
 Lines: committee panel title 827 (`fontSize:14 fontFamily:MONO`), mode toggle 1305–1325, chair tabs 1608–1621, numerous section eyebrows.
 Rule broken: mono is for "TINY stamps only"; a 14px panel title and tab labels aren't stamps.
 Fix: Move the panel title and the mode/chair tab labels to Outfit 700. Keep mono strictly for the numeric stamps (fill counts, scores, tier labels) where it genuinely earns the "stamp" role. Low priority — this page is otherwise exemplary; don't destabilise it.
@@ -131,7 +131,7 @@ The review panel shows nationality as text only; the assignment page proves flag
 ## 3. LEAVE-ALONE LIST (confirmed / challenged)
 
 - **Floating rail (`layout.tsx` SideRail)** — CONFIRMED exemplar. Glass, blur+saturate, hover-expand, saturated status pill, warm shadow. Do not touch. It is the reference the rest of the slice should be pulled toward.
-- **Assignment board (`assignment/page.tsx`)** — CONFIRMED exemplar. Drag-drop, urgency-sorted drop popup, flags, fill bars, tier medallions, fit scores. Best page in the app's management surface. Only nit: trim mono off the panel title/tabs (F7, P3) — otherwise hands-off.
+- **Assignment board (`allocations/page.tsx`)** — CONFIRMED exemplar. Drag-drop, urgency-sorted drop popup, flags, fill bars, tier medallions, fit scores. Best page in the app's management surface. Only nit: trim mono off the panel title/tabs (F7, P3) — otherwise hands-off.
 - **Applications role/status badges** — CONFIRMED good. These already implement the Pill pattern inline (saturated tint + border + Outfit). Use them as the in-slice template; do NOT revert them to mono.
 - **CHALLENGE — dashboard (`page.tsx`)** — do NOT leave alone. Despite being the landing route, it is the least authored surface here (2.4). It needs the biggest lift: a gradient hero checklist, step icons, a completion medallion, and conference imagery.
 

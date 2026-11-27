@@ -43,7 +43,7 @@ import { friendlyError, plainOrFallback } from '@/lib/friendlyError';
 import {
   POOL_MEMBER_SELECT, MemberAvatar,
   type PoolMember,
-} from '@/app/manage/[slug]/assignment/delegationShared';
+} from '@/app/manage/[slug]/allocations/delegationShared';
 import { SectionCard, OUTFIT, PaymentChipMark, derivePaymentChip, formatReleaseDate } from './shared';
 import { AppStatusMark } from './dashboardKit';
 

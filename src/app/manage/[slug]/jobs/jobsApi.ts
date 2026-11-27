@@ -342,3 +342,67 @@ export async function conferenceInvites(confId: string): Promise<{ ok: true; inv
 export function jobOnboardingLater(confId: string) {
   return call<Record<string, never>>('job_onboarding_later', { p_conf: confId }, 'We could not save that. Try again.');
 }
+
+// ── Prompt 72: who is behind a listing's numbers, and a person's whole CV ──
+
+export type ListingPersonStage = 'started' | 'not_a_match' | 'applied';
+export interface ListingPerson {
+  user_id: string;
+  name: string | null;
+  avatar_url: string | null;
+  nationality: string | null;
+  stage: ListingPersonStage;
+  /** Only when applied. */
+  application_id: string | null;
+  application_status: string | null;
+  at: string | null;
+}
+
+/** job_listing_people: the people who started, were not a match, or applied (newest first). Organisers only. */
+export function jobListingPeople(listingId: string) {
+  return call<{ people: ListingPerson[] }>('job_listing_people', { p_listing: listingId }, 'We could not load the people for this listing. Try again.')
+    .then((r) => (r.ok ? { ...r, people: Array.isArray(r.people) ? r.people : [] } : r));
+}
+
+export interface PublicCvEntry {
+  id: string;
+  entry_type: string | null;
+  conference_name: string | null;
+  committee: string | null;
+  allocation: string | null;
+  awards: string[] | null;
+  event_date: string | null;
+  source: string | null;
+}
+export interface PublicCv {
+  profile: { id: string; display_name: string | null; nationality: string | null; avatar_url: string | null } | null;
+  entries: PublicCvEntry[];
+  private: boolean;
+}
+
+/** get_public_cv(p_user_id): the person's public CV (privacy is enforced in the database). */
+export async function readPublicCv(userId: string): Promise<{ ok: true; cv: PublicCv } | Refusal> {
+  const fallback = 'We could not load this CV. Try again.';
+  try {
+    const client = await getFreshAuthedClient();
+    if (!client) return { ok: false, message: SIGNIN };
+    const { data, error } = await client.rpc('get_public_cv', { p_user_id: userId });
+    if (error) return { ok: false, message: friendlyError(error, fallback) };
+    const d = (data ?? null) as { profile?: PublicCv['profile']; entries?: PublicCvEntry[]; private?: boolean } | null;
+    return { ok: true, cv: { profile: d?.profile ?? null, entries: Array.isArray(d?.entries) ? d!.entries! : [], private: d?.private === true } };
+  } catch (e) {
+    return { ok: false, message: friendlyError(e, fallback) };
+  }
+}
+
+// ── Prompt 76: a listing's views and clicks, day by day ────────────────────
+export interface ListingDay { day: string; views: number; clicks: number }
+
+/** job_listing_daily: the last `days` days (oldest first), anonymous counts. Organisers only. */
+export function jobListingDaily(listingId: string, days = 30) {
+  return call<{ days: ListingDay[] }>('job_listing_daily', { p_listing: listingId, p_days: days }, 'We could not load the daily numbers for this listing. Try again.')
+    .then((r) => (r.ok ? {
+      ...r,
+      days: Array.isArray(r.days) ? r.days.map((d) => ({ day: String(d.day), views: Number(d.views ?? 0), clicks: Number(d.clicks ?? 0) })) : [],
+    } : r));
+}

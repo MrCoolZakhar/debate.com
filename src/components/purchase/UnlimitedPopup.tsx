@@ -19,7 +19,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { formatLongDate, manageErrorText, manageSubscription, notifyPlanChanged, useUnlimitedDetail } from '@/lib/subscriptionManage';
 import Link from 'next/link';
-import { BarChart3, Bell, BookOpen, Briefcase, Infinity as InfinityIcon, Loader2, Archive, Rocket } from 'lucide-react';
+import { BarChart3, Bell, BookOpen, Infinity as InfinityIcon, Loader2, Archive, Rocket } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { Emoji3D } from '@/components/neu';
 import { openAuth } from '@/lib/authModal';
@@ -31,6 +31,7 @@ import { waitForUnlimited } from '@/lib/unlimitedStatus';
 import { formatPlanDate, useMySubscription } from '@/lib/mySubscription';
 import { refreshCreditsEverywhere } from '@/hooks/useCredits';
 import { notifyOk } from '@/lib/appNotify';
+import { useRunningSale } from '@/lib/storeSale';
 import { StripeEmbeddedForm } from './StripeEmbedded';
 import { BenefitList, BrandTitle, ErrorLine, Eyebrow, GOLD, GoldButton, PurchaseShell, SwapLine, type Benefit } from './purchaseKit';
 
@@ -40,16 +41,20 @@ import { BenefitList, BrandTitle, ErrorLine, Eyebrow, GOLD, GoldButton, Purchase
 const BENEFITS: Benefit[] = [
   { emoji: 'Infinity', fallback: InfinityIcon, title: 'Apply to as many conferences as you like', live: true },
   { emoji: 'Books', fallback: BookOpen, title: 'Premium MUN guides', live: true },
-  { emoji: 'File cabinet', fallback: Archive, title: 'Your MUN archive', live: false },
   { emoji: 'Rocket', fallback: Rocket, title: 'Your applications show first to organizers', live: true },
-  { emoji: 'Bar chart', fallback: BarChart3, title: "Insights on every role: who's applying and how fast it fills", live: true },
-  { emoji: 'Bell', fallback: Bell, title: 'Job alerts by email when new roles match', live: true },
-  { emoji: 'Briefcase', fallback: Briefcase, title: 'Premium-only roles on the Job Board', live: true },
+  { emoji: 'Bar chart', fallback: BarChart3, title: 'Advanced insights on Job Board roles', live: true },
+  { emoji: 'Bell', fallback: Bell, title: 'Job alerts for role listings', live: true },
+  { emoji: 'File cabinet', fallback: Archive, title: 'Your MUN archive', live: false },
 ];
 
-// Seven benefit lines since 20 Oct 2026 (the Job Board perks): a tighter list
-// so the pop-up still fits 1280 x 800 with no scroll and no captions (owner
-// rule, 25 Sep 2026). Scoped to this pop-up; the kit is unchanged elsewhere.
+// Six benefit lines (prompt 71: the premium-only roles line removed, the archive
+// last with its Soon tag): a tighter list so the pop-up still fits 1280 x 800
+// with no scroll and no captions (owner rule, 25 Sep 2026). Scoped to this
+// pop-up; the kit is unchanged elsewhere.
+// Buy mode (prompt 71): on desktop the plan choice and pay block sit centred
+// in the right panel. Auto margins on the first and last child centre it and
+// fall back to 0 when the panel is taller than the pop-up, so it still scrolls
+// and the top is never clipped. Phones (stacked) stay top-aligned.
 // Resume mode: the benefits a touch more prominent, and the one sentence-case button.
 const RESUME_CSS = `
 [data-testid="unlimited-popup"] .gv-buy-left{gap:16px}
@@ -62,6 +67,10 @@ const RESUME_CSS = `
 .gv-buy-benefits-hl .gv-buy-benefit-text{color:#FFFFFF;font-size:16px!important;font-weight:700}
 .gv-buy-benefits-hl .gv-buy-benefits{gap:11px}
 [data-testid="unlimited-resume"]{text-transform:none;letter-spacing:0.01em}
+@media (min-width:860px){
+  [data-testid="unlimited-popup"] .gv-un-center>:first-child{margin-top:auto}
+  [data-testid="unlimited-popup"] .gv-un-center>:last-child{margin-bottom:auto}
+}
 `;
 
 export default function UnlimitedPopup({ request }: { request: UnlimitedPopupRequest }) {
@@ -71,6 +80,12 @@ export default function UnlimitedPopup({ request }: { request: UnlimitedPopupReq
   const price = unlimitedPricing(null);
   const monthlyCents = Math.round(price.monthly * 100);
   const yearlyCents = Math.round(price.yearly * 100);
+  // Motion to Save (prompt 87): the first year of the yearly plan at the sale
+  // price. Display only: create-subscription-checkout reads the same sale and
+  // charges it; nothing about the price is sent from here. Never on renewOnce.
+  const sale = useRunningSale();
+  const saleFirst = sale?.unlimited_year_first_cents ?? null;
+  const firstYearCents = !renewOnce && saleFirst !== null && saleFirst < yearlyCents ? saleFirst : null;
 
   const [plan, setPlan] = useState<UnlimitedPlan>(request.plan ?? 'yearly');
   const [stage, setStage] = useState<'choose' | 'pay'>('choose');
@@ -113,7 +128,7 @@ export default function UnlimitedPopup({ request }: { request: UnlimitedPopupReq
   }
 
   const effectivePlan: UnlimitedPlan = renewOnce ? 'yearly' : plan;
-  const amountCents = effectivePlan === 'monthly' ? monthlyCents : yearlyCents;
+  const amountCents = effectivePlan === 'monthly' ? monthlyCents : (firstYearCents ?? yearlyCents);
 
   async function pay() {
     if (busy) return;
@@ -190,7 +205,10 @@ export default function UnlimitedPopup({ request }: { request: UnlimitedPopupReq
 
       {/* Resume mode: the title, the line and the button sit in the middle of
           the panel, not stuck to its top (26 Sep 2026). */}
-      <div className="gv-buy-right" style={resumeMode || forever ? { justifyContent: 'center' } : undefined}>
+      <div
+        className={`gv-buy-right${!resumeMode && !forever && !signedOut && !checkingPlan && !alreadyOn && !(stage === 'pay' && checkout) ? ' gv-un-center' : ''}`}
+        style={resumeMode || forever ? { justifyContent: 'center' } : undefined}
+      >
         {forever ? (
           <>
             <h3 className="gv-buy-rtitle">You have Unlimited forever</h3>
@@ -230,7 +248,9 @@ export default function UnlimitedPopup({ request }: { request: UnlimitedPopupReq
             <div className="gv-buy-change">
               <span>
                 <strong>Unlimited, {checkout.plan === 'monthly' ? 'monthly' : 'yearly'}</strong> for <strong>{formatUsd(amountCents)}</strong>
-                {checkout.recurring ? (checkout.plan === 'monthly' ? ' a month' : ' a year') : ', once'}
+                {checkout.recurring
+                  ? (checkout.plan === 'monthly' ? ' a month' : firstYearCents !== null ? ' for your first year' : ' a year')
+                  : ', once'}
               </span>
               <button type="button" className="gv-buy-changebtn" onClick={() => { setStage('choose'); setCheckout(null); }}>Change</button>
             </div>
@@ -264,9 +284,22 @@ export default function UnlimitedPopup({ request }: { request: UnlimitedPopupReq
               <button type="button" role="radio" aria-checked={plan === 'yearly'} className="gv-buy-plan" onClick={() => { setPlan('yearly'); setErr(''); }}>
                 <span className="gv-buy-plan-badge">2 months free</span>
                 <span className="gv-buy-plan-name">Yearly</span>
-                <span className="gv-buy-plan-price">{formatUsd(yearlyCents)}</span>
-                <span className="gv-buy-plan-per">a year</span>
-                <span className="gv-buy-plan-note">{formatUsd(Math.round(yearlyCents / 12))} a month, paid once a year</span>
+                {firstYearCents !== null ? (
+                  <>
+                    <span className="gv-buy-plan-price">
+                      {formatUsd(firstYearCents)}{' '}
+                      <s style={{ fontSize: '0.55em', fontWeight: 600, opacity: 0.6 }} aria-label={`normally ${formatUsd(yearlyCents)}`}>{formatUsd(yearlyCents)}</s>
+                    </span>
+                    <span className="gv-buy-plan-per">your first year</span>
+                    <span className="gv-buy-plan-note">First year, then {formatUsd(yearlyCents)} a year</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="gv-buy-plan-price">{formatUsd(yearlyCents)}</span>
+                    <span className="gv-buy-plan-per">a year</span>
+                    <span className="gv-buy-plan-note">{formatUsd(Math.round(yearlyCents / 12))} a month, paid once a year</span>
+                  </>
+                )}
               </button>
               <button type="button" role="radio" aria-checked={plan === 'monthly'} className="gv-buy-plan" onClick={() => { setPlan('monthly'); setErr(''); }}>
                 <span className="gv-buy-plan-name">Monthly</span>
@@ -276,12 +309,16 @@ export default function UnlimitedPopup({ request }: { request: UnlimitedPopupReq
               </button>
             </div>
             <p className="gv-buy-renew">
-              Renews {plan === 'yearly' ? 'every year' : 'every month'} until you cancel. <strong>Cancel any time</strong> and keep Unlimited until the end of the period you paid for.
+              {plan === 'yearly' && firstYearCents !== null
+                ? <>Renews every year at {formatUsd(yearlyCents)} until you cancel. <strong>Cancel any time</strong> and keep Unlimited until the end of the period you paid for.</>
+                : <>Renews {plan === 'yearly' ? 'every year' : 'every month'} until you cancel. <strong>Cancel any time</strong> and keep Unlimited until the end of the period you paid for.</>}
             </p>
             {trialLine}
             {err ? <ErrorLine>{err}</ErrorLine> : null}
             <GoldButton onClick={pay} busy={busy} busyText="PREPARING YOUR PAYMENT…" testId="unlimited-pay">
-              {plan === 'yearly' ? `PAY ${formatUsd(yearlyCents)} A YEAR` : `PAY ${formatUsd(monthlyCents)} A MONTH`}
+              {plan === 'yearly'
+                ? (firstYearCents !== null ? `PAY ${formatUsd(firstYearCents)} FOR YOUR FIRST YEAR` : `PAY ${formatUsd(yearlyCents)} A YEAR`)
+                : `PAY ${formatUsd(monthlyCents)} A MONTH`}
             </GoldButton>
             {busy && !EMBEDDED_CHECKOUT_AVAILABLE ? <p className="gv-buy-wait"><Loader2 size={15} className="animate-spin" aria-hidden /> Taking you to Stripe…</p> : null}
             <SwapLine lead="Looking for credits?" action="Top up here" onClick={() => swapToCredits('header')} />

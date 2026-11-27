@@ -144,7 +144,7 @@ export default function SubscriptionPage() {
             ))}
           </ul>
           <p style={{ margin: '22px 0 0', fontFamily: OUTFIT, fontSize: T.body, color: 'rgba(250,248,243,0.85)' }}>
-            <TextLink href="/pricing/subscription" onDark>Find out more</TextLink>
+            <TextLink href="/store/credits?plan=unlimited" onDark>Find out more</TextLink>
           </p>
         </ForestCard>
       </div>
@@ -237,8 +237,10 @@ function PlanBlock({ sub, detail, portalBusy, resumeBusy, onPortal, onCancel, on
   } else if (detail.status === 'trial') {
     body = (
       <>
-        {title('Unlimited, trial')}
-        {line(date ? `Your trial ends on ${date}. It does not renew, so there is nothing to cancel.` : 'Your trial does not renew, so there is nothing to cancel.')}
+        {title(detail.source === 'gift' ? 'Unlimited, gift' : 'Unlimited, trial')}
+        {line(detail.source === 'gift'
+          ? (date ? `Your gift ends on ${date}. It does not renew, so there is nothing to cancel.` : 'Your gift does not renew, so there is nothing to cancel.')
+          : (date ? `Your trial ends on ${date}. It does not renew, so there is nothing to cancel.` : 'Your trial does not renew, so there is nothing to cancel.'))}
         <div className="mt-5">
           <PrimaryButton onClick={() => openUnlimitedPopup()}>Get Unlimited</PrimaryButton>
         </div>

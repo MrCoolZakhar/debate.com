@@ -193,7 +193,7 @@ export default function JobPromoteCarousel({ listings, canPromote, promoteOpen, 
           {listings.map((l) => <li key={l.id} className="gv-jpc-swipe-cell">{slot(l)}</li>)}
         </ul>
       ) : (
-        <div className="gv-jpc-frame">
+        <div className={`gv-jpc-frame${sliding ? ' gv-jpc-frame-arrows' : ''}`}>
           {sliding && (
             <button type="button" className="gv-jpc-arrow gv-jpc-prev" onClick={prev} aria-label="Previous listings">
               <ChevronLeft size={18} strokeWidth={2.4} aria-hidden />
@@ -235,6 +235,9 @@ export default function JobPromoteCarousel({ listings, canPromote, promoteOpen, 
 
 const CSS = `
 .gv-jpc-frame{position:relative}
+/* With arrows the track is inset by an arrow plus a gap on each side and the
+   arrows sit in that gutter, so no arrow ever covers a card (prompt 75). */
+.gv-jpc-frame-arrows{padding:0 46px}
 .gv-jpc-viewport{overflow:hidden;padding:4px 2px 10px;margin:-4px -2px -10px}
 .gv-jpc-track{display:flex;width:100%;align-items:stretch}
 .gv-jpc-anim{transition:transform 420ms cubic-bezier(0.22,1,0.36,1)}
@@ -252,8 +255,8 @@ const CSS = `
 .gv-jpc-btn{width:100%;margin-top:auto}
 .gv-jpc-arrow{position:absolute;top:50%;z-index:2;width:36px;height:36px;margin-top:-18px;border-radius:9999px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;color:${FOREST};
   background:linear-gradient(180deg,#FFFFFF 0%,#F2EDE2 100%);border:1px solid rgba(27,56,40,0.16);box-shadow:inset 0 1px 0 #FFFFFF,0 2px 6px rgba(27,56,40,0.14)}
-.gv-jpc-prev{left:-14px}
-.gv-jpc-next{right:-14px}
+.gv-jpc-prev{left:0}
+.gv-jpc-next{right:0}
 .gv-jpc-arrow:focus{outline:none}
 .gv-jpc-arrow:focus-visible{outline:2px solid ${FOREST};outline-offset:2px}
 .gv-jpc-swipe{list-style:none;margin:0 -4px;padding:4px 4px 10px;display:flex;gap:${GAP}px;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none}

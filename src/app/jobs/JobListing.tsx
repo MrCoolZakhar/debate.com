@@ -28,12 +28,13 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ChevronLeft, Bookmark, BookmarkCheck, Check, ExternalLink, ListChecks, Loader2, Mail, Share2, X } from 'lucide-react';
+import { ChevronLeft, Bookmark, BookmarkCheck, Check, ExternalLink, ListChecks, Loader2, Mail, Share2 } from 'lucide-react';
 import ShareCardPopup from './ShareCardPopup';
 import MoreFromConference from './MoreFromConference';
 import { useAuth } from '@/components/AuthProvider';
 import { isUnlimited, useUnlimitedStatus } from '@/lib/unlimitedStatus';
 import { openAuth } from '@/lib/authModal';
+import ProfileLink from '@/components/ProfileLink';
 import { notifyErr } from '@/lib/appNotify';
 import {
   fetchJobListing, jobAppliesOutside, jobContinuePath, recordJobEvent, saveJob,
@@ -67,6 +68,15 @@ function writePending(p: PendingAction | null) {
   } catch { /* storage off: the person presses again after signing in */ }
 }
 
+/** Queue this listing's own Apply: the listing runs it as soon as it is open
+ *  and signed in, exactly as after a sign-in (the invite pop-up's Apply now). */
+export function requestJobApply(id: string) {
+  writePending({ id, action: 'apply' });
+  // A listing already open hears it and carries on at once.
+  try { window.dispatchEvent(new CustomEvent(APPLY_REQUESTED_EVENT, { detail: { id } })); } catch { /* the pending action waits */ }
+}
+const APPLY_REQUESTED_EVENT = 'gavelling-job-apply-requested';
+
 function shortDay(iso: string | null | undefined): string | null {
   if (!iso) return null;
   const d = new Date(iso);
@@ -90,7 +100,8 @@ export default function JobListing({
   /** Saved or applied state changed: the page reads job_my() again. */
   onChanged?: () => void;
   /** This visit came from an invite (prompt 11): "<short> invited you to apply". */
-  inviteNote?: { short: string; message: string | null } | null;
+  /** Opened from an invite: one small line, the note having been shown in the invite pop-up. */
+  inviteNote?: { short: string; by: string | null; avatar?: string | null; byId?: string | null } | null;
   /** Opens another listing in this pane (More from this conference). */
   onSelectListing?: (id: string) => void;
   /** Closes the listing and shows the board (See all roles on an unavailable listing). */
@@ -202,6 +213,14 @@ export default function JobListing({
     void load(true);
   }, [member, lockedRead, id, planStatus, load]);
 
+  // A queued Apply (the invite pop-up) for the listing already on screen: look again.
+  const [pendingTick, setPendingTick] = useState(0);
+  useEffect(() => {
+    const onRequest = (e: Event) => { if ((e as CustomEvent<{ id?: string }>).detail?.id === id) setPendingTick((n) => n + 1); };
+    window.addEventListener(APPLY_REQUESTED_EVENT, onRequest);
+    return () => window.removeEventListener(APPLY_REQUESTED_EVENT, onRequest);
+  }, [id]);
+
   // After signing in, the action pressed while signed out carries on.
   useEffect(() => {
     if (!userId || !detail || detail.listing.id !== id) return;
@@ -214,7 +233,7 @@ export default function JobListing({
       recordJobEvent(id, 'click');
       setApplyOpen(true);
     }
-  }, [userId, detail, id, toggleSave]);
+  }, [userId, detail, id, toggleSave, pendingTick]);
 
   if (!card && failed) {
     return (
@@ -267,8 +286,6 @@ export default function JobListing({
     primary = <span className="gv-jl-main gv-jl-main-wait" aria-hidden><Loader2 size={17} className="animate-spin" /></span>;
   } else if (mine?.status === 'started' && slug) {
     primary = <Link href={jobContinuePath(slug, listing.role, listing.id)} className="gv-jl-main">Continue application</Link>;
-  } else if (mine?.status === 'stopped') {
-    primary = <span className="gv-jl-state"><X size={16} strokeWidth={2.6} aria-hidden /> Not a match for this role</span>;
   } else if (mine && (mine.status === 'submitted' || mine.status === 'accepted' || mine.status === 'rejected')) {
     const lead = mine.status === 'accepted' ? 'Accepted. ' : mine.status === 'rejected' ? 'Not accepted this time. ' : '';
     primary = (
@@ -318,6 +335,9 @@ export default function JobListing({
   const about = detail?.conference_about ?? null;
   const poster = detail?.poster ?? null;
   const qCount = listing?.questions_count ?? 0;
+  // The side column (Posted by, the question count). One condition: it renders
+  // the aside and, when false, lets About the Conference take the side area.
+  const hasAside = !!(poster?.name || (qCount > 0 && open && !outside && !premiumLocked));
 
   return (
     <article className="gv-jl" style={{ fontFamily: FONT }} aria-label={card.title}>
@@ -332,14 +352,15 @@ export default function JobListing({
       {onBack && <BackLink onBack={onBack} />}
 
       {inviteNote && (
-        <div className="gv-jl-invite" role="note">
-          <Mail size={16} strokeWidth={2.4} aria-hidden style={{ flexShrink: 0, marginTop: 2 }} />
-          <div style={{ minWidth: 0 }}>
-            <p style={{ margin: 0, fontSize: 14.5, fontWeight: 700, color: INK, overflowWrap: 'anywhere' }}>{inviteNote.short} invited you to apply</p>
-            {inviteNote.message?.trim() && (
-              <p style={{ margin: '3px 0 0', fontSize: 14, fontStyle: 'italic', color: INK_SOFT, whiteSpace: 'pre-line', overflowWrap: 'anywhere' }}>&ldquo;{inviteNote.message.trim()}&rdquo;</p>
-            )}
-          </div>
+        <div className="gv-jl-invite" role="note" style={{ alignItems: 'center' }}>
+          {inviteNote.by ? (
+            <ProfileLink userId={inviteNote.byId ?? null} name={inviteNote.by} style={{ display: 'inline-flex', borderRadius: 9999, flexShrink: 0 }}>
+              <Avatar name={inviteNote.by} src={inviteNote.avatar ?? null} size={28} />
+            </ProfileLink>
+          ) : <Mail size={16} strokeWidth={2.4} aria-hidden style={{ flexShrink: 0 }} />}
+          <p style={{ margin: 0, minWidth: 0, fontSize: 14, fontWeight: 600, color: INK, overflowWrap: 'anywhere' }}>
+            Invited by {inviteNote.by || 'the organizers'} at {inviteNote.short}
+          </p>
         </div>
       )}
 
@@ -385,7 +406,7 @@ export default function JobListing({
       {loading && !detail ? (
         <BodySkeleton />
       ) : (
-        <div className="gv-jl-body">
+        <div className={`gv-jl-body${hasAside ? '' : ' gv-jl-body-noside'}`}>
           {premiumLocked ? (
             <PremiumLock className="gv-jl-main-col gv-jl-a-role" />
           ) : (
@@ -400,7 +421,7 @@ export default function JobListing({
             </section>
           )}
 
-          {(poster?.name || (qCount > 0 && open && !outside && !premiumLocked)) && (
+          {hasAside && (
             <aside className="gv-jl-side gv-jl-a-side">
               {poster?.name && (
                 <section className="gv-jl-card gv-jl-side-card">
@@ -439,7 +460,7 @@ export default function JobListing({
           ) : about && (about.about?.trim() || about.slug) ? (
             <section className="gv-jl-card gv-jl-a-conf">
               <h3 className="gv-jl-h gv-jl-h-sm">About the Conference</h3>
-              {about.about?.trim() && <p className="gv-jl-text gv-jl-text-sm">{about.about}</p>}
+              {about.about?.trim() && <AboutText text={about.about} />}
               {about.slug && (
                 <Link href={`/conferences/${encodeURIComponent(about.slug)}`} className="gv-jl-link" style={{ marginTop: about.about?.trim() ? 12 : 0 }}>
                   See the conference page
@@ -478,16 +499,63 @@ function BackLink({ onBack }: { onBack: () => void }) {
   );
 }
 
-function Avatar({ name, src }: { name: string; src: string | null }) {
+export function Avatar({ name, src, size = 56 }: { name: string; src: string | null; size?: number }) {
   const [broken, setBroken] = useState(false);
   const initials = name.trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
   return src && !broken ? (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={src} alt="" width={56} height={56} onError={() => setBroken(true)} style={{ width: 56, height: 56, borderRadius: 9999, objectFit: 'cover', flexShrink: 0, border: '2px solid #FFFFFF', boxShadow: '0 3px 10px rgba(27,56,40,0.14)' }} />
+    <img src={src} alt="" width={size} height={size} onError={() => setBroken(true)} style={{ width: size, height: size, borderRadius: 9999, objectFit: 'cover', flexShrink: 0, border: '2px solid #FFFFFF', boxShadow: '0 3px 10px rgba(27,56,40,0.14)' }} />
   ) : (
-    <span aria-hidden style={{ width: 56, height: 56, borderRadius: 9999, flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(238,217,138,0.55)', color: '#4A3410', fontSize: 17, fontWeight: 800 }}>
+    <span aria-hidden style={{ width: size, height: size, borderRadius: 9999, flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(238,217,138,0.55)', color: '#4A3410', fontSize: Math.round(size * 0.3), fontWeight: 800 }}>
       {initials}
     </span>
+  );
+}
+
+/** The listing read caps a conference's description at 600 characters
+ *  (job_listing_get). A capped text is trimmed back to its last whole sentence,
+ *  or its last whole word, so it never stops mid-word or mid-name. */
+const ABOUT_CAP = 600;
+function wholeAbout(raw: string): string {
+  const t = raw.trim();
+  if (raw.length < ABOUT_CAP) return t;
+  const sentence = Math.max(t.lastIndexOf('. '), t.lastIndexOf('! '), t.lastIndexOf('? '));
+  if (sentence > ABOUT_CAP * 0.6) return t.slice(0, sentence + 1);
+  const space = t.lastIndexOf(' ');
+  const cut = (space > 0 ? t.slice(0, space) : t).replace(/[\s(,;:\-]+$/, '');
+  return `${cut}…`;
+}
+
+/** About the Conference (prompt 83): whole when short; long, about 6 lines with
+ *  a soft fade and "Read more" that opens it in place ("Show less" folds it). */
+function AboutText({ text }: { text: string }) {
+  const body = wholeAbout(text);
+  const ref = useRef<HTMLParagraphElement | null>(null);
+  const [long, setLong] = useState(false);
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => {
+      if (open) return;
+      const next = el.scrollHeight - el.clientHeight > 2;
+      setLong((v) => (v === next ? v : next));
+    };
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [open, body]);
+  return (
+    <>
+      <p ref={ref} className={`gv-jl-text gv-jl-text-sm${open ? '' : ' gv-jl-about-clamp'}${long && !open ? ' gv-jl-about-fade' : ''}`}>{body}</p>
+      {(long || open) && (
+        <div style={{ marginTop: 8 }}>
+          <button type="button" className="gv-jl-link" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+            {open ? 'Show less' : 'Read more'}
+          </button>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -562,20 +630,29 @@ const LISTING_CSS = `
 .gv-jl-a-role{grid-area:role}
 .gv-jl-a-side{grid-area:side}
 .gv-jl-a-conf{grid-area:conf}
-@media (min-width:1100px){.gv-jl-body{grid-template-columns:minmax(0,1fr) minmax(260px,340px);grid-template-areas:"role side" "conf side";grid-template-rows:auto 1fr;align-items:start}}
+@media (min-width:1100px){
+  .gv-jl-body{grid-template-columns:minmax(0,1fr) minmax(260px,340px);grid-template-areas:"role side" "conf side";grid-template-rows:auto 1fr;align-items:start}
+  .gv-jl-body-noside{grid-template-areas:"role conf";grid-template-rows:auto}
+  .gv-jl-a-side{align-self:stretch}
+  .gv-jl-a-side>:last-child{flex:1 1 auto}
+  .gv-jl-a-side>.gv-jl-qcount:last-child{flex-wrap:wrap;align-content:flex-start}
+  .gv-jl-a-side>.gv-jl-qcount:last-child>p{flex:1 1 0;min-width:0}
+}
 .gv-jl-side{display:flex;flex-direction:column;gap:16px;min-width:0}
 .gv-jl-side-card{padding:26px 26px}
 .gv-jl-h{margin:0 0 12px;font-size:19px;font-weight:800;letter-spacing:-0.01em;color:${INK}}
 .gv-jl-h-sm{font-size:16px;margin-bottom:10px}
 .gv-jl-text{margin:0;font-size:15.5px;line-height:1.65;color:#2E271F;white-space:pre-line;overflow-wrap:anywhere;max-width:75ch}
 .gv-jl-text-sm{font-size:14.5px;line-height:1.6}
+.gv-jl-about-clamp{max-height:calc(1.6em * 6);overflow:hidden}
+.gv-jl-about-fade{-webkit-mask-image:linear-gradient(to bottom,#000 65%,transparent 100%);mask-image:linear-gradient(to bottom,#000 65%,transparent 100%)}
 .gv-jl-link{display:inline-flex;align-items:center;gap:5px;background:none;border:none;padding:0;cursor:pointer;font-family:${FONT};font-size:14.5px;font-weight:700;color:${INK};text-decoration:underline;text-underline-offset:3px}
 .gv-jl-link:hover{color:${FOREST}}
 .gv-jl-qcount{display:flex;align-items:center;gap:14px}
 .gv-jl-qicon{width:46px;height:46px;border-radius:9999px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;color:${FOREST};background:linear-gradient(180deg,#FFFFFF 0%,#F2EDE2 100%);border:1px solid rgba(27,56,40,0.16);box-shadow:inset 0 1px 0 #FFFFFF,0 2px 6px rgba(27,56,40,0.14)}
 .gv-jl-back{align-self:flex-start;display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 4px;background:none;border:none;cursor:pointer;font-family:${FONT};font-size:15px;font-weight:700;color:${INK}}
 .gv-jl-bar{position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:-80px;min-height:64px;padding:8px 10px 8px 20px;border-radius:16px;
-  background:rgba(255,255,255,0.96);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1.5px solid rgba(27,56,40,0.35);box-shadow:0 2px 4px rgba(27,56,40,0.1),0 10px 26px rgba(27,56,40,0.22);
+  background:rgba(255,255,255,0.96);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid var(--gv-main, ${FOREST});box-shadow:0 2px 4px rgba(27,56,40,0.1),0 10px 26px rgba(27,56,40,0.22);
   opacity:0;transform:translateY(-8px);pointer-events:none;transition:opacity 180ms ease,transform 220ms cubic-bezier(0.22,1,0.36,1)}
 .gv-jl-bar-page{top:calc(8px + env(safe-area-inset-top,0px))}
 .gv-jl-bar-on{opacity:1;transform:none;pointer-events:auto}

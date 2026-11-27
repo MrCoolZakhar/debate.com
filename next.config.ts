@@ -85,9 +85,13 @@ const nextConfig: NextConfig = {
       { source: '/account/manage', destination: '/account/manage/credits', permanent: true },
       // The conference calendar became My conferences (26 Sep 2026).
       { source: '/account/calendar', destination: '/account/conferences', permanent: false },
-      { source: '/account/unlimited', destination: '/pricing/subscription', permanent: true },
+      { source: '/account/unlimited', destination: '/store/credits?plan=unlimited', permanent: true },
       { source: '/my-conferences', destination: '/account/conferences', permanent: true },
-      { source: '/pricing', destination: '/pricing/credits', permanent: true },
+      // Pricing became the Store (prompt 85, 27 Nov 2026). A redirect cannot carry a hash, so
+      // Unlimited is ?plan=unlimited (prompt 86 scrolls to it); ?renew=once rides along.
+      { source: '/pricing', destination: '/store/credits', permanent: true },
+      { source: '/pricing/credits', destination: '/store/credits', permanent: true },
+      { source: '/pricing/subscription', destination: '/store/credits?plan=unlimited', permanent: true },
       // The conference map is archived (src/app/_archive/conferences-map, 25 Sep 2026).
       { source: '/conferences/map', destination: '/conferences/explore', permanent: false },
       // Financial aid moved inside Financials (9 Oct 2026). The query is kept;
@@ -97,6 +101,9 @@ const nextConfig: NextConfig = {
       // into /manage/<slug>/team. The query string is carried over (?promote=,
       // ?highlight=<organizer id>); the Team page reads its tab from any tab value.
       { source: '/manage/:slug/jobs', destination: '/manage/:slug/team?tab=jobs', permanent: false },
+      // Assignment became Allocations (owner, 26 Nov 2026); the query string carries over (?pay=unpaid and the like).
+      { source: '/manage/:slug/assignment', destination: '/manage/:slug/allocations', permanent: true },
+      { source: '/manage/:slug/assignment/:path*', destination: '/manage/:slug/allocations/:path*', permanent: true },
       { source: '/manage/:slug/settings', has: [{ type: 'query', key: 'tab', value: '(team|organizers)' }], destination: '/manage/:slug/team?tab=members', permanent: false },
       { source: '/manage/:slug/settings', has: [{ type: 'query', key: 'highlight' }], destination: '/manage/:slug/team?tab=members', permanent: false },
       // The software comparison moved to its 2027 edition (14 Nov 2026); the

@@ -5,14 +5,11 @@ import { NEU, OUTFIT } from '@/components/neu';
 import Portal from '@/components/Portal';
 
 // The CHAIR PASSWORD (13 Oct 2026: shown and copied as the 4 digits of chairJoinSuffix
-// alone, no longer as "{session code}-{suffix}"; the join page asks for exactly that) for a
-// committee whose dais
-// is OPEN: no chair account on it yet (conference_committees.chair_user_ids is
-// empty). Since 28 Oct 2026 (owner) a pending chair invite or an imported chair
-// who has not made an account no longer closes it: invited is not joined. On an
-// open dais the join page lets chairs in with this code exactly like a
-// standalone session, and nothing else under /manage shows it, so without this
-// chip nobody could chair the room.
+// alone, no longer as "{session code}-{suffix}"; the join page asks for exactly that).
+// Since 26 Nov 2026 (owner) it is shown for every conference room: session_join_rules
+// answers chairs_open true for a conference room, so the password works even with
+// chairs seated (an emergency or last-minute chair). Chairs seated with their
+// Gavelling account still go in without it. Nothing else under /manage shows it.
 //
 // Open or gated is decided by the server's own `session_join_rules(p_code)`
 // (its `chairs_open`), the same RPC the join page reads, so this chip can never
@@ -23,12 +20,13 @@ import Portal from '@/components/Portal';
 type Client = ReturnType<typeof getAuthedClient>;
 
 const EASE = 'cubic-bezier(0.22,1,0.36,1)';
-const HINT = 'Chairs use this until a chair has joined this committee with their Gavelling account. Invited chairs who have not accepted yet still need it. Share it only with your chairs.';
+const HINT = 'Chairs seated in this committee with their Gavelling account go in without it. Anyone else who needs to chair, for example a last-minute chair, uses this password. Share it only with your chairs.';
 const FOCUS = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]/40';
 
 /** One batched pass for the whole grid: one `committees` read for every
  *  suffix, then `session_join_rules` per session in parallel. Returns the chair
- *  password (the 4-digit suffix) keyed by conference_committees.id, for open daises only. */
+ *  password (the 4-digit suffix) keyed by conference_committees.id, wherever session_join_rules
+ *  says chairs_open (every conference room since 26 Nov 2026). */
 export async function loadOpenDaisChairCodes(
   supabase: Client,
   rows: { id: string; session_id: string | null }[],

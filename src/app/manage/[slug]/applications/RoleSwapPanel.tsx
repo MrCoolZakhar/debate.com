@@ -9,10 +9,67 @@
 //   confirm   "Accept {name} as {role}?", one line per thing removed, then
 //             "Accept and remove {old role}" and Cancel
 // The caller owns every write (roleSwap.ts); this file only draws and asks.
+//
+// Prompt 80 (26 Nov 2026): a refusal because the person holds their
+// delegation's tickets (code 'leader_tickets') also offers, in place: hand the
+// tickets to another leader, remove the unpaid ones (asked in place), or write
+// to Gavelling. Close sits on the right. Without `tickets` it draws as before.
 
+import { useCallback, useState } from 'react';
 import { Loader2 } from 'lucide-react';
+import GSelect from '@/components/GSelect';
 import { NEU, OUTFIT } from '@/components/neu';
-import { heldFacts, heldWords, type SwapAsk } from './roleSwap';
+import { heldFacts, heldWords, ticketSummary, loadTicketHold, moveLeaderTickets, removeUnpaidTickets, type SwapAsk, type TicketHold } from './roleSwap';
+import type { getAuthedClient } from '@/lib/supabase-auth';
+import { notifyErr, notifyOk } from '@/lib/appNotify';
+import { friendlyError } from '@/lib/friendlyError';
+
+export type TicketHoldState = { state: 'loading' } | { state: 'ready'; hold: TicketHold } | { state: 'error'; message: string };
+
+type Client = ReturnType<typeof getAuthedClient>;
+
+/**
+ * The ticket choices of a 'leader_tickets' refusal (prompt 80's, for any page
+ * that shows RoleSwapPanel; prompt 84). `read` loads the tickets and the other
+ * leaders after the check refuses; `move` and `remove` run prompt 80's writes
+ * and answer null when they landed (the caller then runs its check again) or
+ * the sentence to show in the panel.
+ */
+export function useLeaderTickets() {
+  const [tickets, setTickets] = useState<TicketHoldState | null>(null);
+  const read = useCallback(async (client: Client, ask: SwapAsk) => {
+    if (ask.phase !== 'blocked' || ask.code !== 'leader_tickets' || !ask.check) { setTickets(null); return; }
+    setTickets({ state: 'loading' });
+    try {
+      const hold = await loadTicketHold(client, ask.check);
+      setTickets(hold ? { state: 'ready', hold } : null);
+    } catch (e) {
+      setTickets({ state: 'error', message: friendlyError(e, 'Could not read their tickets. Please try again.') });
+    }
+  }, []);
+  const move = useCallback(async (client: Client, fromApp: string, toApp: string, toName: string): Promise<string | null> => {
+    try {
+      const r = await moveLeaderTickets(client, fromApp, toApp);
+      if (!r.ok) return r.message;
+      notifyOk(`${r.moved} ${r.moved === 1 ? 'ticket' : 'tickets'} moved to ${toName}`);
+      return null;
+    } catch (e) {
+      return friendlyError(e, 'Could not move the tickets. Please try again.');
+    }
+  }, []);
+  const remove = useCallback(async (client: Client, ids: string[]): Promise<string | null> => {
+    try {
+      const removed = await removeUnpaidTickets(client, ids);
+      if (removed > 0) notifyOk(`${removed} unpaid ${removed === 1 ? 'ticket' : 'tickets'} removed`);
+      else notifyErr('No tickets could be removed. Please try again.');
+      return null;
+    } catch (e) {
+      return friendlyError(e, 'Could not remove the tickets. Please try again.');
+    }
+  }, []);
+  const reset = useCallback(() => setTickets(null), []);
+  return { tickets, read, move, remove, reset };
+}
 
 const INK = '#1C1410';
 const FOREST = '#1B3828';
@@ -24,14 +81,20 @@ const btnBase: React.CSSProperties = {
   display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, textAlign: 'center',
 };
 
-export default function RoleSwapPanel({ ask, busy, error, onConfirm, onCancel }: {
+export default function RoleSwapPanel({ ask, busy, error, onConfirm, onCancel, tickets, onMoveTickets, onRemoveUnpaid }: {
   ask: SwapAsk;
   busy: boolean;
   /** A refusal or failure of the swap itself, shown in place. */
   error: string;
   onConfirm: () => void;
   onCancel: () => void;
+  /** The tickets a leader holds (a 'leader_tickets' refusal). */
+  tickets?: TicketHoldState | null;
+  onMoveTickets?: (toAppId: string, toName: string) => void;
+  onRemoveUnpaid?: (ids: string[]) => void;
 }) {
+  const [moveTo, setMoveTo] = useState('');
+  const [askRemove, setAskRemove] = useState(false);
   if (ask.phase === 'checking') {
     return (
       <div className="flex items-center gap-2 w-full" role="status" style={{ minHeight: 44, fontFamily: OUTFIT, fontSize: 14, color: NEU.inkSoft }}>
@@ -42,12 +105,86 @@ export default function RoleSwapPanel({ ask, busy, error, onConfirm, onCancel }:
   }
 
   if (ask.phase === 'blocked') {
+    const hold = tickets?.state === 'ready' ? tickets.hold : null;
+    const unpaid = hold ? hold.tickets.filter(t => t.removable) : [];
+    const name = ask.check?.name ?? 'This person';
+    const quiet: React.CSSProperties = { ...btnBase, fontWeight: 700, color: NEU.inkSoft, background: 'transparent', border: '1.5px solid #DDD4C0', cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.5 : 1 };
+    const main: React.CSSProperties = { ...btnBase, fontWeight: 800, border: 'none', backgroundColor: busy ? '#DDD4C0' : FOREST, color: busy ? NEU.inkSoft : GOLD, cursor: busy ? 'default' : 'pointer' };
+    const mail = hold ? `mailto:wearegavelling@gmail.com?subject=${encodeURIComponent(`Move tickets: ${hold.conferenceAcronym}, ${name}`)}&body=${encodeURIComponent(
+      `Conference: ${hold.conferenceAcronym}\nPerson: ${name}\nDelegation: ${hold.delegation ?? 'their delegation'}\nTickets: ${ticketSummary(hold.tickets)}\n\nPlease help us move these tickets so we can accept them in another role.`,
+    )}` : null;
     return (
       <div className="flex flex-col gap-3 w-full" role="alert" style={{ minWidth: 0, fontFamily: OUTFIT }}>
         <p className="[overflow-wrap:anywhere]" style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: INK }}>{ask.message}</p>
-        <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={onCancel} className="focus:outline-none"
-            style={{ ...btnBase, fontWeight: 700, color: NEU.inkSoft, background: 'transparent', border: '1.5px solid #DDD4C0', cursor: 'pointer' }}>
+
+        {tickets?.state === 'loading' && (
+          <div className="flex items-center gap-2" role="status" style={{ fontSize: 13.5, color: NEU.inkSoft }}>
+            <Loader2 size={15} className="animate-spin" aria-hidden /> Reading their tickets
+          </div>
+        )}
+        {tickets?.state === 'error' && <p style={{ margin: 0, fontSize: 13.5, color: RED, fontWeight: 600 }}>{tickets.message}</p>}
+
+        {hold && (
+          <>
+            <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: INK }}>{ticketSummary(hold.tickets)}</p>
+
+            <div className="flex flex-col gap-2" style={{ padding: '12px 14px', borderRadius: 14, background: '#FFFFFF', border: '1px solid #E4DAC4' }}>
+              <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: INK }}>Hand the tickets to another leader</p>
+              {hold.others.length === 0 ? (
+                <p style={{ margin: 0, fontSize: 13.5, color: NEU.inkSoft }}>This delegation has no other leader yet</p>
+              ) : (
+                <div className="flex flex-wrap items-center gap-2">
+                  <div style={{ flex: '1 1 220px', minWidth: 0 }}>
+                    <GSelect value={moveTo} onChange={setMoveTo} placeholder="Pick a leader" aria-label="Leader to hand the tickets to"
+                      disabled={busy} options={hold.others.map(o => ({ value: o.appId, label: o.name }))} />
+                  </div>
+                  <button type="button" className="focus:outline-none" disabled={busy || !moveTo} aria-busy={busy || undefined}
+                    style={{ ...main, opacity: !moveTo ? 0.55 : 1 }}
+                    onClick={() => { const o = hold.others.find(x => x.appId === moveTo); if (o && onMoveTickets) onMoveTickets(o.appId, o.name); }}>
+                    {busy && <Loader2 size={15} className="animate-spin" aria-hidden />}
+                    Move tickets
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {unpaid.length > 0 && onRemoveUnpaid && (
+              <div className="flex flex-col gap-2" style={{ padding: '12px 14px', borderRadius: 14, background: '#FFFFFF', border: '1px solid #E4DAC4' }}>
+                {askRemove ? (
+                  <>
+                    <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: INK }}>
+                      Remove {unpaid.length} unpaid {unpaid.length === 1 ? 'ticket' : 'tickets'}? The delegates they covered will owe their own fee
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <button type="button" className="focus:outline-none" style={quiet} disabled={busy} onClick={() => setAskRemove(false)}>Back</button>
+                      <button type="button" className="focus:outline-none" disabled={busy} aria-busy={busy || undefined}
+                        style={{ ...quiet, color: RED, borderColor: 'rgba(139,32,32,0.35)' }}
+                        onClick={() => { setAskRemove(false); onRemoveUnpaid(unpaid.map(t => t.id)); }}>
+                        {busy && <Loader2 size={15} className="animate-spin" aria-hidden />}
+                        Yes, remove them
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <button type="button" className="focus:outline-none self-start" style={quiet} disabled={busy} onClick={() => setAskRemove(true)}>
+                    Remove unpaid tickets
+                  </button>
+                )}
+              </div>
+            )}
+          </>
+        )}
+
+        {error && <p role="alert" className="[overflow-wrap:anywhere]" style={{ margin: 0, fontSize: 13.5, lineHeight: 1.5, fontWeight: 700, color: RED }}>{error}</p>}
+
+        <div className="flex flex-wrap items-center gap-2">
+          {mail && (
+            <a href={mail} className="focus:outline-none" style={{ fontSize: 14, fontWeight: 700, color: FOREST, textDecoration: 'underline', textUnderlineOffset: 3 }}>
+              Contact Gavelling
+            </a>
+          )}
+          <button type="button" onClick={onCancel} disabled={busy} className="focus:outline-none"
+            style={{ ...quiet, marginLeft: 'auto' }}>
             Close
           </button>
         </div>

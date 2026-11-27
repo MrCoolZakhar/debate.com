@@ -22,8 +22,9 @@ import Portal from '@/components/Portal';
 import { JOB_ROLE_LABEL } from '@/lib/jobBoard';
 import { InfoHint } from '../settings/applicationsUi';
 import { closeListing, dayLabel, type OrgListing, type ShownState } from './jobsApi';
-import ListingFunnel from '@/app/jobs/ListingFunnel';
+import ListingFunnel, { type FunnelOpen } from '@/app/jobs/ListingFunnel';
 import ShareCardPopup from '@/app/jobs/ShareCardPopup';
+import { lastDayIso, useConferenceTimeZone } from './PostingPopup';
 import { ICON_STROKE, ROLE_THEME, RoleThumb, STATUS_TONE } from './jobKit';
 
 const FONT = "var(--font-brand), sans-serif";
@@ -50,7 +51,9 @@ function closingSoon(listing: OrgListing): boolean {
   return Number.isFinite(left) && left >= 0 && left <= SOON_DAYS * 86_400_000;
 }
 
-export default function ListingRow({ listing, canPromote, onEdit, onPromote, onChanged, draftedForYou = false, onCopy }: {
+export default function ListingRow({ listing, canPromote, onEdit, onPromote, onChanged, draftedForYou = false, onCopy, onOpenPeople }: {
+  /** Opens the people behind Started or Applied (prompt 72, ListingPeoplePopup in the panel). */
+  onOpenPeople?: (stage: FunnelOpen) => void;
   /** A chair draft the database wrote when chair applications opened (prompt 44). */
   draftedForYou?: boolean;
   /** "Copy to other listings"; only when there is another listing that is not closed. */
@@ -67,10 +70,15 @@ export default function ListingRow({ listing, canPromote, onEdit, onPromote, onC
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const busyRef = useRef(false);
+  // A deleted draft leaves the list at once; the panel's reload confirms it.
+  const [gone, setGone] = useState(false);
+  const askRef = useRef<HTMLDivElement | null>(null);
+  // The last day to apply, in the conference's time zone (prompt 75).
+  const { tz } = useConferenceTimeZone(listing.conference?.id);
   const st = STATUS[listing.shown] ?? STATUS.draft;
   const StatusIcon = st.icon;
   const paidOutside = listing.kind === 'outside' && (listing.charged_credits > 0 || listing.locked);
-  const closes = dayLabel(listing.closes_at);
+  const closes = dayLabel(lastDayIso(listing.closes_at, tz));
   const theme = ROLE_THEME[listing.role] ?? ROLE_THEME.chair;
   const RoleIcon = theme.icon;
   const soon = closingSoon(listing);
@@ -83,13 +91,28 @@ export default function ListingRow({ listing, canPromote, onEdit, onPromote, onC
     try {
       const r = await closeListing(listing.id);
       if (!r.ok) { setErr(r.message); return; }
+      const deleting = asking === 'delete' || !!r.deleted;
       setAsking(null);
-      onChanged(r.message || (r.deleted ? 'Draft deleted' : 'Listing closed'));
+      if (deleting) setGone(true);
+      onChanged(deleting ? 'Draft deleted' : r.message || 'Listing closed');
     } finally {
       busyRef.current = false;
       setBusy(false);
     }
   };
+
+  // Delete asks in place below the fold: bring the confirm into view and put
+  // focus on its first button, so the first press visibly does something.
+  useEffect(() => {
+    if (asking !== 'delete') return;
+    const el = askRef.current;
+    if (!el) return;
+    const reduce = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    el.scrollIntoView({ block: 'nearest', behavior: reduce ? 'auto' : 'smooth' });
+    el.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true });
+  }, [asking]);
+
+  if (gone) return null;
 
   return (
     <li
@@ -165,6 +188,8 @@ export default function ListingRow({ listing, canPromote, onEdit, onPromote, onC
             funnel={listing.funnel}
             fallback={{ views: listing.views, clicks: listing.clicks, applicants: listing.applicants }}
             outside={listing.kind === 'outside'}
+            // Views and clicks open the daily graph for every listing; Started and Applied exist only on Gavelling listings.
+            onOpen={onOpenPeople}
           />
         </div>
 
@@ -185,7 +210,7 @@ export default function ListingRow({ listing, canPromote, onEdit, onPromote, onC
       {sharing && <ShareCardPopup card={listing} onClose={() => setSharing(false)} />}
 
       {asking && (
-        <div className="gv-jr-ask" role="group" aria-label={asking === 'close' ? 'Close this listing' : 'Delete this draft'}>
+        <div ref={askRef} className="gv-jr-ask" role="group" aria-label={asking === 'close' ? 'Close this listing' : 'Delete this draft'}>
           <p>{asking === 'close' ? 'Close this listing? It stops taking applicants' : 'Delete this draft? It cannot be brought back'}</p>
           <div className="gv-jr-ask-btns">
             <button type="button" className="gv-st-btn gv-st-outline" onClick={() => { setAsking(null); setErr(''); }} disabled={busy}>Keep it</button>

@@ -195,7 +195,7 @@ function headlineSize(text: string): number {
  *  not a country".
  *
  *  The replacement is not a new icon. It is exactly what the assignment page
- *  already draws for a character/custom seat (`manage/[slug]/assignment/page.tsx:741`,
+ *  already draws for a character/custom seat (`manage/[slug]/allocations/page.tsx:741`,
  *  and the same `UserRound` glyph in its `PersonAvatar` at `:668`): a lucide
  *  `UserRound` head-and-shoulders in a disc. `NEU.forest` on `NEU.surface` is
  *  10.73:1, far past the 3:1 a glyph needs. */
@@ -273,7 +273,7 @@ export function mergedSeatRoster(
  *  committee's character are not countries, so `SeatFlag` resolves `kind: 'none'`
  *  and would draw a GLOBE — and the one thing a globe cannot mean is "this is a
  *  person, not a country". The replacement is what the assignment page already
- *  draws for a character/custom seat (`manage/[slug]/assignment/page.tsx:741`):
+ *  draws for a character/custom seat (`manage/[slug]/allocations/page.tsx:741`):
  *  a lucide `UserRound` in a disc. `NEU.forest` on `NEU.surface` is 10.73:1. */
 // ROUND since 23 Sep 2026 (owner: "start using the circle flags literally
 // everywhere, as they fill more space ... in live view"). `SeatCircleFlag` reads

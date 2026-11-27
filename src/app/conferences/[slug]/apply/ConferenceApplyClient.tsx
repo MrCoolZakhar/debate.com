@@ -72,8 +72,10 @@ import {
   GraduationCap, Trophy, Crown, Sparkles,
   MapPin, Landmark, Check, X, Plus, ArrowRight, CalendarClock,
   Ticket, Infinity as InfinityIcon, Globe, Lock, ChevronUp, ChevronDown,
-  Info, Coins, Pencil, Ban, Cake, CircleAlert,
+  Info, Coins, Pencil, Ban, Cake, CircleAlert, Upload,
 } from 'lucide-react';
+import CvImportPopup from '@/components/cv/CvImportPopup';
+import { draftToInsert, type CvDraft } from '@/lib/cvImport';
 import { replaceUrlInPlace } from '@/lib/replaceUrlInPlace';
 import { CHARGED_ROLES, HOLDING_STATUSES, heldRoleSwapLine, rolesCombine, roleWithArticle } from '@/lib/roleCombos';
 import { specialFeeSentence, ticketNameFor, toSpecialFeeInfo, type SpecialFeeInfo } from '@/lib/specialFeeReason';
@@ -2784,6 +2786,31 @@ function ConferenceApplyInner() {
     setMunCvRows((data as CVEntry[] | null) ?? []);
   }
 
+  // Import from a template (prompt 70). A preview only fills the step; otherwise ONE insert
+  // into mun_cv_entries, and the step carries the new rows' ids so they never import twice.
+  const [cvImportOpen, setCvImportOpen] = useState(false);
+  async function importCvDrafts(drafts: CvDraft[]): Promise<number> {
+    const toEntry = (d: CvDraft, sourceId: string | null): ExperienceEntry => ({
+      id: crypto.randomUUID(), source_cv_entry_id: sourceId, entry_type: d.entry_type ?? 'other',
+      conference_name: d.conference_name, committee: d.committee, allocation: d.allocation,
+      event_date: d.event_date, awards: d.awards, description: d.description, logo_url: null,
+    });
+    if (previewing) {
+      setExperienceEntries(prev => [...prev, ...drafts.map(d => toEntry(d, null))]);
+      return drafts.length;
+    }
+    if (!session || !user) throw new UserFacingError('Your session has expired, please refresh and sign in again.');
+    const rows = drafts.map(d => ({ ...draftToInsert(d), user_id: user.id }));
+    const { data, error } = await getAuthedClient(session.access_token).from('mun_cv_entries').insert(rows).select('id');
+    if (error) throw error;
+    if (!data || data.length !== rows.length) throw new UserFacingError('Could not add your conferences. Please try again');
+    const ids = (data as { id: string }[]).map(r => r.id);
+    setExperienceEntries(prev => [...prev, ...drafts.map((d, i) => toEntry(d, ids[i]))]);
+    await loadMunCvRows();
+    await refreshCvCount();
+    return ids.length;
+  }
+
   useEffect(() => {
     if (!session || !user || !showMunExperienceStep || munCvRows !== null) return;
     loadMunCvRows();
@@ -5095,6 +5122,25 @@ function ConferenceApplyInner() {
           <Plus size={17} strokeWidth={2.6} />
           {sortedEntries.length > 0 ? 'Add another conference' : 'Add a conference'}
         </button>
+        <div className="flex justify-center mt-2.5">
+          <button
+            type="button"
+            onClick={() => setCvImportOpen(true)}
+            className="inline-flex items-center gap-1.5 focus:outline-none"
+            style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 700, color: 'var(--gv-main)', textDecoration: 'underline', textUnderlineOffset: 3, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 2px' }}
+          >
+            <Upload size={15} strokeWidth={1.5} aria-hidden />
+            Import from a template
+          </button>
+        </div>
+        {cvImportOpen && (
+          <CvImportPopup
+            theme="conference"
+            existing={[...experienceEntries, ...(munCvRows ?? [])]}
+            onImport={importCvDrafts}
+            onClose={() => setCvImportOpen(false)}
+          />
+        )}
 
         {sortedEntries.length > 0 && (
           <div className="flex flex-col gap-3 mt-4 mb-4">

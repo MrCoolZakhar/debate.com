@@ -31,7 +31,7 @@ import { NEU, NEU_GRADIENTS, OUTFIT, NeuCard, NeuIconDisc, NeuInset } from '@/co
 import { currencySymbol } from '@/lib/currencies';
 import { friendlyError } from '@/lib/friendlyError';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
-import { MemberAvatar, removeFromDelegation, type PoolMember } from '@/app/manage/[slug]/assignment/delegationShared';
+import { MemberAvatar, removeFromDelegation, type PoolMember } from '@/app/manage/[slug]/allocations/delegationShared';
 import { DelegationIdentity } from './DelegationAvatar';
 import {
   buildDelegationRows, sortDelegationRows, memberName, ACCEPTED,
@@ -595,11 +595,11 @@ function DelegationRowCard<M extends DelegationMemberLite>({
               title={owing.length === 0 ? 'Nobody in this delegation owes money' : 'Re-sends the "you can pay now" email. Anyone reminded in the last 24 hours is skipped.'}
               onClick={() => onRemindPay(owing)} />
             <Link
-              href={`/manage/${conferenceSlug}/assignment?mode=delegations&delegation=${row.id}`}
+              href={`/manage/${conferenceSlug}/allocations?mode=delegations&delegation=${row.id}`}
               className="dlgAct inline-flex items-center gap-1.5 focus:outline-none"
               style={{ padding: '8px 13px', borderRadius: 999, fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, color: NEU.ink, backgroundColor: NEU.surface, boxShadow: NEU.outSm, textDecoration: 'none' }}
             >
-              <ArrowUpRight size={14} strokeWidth={2.5} /> Open in Assignment
+              <ArrowUpRight size={14} strokeWidth={2.5} /> Open in Allocations
             </Link>
           </div>
 

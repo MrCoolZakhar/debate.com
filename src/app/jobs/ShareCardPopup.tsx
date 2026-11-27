@@ -9,7 +9,7 @@
 //   the conference's logo (a monogram disc when it has none or it cannot be
 //   read), its short name, "Now hiring · <role>", the title large, the
 //   committee, the dates and place, up to three offer chips, and at the foot a
-//   QR code beside "Apply on Gavelling", "gavelling.com/jobs" and the
+//   QR code beside "Apply on Gavelling" ("Apply on their site" for an outside listing), "gavelling.com/jobs" and the
 //   Gavelling lockup (the image, never typed, in its own colours on an ivory
 //   capsule). The QR and Copy link both point at
 //   `${SITE_URL}/jobs?listing=<id>&ref=share`.
@@ -355,7 +355,8 @@ async function paintCard(canvas: HTMLCanvasElement, which: SizeKey, card: JobCar
 
   const colX = P + Q + 40;
   const colW = W - P - colX;
-  const cta = fitText(ctx, 'Apply on Gavelling', { weight: 800, max: story ? 58 : 52, min: 28, maxLines: 2, maxW: colW, maxH: 140, lh: 1.08 }, font);
+  // An outside listing applies on the conference's own site (prompt 78).
+  const cta = fitText(ctx, card.kind === 'outside' ? 'Apply on their site' : 'Apply on Gavelling', { weight: 800, max: story ? 58 : 52, min: 28, maxLines: 2, maxW: colW, maxH: 140, lh: 1.08 }, font);
   let cy = footTop + cta.size * 0.95;
   ctx.fillStyle = IVORY;
   ctx.font = font(800, cta.size);
@@ -615,15 +616,19 @@ function fileName(card: JobCard): string {
 
 const CSS = `
 .gv-buy-panel.gv-share{max-width:560px;min-height:0}
-.gv-buy-panel.gv-share .gv-buy-body{display:block}
-.gv-share-col{display:flex;flex-direction:column;gap:18px;padding:30px 28px 26px;font-family:${FONT};color:${INK}}
+.gv-buy-panel.gv-share .gv-buy-body{display:flex;flex-direction:column;overflow:hidden}
+.gv-share-col{display:flex;flex-direction:column;gap:18px;padding:30px 28px 26px;font-family:${FONT};color:${INK};flex:1 1 auto;min-height:0}
+.gv-share-col>*{flex-shrink:0}
 .gv-share-head{padding-right:44px}
 .gv-share-title{margin:0;font-size:clamp(22px,2.8vw,28px);font-weight:800;letter-spacing:-0.02em;line-height:1.12;color:${INK};text-wrap:balance}
 .gv-share-switch{display:inline-flex;align-self:flex-start;gap:4px;padding:4px;border-radius:999px;background:#FFFFFF;box-shadow:0 1px 2px rgba(27,56,40,0.06),0 4px 14px rgba(27,56,40,0.07)}
 .gv-share-pill{min-height:38px;padding:0 20px;border:none;border-radius:999px;background:transparent;cursor:pointer;font-family:${FONT};font-size:15px;font-weight:700;color:${INK_SOFT};transition:background-color 160ms ease,color 160ms ease}
 .gv-share-pill:hover{color:${INK}}
 .gv-share-pill[aria-checked="true"]{background:${FOREST};color:#FFFFFF}
-.gv-share-stage{display:flex;justify-content:center}
+/* The preview is the part that gives: it shrinks and scrolls inside the pop-up,
+   so the buttons beneath it never scroll away (prompt 75). The padding and
+   matching negative margin keep the frame's shadow from being clipped. */
+.gv-share-col>.gv-share-stage{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;display:flex;justify-content:center;align-items:flex-start;padding:2px 14px 24px;margin:-2px -14px -24px}
 .gv-share-frame{position:relative;max-width:100%;height:auto;border-radius:14px;overflow:hidden;box-shadow:0 10px 30px -10px rgba(27,56,40,0.35)}
 .gv-share-canvas{display:block;width:100%;height:100%}
 .gv-share-skel{position:absolute;inset:0;background:linear-gradient(90deg,#E4DFD2 0%,#EEEADF 50%,#E4DFD2 100%);background-size:200% 100%;animation:gvShareSkel 1.3s ease-in-out infinite}
