@@ -4531,7 +4531,7 @@ export default function SettingsPage() {
               </p>
               <p className="text-sm mt-1" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, textWrap: 'pretty' }}>
                 {canManageTeam
-                  ? 'Your team as a hierarchy: who holds the conference, who can do everything, and who has been given a hand-picked set of pages. Everyone is listed on your public conference page by default, and you can hide anyone from their card.'
+                  ? 'Your team as a hierarchy: who holds the conference, who can do everything, and who has been given a hand-picked set of pages. Hide anyone from your public page from their card.'
                   : 'Your team as a hierarchy: who holds the conference, who can do everything, and who has been given a hand-picked set of pages.'}
               </p>
             </div>

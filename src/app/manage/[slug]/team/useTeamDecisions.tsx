@@ -15,7 +15,10 @@
 // Optimistic status while busy, rolled back on a failure (here and, through
 // `optimistic`, on the page's list); a ref guards every button; errors are
 // shown as written. Every decision that lands calls `onChanged` so the page
-// re-reads its list and money.
+// re-reads its list and money, and announces 'gv-team-waiting-changed' so the
+// left menu re-reads its badges. A chair accept and a swap patch the page's
+// row (status, committee) through `patchRow` the moment the RPC answers ok, so
+// the card never shows the old status while the reload runs (prompt 73).
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useAuth } from '@/components/AuthProvider';
@@ -32,6 +35,11 @@ import {
   type TeamApplicant, type TeamCommittee,
 } from './teamApi';
 
+/** The left menu listens for this and re-reads its badges (manage/[slug]/layout.tsx). */
+function announceTeamChange() {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event('gv-team-waiting-changed'));
+}
+
 export interface TeamRoleConfig { role: string; payment_timing: string | null; custom_questions: unknown }
 
 export interface TeamDecisions {
@@ -44,7 +52,7 @@ export interface TeamDecisions {
 }
 
 export function useTeamDecisions({
-  enabled, conferenceId: conferenceIdOrNull, roleConfigs, pushDraftNotice, onChanged, optimistic,
+  enabled, conferenceId: conferenceIdOrNull, roleConfigs, pushDraftNotice, onChanged, optimistic, patchRow,
 }: {
   enabled: boolean;
   conferenceId: string | null;
@@ -54,6 +62,8 @@ export function useTeamDecisions({
   onChanged: () => void;
   /** Patch the page's row to `status` at once; returns the rollback. */
   optimistic?: (appId: string, status: string) => () => void;
+  /** Patch the page's row after a decision landed (no rollback: the reload confirms it). */
+  patchRow?: (appId: string, p: { status: string; assigned_committee_id?: string | null }) => void;
 }): TeamDecisions {
   const { user } = useAuth();
   // The decisions run only from the pop-up, which opens only after the list
@@ -158,6 +168,7 @@ export function useTeamDecisions({
         if (res.followUpFailed) notifyErr('Accepted, but a follow-up step (email / auto-cover) failed. Refresh to verify.');
         setOpen(null);
         onChanged();
+      announceTeamChange();
         return true;
       } catch (e) {
         patch(a.application_id, before);
@@ -183,6 +194,8 @@ export function useTeamDecisions({
       if (await askSwap(a, forWhat, false)) return null;
       const res = await acceptChair({ conferenceId, appId: a.application_id, committeeId, pushDraftNotice });
       if (!res.ok) return res.message;
+      patch(a.application_id, { status: res.status });
+      patchRow?.(a.application_id, res.committeeId ? { status: res.status, assigned_committee_id: res.committeeId } : { status: res.status });
       const c = res.committeeId ? committeeById.get(res.committeeId) : undefined;
       // An already accepted chair was only seated (the Seat button, 24 Nov 2026).
       const wasAccepted = a.status === 'accepted';
@@ -191,6 +204,7 @@ export function useTeamDecisions({
       setOpen(null);
       await load();
       onChanged();
+      announceTeamChange();
       return null;
     } catch (e) {
       if (isHoldsRole(e)) { await askSwap(a, forWhat, true); return null; }
@@ -199,7 +213,7 @@ export function useTeamDecisions({
       busyRef.current = false;
       setBusyId(null);
     }
-  }, [conferenceId, pushDraftNotice, committeeById, load, askSwap, onChanged]);
+  }, [conferenceId, pushDraftNotice, committeeById, load, askSwap, onChanged, patch, patchRow]);
 
   /** "Accept and remove {role}": the swap, then what the plain accept runs after its write. */
   const confirmSwap = useCallback(async (a: TeamApplicant) => {
@@ -222,6 +236,8 @@ export function useTeamDecisions({
         });
         if (!res.ok) { setSwap(prev => prev ? { ...prev, busy: false, error: res.message } : prev); return; }
         setSwap(null);
+        patch(a.application_id, { status: 'accepted' });
+        patchRow?.(a.application_id, { status: 'accepted' });
         notifyOk(res.message);
         if (res.followUpFailed) notifyErr('Accepted, but a follow-up step (email / auto-cover) failed. Refresh to verify.');
       } else {
@@ -230,6 +246,7 @@ export function useTeamDecisions({
         const res = await runRoleSwap(supabase, a.application_id);
         if (!res.ok) { setSwap(prev => prev ? { ...prev, busy: false, error: res.message } : prev); return; }
         setSwap(null);
+        patchRow?.(res.application_id, { status: 'accepted' });
         notifyOk(res.message);
         // Seat them when a committee was picked. A failure here leaves them accepted, never undone.
         if (forWhat.committeeId) {
@@ -237,6 +254,7 @@ export function useTeamDecisions({
           try {
             const seat = await acceptChair({ conferenceId, appId: res.application_id, committeeId: forWhat.committeeId, pushDraftNotice });
             seated = seat.ok;
+            if (seat.ok) patchRow?.(res.application_id, { status: seat.status, assigned_committee_id: seat.committeeId });
           } catch {
             seated = false;
           }
@@ -251,13 +269,14 @@ export function useTeamDecisions({
       setOpen(null);
       await load();
       onChanged();
+      announceTeamChange();
     } catch (e) {
       setSwap(prev => prev ? { ...prev, busy: false, error: friendlyError(e, 'Could not accept the application. Please try again.') } : prev);
     } finally {
       busyRef.current = false;
       setBusyId(null);
     }
-  }, [swap, conferenceId, roleConfigs, pushDraftNotice, load, onChanged]);
+  }, [swap, conferenceId, roleConfigs, pushDraftNotice, load, onChanged, patch, patchRow]);
 
   const reject = useCallback(async (a: TeamApplicant): Promise<boolean> => {
     if (busyRef.current) return false;
@@ -286,6 +305,7 @@ export function useTeamDecisions({
       if (problem) notifyErr(problem); else notifyOk('Application rejected');
       setOpen(null);
       onChanged();
+      announceTeamChange();
       return true;
     } catch (e) {
       patch(a.application_id, before);
