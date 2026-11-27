@@ -2,7 +2,7 @@
 
 import { sortCvEntries } from '@/lib/cvOrder';
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, Share2, Check, ScrollText, EyeOff, Download, Loader2, Upload } from 'lucide-react';
+import { Plus, Share2, Check, ScrollText, EyeOff, Download, Loader2, Upload, Lock } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { syncExperienceLevel } from '@/lib/munExperience';
@@ -25,6 +25,17 @@ import { draftToInsert, type CvDraft } from '@/lib/cvImport';
 import TalentPrompt from '@/components/TalentPrompt';
 import { downloadCvPdf, CV_PDF_FAILED } from '@/components/cv/downloadCvPdf';
 import { notifyErr } from '@/lib/appNotify';
+
+// The CV header (prompt 77). AccountHero caps its text column at 62ch and puts
+// actions in a right-hand column; here the buttons sit under the line in the
+// text column, which spans the band (clear of the decorative emoji from 640px),
+// and the h1 stays on one line, its size stepping down on narrow screens.
+const CV_HERO_CSS = `
+.gv-cv-hero header>.relative>.min-w-0{max-width:none!important;flex:1 1 auto}
+@media (min-width:640px){.gv-cv-hero header>.relative>.min-w-0{padding-right:150px}}
+.gv-cv-hero header h1{white-space:nowrap;overflow-wrap:normal!important;font-size:clamp(26px,7vw,44px)!important}
+.gv-cv-hero header h1+p{max-width:none}
+`;
 
 // ── Page ───────────────────────────────────────────────────────────────────
 
@@ -237,14 +248,19 @@ export default function CVPage() {
     <div>
       {/* "Open to team roles" nudge: renders nothing unless the server asks for it */}
       <TalentPrompt className="mb-4" />
+      {/* The header at every width (prompt 77): the title never wraps (it steps
+          down instead), the line and the one button row span the band, and
+          nothing sits pushed to the far right. Scoped to this page. */}
+      <style>{CV_HERO_CSS}</style>
+      <div className="gv-cv-hero">
       <AccountHero
         label="Delegate record"
         title={<>Your MUN <GoldWord>CV</GoldWord></>}
         line="Every Model UN conference you have taken part in, in one record"
         emoji="Scroll"
         fallback={ScrollText}
-        aside={
-          <>
+      >
+        <div className="mt-5 flex flex-wrap items-center gap-3">
             {/* Share: copies a public read-only link to this CV */}
             <button
               type="button"
@@ -280,19 +296,24 @@ export default function CVPage() {
               <Plus size={18} strokeWidth={2.6} aria-hidden />
               Add conference
             </button>
-          </>
-        }
-      >
-        {/* Who can see the CV: one small toggle, the rest behind its gear */}
-        <CVPrivacyPanel
-          value={privacy}
-          onChange={changePrivacy}
-          saving={privSaving}
-          error={privError}
-          publicHref={publicHref}
-          hiddenCount={entries.filter((e) => e.is_private).length}
-        />
+            {/* Who can see the CV, the nationality and team roles: one Settings button */}
+            <CVPrivacyPanel
+              value={privacy}
+              onChange={changePrivacy}
+              saving={privSaving}
+              error={privError}
+              publicHref={publicHref}
+              hiddenCount={entries.filter((e) => e.is_private).length}
+            />
+        </div>
+        {privacy.cvPrivate && (
+          <p className="inline-flex items-center gap-1.5" style={{ margin: '12px 0 0', fontFamily: OUTFIT, fontSize: T.body, color: INK_SOFT }}>
+            <Lock size={14} strokeWidth={2.2} aria-hidden />
+            Your CV is private
+          </p>
+        )}
       </AccountHero>
+      </div>
 
       <HeroOverlap>
         {/* ── The person, with three big numbers ── */}

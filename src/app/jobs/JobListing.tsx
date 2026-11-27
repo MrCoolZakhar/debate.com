@@ -67,6 +67,15 @@ function writePending(p: PendingAction | null) {
   } catch { /* storage off: the person presses again after signing in */ }
 }
 
+/** Queue this listing's own Apply: the listing runs it as soon as it is open
+ *  and signed in, exactly as after a sign-in (the invite pop-up's Apply now). */
+export function requestJobApply(id: string) {
+  writePending({ id, action: 'apply' });
+  // A listing already open hears it and carries on at once.
+  try { window.dispatchEvent(new CustomEvent(APPLY_REQUESTED_EVENT, { detail: { id } })); } catch { /* the pending action waits */ }
+}
+const APPLY_REQUESTED_EVENT = 'gavelling-job-apply-requested';
+
 function shortDay(iso: string | null | undefined): string | null {
   if (!iso) return null;
   const d = new Date(iso);
@@ -90,7 +99,8 @@ export default function JobListing({
   /** Saved or applied state changed: the page reads job_my() again. */
   onChanged?: () => void;
   /** This visit came from an invite (prompt 11): "<short> invited you to apply". */
-  inviteNote?: { short: string; message: string | null } | null;
+  /** Opened from an invite: one small line, the note having been shown in the invite pop-up. */
+  inviteNote?: { short: string; by: string | null } | null;
   /** Opens another listing in this pane (More from this conference). */
   onSelectListing?: (id: string) => void;
   /** Closes the listing and shows the board (See all roles on an unavailable listing). */
@@ -202,6 +212,14 @@ export default function JobListing({
     void load(true);
   }, [member, lockedRead, id, planStatus, load]);
 
+  // A queued Apply (the invite pop-up) for the listing already on screen: look again.
+  const [pendingTick, setPendingTick] = useState(0);
+  useEffect(() => {
+    const onRequest = (e: Event) => { if ((e as CustomEvent<{ id?: string }>).detail?.id === id) setPendingTick((n) => n + 1); };
+    window.addEventListener(APPLY_REQUESTED_EVENT, onRequest);
+    return () => window.removeEventListener(APPLY_REQUESTED_EVENT, onRequest);
+  }, [id]);
+
   // After signing in, the action pressed while signed out carries on.
   useEffect(() => {
     if (!userId || !detail || detail.listing.id !== id) return;
@@ -214,7 +232,7 @@ export default function JobListing({
       recordJobEvent(id, 'click');
       setApplyOpen(true);
     }
-  }, [userId, detail, id, toggleSave]);
+  }, [userId, detail, id, toggleSave, pendingTick]);
 
   if (!card && failed) {
     return (
@@ -333,14 +351,11 @@ export default function JobListing({
       {onBack && <BackLink onBack={onBack} />}
 
       {inviteNote && (
-        <div className="gv-jl-invite" role="note">
-          <Mail size={16} strokeWidth={2.4} aria-hidden style={{ flexShrink: 0, marginTop: 2 }} />
-          <div style={{ minWidth: 0 }}>
-            <p style={{ margin: 0, fontSize: 14.5, fontWeight: 700, color: INK, overflowWrap: 'anywhere' }}>{inviteNote.short} invited you to apply</p>
-            {inviteNote.message?.trim() && (
-              <p style={{ margin: '3px 0 0', fontSize: 14, fontStyle: 'italic', color: INK_SOFT, whiteSpace: 'pre-line', overflowWrap: 'anywhere' }}>&ldquo;{inviteNote.message.trim()}&rdquo;</p>
-            )}
-          </div>
+        <div className="gv-jl-invite" role="note" style={{ alignItems: 'center' }}>
+          {inviteNote.by ? <Avatar name={inviteNote.by} src={null} size={28} /> : <Mail size={16} strokeWidth={2.4} aria-hidden style={{ flexShrink: 0 }} />}
+          <p style={{ margin: 0, minWidth: 0, fontSize: 14, fontWeight: 600, color: INK, overflowWrap: 'anywhere' }}>
+            Invited by {inviteNote.by || 'the organizers'} at {inviteNote.short}
+          </p>
         </div>
       )}
 
@@ -479,14 +494,14 @@ function BackLink({ onBack }: { onBack: () => void }) {
   );
 }
 
-function Avatar({ name, src }: { name: string; src: string | null }) {
+export function Avatar({ name, src, size = 56 }: { name: string; src: string | null; size?: number }) {
   const [broken, setBroken] = useState(false);
   const initials = name.trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
   return src && !broken ? (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={src} alt="" width={56} height={56} onError={() => setBroken(true)} style={{ width: 56, height: 56, borderRadius: 9999, objectFit: 'cover', flexShrink: 0, border: '2px solid #FFFFFF', boxShadow: '0 3px 10px rgba(27,56,40,0.14)' }} />
+    <img src={src} alt="" width={size} height={size} onError={() => setBroken(true)} style={{ width: size, height: size, borderRadius: 9999, objectFit: 'cover', flexShrink: 0, border: '2px solid #FFFFFF', boxShadow: '0 3px 10px rgba(27,56,40,0.14)' }} />
   ) : (
-    <span aria-hidden style={{ width: 56, height: 56, borderRadius: 9999, flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(238,217,138,0.55)', color: '#4A3410', fontSize: 17, fontWeight: 800 }}>
+    <span aria-hidden style={{ width: size, height: size, borderRadius: 9999, flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(238,217,138,0.55)', color: '#4A3410', fontSize: Math.round(size * 0.3), fontWeight: 800 }}>
       {initials}
     </span>
   );

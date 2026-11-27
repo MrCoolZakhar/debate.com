@@ -39,7 +39,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { replaceUrlInPlace } from '@/lib/replaceUrlInPlace';
 import { openAuth } from '@/lib/authModal';
 import {
-  fetchJobBoard, fetchJobMy, fetchMyInvites, jobContinuePath, respondToInvite,
+  fetchJobBoard, fetchJobMy, fetchMyInvites, fetchTalentSettings, jobContinuePath, respondToInvite,
   type JobBoardPage, type JobCard as JobCardData, type JobListingResult, type JobMyApplication, type JobMyListing, type JobMyResult, type JobMyStatus, type JobInvite,
 } from '@/lib/jobBoard';
 import { notifyOk } from '@/lib/appNotify';
@@ -49,7 +49,8 @@ import SaveAlertAction from './SaveAlertAction';
 import AlertsPanel from './AlertsPanel';
 import InvitesBlock, { unansweredInvites } from './InvitesBlock';
 import NoMatches from './NoMatches';
-import TalentPrompt from '@/components/TalentPrompt';
+import TalentPrompt, { TALENT_CHANGED_EVENT } from '@/components/TalentPrompt';
+import Link from 'next/link';
 import JobCard, { JobCardSkeleton } from './JobCard';
 import JobFilters from './JobFilters';
 import JobListing from './JobListing';
@@ -81,6 +82,30 @@ const STATUS_WORD: Record<JobMyStatus, { label: string; icon: typeof Check; tone
   rejected: { label: 'Rejected', icon: X, tone: '#8A3A22' },
   not_finished: { label: 'Not finished', icon: Clock, tone: '#8A5A12' },
 };
+
+// My Applications' filters (prompt 77): every application job_my returns,
+// narrowed by outcome. In progress is submitted and not finished.
+type AppFilter = 'all' | 'progress' | 'won' | 'lost';
+const APP_FILTERS: { key: AppFilter; label: string }[] = [
+  { key: 'all', label: 'All' },
+  { key: 'progress', label: 'In progress' },
+  { key: 'won', label: 'Successful' },
+  { key: 'lost', label: 'Not accepted' },
+];
+function appInFilter(a: JobMyApplication, f: AppFilter): boolean {
+  if (f === 'progress') return a.status === 'submitted' || a.status === 'not_finished';
+  if (f === 'won') return a.status === 'accepted';
+  if (f === 'lost') return a.status === 'rejected';
+  return true;
+}
+/** job_my's can_resubmit (a turned-down application that can still be edited and sent again). */
+type MyApp = JobMyApplication & { can_resubmit?: boolean };
+/** A successful application's page: the chair role page, else the conference page. */
+function rolePageHref(a: JobMyApplication): string | null {
+  const slug = a.conference.slug;
+  if (!slug) return null;
+  return a.role === 'chair' ? `/conferences/${encodeURIComponent(slug)}/role/chair` : `/conferences/${encodeURIComponent(slug)}`;
+}
 
 function useIsWide(): boolean {
   const [wide, setWide] = useState(true);
@@ -127,6 +152,11 @@ export default function JobBoardClient({ initialQuery, initialPage, initialError
     if (typeof window === 'undefined') return null;
     try { return new URLSearchParams(window.location.search).get('invite'); } catch { return null; }
   });
+  // The listing an invite pop-up opened (its small "Invited by" line).
+  const [inviteListing, setInviteListing] = useState<string | null>(null);
+  const [appFilter, setAppFilter] = useState<AppFilter>('all');
+  // Open to team roles, for the line under the invites (null until read).
+  const [talentOn, setTalentOn] = useState<boolean | null>(null);
   const [pane, setPane] = useState<HTMLDivElement | null>(null);
   const seq = useRef(0);
   const pushedRef = useRef(false);
@@ -291,12 +321,29 @@ export default function JobBoardClient({ initialQuery, initialPage, initialError
     return () => window.clearTimeout(t);
   }, [authLoading, userId, my, myListings, posting]);
 
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    void fetchTalentSettings().then((r) => { if (!cancelled && !('ok' in r)) setTalentOn(r.open); });
+    const onChanged = (e: Event) => {
+      const open = (e as CustomEvent<{ open?: unknown }>).detail?.open;
+      if (typeof open === 'boolean') setTalentOn(open);
+    };
+    window.addEventListener(TALENT_CHANGED_EVENT, onChanged);
+    return () => { cancelled = true; window.removeEventListener(TALENT_CHANGED_EVENT, onChanged); };
+  }, [userId]);
+
+  const appCounts = useMemo(() => {
+    const list = my?.applications ?? [];
+    return Object.fromEntries(APP_FILTERS.map((f) => [f.key, list.filter((a) => appInFilter(a, f.key)).length])) as Record<AppFilter, number>;
+  }, [my]);
+
   const items: JobCardData[] = useMemo(() => {
     if (tab === 'listings') return myListings;
     if (tab === 'saved') return my?.saved ?? [];
-    if (tab === 'applications') return my?.applications ?? [];
+    if (tab === 'applications') return (my?.applications ?? []).filter((a) => appInFilter(a, appFilter));
     return board.k === 'error' ? [] : board.page?.items ?? [];
-  }, [tab, my, board, myListings]);
+  }, [tab, my, board, myListings, appFilter]);
 
   const appliedAt = useMemo(() => {
     const m = new Map<string, string | null>();
@@ -395,8 +442,8 @@ export default function JobBoardClient({ initialQuery, initialPage, initialError
       onSelectListing={select}
       onSeeAll={back}
       inviteNote={(() => {
-        const inv = inviteParam ? invites.find((i) => i.invite_id === inviteParam && i.id === selectedId) : null;
-        return inv ? { short: inv.conference.short || inv.conference.name || 'A conference', message: inv.message } : null;
+        const inv = invites.find((i) => i.id === selectedId && ((!!inviteParam && i.invite_id === inviteParam) || i.id === inviteListing)) ?? null;
+        return inv ? { short: inv.conference.short || inv.conference.name || 'a conference', by: inv.invited_by } : null;
       })()}
     />
   ) : null;
@@ -464,7 +511,9 @@ export default function JobBoardClient({ initialQuery, initialPage, initialError
         {tab === 'saved' ? (
           <>Nothing saved yet. <button type="button" className="gv-jobs-link" onClick={() => changeTab('all')}>Browse all roles</button></>
         ) : tab === 'applications' ? (
-          <>You have not applied through the Job Board yet. <button type="button" className="gv-jobs-link" onClick={() => changeTab('all')}>Browse all roles</button></>
+          appFilter !== 'all' && (my?.applications.length ?? 0) > 0
+            ? <>Nothing here. <button type="button" className="gv-jobs-link" onClick={() => setAppFilter('all')}>Show all</button></>
+            : <>You have not applied through the Job Board yet. <button type="button" className="gv-jobs-link" onClick={() => changeTab('all')}>Browse all roles</button></>
         ) : !hasActiveFilters(query) ? (
           <>There are no open roles yet.</>
         ) : (
@@ -479,17 +528,21 @@ export default function JobBoardClient({ initialQuery, initialPage, initialError
   ) : (
     <ul className={`gv-jobs-cards ${asGrid ? 'gv-jobs-cards-grid' : ''}`} style={{ opacity: board.k === 'loading' && tab === 'all' ? 0.55 : 1 }}>
       {items.map((c) => {
-        const app = tab === 'applications' ? (c as JobMyApplication) : null;
+        const app = tab === 'applications' ? (c as MyApp) : null;
         const unfinished = app?.status === 'not_finished' && !!c.conference.slug;
+        // A turned-down application that can be sent again opens the application; a successful one its role page.
+        const resend = app?.status === 'rejected' && !!app.can_resubmit && !!c.conference.slug;
+        const won = app?.status === 'accepted' ? rolePageHref(app) : null;
+        const href = unfinished || resend ? jobContinuePath(c.conference.slug as string, c.role, c.id) : won ?? undefined;
         return (
           <li key={c.id}>
             <JobCard
               card={c}
               selected={splitWide && c.id === selectedId}
-              onSelect={unfinished ? undefined : select}
-              href={unfinished ? jobContinuePath(c.conference.slug as string, c.role, c.id) : undefined}
+              onSelect={href ? undefined : select}
+              href={href}
               closed={tab === 'saved' && 'open' in c && !(c as { open: boolean }).open}
-              status={app ? <StatusLine status={app.status} /> : undefined}
+              status={app ? <StatusLine status={app.status} resend={resend} rolePage={!!won} /> : undefined}
             />
           </li>
         );
@@ -519,8 +572,37 @@ export default function JobBoardClient({ initialQuery, initialPage, initialError
       {/* Members manage their alerts in the Saved tab. */}
       {tab === 'saved' && <div style={{ marginTop: 4 }}><AlertsPanel /></div>}
       {/* Invites to apply, above My Applications (prompt 11). */}
-      {tab === 'applications' && <InvitesBlock invites={invites} onChange={setInvites} onSelect={select} />}
+      {tab === 'applications' && (
+        <InvitesBlock invites={invites} onChange={setInvites} onSelect={(id) => { setInviteListing(id); select(id); }} />
+      )}
+      {/* Turning invites on or off (prompt 77), under the invites or alone. */}
+      {tab === 'applications' && talentOn !== null && (
+        <p className="gv-jobs-talent">
+          {talentOn ? (
+            <>Don&apos;t want invites? <Link href="/account/cv?settings=open" className="gv-jobs-talent-a">Turn them off in your MUN CV Settings</Link></>
+          ) : (
+            <>Want conferences to invite you to chair or join their team? <Link href="/account/cv?settings=open" className="gv-jobs-talent-a">Turn on Open to team roles</Link></>
+          )}
+        </p>
+      )}
     </>
+  );
+
+  // My Applications: All, In progress, Successful, Not accepted, each with its number.
+  const appFilters = tab === 'applications' && (my?.applications.length ?? 0) > 0 && (
+    <div className="gv-jobs-view" role="group" aria-label="Show applications">
+      {APP_FILTERS.map((f) => (
+        <button
+          key={f.key}
+          type="button"
+          aria-pressed={appFilter === f.key}
+          onClick={() => setAppFilter(f.key)}
+          className={`gv-jobs-af${appFilter === f.key ? ' gv-jobs-view-on' : ''}`}
+        >
+          {f.label} <span className="gv-jobs-af-n">{appCounts[f.key]}</span>
+        </button>
+      ))}
+    </div>
   );
 
   return (
@@ -548,6 +630,7 @@ export default function JobBoardClient({ initialQuery, initialPage, initialError
             {filters}
             {tabExtras}
             <div className="gv-jobs-count" aria-live="polite">{countLine}</div>
+            {appFilters && <div style={{ marginBottom: 12 }}>{appFilters}</div>}
             {cards}
             {showMore}
           </section>
@@ -583,6 +666,7 @@ export default function JobBoardClient({ initialQuery, initialPage, initialError
               <div className="gv-jobs-countacts">
                 {/* Save the current filters as a job alert (Unlimited). */}
                 {tab === 'all' && <SaveAlertAction query={query} />}
+                {appFilters}
                 {tab !== 'listings' && <JobsViewToggle view={view} onChange={changeView} />}
               </div>
             </div>
@@ -625,14 +709,25 @@ function JobsViewToggle({ view, onChange }: { view: 'grid' | 'list'; onChange: (
   );
 }
 
-function StatusLine({ status }: { status: JobMyStatus }) {
+function StatusLine({ status, resend = false, rolePage = false }: { status: JobMyStatus; resend?: boolean; rolePage?: boolean }) {
+  // A turned-down application that can still be sent again (fewer than 3 turn-downs).
+  if (status === 'rejected' && resend) {
+    return (
+      <span className="inline-flex items-center flex-wrap" style={{ gap: 6, fontSize: 13.5, fontWeight: 700, color: '#8A5A12' }}>
+        <Clock size={14} strokeWidth={2.6} aria-hidden />
+        Not accepted yet. You can edit and send it again
+        <span style={{ fontWeight: 600, color: INK_SOFT }}>· Edit application</span>
+      </span>
+    );
+  }
   const s = STATUS_WORD[status] ?? STATUS_WORD.submitted;
   const Icon = s.icon;
   return (
-    <span className="inline-flex items-center" style={{ gap: 6, fontSize: 13.5, fontWeight: 700, color: s.tone }}>
+    <span className="inline-flex items-center flex-wrap" style={{ gap: 6, fontSize: 13.5, fontWeight: 700, color: s.tone }}>
       <Icon size={14} strokeWidth={2.6} aria-hidden />
       {s.label}
       {status === 'not_finished' && <span style={{ fontWeight: 600, color: INK_SOFT }}>· Continue application</span>}
+      {status === 'accepted' && rolePage && <span style={{ fontWeight: 600, color: INK_SOFT }}>· Open my role page</span>}
     </span>
   );
 }
@@ -678,6 +773,13 @@ const PAGE_CSS = `
 .gv-jobs-view{display:flex;align-items:center;flex-shrink:0;gap:2px;padding:3px;border-radius:12px;background:#FFFFFF;box-shadow:0 1px 2px rgba(27,56,40,0.08),0 4px 12px rgba(27,56,40,0.06)}
 .gv-jobs-view-btn{display:flex;align-items:center;justify-content:center;width:40px;height:34px;border-radius:9px;border:none;cursor:pointer;background:transparent;color:#6B5F52}
 .gv-jobs-view-on{background:#EEF3EC;color:${FOREST}}
+.gv-jobs-af{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 12px;border-radius:9px;border:none;cursor:pointer;background:transparent;font-family:${FONT};font-size:14px;font-weight:600;color:#6B5F52;white-space:nowrap}
+.gv-jobs-af.gv-jobs-view-on{font-weight:700}
+.gv-jobs-af-n{font-weight:800;font-variant-numeric:tabular-nums}
+.gv-jobs-af:focus{outline:none}
+.gv-jobs-af:focus-visible{outline:2px solid ${FOREST};outline-offset:1px}
+.gv-jobs-talent{margin:0 0 14px;font-size:14.5px;line-height:1.5;color:${INK_SOFT}}
+.gv-jobs-talent-a{font-weight:700;color:${INK};text-decoration:underline;text-underline-offset:3px}
 .gv-jobs-view-btn:focus{outline:none}
 .gv-jobs-view-btn:focus-visible{outline:2px solid ${FOREST};outline-offset:1px}
 .gv-jobs-split{display:grid;grid-template-columns:minmax(340px,0.62fr) minmax(0,1.38fr);gap:28px;overflow:hidden}
