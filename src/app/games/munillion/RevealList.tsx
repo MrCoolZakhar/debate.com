@@ -9,6 +9,7 @@ import { useMemo, useState } from 'react';
 import { TierIcon } from '@/components/munillion/PixelArt';
 import { ADD_CONFERENCE_HREF, TIER_ORDER, conferenceHref, munConfAdd, tierMeta, type MunReveal, type MunRevealQuestion } from '@/lib/munillion';
 import AddConferenceButton from './AddConferenceButton';
+import CountryFlag from './Flag';
 
 const PAGE = 120;
 
@@ -37,7 +38,7 @@ function Round({ q, open, onToggle }: { q: MunRevealQuestion; open: boolean; onT
     return q.answers.filter((a) => {
       if (filter !== 'all' && a.tier !== filter) return false;
       if (!needle) return true;
-      return fold(a.answer).includes(needle) || fold(a.note ?? '').includes(needle);
+      return fold(a.answer).includes(needle) || fold(a.note ?? '').includes(needle) || fold(a.country ?? '').includes(needle);
     });
   }, [q.answers, filter, query]);
 
@@ -51,7 +52,7 @@ function Round({ q, open, onToggle }: { q: MunRevealQuestion; open: boolean; onT
         <TierIcon tier={mineTier} size={28} label={tierMeta(mineTier).name} />
         <span>
           <span className="mn-round-q mn-tx">{q.prompt}</span>
-          <span className="mn-round-a mn-tx">{mineLabel || 'Absent'}</span>
+          <span className="mn-round-a mn-tx">{mine?.tier ? <CountryFlag country={mine.country} size={18} /> : null}{mineLabel || 'Absent'}</span>
         </span>
         <span className="mn-round-pts mn-px">{mineTier}</span>
         <span className="mn-round-chev mn-px" aria-hidden>&#9656;</span>
@@ -79,15 +80,6 @@ function Round({ q, open, onToggle }: { q: MunRevealQuestion; open: boolean; onT
 
       {open ? (
         <div id={bodyId} className="mn-round-body">
-          {q.source ? (
-            <p className="mn-source mn-tx" style={{ margin: '0 0 8px' }}>
-              <span className="mn-info mn-px" aria-hidden>i</span>
-              <span>
-                {q.source.note}
-                {q.source.url ? <> <a className="mn-link" href={q.source.url} target="_blank" rel="noopener noreferrer">Source</a></> : null}
-              </span>
-            </p>
-          ) : null}
           <div className="mn-filters" role="group" aria-label="Show answers by score">
             <button type="button" className={`mn-filter mn-px focus:outline-none${filter === 'all' ? ' is-on' : ''}`} onClick={() => { setFilter('all'); setShown(PAGE); }}>
               All {q.answers.length}
@@ -121,9 +113,15 @@ function Round({ q, open, onToggle }: { q: MunRevealQuestion; open: boolean; onT
                   <TierIcon tier={a.tier} size={22} label={tierMeta(a.tier).name} />
                   <span>
                     <span className="mn-a mn-tx">
+                      <CountryFlag country={a.country} size={18} />
                       {a.slug ? <a href={conferenceHref(a.slug)} target="_blank" rel="noopener noreferrer">{text}</a> : text}
                     </span>
-                    {a.note && a.note !== a.answer ? <span className="mn-note mn-tx">{a.note}</span> : null}
+                    {(() => {
+                      // a conference names its host country beside its full name; a president's note already is the country
+                      const parts = [a.note && a.note !== a.answer ? a.note : null,
+                        a.slug && a.country && a.country !== a.note ? a.country : null].filter(Boolean);
+                      return parts.length ? <span className="mn-note mn-tx">{parts.join(' · ')}</span> : null;
+                    })()}
                   </span>
                   <span className="mn-px">+{a.tier}</span>
                 </li>
@@ -137,6 +135,15 @@ function Round({ q, open, onToggle }: { q: MunRevealQuestion; open: boolean; onT
               <button type="button" className="mn-filter mn-px focus:outline-none" onClick={() => setShown((n) => n + PAGE)}>Show more</button>
             ) : null}
           </div>
+          {q.source ? (
+            <p className="mn-source mn-tx" style={{ margin: '12px 0 0', justifyContent: 'flex-start' }}>
+              <span className="mn-info mn-px" aria-hidden>i</span>
+              <span>
+                {q.source.note}
+                {q.source.url ? <> <a className="mn-link" href={q.source.url} target="_blank" rel="noopener noreferrer">Source</a></> : null}
+              </span>
+            </p>
+          ) : null}
           {q.kind === 'number' && q.default_tier ? (
             <p className="mn-note mn-tx" style={{ marginTop: 10 }}>
               Any other resolution from 1 to {q.number_max ?? 0} scores {tierMeta(q.default_tier).name} ({q.default_tier})

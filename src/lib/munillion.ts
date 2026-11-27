@@ -89,6 +89,8 @@ export interface MunAnswerResult {
   finished?: boolean;
   attempts_left?: number;
   source?: MunSource | null;
+  /** The country of the answer (a president's country, a conference's host), for its flag. */
+  country?: string | null;
   /** reason 'wrong_country': a real conference, in a country that doesn't count on this question. */
   conference?: { label: string; country: string | null };
 }
@@ -101,7 +103,7 @@ export interface MunOpenResult {
   seconds_left?: number;
 }
 
-export interface MunRevealAnswer { answer: string; note: string | null; slug: string | null; tier?: number }
+export interface MunRevealAnswer { answer: string; note: string | null; slug: string | null; tier?: number; country?: string | null }
 
 export interface MunRevealQuestion {
   position: number;
@@ -109,7 +111,7 @@ export interface MunRevealQuestion {
   kind: QuestionKind;
   default_tier: number | null;
   number_max: number | null;
-  mine: { typed: string | null; label: string | null; sub: string | null; slug: string | null; tier: number | null } | null;
+  mine: { typed: string | null; label: string | null; sub: string | null; slug: string | null; tier: number | null; country?: string | null } | null;
   gavel: MunRevealAnswer | null;
   source?: MunSource | null;
   /** Conference question: names this player typed that aren't on Gavelling (for "Add <name>"). */
