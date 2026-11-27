@@ -37,7 +37,7 @@ const STATIC_PAGES: { path: string; lastModified: string; changeFrequency: 'dail
   { path: '/store',             lastModified: '2026-11-27', changeFrequency: 'monthly', priority: 0.7 },
   { path: '/store/credits',     lastModified: '2026-11-27', changeFrequency: 'monthly', priority: 0.7 },
   { path: '/help',              lastModified: '2026-10-18', changeFrequency: 'weekly',  priority: 0.6 },
-  { path: '/games',             lastModified: '2026-11-26', changeFrequency: 'daily',   priority: 0.6 },
+  { path: '/games',             lastModified: '2026-11-27', changeFrequency: 'daily',   priority: 0.6 },
   { path: '/about',             lastModified: '2026-09-27', changeFrequency: 'monthly', priority: 0.6 },
   { path: '/contact',           lastModified: '2026-10-18', changeFrequency: 'yearly',  priority: 0.5 },
   { path: '/privacy',           lastModified: '2026-08-28', changeFrequency: 'yearly',  priority: 0.3 },

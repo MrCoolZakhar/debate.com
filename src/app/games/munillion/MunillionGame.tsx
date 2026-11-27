@@ -248,6 +248,14 @@ export default function MunillionGame({ header }: { header?: ReactNode }) {
     return () => { anim.onfinish = null; window.clearTimeout(safety); };
   }, [growKey]);
 
+  // On phones the site's top bar, bottom tab bar and sale bar step aside while a game is in play (owner, 27 Nov 2026).
+  useEffect(() => {
+    const playing = phase === 'question' || phase === 'growing' || phase === 'result';
+    const root = document.documentElement;
+    root.classList.toggle('mn-playing', playing);
+    return () => root.classList.remove('mn-playing');
+  }, [phase]);
+
   // A big score shakes the hall for half a second (a class toggle, so nothing remounts).
   useEffect(() => {
     const el = stageRef.current;
@@ -651,7 +659,6 @@ export default function MunillionGame({ header }: { header?: ReactNode }) {
     );
   } else if (phase === 'question' && q) {
     const pct = q.seconds > 0 ? Math.max(0, Math.min(1, remainingMs / (q.seconds * 1000))) : 0;
-    const C = 2 * Math.PI * 27;
     centre = (
       <div className="mn-panel mn-card">
         <div className="mn-kicker mn-px">Question {q.position} of {count}</div>
@@ -671,8 +678,8 @@ export default function MunillionGame({ header }: { header?: ReactNode }) {
         ) : null}
         <form key={shake} className={`mn-answer-row${shake ? ' mn-shake' : ''}`} onSubmit={(e) => { e.preventDefault(); void submit(); }}>
           <div className={`mn-timer mn-px${remaining <= 5 ? ' is-low' : ''}`} aria-label={`${remaining} seconds left`}>
-            <svg width="60" height="60" viewBox="0 0 60 60" aria-hidden>
-              <circle cx="30" cy="30" r="27" fill="none" stroke={remaining <= 5 ? '#FF8FA3' : '#EED98A'} strokeWidth="3" strokeDasharray={`${C * pct} ${C}`} />
+            <svg viewBox="0 0 60 60" aria-hidden>
+              <circle cx="30" cy="30" r="28.33" fill="none" stroke={remaining <= 5 ? '#FF8FA3' : '#EED98A'} strokeWidth="3.34" pathLength={100} strokeDasharray={`${pct * 100} 100`} />
             </svg>
             {remaining}
           </div>

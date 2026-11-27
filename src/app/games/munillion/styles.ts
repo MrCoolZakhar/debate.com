@@ -126,7 +126,8 @@ export const MUNILLION_CSS = `
 .mn-answer-row { display: flex; gap: 8px; align-items: stretch; }
 .mn-timer { width: 54px; height: 54px; flex: none; border-radius: 50%; border: 3px solid rgba(238,217,138,.35); background: rgba(12,16,23,.92);
   display: flex; align-items: center; justify-content: center; color: #EED98A; font-size: 13px; position: relative; }
-.mn-timer svg { position: absolute; inset: -3px; transform: rotate(-90deg); }
+/* the ring sits exactly on the circle's 3px border at any size (r 28.5 in a 60 box = the border's middle) */
+.mn-timer svg { position: absolute; top: -3px; left: -3px; width: calc(100% + 6px); height: calc(100% + 6px); transform: rotate(-90deg); overflow: visible; }
 .mn-timer.is-low { color: #FF8FA3; animation: mn-blink 1s steps(2, end) infinite; }
 @keyframes mn-blink { 50% { opacity: .55; } }
 .mn-input { flex: 1; min-width: 0; height: 54px; padding: 0 14px; border: 3px solid #EED98A; border-radius: 0; outline: none;
@@ -228,6 +229,25 @@ export const MUNILLION_CSS = `
   .mn-timer { width: 48px; height: 48px; }
   .mn-input { height: 48px; font-size: 22px; }
   .mn-btn.is-wide { min-height: 48px; }
+}
+/* the short guide under the game (for new players and search engines; below the one-screen game) */
+.mn-about { background: #0E141B; border-top: 3px solid rgba(238,217,138,.35); padding: clamp(32px, 5vw, 64px) clamp(16px, 4vw, 48px); }
+.mn-about-inner { max-width: 1100px; margin: 0 auto; display: grid; gap: 14px; }
+.mn-about h2 { margin: 18px 0 4px; color: #EED98A; font-size: clamp(13px, 1.6vw, 17px); line-height: 1.6; }
+.mn-about p, .mn-about li, .mn-about dd { color: #E6DFCC; font-size: 21px; line-height: 1.3; margin: 0; }
+.mn-about-tiers { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.mn-about-tiers b { display: inline-block; min-width: 44px; color: #EED98A; font-size: 11px; font-weight: 400; }
+.mn-about-faq { margin: 0; display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+.mn-about-faq dt { color: #F3EEDF; font-size: 23px; margin-bottom: 4px; }
+.mn-about-faq dd { margin: 0; color: #B9B09A; }
+.mn-about-links { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 10px 24px; }
+.mn-about-links a { color: #EED98A; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+
+/* phones: while a game is in play the site's bars step aside and the game takes the whole screen */
+@media (max-width: 1023px) {
+  html.mn-playing .mn-nav, html.mn-playing .gv-salebar { display: none !important; }
+  html.mn-playing body { padding-bottom: 0 !important; }
+  html.mn-playing .mn-stage { padding-top: max(14px, env(safe-area-inset-top, 0px)); height: 100vh; height: 100dvh; padding-bottom: max(12px, env(safe-area-inset-bottom, 0px)); }
 }
 @media (max-height: 640px) {
   .mn-tagline { display: none; }
