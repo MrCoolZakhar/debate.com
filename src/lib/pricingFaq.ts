@@ -147,6 +147,22 @@ export function faqForPage(page: 'credits' | 'subscription'): FaqEntry[] {
   return PRICING_FAQ.filter((f) => f.pages.includes(page));
 }
 
+/** Asked first on /store/credits during a buy one, get one free sale only (never in the help center). */
+const SALE_FREE_CREDITS: FaqEntry = {
+  id: 'sale-free-credits',
+  question: 'Do the free credits expire?',
+  answer: 'No. The free credits from a sale never expire, and they work everywhere credits do.',
+  actions: [],
+  pages: [],
+};
+
+/** /store/credits (prompt 86): the credits and subscription questions together,
+ *  without the renewal question (owner, 27 Nov 2026), the sale question first during a BOGO sale. */
+export function faqForStoreCredits(bogo: boolean): FaqEntry[] {
+  const list = PRICING_FAQ.filter((f) => f.id !== 'unlimited-renewal' && (f.pages.includes('credits') || f.pages.includes('subscription')));
+  return bogo ? [SALE_FREE_CREDITS, ...list] : list;
+}
+
 /**
  * The answer with its price placeholders filled from the server's tier table.
  * With no table yet the placeholders read as plain "…" so nothing invented is

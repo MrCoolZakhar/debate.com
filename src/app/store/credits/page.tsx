@@ -1,32 +1,18 @@
-import { Suspense } from 'react';
 import type { Metadata } from 'next';
 import { pageMetadata } from '@/lib/seo';
-import { StoreBar } from '@/components/store/storeKit';
-import RenewOnceOpener from '@/components/pricing/RenewOnceOpener';
+import CreditsUnlimitedClient from './CreditsUnlimitedClient';
 
-// ── Credits and Unlimited (/store/credits) ──────────────────────────────────
-// Prompt 86 fills this page (bundles, Unlimited, ?plan=unlimited scrolls to
-// it). Until then the tab never 404s, and the failed-renewal email's
-// ?renew=once (redirected from /pricing/subscription) still opens the
-// Unlimited pop-up.
+// ── Credits and Unlimited (/store/credits, prompt 86) ───────────────────────
+// The bundles, Gavelling Unlimited (?plan=unlimited scrolls to it; ?renew=once
+// opens the one-time-year Unlimited pop-up) and the questions, in the black
+// Store shell.
 
 export const metadata: Metadata = pageMetadata({
   title: 'Credits and Unlimited',
-  description: 'Gavelling credits and Gavelling Unlimited: one credit is one conference application, and Unlimited covers every application while it is active.',
+  description: 'Gavelling credits and Gavelling Unlimited: one credit is one conference application, bigger bundles cost less a credit, and Unlimited covers every application while it is active.',
   path: '/store/credits',
 });
 
 export default function StoreCreditsPage() {
-  return (
-    <>
-      <StoreBar />
-      <Suspense fallback={null}>
-        <RenewOnceOpener />
-      </Suspense>
-      <header className="gv-s-wrap" style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 'clamp(40px, 5vw, 72px)', paddingBottom: 'clamp(40px, 5vw, 72px)' }}>
-        <h1 className="gv-s-caps" style={{ fontSize: 'clamp(56px, 7.4vw, 124px)' }}>Credits and Unlimited</h1>
-        <p className="gv-s-line" style={{ fontSize: 19 }}>Coming in the next update</p>
-      </header>
-    </>
-  );
+  return <CreditsUnlimitedClient />;
 }
