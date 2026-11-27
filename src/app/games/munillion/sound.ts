@@ -133,6 +133,40 @@ export function playRise(ms: number): () => void {
   return () => { try { o.stop(); } catch { /* already stopped */ } };
 }
 
+/** Passing an award on the climb: a bright ding that rises with each rung (1 to 5). */
+export function playDing(rung: number) {
+  const f = [523, 659, 784, 988, 1319][Math.max(0, Math.min(4, rung - 1))];
+  tone(f, 0, 0.16, 'square', 0.07);
+  tone(f * 2, 0.02, 0.22, 'triangle', 0.04);
+}
+
+/** A soft tick while the marker climbs; called more often the faster it moves. */
+export function playClimbTick(pos: number) {
+  tone(380 + pos * 120, 0, 0.025, 'square', 0.022);
+}
+
+/** Falling back short of the next award: a low thud. */
+export function playThud() {
+  tone(160, 0, 0.18, 'triangle', 0.12, 70);
+  noise(0, 0.06, 0.18, 400);
+}
+
+/** The drumroll under a stall: fast snare hits that swell. Returns a stop function. */
+export function startDrumroll(): () => void {
+  const c = ready();
+  if (!c || !master) return () => {};
+  let stopped = false;
+  let n = 0;
+  const hit = () => {
+    if (stopped) return;
+    noise(0, 0.035, Math.min(0.22, 0.06 + n * 0.006), 2400);
+    n++;
+    timer = window.setTimeout(hit, 46);
+  };
+  let timer = window.setTimeout(hit, 0);
+  return () => { stopped = true; window.clearTimeout(timer); };
+}
+
 /** The moment it stops: the toot, louder and higher for rarer answers, the fanfare for The Gavel. */
 export function playReveal(tier: number) {
   if (tier <= 0) { playAbsent(); return; }
