@@ -271,8 +271,10 @@ const CSS = `
 .gv-nt-author{font-size:13.5px;font-weight:700;color:${INK};overflow-wrap:anywhere}
 .gv-nt-when{font-size:12px;color:${INK_SOFT};font-variant-numeric:tabular-nums}
 .gv-nt-body{margin:4px 0 0;font-size:14.5px;line-height:1.55;color:${INK};white-space:pre-line;overflow-wrap:anywhere}
-.gv-nt-box{width:100%;min-height:80px;padding:10px 12px;border-radius:12px;border:1.5px solid rgba(28,20,16,0.14);background:#FFFFFF;font-family:${FONT};font-size:14.5px;line-height:1.5;color:${INK};resize:vertical}
+.gv-nt-box{width:100%;min-height:80px;padding:10px 12px;border-radius:12px;border:1.5px solid rgba(28,20,16,0.14);background:#FFFFFF;font-family:${FONT};font-size:14.5px;line-height:1.5;color:${INK};resize:vertical;scroll-margin-bottom:96px}
 .gv-nt-box:focus{outline:none;border-color:${FOREST};box-shadow:inset 0 0 0 1px ${FOREST}}
+@media (max-width:640px){.gv-nt-box{font-size:16px}}
+@media (max-width:640px){.apdCard:has(.gv-nt-box:focus) .apdActions{display:none}}
 .gv-nt-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin-top:8px}
 .gv-nt-btn{min-height:38px;padding:0 16px;border:none;border-radius:10px;cursor:pointer;font-family:${FONT};font-size:13.5px;font-weight:700;color:#FFFFFF;background:linear-gradient(90deg,#1B3828 0%,#2A5A3C 100%)}
 .gv-nt-btn:disabled{opacity:0.5;cursor:default}
