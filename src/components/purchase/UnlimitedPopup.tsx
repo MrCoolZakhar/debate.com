@@ -19,7 +19,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { formatLongDate, manageErrorText, manageSubscription, notifyPlanChanged, useUnlimitedDetail } from '@/lib/subscriptionManage';
 import Link from 'next/link';
-import { BarChart3, Bell, BookOpen, Briefcase, Infinity as InfinityIcon, Loader2, Archive, Rocket } from 'lucide-react';
+import { BarChart3, Bell, BookOpen, Infinity as InfinityIcon, Loader2, Archive, Rocket } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { Emoji3D } from '@/components/neu';
 import { openAuth } from '@/lib/authModal';
@@ -40,16 +40,20 @@ import { BenefitList, BrandTitle, ErrorLine, Eyebrow, GOLD, GoldButton, Purchase
 const BENEFITS: Benefit[] = [
   { emoji: 'Infinity', fallback: InfinityIcon, title: 'Apply to as many conferences as you like', live: true },
   { emoji: 'Books', fallback: BookOpen, title: 'Premium MUN guides', live: true },
-  { emoji: 'File cabinet', fallback: Archive, title: 'Your MUN archive', live: false },
   { emoji: 'Rocket', fallback: Rocket, title: 'Your applications show first to organizers', live: true },
-  { emoji: 'Bar chart', fallback: BarChart3, title: "Insights on every role: who's applying and how fast it fills", live: true },
-  { emoji: 'Bell', fallback: Bell, title: 'Job alerts by email when new roles match', live: true },
-  { emoji: 'Briefcase', fallback: Briefcase, title: 'Premium-only roles on the Job Board', live: true },
+  { emoji: 'Bar chart', fallback: BarChart3, title: 'Advanced insights on Job Board roles', live: true },
+  { emoji: 'Bell', fallback: Bell, title: 'Job alerts for role listings', live: true },
+  { emoji: 'File cabinet', fallback: Archive, title: 'Your MUN archive', live: false },
 ];
 
-// Seven benefit lines since 20 Oct 2026 (the Job Board perks): a tighter list
-// so the pop-up still fits 1280 x 800 with no scroll and no captions (owner
-// rule, 25 Sep 2026). Scoped to this pop-up; the kit is unchanged elsewhere.
+// Six benefit lines (prompt 71: the premium-only roles line removed, the archive
+// last with its Soon tag): a tighter list so the pop-up still fits 1280 x 800
+// with no scroll and no captions (owner rule, 25 Sep 2026). Scoped to this
+// pop-up; the kit is unchanged elsewhere.
+// Buy mode (prompt 71): on desktop the plan choice and pay block sit centred
+// in the right panel. Auto margins on the first and last child centre it and
+// fall back to 0 when the panel is taller than the pop-up, so it still scrolls
+// and the top is never clipped. Phones (stacked) stay top-aligned.
 // Resume mode: the benefits a touch more prominent, and the one sentence-case button.
 const RESUME_CSS = `
 [data-testid="unlimited-popup"] .gv-buy-left{gap:16px}
@@ -62,6 +66,10 @@ const RESUME_CSS = `
 .gv-buy-benefits-hl .gv-buy-benefit-text{color:#FFFFFF;font-size:16px!important;font-weight:700}
 .gv-buy-benefits-hl .gv-buy-benefits{gap:11px}
 [data-testid="unlimited-resume"]{text-transform:none;letter-spacing:0.01em}
+@media (min-width:860px){
+  [data-testid="unlimited-popup"] .gv-un-center>:first-child{margin-top:auto}
+  [data-testid="unlimited-popup"] .gv-un-center>:last-child{margin-bottom:auto}
+}
 `;
 
 export default function UnlimitedPopup({ request }: { request: UnlimitedPopupRequest }) {
@@ -190,7 +198,10 @@ export default function UnlimitedPopup({ request }: { request: UnlimitedPopupReq
 
       {/* Resume mode: the title, the line and the button sit in the middle of
           the panel, not stuck to its top (26 Sep 2026). */}
-      <div className="gv-buy-right" style={resumeMode || forever ? { justifyContent: 'center' } : undefined}>
+      <div
+        className={`gv-buy-right${!resumeMode && !forever && !signedOut && !checkingPlan && !alreadyOn && !(stage === 'pay' && checkout) ? ' gv-un-center' : ''}`}
+        style={resumeMode || forever ? { justifyContent: 'center' } : undefined}
+      >
         {forever ? (
           <>
             <h3 className="gv-buy-rtitle">You have Unlimited forever</h3>

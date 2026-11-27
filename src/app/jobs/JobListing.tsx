@@ -316,6 +316,9 @@ export default function JobListing({
   const about = detail?.conference_about ?? null;
   const poster = detail?.poster ?? null;
   const qCount = listing?.questions_count ?? 0;
+  // The side column (Posted by, the question count). One condition: it renders
+  // the aside and, when false, lets About the Conference take the side area.
+  const hasAside = !!(poster?.name || (qCount > 0 && open && !outside && !premiumLocked));
 
   return (
     <article className="gv-jl" style={{ fontFamily: FONT }} aria-label={card.title}>
@@ -383,7 +386,7 @@ export default function JobListing({
       {loading && !detail ? (
         <BodySkeleton />
       ) : (
-        <div className="gv-jl-body">
+        <div className={`gv-jl-body${hasAside ? '' : ' gv-jl-body-noside'}`}>
           {premiumLocked ? (
             <PremiumLock className="gv-jl-main-col gv-jl-a-role" />
           ) : (
@@ -398,7 +401,7 @@ export default function JobListing({
             </section>
           )}
 
-          {(poster?.name || (qCount > 0 && open && !outside && !premiumLocked)) && (
+          {hasAside && (
             <aside className="gv-jl-side gv-jl-a-side">
               {poster?.name && (
                 <section className="gv-jl-card gv-jl-side-card">
@@ -560,7 +563,14 @@ const LISTING_CSS = `
 .gv-jl-a-role{grid-area:role}
 .gv-jl-a-side{grid-area:side}
 .gv-jl-a-conf{grid-area:conf}
-@media (min-width:1100px){.gv-jl-body{grid-template-columns:minmax(0,1fr) minmax(260px,340px);grid-template-areas:"role side" "conf side";grid-template-rows:auto 1fr;align-items:start}}
+@media (min-width:1100px){
+  .gv-jl-body{grid-template-columns:minmax(0,1fr) minmax(260px,340px);grid-template-areas:"role side" "conf side";grid-template-rows:auto 1fr;align-items:start}
+  .gv-jl-body-noside{grid-template-areas:"role conf";grid-template-rows:auto}
+  .gv-jl-a-side{align-self:stretch}
+  .gv-jl-a-side>:last-child{flex:1 1 auto}
+  .gv-jl-a-side>.gv-jl-qcount:last-child{flex-wrap:wrap;align-content:flex-start}
+  .gv-jl-a-side>.gv-jl-qcount:last-child>p{flex:1 1 0;min-width:0}
+}
 .gv-jl-side{display:flex;flex-direction:column;gap:16px;min-width:0}
 .gv-jl-side-card{padding:26px 26px}
 .gv-jl-h{margin:0 0 12px;font-size:19px;font-weight:800;letter-spacing:-0.01em;color:${INK}}

@@ -4120,7 +4120,7 @@ export default function ApplicationsView({ scope }: { scope: 'participants' | 't
             {/* Team roles live in Team (owner, 14 Nov 2026). */}
             <p style={{ fontFamily: OUTFIT, fontSize: 13.5, color: NEU.inkSoft, margin: '4px 0 0', lineHeight: 1.5 }}>
               Applications is for delegates, head delegates, faculty advisors and observers. Chairs, secretariat and staff are in{' '}
-              <Link href={`/manage/${conference.slug}/team`} style={{ fontWeight: 700, color: NEU.ink, textDecoration: 'underline', textUnderlineOffset: 3 }}>Team</Link>.
+              <Link href={`/manage/${conference.slug}/team?tab=applications`} style={{ fontWeight: 700, color: NEU.ink, textDecoration: 'underline', textUnderlineOffset: 3 }}>Team Applications</Link>.
             </p>
           </div>
         </div>
