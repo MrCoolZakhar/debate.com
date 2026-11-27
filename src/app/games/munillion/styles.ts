@@ -59,6 +59,29 @@ export const MUNILLION_CSS = `
 .mn-halo.is-on { opacity: 1; }
 @keyframes mn-spin { to { transform: translateX(-50%) rotate(360deg); } }
 
+/* the climb: a ladder of the five awards and a marker that climbs it after each answer */
+.mn-climb { position: absolute; left: clamp(8px, 3.5vw, 56px); top: 20%; bottom: 18%; width: 200px; z-index: 2; pointer-events: none; }
+.mn-climb-rail { position: absolute; left: 14px; top: 0; bottom: 0; width: 10px; border: 3px solid #0B0E13; background: rgba(12,16,23,.85); box-shadow: 0 0 0 2px rgba(238,217,138,.4); }
+.mn-climb-fill { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: linear-gradient(0deg, #C9A84A, #EED98A); }
+.mn-climb-rung { position: absolute; left: 0; display: flex; align-items: center; gap: 10px; transform: translateY(50%); }
+.mn-climb-icon { width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; background: rgba(12,16,23,.92); border: 3px solid rgba(238,217,138,.35);
+  filter: grayscale(.85) brightness(.75); transition: filter .15s steps(2, end), border-color .15s steps(2, end); }
+.mn-climb-name { color: rgba(243,238,223,.45); font-size: 8px; white-space: nowrap; text-shadow: 1px 1px 0 #0B0E13; }
+.mn-climb-rung.is-lit .mn-climb-icon { filter: none; border-color: #EED98A; box-shadow: 0 0 14px rgba(238,217,138,.55); }
+.mn-climb-rung.is-lit .mn-climb-name { color: #EED98A; }
+.mn-climb-rung.is-pop .mn-climb-icon { animation: mn-pop .38s steps(4, end) 1; }
+.mn-climb-marker { position: absolute; left: 4px; bottom: 0; width: 30px; height: 22px; transform: translateY(50%); }
+.mn-climb-marker span { position: absolute; inset: 0; background: #FBF7EC; border: 3px solid #0B0E13; box-shadow: 0 0 0 2px #EED98A, 0 0 16px rgba(238,217,138,.7); }
+.mn-climb-marker span::after { content: ''; position: absolute; left: 50%; bottom: -12px; width: 4px; height: 9px; margin-left: -2px; background: #0B0E13; }
+@keyframes mn-spin-y { to { transform: rotateY(360deg); } }
+.mn-spin-once { animation: mn-spin-y .9s steps(9, end) 1; }
+@media (max-width: 760px) {
+  .mn-climb { width: 46px; left: 6px; top: 24%; bottom: 22%; }
+  .mn-climb-name { display: none; }
+  .mn-climb-rail { left: 15px; }
+  .mn-climb-icon { width: 32px; height: 32px; }
+}
+
 /* bursts and flashes */
 .mn-burst { position: absolute; left: 50%; top: 46%; z-index: 4; pointer-events: none; }
 .mn-bit { position: absolute; width: 8px; height: 8px; background: var(--c, #EED98A); animation: mn-bit 1.3s cubic-bezier(.15,.8,.3,1) forwards; }

@@ -44,9 +44,10 @@ import {
 } from '@/lib/munillion';
 import { isBlockedText } from '@/lib/munillionProfanity';
 import RevealList from './RevealList';
+import { RUNG_TIERS, buildClimb, climbAt, rungFor } from './suspense';
 import AddConferenceButton from './AddConferenceButton';
 import {
-  playBuzz, playReveal, playRise, playStart, playSuggest, playTick, setSoundMuted, soundMuted, unlockSound,
+  playBuzz, playClimbTick, playDing, playReveal, playStart, playSuggest, playThud, playTick, setSoundMuted, soundMuted, startDrumroll, unlockSound,
 } from './sound';
 
 type Phase = 'loading' | 'error' | 'nogame' | 'intro' | 'question' | 'growing' | 'result' | 'summary';
@@ -77,11 +78,6 @@ const BURST_COLOURS = ['#EED98A', '#FF8FA3', '#7BC9A0', '#F3EEDF', '#5AC8FF'];
 /** How big the hand stands for a score: 0.85 at zero, about 4 at a perfect 700 (it fills the hall behind the panels). */
 function scaleFor(total: number): number {
   return 0.85 + Math.min(1, Math.max(0, total) / MAX_POINTS) * 3.2;
-}
-
-/** How long the placard keeps growing before the score shows: longer for rarer answers, so the wait builds. */
-function growMs(tier: number): number {
-  return tier >= 100 ? 4800 : tier >= 85 ? 3900 : tier >= 60 ? 3100 : tier >= 30 ? 2400 : tier > 0 ? 1700 : 1000;
 }
 
 function formatDate(iso: string | undefined): string {
@@ -173,7 +169,9 @@ export default function MunillionGame({ header }: { header?: ReactNode }) {
   const [confMisses, setConfMisses] = useState<string[]>([]);
   const [addPrompt, setAddPrompt] = useState<string | null>(null);
   const pendingRef = useRef<{ total: number; tier: number } | null>(null);
-  const stopRiseRef = useRef<(() => void) | null>(null);
+  const climbRef = useRef<HTMLDivElement>(null);
+  const markerRef = useRef<HTMLDivElement>(null);
+  const fillRef = useRef<HTMLDivElement>(null);
   const finishGrowRef = useRef<() => void>(() => {});
   const revealedAtRef = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -202,8 +200,10 @@ export default function MunillionGame({ header }: { header?: ReactNode }) {
     growRef.current.style.transform = `scale(${scaleRef.current})`;
   }, [total, growKey]);
 
-  // After each answer the hand grows slowly with a rising sound and the score stays hidden until it stops
-  // (owner, 26 Nov 2026: the wait is the point). It sways side to side as it grows; The Gavel spins it round.
+  // After each answer a marker climbs the ladder of awards while the hand grows with it (owner, 27 Nov 2026:
+  // more suspense). It speeds through the low rungs with a ding at each award, creeps up under the next
+  // one, trembles to a drumroll and either pushes over or falls back; then a beat of silence, then the
+  // score. A stall happens on good and bad answers alike, so it never gives the result away.
   useEffect(() => {
     const el = growRef.current;
     if (!growKey || !el) return;
@@ -211,41 +211,71 @@ export default function MunillionGame({ header }: { header?: ReactNode }) {
     const a = scaleRef.current;
     const b = scaleFor(target);
     scaleRef.current = b;
-    const ms = growMs(tier);
+    const segs = buildClimb(tier);
+    const top = rungFor(tier);
+    const ladder = climbRef.current;
+    const marker = markerRef.current;
+    const fill = fillRef.current;
+    const fig = el.querySelector('.mn-hand-fig');
+    ladder?.querySelectorAll('.mn-climb-rung').forEach((r) => r.classList.remove('is-lit', 'is-pop'));
+    fig?.classList.remove('mn-spin-once');
+    const place = (pos: number) => {
+      const pct = `${Math.max(0, pos) / 5.6 * 100}%`;
+      if (marker) marker.style.bottom = pct;
+      if (fill) fill.style.height = pct;
+    };
+    place(0);
     let done = false;
+    let stopRoll: (() => void) | null = null;
     const finish = () => {
       if (done) return;
       done = true;
+      stopRoll?.();
+      stopRoll = null;
       el.style.transform = `scale(${b})`;
-      stopRiseRef.current?.();
-      stopRiseRef.current = null;
       finishGrowRef.current();
     };
-    stopRiseRef.current = playRise(ms);
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || typeof el.animate !== 'function') {
-      const id = window.setTimeout(finish, Math.min(ms, 900));
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      for (let r = 1; r <= top; r++) ladder?.querySelector(`[data-rung="${r}"]`)?.classList.add('is-lit');
+      place(top);
+      const id = window.setTimeout(finish, 700);
       return () => window.clearTimeout(id);
     }
-    const frames: Keyframe[] = [];
-    const steps = 14;
-    for (let i = 0; i <= steps; i++) {
-      const p = i / steps;
-      if (tier === 0) {
-        const droop = Math.sin(p * Math.PI);
-        frames.push({ transform: `scale(${a - (a - b) * p - droop * a * 0.12}) rotate(${Math.sin(p * Math.PI * 3) * 8 * (1 - p)}deg)` });
-        continue;
+    let raf = 0;
+    let lit = 0;
+    let lastTick = 0;
+    let thudded = false;
+    const t0 = performance.now();
+    const frame = (now: number) => {
+      const ms = now - t0;
+      const f = climbAt(segs, ms);
+      const tremble = f.stalling ? Math.sin(ms / 26) * 0.04 : 0;
+      place(f.pos + tremble);
+      // every award passed lights up with a ding (rising pitch)
+      const reached = Math.floor(f.pos + 1e-6);
+      while (lit < reached && lit < 5) {
+        lit++;
+        const rung = ladder?.querySelector(`[data-rung="${lit}"]`);
+        rung?.classList.add('is-lit', 'is-pop');
+        window.setTimeout(() => rung?.classList.remove('is-pop'), 380);
+        playDing(lit);
+        if (lit === 5) fig?.classList.add('mn-spin-once');
       }
-      // smootherstep: starts gently, picks up, then eases into the final size
-      const e = p * p * p * (p * (p * 6 - 15) + 10);
-      const sway = Math.sin(p * Math.PI * 4) * 7 * (1 - p * 0.7);
-      const drift = Math.sin(p * Math.PI * 3) * 2.5 * (1 - p);
-      const spin = tier >= 100 ? ` rotateY(${Math.round(e * 360)}deg)` : '';
-      frames.push({ transform: `scale(${a + (b - a) * e})${spin} rotate(${sway}deg) translateX(${drift}%)` });
-    }
-    const anim = el.animate(frames, { duration: ms, easing: 'linear', fill: 'forwards' });
-    anim.onfinish = () => { finish(); anim.cancel(); };
-    const safety = window.setTimeout(finish, ms + 400);
-    return () => { anim.onfinish = null; window.clearTimeout(safety); };
+      // ticks come faster the faster it climbs; a drumroll under a stall; a thud when it falls back
+      if (f.kind === 'move' && Math.abs(f.pos - lastTick) >= 0.2) { playClimbTick(f.pos); lastTick = f.pos; }
+      if (f.stalling && !stopRoll) stopRoll = startDrumroll();
+      if (!f.stalling && stopRoll) { stopRoll(); stopRoll = null; }
+      if (f.kind === 'drop' && !thudded) { playThud(); thudded = true; }
+      // the hand grows with the climb, trembling while it stalls
+      const prog = top > 0 ? Math.max(0, Math.min(1.12, f.pos / top)) : 0;
+      const scale = top > 0 ? a + (b - a) * prog : a * (1 - 0.12 * Math.min(1, f.pos / 0.72));
+      const sway = Math.sin(ms / 240) * (f.hush ? 1 : 4) + (f.stalling ? Math.sin(ms / 24) * 1.8 : 0);
+      el.style.transform = `scale(${scale}) rotate(${sway}deg)`;
+      if (f.done) { finish(); return; }
+      raf = requestAnimationFrame(frame);
+    };
+    raf = requestAnimationFrame(frame);
+    return () => { cancelAnimationFrame(raf); stopRoll?.(); };
   }, [growKey]);
 
   // On phones the site's top bar, bottom tab bar and sale bar step aside while a game is in play (owner, 27 Nov 2026).
@@ -792,6 +822,18 @@ export default function MunillionGame({ header }: { header?: ReactNode }) {
         ))}
       </div>
       {handLayer}
+      {phase === 'growing' || phase === 'result' ? (
+        <div className="mn-climb" ref={climbRef} aria-hidden>
+          <div className="mn-climb-rail"><div className="mn-climb-fill" ref={fillRef} /></div>
+          {RUNG_TIERS.map((t, i) => (
+            <div key={t} className="mn-climb-rung" data-rung={i + 1} style={{ bottom: `${((i + 1) / 5.6) * 100}%` }}>
+              <span className="mn-climb-icon"><TierIcon tier={t} size={20} /></span>
+              <span className="mn-climb-name mn-px">{tierMeta(t).name}</span>
+            </div>
+          ))}
+          <div className="mn-climb-marker" ref={markerRef}><span /></div>
+        </div>
+      ) : null}
       {burst && burst.bits.length ? (
         <div className="mn-burst" key={burst.key} aria-hidden>
           {burst.bits.map((b, i) => (
