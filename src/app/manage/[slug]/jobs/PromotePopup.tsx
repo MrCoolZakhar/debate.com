@@ -49,6 +49,9 @@ export interface PromoteProps {
   choices?: { id: string; title: string }[];
 }
 
+// Short title plus one short line each, so the left side fits one screen from
+// 1280x720 (prompt 78). A standalone listing (payer 'you') has no conference card,
+// so it never lists the Hiring mark.
 const POINTS: Benefit[] = [
   { emoji: 'Glowing star', fallback: Star, title: 'First on the Job Board', note: 'In every filter it matches, with a gold edge and a Promoted tag', live: true },
   { emoji: 'Briefcase', fallback: Briefcase, title: 'The Hiring mark on Explore', note: 'Your conference card shows people you are hiring', live: true },
@@ -215,10 +218,11 @@ export function PromoteContent({ listingId: firstId, listingTitle: firstTitle, c
 
   return (
     <>
-      <div className="gv-buy-left">
+      <div className="gv-buy-left gv-pr-left">
         <div>
           <h2 className="gv-buy-title">Promote Your Listing</h2>
-          <p className="gv-buy-sub">{heading ?? 'Shown first to everyone looking for a role'}</p>
+          {/* The default line repeated the first item below (prompt 78); only a caller's own heading shows. */}
+          {heading ? <p className="gv-buy-sub">{heading}</p> : null}
         </div>
         <div className="gv-pr-listing">
           <Eyebrow>Listing</Eyebrow>
@@ -237,7 +241,7 @@ export function PromoteContent({ listingId: firstId, listingTitle: firstTitle, c
         </div>
         <div>
           <Eyebrow>What you get</Eyebrow>
-          <BenefitList items={POINTS} tone="light" />
+          <BenefitList items={payer === 'you' ? POINTS.filter((pt) => pt.fallback !== Briefcase) : POINTS} tone="light" />
         </div>
       </div>
 
@@ -386,6 +390,16 @@ const PROMOTE_CSS = `
 .gv-pr-total-big{font-size:32px;font-weight:800;letter-spacing:-0.03em;line-height:1;color:${FOREST};font-variant-numeric:tabular-nums}
 .gv-pr-total-cap{margin-top:3px;font-size:12.5px;font-weight:600;color:${INK_SOFT}}
 .gv-pr-not-now{display:flex;justify-content:center}
+.gv-pr-left{gap:16px;padding-top:24px;padding-bottom:20px}
+.gv-pr-left .gv-buy-title{font-size:30px}
+.gv-pr-left .gv-buy-sub{margin-top:6px}
+.gv-pr-left .gv-buy-benefits{gap:10px}
+.gv-pr-left .gv-buy-benefit{gap:12px}
+.gv-pr-left .gv-buy-benefit-disc{width:40px;height:40px;border-radius:12px}
+.gv-pr-left .gv-buy-benefit-disc img,.gv-pr-left .gv-buy-benefit-disc svg{width:22px;height:22px}
+.gv-pr-left .gv-buy-benefit-text{font-size:15px!important}
+.gv-pr-left .gv-buy-benefit-note{font-size:12.5px!important}
+@media (min-width:744px){.gv-pr-pop .gv-buy-body{overflow:hidden}.gv-pr-pop .gv-buy-right{overflow-y:auto}}
 .gv-pr-own{margin:0;font-size:14.5px;font-weight:600;line-height:1.45;color:${INK}}
 @media (min-width:744px){.gv-pr-pop .gv-buy-right{justify-content:safe center}}
 .gv-pr-skel{display:block;width:100%;border-radius:14px;background:rgba(28,20,16,0.08);animation:gvPrPulse 1.2s ease-in-out infinite}

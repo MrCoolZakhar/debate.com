@@ -9,7 +9,7 @@
 //   the conference's logo (a monogram disc when it has none or it cannot be
 //   read), its short name, "Now hiring · <role>", the title large, the
 //   committee, the dates and place, up to three offer chips, and at the foot a
-//   QR code beside "Apply on Gavelling", "gavelling.com/jobs" and the
+//   QR code beside "Apply on Gavelling" ("Apply on their site" for an outside listing), "gavelling.com/jobs" and the
 //   Gavelling lockup (the image, never typed, in its own colours on an ivory
 //   capsule). The QR and Copy link both point at
 //   `${SITE_URL}/jobs?listing=<id>&ref=share`.
@@ -355,7 +355,8 @@ async function paintCard(canvas: HTMLCanvasElement, which: SizeKey, card: JobCar
 
   const colX = P + Q + 40;
   const colW = W - P - colX;
-  const cta = fitText(ctx, 'Apply on Gavelling', { weight: 800, max: story ? 58 : 52, min: 28, maxLines: 2, maxW: colW, maxH: 140, lh: 1.08 }, font);
+  // An outside listing applies on the conference's own site (prompt 78).
+  const cta = fitText(ctx, card.kind === 'outside' ? 'Apply on their site' : 'Apply on Gavelling', { weight: 800, max: story ? 58 : 52, min: 28, maxLines: 2, maxW: colW, maxH: 140, lh: 1.08 }, font);
   let cy = footTop + cta.size * 0.95;
   ctx.fillStyle = IVORY;
   ctx.font = font(800, cta.size);

@@ -380,9 +380,12 @@ export default function PostingPopup({
         if (problem) { setStep(s); setBad(problem); return; }
       }
     }
-    // From step 2 on (and on every step of an existing listing), leaving a
-    // step saves the draft, so closing half way keeps it.
-    if ((forward && index >= 1) || id) {
+    // From step 2 on (and on every step of an existing draft), leaving a
+    // step saves the draft, so closing half way keeps it. A PUBLISHED listing
+    // never saves on a step change (prompt 78): only Save changes saves, so the
+    // one free fix of an outside listing is spent only by that button.
+    const published = shown === 'live' || shown === 'closed' || shown === 'hidden';
+    if (!published && ((forward && index >= 1) || id)) {
       busyRef.current = true;
       setBusy('save');
       try {
