@@ -51,7 +51,8 @@ export default function MobileTabBar() {
           const inner = (
             <>
               <Icon size={23} strokeWidth={on ? 2.3 : 1.8} aria-hidden="true" />
-              <span style={{ fontSize: 11, fontWeight: on ? 800 : 600, lineHeight: 1 }}>
+              {/* While auth loads the Profile / Log in word keeps its space but is hidden, so it never flips (prompt 94). */}
+              <span style={{ fontSize: 11, fontWeight: on ? 800 : 600, lineHeight: 1, visibility: loading && label === 'Profile' ? 'hidden' : undefined }}>
                 {needsAuth && !user && !loading && label === 'Profile' ? 'Log in' : label}
               </span>
             </>

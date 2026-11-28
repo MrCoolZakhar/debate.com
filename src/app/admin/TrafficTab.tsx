@@ -47,6 +47,9 @@ const PAGE_FAMILIES: { key: string; label: string }[] = [
   { key: 'pricing', label: 'Pricing' },
   { key: 'help', label: 'Help' },
   { key: 'join', label: 'Join' },
+  { key: 'store', label: 'Store' },
+  { key: 'games', label: 'Games' },
+  { key: 'jobs', label: 'Job Board' },
 ];
 const familyLabel = (k: string) => PAGE_FAMILIES.find(f => f.key === k)?.label ?? k.charAt(0).toUpperCase() + k.slice(1);
 
@@ -217,7 +220,7 @@ export default function TrafficTab() {
 
 // ── Pieces, in the Data tab's manner ─────────────────────────────────────────
 
-function Section({ icon, gradient, title, kicker, children }: {
+export function Section({ icon, gradient, title, kicker, children }: {
   icon: typeof BarChart3; gradient: [string, string]; title: string; kicker?: string; children: React.ReactNode;
 }) {
   return (
@@ -234,7 +237,7 @@ function Section({ icon, gradient, title, kicker, children }: {
   );
 }
 
-function StatStrip({ items }: { items: { label: string; value: string }[] }) {
+export function StatStrip({ items }: { items: { label: string; value: string }[] }) {
   return (
     <NeuInset small style={{ display: 'flex', flexWrap: 'wrap', gap: 0, padding: '10px 4px' }}>
       {items.map((it, i) => (
@@ -280,7 +283,7 @@ function dayTicks(max: number): { top: number; ticks: number[] } {
   return { top, ticks };
 }
 
-function DayChart({ points, days, label }: { points: { day: string; views: number }[]; days: number; label: string }) {
+export function DayChart({ points, days, label, unit = 'views' }: { points: { day: string; views: number }[]; days: number; label: string; unit?: string }) {
   const byDay = new Map(points.map(p => [p.day.slice(0, 10), p.views]));
   const series: { d: string; v: number }[] = [];
   const today = new Date();
@@ -312,7 +315,7 @@ function DayChart({ points, days, label }: { points: { day: string; views: numbe
         ))}
         {series.map((s, i) => (
           <rect key={s.d} x={padL + bw * i + bw * 0.15} y={y(s.v)} width={bw * 0.7} height={Math.max(0, padT + innerH - y(s.v))} rx={2} fill={NEU.forest} opacity={0.85}>
-            <title>{`${s.d}: ${int(s.v)} views`}</title>
+            <title>{`${s.d}: ${int(s.v)} ${unit}`}</title>
           </rect>
         ))}
         <path d={smoothPath(meanPts)} fill="none" stroke="#B6871F" strokeWidth={2} strokeDasharray="5 4" />
@@ -321,7 +324,7 @@ function DayChart({ points, days, label }: { points: { day: string; views: numbe
         ))}
       </svg>
       <p style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.inkSoft, marginTop: 4 }}>
-        {empty ? 'No views in this window.' : 'Bars are the daily count; the dashed line is the 7-day mean.'}
+        {empty ? `No ${unit} in this window.` : 'Bars are the daily count; the dashed line is the 7-day mean.'}
       </p>
     </div>
   );

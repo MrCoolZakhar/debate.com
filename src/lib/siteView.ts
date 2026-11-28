@@ -11,7 +11,7 @@ import { classifyTraffic } from '@/lib/trafficSource';
 
 export const SITE_SOURCE_KEY = 'gavelling-site-source';
 
-/** The page key for a path: home, explore, guides/<slug>, conference, other ... */
+/** The page key for a path: home, explore, guides/<slug>, conference, store, store/credits, games, games/<slug>, jobs, other ... */
 export function sitePageKey(pathname: string): string {
   const p = (pathname || '/').toLowerCase().replace(/\/+$/, '') || '/';
   if (p === '/') return 'home';
@@ -35,6 +35,10 @@ export function sitePageKey(pathname: string): string {
   if (first === 'manage') return 'manage';
   if (first === 'account' || first === 'my-conferences') return 'account';
   if (first === 'about' || first === 'contact' || first === 'organisers' || first === 'cv') return first;
+  // Their own keys since prompt 94 (28 Nov 2026); older days stay under 'other'.
+  if (first === 'store') return seg[1] === 'credits' ? 'store/credits' : 'store';
+  if (first === 'games') return seg[1] ? `games/${slug(seg[1])}` : 'games';
+  if (first === 'jobs') return 'jobs';
   return 'other';
 }
 

@@ -19,14 +19,14 @@ import Link from 'next/link';
 import { ArrowRight, Check } from 'lucide-react';
 import { MotionPlacard } from '@/components/store/MotionPlacards';
 import StoreBundlePicker from '@/components/store/StoreBundlePicker';
-import { Countdown, HeroScrollCue, StoreBar } from '@/components/store/storeKit';
+import { Countdown, HeroScrollCue, Skel, StoreBar } from '@/components/store/storeKit';
 import FaqList from '@/components/pricing/FaqList';
 import RenewOnceOpener from '@/components/pricing/RenewOnceOpener';
 import { formatUsd } from '@/lib/creditPricing';
 import { unlimitedPricing } from '@/lib/payments';
 import { faqForStoreCredits } from '@/lib/pricingFaq';
 import { openCreditsPopup, openUnlimitedPopup } from '@/lib/purchasePopup';
-import { saleEndLabel, useRunningSale } from '@/lib/storeSale';
+import { saleEndLabel, useRunningSale, useStoreSaleKnown } from '@/lib/storeSale';
 import { isUnlimited, useUnlimitedStatus } from '@/lib/unlimitedStatus';
 
 const JOBS_ROUTE = '/jobs';
@@ -47,6 +47,8 @@ type Period = 'yearly' | 'monthly';
 
 export default function CreditsUnlimitedClient() {
   const sale = useRunningSale();
+  // Until store_sale_now() answers, neither look is drawn (prompt 94: no flash of the plain page).
+  const known = useStoreSaleKnown();
   const bogo = !!sale?.credits_bogo;
   const status = useUnlimitedStatus();
   const onUnlimited = isUnlimited(status);
@@ -80,7 +82,21 @@ export default function CreditsUnlimitedClient() {
         <RenewOnceOpener />
       </Suspense>
 
-      {sale && bogo ? (
+      {!known ? (
+        // The sale hero's own height rules, with grey bars where the words go.
+        <section className="gv-cu-hero" aria-busy="true">
+          <div className="gv-s-wrap gv-cu-hero-in">
+            <div className="gv-cu-hero-copy">
+              <h1 className="sr-only">Credits and Unlimited</h1>
+              <Skel w={260} h={14} />
+              <Skel w="60%" h={96} style={{ borderRadius: 14 }} />
+              <Skel w="80%" h={96} style={{ borderRadius: 14 }} />
+              <Skel w={360} h={20} />
+            </div>
+            <div className="gv-cu-hero-art" aria-hidden />
+          </div>
+        </section>
+      ) : sale && bogo ? (
         <section id="gv-cu-hero" className="gv-cu-hero" aria-labelledby="gv-cu-h1">
           <span className="gv-cu-hero-glow" aria-hidden />
           <div className="gv-s-wrap gv-cu-hero-in">
@@ -105,7 +121,7 @@ export default function CreditsUnlimitedClient() {
         </header>
       )}
 
-      {sale && bogo && (
+      {known && sale && bogo && (
         <div className="gv-cu-ticker" aria-hidden>
           <div className="gv-cu-ticker-track">
             <span>{tickerPhrase.repeat(4)}</span>
@@ -122,12 +138,14 @@ export default function CreditsUnlimitedClient() {
           <div className="gv-s-head gv-cu-head-stack">
             <h2 id="gv-cu-bundle" className="gv-s-caps gv-s-h2">Pick your bundle</h2>
             <p className="gv-s-line gv-cu-head-line">
-              {bogo
+              {!known
+                ? <Skel w="90%" h={18} />
+                : bogo
                 ? <>Bigger bundles cost less a credit, and every bundle is doubled this weekend. Use them in the <Link href="/store" className="gv-s-a">Gavelling Store</Link>.</>
                 : <>Bigger bundles cost less a credit. Use them in the <Link href="/store" className="gv-s-a">Gavelling Store</Link>.</>}
             </p>
           </div>
-          <StoreBundlePicker bogo={bogo} />
+          <StoreBundlePicker bogo={bogo} known={known} />
         </section>
 
         {/* ── Gavelling Unlimited ── */}
@@ -135,7 +153,7 @@ export default function CreditsUnlimitedClient() {
           <div className="gv-s-head">
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
               <h2 id="gv-cu-unl" className="gv-s-caps gv-s-h2">Gavelling Unlimited</h2>
-              <p className="gv-s-line gv-cu-head-line">{saleYear ? 'Never spend a credit to apply again. Now at a discount.' : 'Never spend a credit to apply again.'}</p>
+              <p className="gv-s-line gv-cu-head-line">{!known ? <Skel w={320} h={18} /> : saleYear ? 'Never spend a credit to apply again. Now at a discount.' : 'Never spend a credit to apply again.'}</p>
             </div>
             <div className="gv-cu-switch" role="radiogroup" aria-label="Billing period">
               {(['yearly', 'monthly'] as Period[]).map((p) => (
@@ -158,7 +176,7 @@ export default function CreditsUnlimitedClient() {
                   }}
                 >
                   <span className="gv-cu-seg-w">{p === 'yearly' ? 'Yearly' : 'Monthly'}</span>
-                  <small>{p === 'yearly' ? (saleYear ? `${first} the first year` : `${yearly} a year`) : `${monthly} a month`}</small>
+                  <small>{p === 'yearly' ? (!known ? <Skel w={96} h={12} inline /> : saleYear ? `${first} the first year` : `${yearly} a year`) : `${monthly} a month`}</small>
                 </button>
               ))}
             </div>
@@ -187,11 +205,16 @@ export default function CreditsUnlimitedClient() {
               </div>
               <div className="gv-cu-plan-top">
                 <h3 id="gv-cu-unl-t" className="gv-s-caps gv-cu-plan-t">Unlimited</h3>
-                {sale && <span className="gv-cu-chip">Motion to save</span>}
+                {known && sale && <span className="gv-cu-chip">Motion to save</span>}
               </div>
               <p className="gv-cu-plan-line">Unlimited applications. Unlimited guides. Unlimited MUN. Never spend a credit to apply again.</p>
               <div aria-live="polite">
-                {period === 'yearly' && saleYear ? (
+                {period === 'yearly' && !known ? (
+                  <>
+                    <div className="gv-cu-price"><Skel w={160} h={64} /></div>
+                    <Skel w={240} h={16} style={{ marginTop: 10 }} />
+                  </>
+                ) : period === 'yearly' && saleYear ? (
                   <>
                     <div className="gv-cu-price"><b>{first}</b><span>the first year</span><s className="gv-cu-was"><span className="sr-only">instead of </span>{yearly}</s></div>
                     <p className="gv-cu-note">Renews at {yearly} a year. Cancel anytime.</p>
@@ -227,7 +250,7 @@ export default function CreditsUnlimitedClient() {
                   <Link href="/account/manage/subscription" className="gv-s-btn gv-s-big gv-s-cream">You&apos;re on Unlimited</Link>
                 ) : (
                   <button type="button" className="gv-s-btn gv-s-big gv-s-cream" onClick={() => openUnlimitedPopup({ plan: period })}>
-                    {period === 'yearly' && saleYear ? `Get a year for ${first}` : 'Go Unlimited'}
+                    {period === 'yearly' && !known ? <Skel w={150} h={16} inline style={{ background: 'rgba(14,15,13,0.12)' }} /> : period === 'yearly' && saleYear ? `Get a year for ${first}` : 'Go Unlimited'}
                   </button>
                 )}
               </div>
@@ -245,7 +268,8 @@ export default function CreditsUnlimitedClient() {
             <h2 id="gv-cu-q" className="gv-s-caps gv-s-h2">Questions</h2>
           </div>
           <div className="gv-cu-faq">
-            <FaqList entries={faqForStoreCredits(bogo)} context="pricing" />
+            {/* The sale question comes first during a sale: drawn once the read has answered. */}
+            {known ? <FaqList entries={faqForStoreCredits(bogo)} context="pricing" /> : <Skel w="100%" h={180} style={{ borderRadius: 14 }} />}
           </div>
         </section>
       </div>

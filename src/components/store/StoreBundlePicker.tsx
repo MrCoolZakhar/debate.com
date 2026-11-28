@@ -29,6 +29,7 @@ import {
   useCreditPriceTable,
 } from '@/lib/creditPricing';
 import { openCreditsPopup } from '@/lib/purchasePopup';
+import { Skel } from './storeKit';
 
 const BUNDLES = CREDIT_BUNDLES.pricing;
 const DEFAULT_CUSTOM = 15;
@@ -48,7 +49,11 @@ function creditsWord(n: number) {
   return n === 1 ? 'credit' : 'credits';
 }
 
-export default function StoreBundlePicker({ bogo }: { bogo: boolean }) {
+export default function StoreBundlePicker({ bogo, known = true }: {
+  bogo: boolean;
+  /** False until the sale read answers (prompt 94): sale-dependent words are grey bars until then. */
+  known?: boolean;
+}) {
   const { table, error, retry } = useCreditPriceTable();
   const [choice, setChoice] = useState<Choice>(10);
   const [customQty, setCustomQty] = useState(DEFAULT_CUSTOM);
@@ -129,7 +134,7 @@ export default function StoreBundlePicker({ bogo }: { bogo: boolean }) {
                 <span className="gv-sbp-num">{qty}</span>
                 <span className="gv-sbp-unit">{creditsWord(qty)}</span>
               </div>
-              {bogo && <span className="gv-sbp-free">+{qty} free · {qty * 2} in total</span>}
+              {!known ? <Skel w={170} h={30} style={{ marginTop: 14, borderRadius: 8 }} /> : bogo && <span className="gv-sbp-free">+{qty} free · {qty * 2} in total</span>}
               <div className="gv-sbp-facts">
                 <span className="gv-sbp-each"><b>{priced ? formatUsd(priced.each) : '…'}</b> a credit</span>
                 {priced && priced.pct > 0 && (
@@ -174,9 +179,9 @@ export default function StoreBundlePicker({ bogo }: { bogo: boolean }) {
             )}
 
             <button type="button" className="gv-s-btn gv-s-big gv-s-cream gv-sbp-buy" onClick={confirm} disabled={!priced} aria-disabled={!priced}>
-              {buyLabel}
+              {known ? buyLabel : <Skel w={200} h={18} inline style={{ background: 'rgba(14,15,13,0.12)' }} />}
             </button>
-            {bogo && <p className="gv-sbp-fine">Free credits never expire</p>}
+            {known && bogo && <p className="gv-sbp-fine">Free credits never expire</p>}
 
             {error && (
               <p className="gv-sbp-err" role="alert">
@@ -217,7 +222,7 @@ export default function StoreBundlePicker({ bogo }: { bogo: boolean }) {
                   <div className="gv-sbp-top" aria-hidden>
                     <div className="gv-sbp-toprow">
                       <span className="gv-sbp-cap">{photo.caption}</span>
-                      {bogo ? <span className="gv-sbp-tag">+{n} free</span> : pct ? <span className="gv-sbp-save">Save {pct}%</span> : null}
+                      {!known ? <Skel w={64} h={26} style={{ flexShrink: 0, borderRadius: 8 }} /> : bogo ? <span className="gv-sbp-tag">+{n} free</span> : pct ? <span className="gv-sbp-save">Save {pct}%</span> : null}
                     </div>
                     <span className="gv-sbp-card-num">{n}</span>
                     <span className="gv-sbp-card-unit">{creditsWord(n)}</span>
@@ -225,7 +230,7 @@ export default function StoreBundlePicker({ bogo }: { bogo: boolean }) {
                   <div className="gv-sbp-bottom" aria-hidden>
                     <div>
                       <span className="gv-sbp-card-each">{each}<small>a credit</small></span>
-                      <span className="gv-sbp-card-total">{bogo ? `${sum} · get ${n * 2}` : `${sum} in total`}</span>
+                      {known ? <span className="gv-sbp-card-total">{bogo ? `${sum} · get ${n * 2}` : `${sum} in total`}</span> : <Skel w={90} h={13} style={{ marginTop: 6 }} />}
                     </div>
                     <span className="gv-sbp-disc">
                       {checked ? <Check size={20} strokeWidth={2.6} /> : <Plus size={20} strokeWidth={2.2} />}
@@ -241,7 +246,7 @@ export default function StoreBundlePicker({ bogo }: { bogo: boolean }) {
               <div>
                 <div className="gv-sbp-toprow">
                   <span className="gv-sbp-cap" style={{ color: '#A8C9B2' }}>{CUSTOM_CAPTION}</span>
-                  {bogo ? <span className="gv-sbp-tag">+{customQty} free</span> : null}
+                  {!known ? <Skel w={64} h={26} style={{ flexShrink: 0, borderRadius: 8 }} /> : bogo ? <span className="gv-sbp-tag">+{customQty} free</span> : null}
                 </div>
                 <div className="gv-sbp-custom-field">
                   <button type="button" className="gv-sbp-step" aria-label="One credit fewer" onClick={() => stepCustom(-1)} disabled={customQty <= 1}>
@@ -271,13 +276,13 @@ export default function StoreBundlePicker({ bogo }: { bogo: boolean }) {
                     <Plus size={18} strokeWidth={2.2} aria-hidden />
                   </button>
                 </div>
-                <p className="gv-sbp-custom-max">{maxQty ? `Up to ${maxQty}${bogo ? ', doubled too' : ''}` : '…'}</p>
+                <p className="gv-sbp-custom-max">{maxQty && known ? `Up to ${maxQty}${bogo ? ', doubled too' : ''}` : '…'}</p>
               </div>
               <div className="gv-sbp-bottom gv-sbp-bottom-static" aria-hidden>
                 <div>
                   <span className="gv-sbp-card-each">{table ? formatUsd(perCreditCents(customQty, table)) : '…'}<small>a credit</small></span>
                   <span className="gv-sbp-card-total">
-                    {table ? (bogo ? `${formatUsd(priceCentsFor(customQty, table))} · get ${customQty * 2}` : `${formatUsd(priceCentsFor(customQty, table))} in total`) : '…'}
+                    {table && known ? (bogo ? `${formatUsd(priceCentsFor(customQty, table))} · get ${customQty * 2}` : `${formatUsd(priceCentsFor(customQty, table))} in total`) : '…'}
                   </span>
                 </div>
                 <span className="gv-sbp-disc" data-on={choice === 'custom' ? 'true' : undefined}>
