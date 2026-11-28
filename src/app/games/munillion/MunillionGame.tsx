@@ -440,6 +440,7 @@ export default function MunillionGame({ header }: { header?: ReactNode }) {
         playBuzz();
         if (r.not_listed && !isBlockedText(text)) setConfMisses((m) => (m.some((x) => x.toLowerCase() === text.toLowerCase()) ? m : [...m, text]));
         if (r.reason === 'blocked') setMsg("Let's keep it clean. Try another answer");
+        else if (r.reason === 'explained' && r.message) setMsg(r.message);
         else if (r.reason === 'wrong_country' && r.conference) setMsg(`${r.conference.label} is ${r.conference.country ? `in ${r.conference.country}` : 'online'}, which doesn't count here`);
         else if ((r.attempts_left ?? 1) <= 0) setMsg("That's every try for this one");
         else if (q.kind === 'conference') setMsg('Not on Gavelling yet. Try another, or add yours with the plus');

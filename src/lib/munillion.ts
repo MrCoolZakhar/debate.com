@@ -91,6 +91,8 @@ export interface MunAnswerResult {
   source?: MunSource | null;
   /** The country of the answer (a president's country, a conference's host), for its flag. */
   country?: string | null;
+  /** reason 'explained': a known wrong answer, with why ("Waterloo was a battle, not a war"). */
+  message?: string;
   /** reason 'wrong_country': a real conference, in a country that doesn't count on this question. */
   conference?: { label: string; country: string | null };
 }
