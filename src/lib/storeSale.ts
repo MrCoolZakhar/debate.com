@@ -50,11 +50,14 @@ function parseSale(raw: unknown): StoreSale | null {
 // ── One module store ────────────────────────────────────────────────────────
 
 let current: StoreSale | null = null;
+/** True once readSale() has answered (a failed read is known and null). */
+let known = false;
 let started = false;
 const listeners = new Set<() => void>();
 
 function set(next: StoreSale | null) {
   current = next;
+  known = true;
   listeners.forEach((l) => l());
 }
 
@@ -93,6 +96,14 @@ export function useStoreSale(): StoreSale | null {
   const sale = useSyncExternalStore(subscribe, () => current, () => null);
   useEffect(() => { load(); }, []);
   return sale;
+}
+
+/** Whether the sale read has answered yet (prompt 94): until then the Store draws
+ *  neither the sale nor the plain look, so it never flashes one and jumps to the other. */
+export function useStoreSaleKnown(): boolean {
+  const k = useSyncExternalStore(subscribe, () => known, () => false);
+  useEffect(() => { load(); }, []);
+  return k;
 }
 
 /** The running sale, dropped to null the moment its ends_at passes (one timer, no tick). */
@@ -148,9 +159,10 @@ export function useSaleCountdown(endsAt: string | null | undefined): Countdown |
   return endsAt ? countdownAt(endsAt, now) : null;
 }
 
-/** "Wednesday 2 December" in the viewer's time zone (shown in capitals by CSS). */
+/** "Wednesday 2 December": the UTC day, the day the sale is announced for, wherever the
+ *  viewer is (shown in capitals by CSS). The countdown still counts to the exact moment. */
 export function saleEndLabel(endsAt: string): string {
   const d = new Date(endsAt);
   if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+  return d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
 }

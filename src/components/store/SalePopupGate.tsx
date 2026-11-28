@@ -39,7 +39,9 @@ function markSeen(key: string) {
 function excludedPath(pathname: string | null): boolean {
   if (!pathname) return true;
   if (saleBarExcluded(pathname) || isLiveRoomsExcludedPath(pathname)) return true;
-  return pathname === '/manage' || pathname.startsWith('/manage/');
+  if (pathname === '/manage' || pathname.startsWith('/manage/')) return true;
+  // No pop-up over Games (MUNillion included); the sale bar still shows there (prompt 93).
+  return pathname === '/games' || pathname.startsWith('/games/');
 }
 
 /** Another modal layer on screen (ours excluded). */

@@ -20,13 +20,13 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
 import { MotionPlacards } from '@/components/store/MotionPlacards';
-import { ComingSoon, Countdown, HeroScrollCue, StoreBar, StoreSectionHead, WaitlistButton, type WaitlistItem } from '@/components/store/storeKit';
+import { ComingSoon, Countdown, HeroScrollCue, Skel, StoreBar, StoreSectionHead, WaitlistButton, type WaitlistItem } from '@/components/store/storeKit';
 import OrganiserConferencePicker, { type OrganiserAction } from '@/components/store/OrganiserConferencePicker';
 import { openAuth } from '@/lib/authModal';
 import { formatUsd } from '@/lib/creditPricing';
 import { unlimitedPricing } from '@/lib/payments';
 import { openCreditsPopup, openUnlimitedPopup } from '@/lib/purchasePopup';
-import { saleEndLabel, useRunningSale } from '@/lib/storeSale';
+import { saleEndLabel, useRunningSale, useStoreSaleKnown } from '@/lib/storeSale';
 import { supabase } from '@/lib/supabase';
 import { isUnlimited, useUnlimitedStatus } from '@/lib/unlimitedStatus';
 import { PLACEMENTS, type Placement, type PlacementPrice } from '@/app/manage/[slug]/store/storeApi';
@@ -146,6 +146,8 @@ function Waitlist({ item }: { item: WaitlistItem }) {
 
 export default function StoreClient() {
   const sale = useRunningSale();
+  // Until store_sale_now() answers, neither look is drawn (prompt 94: no flash of the plain Store).
+  const known = useStoreSaleKnown();
   const { prices, promoFrom } = useStorePrices();
   const router = useRouter();
   const { user } = useAuth();
@@ -195,7 +197,21 @@ export default function StoreClient() {
     <>
       <style>{CSS}</style>
 
-      {sale ? (
+      {!known ? (
+        // The sale hero's own height rules, with grey bars where the words go.
+        <section className="gv-st-hero" aria-busy="true">
+          <div className="gv-s-wrap gv-st-hero-in">
+            <div className="gv-st-hero-copy">
+              <h1 className="sr-only">The Gavelling Store</h1>
+              <Skel w={260} h={14} />
+              <Skel w="80%" h={96} style={{ borderRadius: 14 }} />
+              <Skel w="60%" h={96} style={{ borderRadius: 14 }} />
+              <Skel w={320} h={20} />
+            </div>
+            <div className="gv-st-hero-art" aria-hidden />
+          </div>
+        </section>
+      ) : sale ? (
         <section id="gv-st-hero" className="gv-st-hero" aria-labelledby="gv-st-h1">
           <span className="gv-st-hero-glow" aria-hidden />
           <div className="gv-s-wrap gv-st-hero-in">
@@ -222,7 +238,7 @@ export default function StoreClient() {
         </header>
       )}
 
-      {sale && (
+      {known && sale && (
         <div className="gv-st-ticker" aria-hidden>
           <div className="gv-st-ticker-track">
             <span>{tickerPhrase.repeat(4)}</span>
@@ -239,9 +255,19 @@ export default function StoreClient() {
           {/* Each card is one button: the whole card opens the pop-up (prompt 90). */}
           <button type="button" className="gv-st-offer" onClick={buyCredits}>
             <span className="gv-st-offer-in">
-              <span className="gv-s-label">{bogo ? 'Credits · Buy one, get one free' : 'Gavelling credits'}</span>
-              <span className="gv-s-caps gv-st-offer-t">{bogo ? <>Double<br />your MUN</> : <>One credit,<br />one application</>}</span>
-              <span className="gv-st-offer-line">{bogo ? 'Buy one, get one free on all credit purchases, with no expiry on usage.' : 'Bigger bundles cost less a credit.'}</span>
+              {!known ? (
+                <>
+                  <Skel w={220} h={13} />
+                  <Skel w="70%" h={52} />
+                  <Skel w="85%" h={18} />
+                </>
+              ) : (
+                <>
+                  <span className="gv-s-label">{bogo ? 'Credits · Buy one, get one free' : 'Gavelling credits'}</span>
+                  <span className="gv-s-caps gv-st-offer-t">{bogo ? <>Double<br />your MUN</> : <>One credit,<br />one application</>}</span>
+                  <span className="gv-st-offer-line">{bogo ? 'Buy one, get one free on all credit purchases, with no expiry on usage.' : 'Bigger bundles cost less a credit.'}</span>
+                </>
+              )}
             </span>
             <span className="gv-s-a gv-st-offer-a">Pick a bundle</span>
           </button>
@@ -249,14 +275,24 @@ export default function StoreClient() {
             <Image src="/onboarding/hall-01.jpg" alt="" fill sizes="(max-width: 1023px) 100vw, 50vw" style={{ objectFit: 'cover' }} />
             <span className="gv-st-offer-glass" aria-hidden />
             <span className="gv-st-offer-in">
-              <span className="gv-s-label">Gavelling Unlimited · Yearly</span>
-              <span className="gv-s-caps gv-st-offer-t">
-                {yearPrice}
-                {saleYear && <s className="gv-st-was"><span className="sr-only">instead of </span>{yearlyPrice}</s>}
-              </span>
-              <span className="gv-st-offer-line">
-                Unlimited applications. Unlimited guides. Unlimited MUN. Never spend a credit to apply again{saleYear ? `, now ${yearPrice} for your first year.` : '.'}
-              </span>
+              {!known ? (
+                <>
+                  <Skel w={220} h={13} />
+                  <Skel w="40%" h={52} />
+                  <Skel w="85%" h={18} />
+                </>
+              ) : (
+                <>
+                  <span className="gv-s-label">Gavelling Unlimited · Yearly</span>
+                  <span className="gv-s-caps gv-st-offer-t">
+                    {yearPrice}
+                    {saleYear && <s className="gv-st-was"><span className="sr-only">instead of </span>{yearlyPrice}</s>}
+                  </span>
+                  <span className="gv-st-offer-line">
+                    Unlimited applications. Unlimited guides. Unlimited MUN. Never spend a credit to apply again{saleYear ? `, now ${yearPrice} for your first year.` : '.'}
+                  </span>
+                </>
+              )}
             </span>
             <span className="gv-s-a gv-st-offer-a">{onUnlimited ? "You're on Unlimited" : 'Go Unlimited'}</span>
           </button>

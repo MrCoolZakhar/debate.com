@@ -13,7 +13,7 @@
 // Countdown, WaitlistButton, the COMING SOON chip, a section header and the
 // Got a question box that closes every Store page.
 
-import { useCallback, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react';
 import Link from 'next/link';
 import { ArrowDown } from 'lucide-react';
 import { usePathname } from 'next/navigation';
@@ -66,6 +66,10 @@ export const STORE_CSS = `
 .gv-s-btn[disabled]{cursor:default}
 .gv-s-btn.gv-s-outline[disabled]:hover{background:transparent;box-shadow:inset 0 0 0 1.5px rgba(246,242,232,.55)}
 
+.gv-s-skel{display:block;max-width:100%;border-radius:10px;background:rgba(246,242,232,0.08);animation:gvSSkel 1.4s ease-in-out infinite}
+.gv-s-skel-in{display:inline-block;vertical-align:middle}
+@keyframes gvSSkel{0%,100%{opacity:1}50%{opacity:.55}}
+@media (prefers-reduced-motion:reduce){.gv-s-skel{animation:none}}
 .gv-s-soon{display:inline-flex;align-items:center;height:26px;padding:0 10px;border-radius:8px;background:${S.cream};color:${S.black};font-size:11.5px;font-weight:900;letter-spacing:.12em;text-transform:uppercase}
 
 .gv-s-bar{position:sticky;top:0;z-index:20;background:${S.black};border-bottom:1px solid ${S.edge}}
@@ -290,6 +294,11 @@ export function WaitlistButton({ item }: { item: WaitlistItem }) {
 }
 
 // ── Small pieces ────────────────────────────────────────────────────────────
+
+/** A soft grey bar where words go while the sale read has not answered (prompt 94). */
+export function Skel({ w, h = 16, inline = false, style }: { w: number | string; h?: number; inline?: boolean; style?: CSSProperties }) {
+  return <span className={`gv-s-skel${inline ? ' gv-s-skel-in' : ''}`} aria-hidden style={{ width: w, height: h, ...style }} />;
+}
 
 export function ComingSoon() {
   return <span className="gv-s-soon">Coming soon</span>;
