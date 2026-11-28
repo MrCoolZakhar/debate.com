@@ -812,3 +812,9 @@ grant execute on function public.munillion_reset_preview_play(text) to anon, aut
 -- munillion_play_answer_country); munillion_answer, munillion_history and munillion_reveal return the country so
 -- the page draws a flag. Game 2 re-scored to about 3 x 10, 5 x 30, the rest 60 and mostly 85 per question;
 -- the conference question scores the US and India 60 and everywhere else 85.
+
+-- ── 28 Nov 2026: munillion_wrong_notes ──
+-- munillion_wrong_notes (question_id, typed, keys via trigger _munillion_wrong_note_keys, pattern, message),
+-- _munillion_wrong_note / _munillion_note_display; munillion_answer patched to answer reason 'explained' with the
+-- message. Game 2 got about 240 notes (prime ministers, battles, countries and committees typed as conferences,
+-- non-members and admission years) and the committee answers HCC, FCC, HOC, UPU, PNA, CPC, CCC, GA (alias of UNGA).
