@@ -25,7 +25,7 @@ import { formatUsd } from '@/lib/creditPricing';
 const BAR_H = 40;
 const OFFSET_VAR = '--gv-sale-bar-offset';
 
-const EXCLUDED = ['/chair', '/delegate', '/advisor', '/voting', '/join', '/create', '/crisis', '/store'];
+const EXCLUDED = ['/chair', '/delegate', '/advisor', '/voting', '/join', '/create', '/crisis', '/store', '/manage'];
 
 export function saleBarExcluded(pathname: string | null): boolean {
   if (!pathname) return true;
